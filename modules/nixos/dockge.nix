@@ -28,14 +28,9 @@ let
   '';
 in
 {
-  systemd.tmpfiles.rules = [
-    "d /home/z/dockge/data 0755 z users -"
-    "d /home/z/stacks      0755 z users -"
-  ];
-
   systemd.services.dockge = {
     description = "Dockge Docker compose manager";
-    after = [ "network-online.target" "user@1000.service" "traefik-docker.service" "systemd-tmpfiles-setup.service" ];
+    after = [ "network-online.target" "user@1000.service" "traefik-docker.service" ];
     wants = [ "network-online.target" "user@1000.service" ];
     wantedBy = [ "multi-user.target" ];
 
@@ -45,6 +40,9 @@ in
       User = "z";
       Restart = "on-failure";
       RestartSec = "10s";
+      # Create bind-mount source dirs as z before the container starts.
+      # `+` runs the command as root so it can mkdir under /home/z and chown.
+      ExecStartPre = "+${pkgs.bash}/bin/bash -c 'mkdir -p /home/z/dockge/data /home/z/stacks && chown -R z:users /home/z/dockge /home/z/stacks'";
       ExecStop = "${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name dockge down";
     };
 
