@@ -30,9 +30,11 @@
     LC_TIME           = "en_US.UTF-8";
   };
 
+  security.sudo.wheelNeedsPassword = false;
+
   users.users.z = {
     isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" "docker" ];
+    extraGroups = [ "wheel" "networkmanager" ];
     shell = pkgs.bash;
     openssh.authorizedKeys.keys = [
       "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCfTHdojQvKOlTaaTYT2RmYMNKQ/6rBQwn6V+bPnrtASaI/G5E7RW67XGbZHi3K7EctyB9UP9Uw54sayEu4ebixI/dNFVVWeZ2byBQ49FoXh5o9Cfok0Qwf0QM7g9Td8O6Iu2ElnI8e+9cr8ThrfPpKmP68e6mpuYDvhQb4omcx8kRhxnsuNxkL2xCTNVxG/jw68o/1KHX++6tRqf0E3PBCjZ3Z8HMTdS8ouEBa8Y96GGeUvslwDJ9cUtLNCUhR5t3mGu3iSS9RYpFg/JujyTT9yhe2O/0og+OhBeSayGZMOXGWngGUEItExlbq2I4rMV5pFB1q+OyqksvlUfkJ/j3yJOii5uwonYvkWLZfR02yhn2b/bgOfYaimO5rfKj5jAC8bMRnWqLJAiG2qRDwtJT+ijyYlTKgLpz73sOGAQVvZygq11Vc35cZMFojlMeqAHdZMGi6XkUHnfZt8gyplw6VPV5EQnyDI4bRfY9sknuFvjHqdEzNyNrIEXtlmIB870s= z@Serenity.local"
@@ -60,11 +62,13 @@
 
   networking.firewall.enable = true;
 
-  virtualisation.docker = {
+  virtualisation.docker.rootless = {
     enable = true;
-    autoPrune = {
-      enable = true;
-      dates = "weekly";
-    };
+    setSocketVariable = true;  # sets DOCKER_HOST in the user session
+  };
+
+  virtualisation.docker.autoPrune = {
+    enable = true;
+    dates = "weekly";
   };
 }
