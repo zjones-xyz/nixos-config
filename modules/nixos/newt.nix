@@ -25,7 +25,6 @@
     serviceConfig = {
       Restart = "on-failure";
       RestartSec = "10s";
-      DynamicUser = true;
       CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_NET_RAW" ];
       AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_NET_RAW" ];
     };
