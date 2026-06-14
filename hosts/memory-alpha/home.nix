@@ -15,8 +15,8 @@
     enable = true;
     shellAliases = {
       ll = "ls -la";
-      nrs = "sudo nixos-rebuild switch --flake /etc/nixos#memory-alpha";
-      nrt = "sudo nixos-rebuild test --flake /etc/nixos#memory-alpha";
+      nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#memory-alpha";
+      nrt = "sudo nixos-rebuild test --flake ~/nixos-config#memory-alpha";
       npull = "git -C ~/nixos-config pull";
     };
   };
