@@ -68,12 +68,11 @@
   };
 
   # ── NFS mounts (Tower media) ───────────────────────────────────────────────
-  # Uncomment and adjust after Tower NFS exports are configured.
-  # fileSystems."/mnt/media" = {
-  #   device = "tower.local:/mnt/user/media";  # or Tailscale hostname
-  #   fsType = "nfs";
-  #   options = [ "nfsvers=4" "soft" "timeo=30" "x-systemd.automount" "noauto" ];
-  # };
+  fileSystems."/mnt/unmanaged" = {
+    device = "tower.internal:/mnt/user/jellyfin";
+    fsType = "nfs";
+    options = [ "nfsvers=4" "soft" "timeo=30" "x-systemd.automount" "noauto" ];
+  };
 
   # ── home-manager ──────────────────────────────────────────────────────────
   home-manager = {
