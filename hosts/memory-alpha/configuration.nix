@@ -6,6 +6,8 @@
     ../../modules/nixos/common.nix
     ../../modules/nixos/jellyfin.nix
     ../../modules/nixos/newt.nix
+    ../../modules/nixos/traefik.nix
+    ../../modules/nixos/dockge.nix
   ];
 
   networking.hostName = "memory-alpha";
