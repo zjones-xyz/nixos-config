@@ -17,13 +17,14 @@
       ll = "ls -la";
       nrs = "sudo nixos-rebuild switch --flake /etc/nixos#memory-alpha";
       nrt = "sudo nixos-rebuild test --flake /etc/nixos#memory-alpha";
+      npull = "git -C ~/nixos-config pull";
     };
   };
 
   programs.git = {
     enable = true;
-    userName = "z";
-    userEmail = "zoejonestx91@gmail.com";
+    user.name = "z";
+    user.email = "zoejonestx91@gmail.com";
   };
 
   home.stateVersion = "26.05";

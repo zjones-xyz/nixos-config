@@ -72,13 +72,13 @@
   fileSystems."/mnt/unmanaged" = {
     device = "tower.internal:/mnt/user/jellyfin";
     fsType = "nfs";
-    options = [ "nfsvers=4" "soft" "timeo=30" "x-systemd.automount" "noauto" ];
+    options = [ "nfsvers=4" "soft" "timeo=30" "x-systemd.automount" "noauto" "rsize=131072" "wsize=131072" "async" "nconnect=4" "noatime" ];
   };
 
   fileSystems."/mnt/arr_managed_data" = {
     device = "tower.internal:/mnt/user/arr_managed_data";
     fsType = "nfs";
-    options = [ "nfsvers=4" "soft" "timeo=30" "x-systemd.automount" "noauto" ];
+    options = [ "nfsvers=4" "soft" "timeo=30" "x-systemd.automount" "noauto" "rsize=131072" "wsize=131072" "nconnect=4" "noatime" ];
   };
 
   # ── home-manager ──────────────────────────────────────────────────────────
