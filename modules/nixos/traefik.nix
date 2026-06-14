@@ -4,8 +4,7 @@ let
   composeFile = pkgs.writeText "traefik-compose.yml" ''
     networks:
       proxy:
-        name: proxy
-        driver: bridge
+        external: true
 
     services:
       traefik:
@@ -51,9 +50,36 @@ in
 {
   networking.firewall.allowedTCPPorts = [ 80 443 ];
 
+  # Rootless Docker can't bind ports < 1024 by default; lower the threshold
+  # so Traefik can publish 80/443. ip_forward is needed for bridge networking.
+  boot.kernel.sysctl = {
+    "net.ipv4.ip_unprivileged_port_start" = 80;
+    "net.ipv4.ip_forward" = 1;
+  };
+
+  # Single owner for the shared `proxy` network. Both Traefik and Dockge
+  # reference it as `external: true`, avoiding compose project-ownership
+  # conflicts that caused Traefik to ignore its own container.
+  systemd.services.docker-proxy-network = {
+    description = "Create shared Docker proxy network";
+    after = [ "user@1000.service" ];
+    wants = [ "user@1000.service" ];
+    before = [ "traefik-docker.service" "dockge.service" ];
+    requiredBy = [ "traefik-docker.service" "dockge.service" ];
+
+    environment.DOCKER_HOST = "unix:///run/user/1000/docker.sock";
+
+    serviceConfig = {
+      User = "z";
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${pkgs.bash}/bin/bash -c '${pkgs.docker}/bin/docker network inspect proxy >/dev/null 2>&1 || ${pkgs.docker}/bin/docker network create proxy'";
+    };
+  };
+
   systemd.services.traefik-docker = {
     description = "Traefik reverse proxy";
-    after = [ "network-online.target" "user@1000.service" ];
+    after = [ "network-online.target" "user@1000.service" "docker-proxy-network.service" ];
     wants = [ "network-online.target" "user@1000.service" ];
     wantedBy = [ "multi-user.target" ];
 

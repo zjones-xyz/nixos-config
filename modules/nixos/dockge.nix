@@ -30,7 +30,7 @@ in
 {
   systemd.services.dockge = {
     description = "Dockge Docker compose manager";
-    after = [ "network-online.target" "user@1000.service" "traefik-docker.service" ];
+    after = [ "network-online.target" "user@1000.service" "docker-proxy-network.service" "traefik-docker.service" ];
     wants = [ "network-online.target" "user@1000.service" ];
     wantedBy = [ "multi-user.target" ];
 
