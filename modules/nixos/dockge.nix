@@ -35,7 +35,7 @@ in
 
   systemd.services.dockge = {
     description = "Dockge Docker compose manager";
-    after = [ "network-online.target" "user@1000.service" "traefik-docker.service" ];
+    after = [ "network-online.target" "user@1000.service" "traefik-docker.service" "systemd-tmpfiles-setup.service" ];
     wants = [ "network-online.target" "user@1000.service" ];
     wantedBy = [ "multi-user.target" ];
 
@@ -45,11 +45,11 @@ in
       User = "z";
       Restart = "on-failure";
       RestartSec = "10s";
-      ExecStop = "${pkgs.docker}/bin/docker compose -f ${composeFile} down";
+      ExecStop = "${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name dockge down";
     };
 
     script = ''
-      exec ${pkgs.docker}/bin/docker compose -f ${composeFile} up --remove-orphans
+      exec ${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name dockge up --remove-orphans
     '';
   };
 }

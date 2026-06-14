@@ -63,11 +63,11 @@ in
       User = "z";
       Restart = "on-failure";
       RestartSec = "10s";
-      ExecStop = "${pkgs.docker}/bin/docker compose -f ${composeFile} down";
+      ExecStop = "${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name traefik down";
     };
 
     script = ''
-      exec ${pkgs.docker}/bin/docker compose -f ${composeFile} up --remove-orphans
+      exec ${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name traefik up --remove-orphans
     '';
   };
 }
