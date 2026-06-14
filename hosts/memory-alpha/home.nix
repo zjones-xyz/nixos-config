@@ -23,8 +23,8 @@
 
   programs.git = {
     enable = true;
-    user.name = "z";
-    user.email = "zoejonestx91@gmail.com";
+    settings.user.name = "z";
+    settings.user.email = "zoej7@protonmail.com";
   };
 
   home.stateVersion = "26.05";
