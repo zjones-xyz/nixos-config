@@ -5,6 +5,7 @@
     ./hardware-configuration.nix
     ../../modules/nixos/common.nix
     ../../modules/nixos/jellyfin.nix
+    ../../modules/nixos/newt.nix
   ];
 
   networking.hostName = "memory-alpha";
