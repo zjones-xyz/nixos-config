@@ -75,6 +75,12 @@
     options = [ "nfsvers=4" "soft" "timeo=30" "x-systemd.automount" "noauto" ];
   };
 
+  fileSystems."/mnt/arr_managed_data" = {
+    device = "tower.internal:/mnt/user/arr_managed_data";
+    fsType = "nfs";
+    options = [ "nfsvers=4" "soft" "timeo=30" "x-systemd.automount" "noauto" ];
+  };
+
   # ── home-manager ──────────────────────────────────────────────────────────
   home-manager = {
     useGlobalPkgs = true;
