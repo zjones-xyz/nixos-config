@@ -14,7 +14,7 @@ let
         volumes:
           - /run/user/1000/docker.sock:/var/run/docker.sock
           - /home/z/dockge/data:/app/data
-          - /home/z/stacks:/opt/stacks
+          - /home/z/homelab-stacks/memory-alpha:/opt/stacks
         environment:
           - DOCKGE_STACKS_DIR=/opt/stacks
         networks:
@@ -42,7 +42,7 @@ in
       RestartSec = "10s";
       # Create bind-mount source dirs as z before the container starts.
       # `+` runs the command as root so it can mkdir under /home/z and chown.
-      ExecStartPre = "+${pkgs.bash}/bin/bash -c 'mkdir -p /home/z/dockge/data /home/z/stacks && chown -R z:users /home/z/dockge /home/z/stacks'";
+      ExecStartPre = "+${pkgs.bash}/bin/bash -c 'mkdir -p /home/z/dockge/data /home/z/homelab-stacks/memory-alpha && chown -R z:users /home/z/dockge /home/z/homelab-stacks'";
       ExecStop = "${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name dockge down";
     };
 
