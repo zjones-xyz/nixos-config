@@ -8,7 +8,7 @@
 #   sops secrets/memory-alpha.yaml
 
 keys:
-  - &memory-alpha age1REPLACE_WITH_OUTPUT_OF_SSH_TO_AGE
+  - &memory-alpha age13790dgm55mp5luu7pdpqewjxh0he5dlhnagp5wuk9dte0ks5gc6qp09882
 
 creation_rules:
   - path_regex: secrets/memory-alpha\.yaml$
