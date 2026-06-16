@@ -5,10 +5,50 @@ flash an image once to bootstrap → enrol its sops key → deploy normally with
 `nixos-rebuild --target-host` from then on.
 
 > **Build host note:** hopper is `aarch64-linux`. A macOS workstation can't build
-> it natively. Build on an aarch64 Linux machine (the Pi itself, or another
-> arm64 box), or configure an aarch64 remote builder / binfmt emulation. The
-> commands below assume you run them somewhere that can produce aarch64
-> derivations.
+> it natively. Build on an aarch64 Linux machine (the Pi itself via
+> `--build-host`, or another arm64 box), or use a Mac-hosted Linux builder VM —
+> see below. The commands below assume you run them somewhere that can produce
+> aarch64 derivations.
+
+---
+
+## 0. Build host: Nix + linux-builder on an Apple Silicon Mac
+
+On an Apple Silicon Mac you can build aarch64-linux **natively** (no emulation)
+via a small NixOS builder VM that your Mac's Nix daemon drives as a remote
+builder.
+
+1. **Install Nix on the Mac** (it isn't installed by default). The Determinate
+   Systems installer sets up the daemon + flakes cleanly:
+
+   ```sh
+   curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
+   ```
+
+2. **Start the builder VM** and register it:
+
+   ```sh
+   nix run nixpkgs#darwin.linux-builder
+   ```
+
+   It boots a minimal `aarch64-linux` NixOS VM and prints a `builders = ...` line
+   to add to `/etc/nix/nix.conf` on the Mac, e.g.:
+
+   ```
+   builders = ssh://builder@linux-builder aarch64-linux /etc/nix/builder_ed25519 - - - -
+   builders-use-substitutes = true
+   ```
+
+   (If you run **nix-darwin**, prefer `nix.linux-builder.enable = true;` — it
+   manages the VM as a launchd service declaratively.)
+
+3. From then on, run the `nix build` / `nixos-rebuild` commands below **on the
+   Mac**. Nix offloads the aarch64 compilation to the VM automatically and ships
+   the result to the Pi.
+
+> Apple Silicon only — an Intel Mac VM would be x86_64 and couldn't build
+> aarch64 without emulation. Alternatively, skip the VM and add
+> `--build-host z@hopper.internal` to build on the Pi itself (slower).
 
 ---
 

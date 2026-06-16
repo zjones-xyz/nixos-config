@@ -11,8 +11,36 @@ resolver) and a Tailscale client. The flow mirrors hopper: flash once to
 bootstrap → enrol its sops key → deploy with `nixos-rebuild --target-host`.
 
 > **Build host note:** pi3 is `aarch64-linux`. A macOS workstation can't build it
-> natively. Build on an aarch64 Linux machine (the Pi itself, or another arm64
-> box), or use an aarch64 remote builder / binfmt emulation.
+> natively. Build on an aarch64 Linux machine (the Pi itself via `--build-host`,
+> or another arm64 box), or use a Mac-hosted Linux builder VM — see below.
+
+---
+
+## 0. Build host: Nix + linux-builder on an Apple Silicon Mac
+
+Identical to hopper — see
+[hosts/hopper/DEPLOY.md](../hopper/DEPLOY.md#0-build-host-nix--linux-builder-on-an-apple-silicon-mac)
+for the full steps. In short:
+
+1. Install Nix on the Mac (not installed by default):
+
+   ```sh
+   curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
+   ```
+
+2. Start + register the builder VM (Apple Silicon builds aarch64 natively):
+
+   ```sh
+   nix run nixpkgs#darwin.linux-builder
+   ```
+
+   Add the printed `builders = ...` line to `/etc/nix/nix.conf` (or use
+   nix-darwin's `nix.linux-builder.enable = true;`).
+
+3. Run the commands below on the Mac; Nix offloads to the VM.
+
+> A Pi 3 is very slow to build on itself, so `--build-host z@pi3.internal` works
+> but the Mac builder VM is much more pleasant here.
 
 ---
 
