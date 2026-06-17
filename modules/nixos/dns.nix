@@ -67,8 +67,58 @@
         # Don't fall back to public resolvers; keep all recursion in Unbound.
         upstream_mode = "load_balance";
       };
-      # Add filter lists / clients declaratively here as you settle them, e.g.
-      # filters = [ { enabled = true; url = "..."; name = "..."; id = 1; } ];
+      # ── Filter lists ────────────────────────────────────────────────────────
+      # Add blocklists here. Each entry needs a unique integer `id`.
+      # Example:
+      #   filters = [
+      #     { enabled = true; id = 1; name = "AdGuard DNS filter";
+      #       url = "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt"; }
+      #     { enabled = true; id = 2; name = "OISD Basic";
+      #       url = "https://basic.oisd.nl/"; }
+      #   ];
+
+      # ── Per-client names and settings ───────────────────────────────────────
+      # Identify devices by IP or MAC address and give them a friendly name.
+      # With mutableSettings = false, do this here — not in the web UI, which
+      # would be overwritten on the next rebuild.
+      #
+      # `ids` accepts: IPv4, IPv6, MAC address (aa:bb:cc:dd:ee:ff), CIDR, or
+      # a ClientID for DNS-over-HTTPS/TLS clients.
+      #
+      # Minimal example (name only, inherit all global settings):
+      #   clients.persistent = [
+      #     { name = "router";    ids = [ "192.168.1.1" ]; }
+      #     { name = "tv";        ids = [ "192.168.1.42" "aa:bb:cc:dd:ee:ff" ]; }
+      #     { name = "hopper";    ids = [ "192.168.1.10" ]; }
+      #     { name = "hamilton";  ids = [ "192.168.1.11" ]; }
+      #   ];
+      #
+      # Per-client overrides (filtering, safe search, parental controls, etc.):
+      #   clients.persistent = [
+      #     {
+      #       name = "kids-tablet";
+      #       ids = [ "192.168.1.55" ];
+      #       use_global_settings = false;
+      #       filtering_enabled = true;
+      #       safebrowsing_enabled = true;
+      #       parental_enabled = true;
+      #       safe_search = {
+      #         enabled = true;
+      #         google = true; youtube = true; bing = true;
+      #       };
+      #     }
+      #     {
+      #       name = "server";
+      #       ids = [ "192.168.1.20" ];
+      #       use_global_settings = false;
+      #       # Bypass filtering entirely for a trusted server.
+      #       filtering_enabled = false;
+      #     }
+      #   ];
+      #
+      # Note: both hopper and hamilton import this module, so any clients
+      # defined here appear on both instances — which is what you want for
+      # a primary/backup resolver pair.
     };
   };
 
