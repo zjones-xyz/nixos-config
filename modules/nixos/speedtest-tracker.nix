@@ -17,7 +17,7 @@ let
           - PUID=1000
           - PGID=100
           - TZ=America/Los_Angeles
-          - APP_URL=https://speedtest.hopper.internal
+          - APP_URL=https://speedtest.hopper.zjones.dev
           - DB_CONNECTION=sqlite
           - SPEEDTEST_SCHEDULE=0 */6 * * *
         env_file:
@@ -31,6 +31,10 @@ let
           - "traefik.http.routers.speedtest.rule=Host(`speedtest.hopper.internal`)"
           - "traefik.http.routers.speedtest.entrypoints=websecure"
           - "traefik.http.routers.speedtest.tls=true"
+          - "traefik.http.routers.speedtest-dev.rule=Host(`speedtest.hopper.zjones.dev`)"
+          - "traefik.http.routers.speedtest-dev.entrypoints=websecure"
+          - "traefik.http.routers.speedtest-dev.tls.certresolver=letsencrypt"
+          - "traefik.http.routers.speedtest-dev.service=speedtest"
           - "traefik.http.services.speedtest.loadbalancer.server.port=80"
   '';
 in

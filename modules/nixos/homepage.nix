@@ -8,7 +8,7 @@
     listenPort = 8082;
     # Homepage refuses requests whose Host header isn't allowed when behind a
     # proxy; list the hostnames Traefik will forward.
-    allowedHosts = "hopper.internal,home.hopper.internal";
+    allowedHosts = "hopper.internal,home.hopper.internal,hopper.zjones.dev,home.hopper.zjones.dev";
 
     settings = {
       title = "hopper";

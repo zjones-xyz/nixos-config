@@ -4,9 +4,10 @@
   imports = [
     ../../modules/nixos/common.nix
     ../../modules/nixos/dns.nix
+    ../../modules/nixos/traefik-hamilton.nix
   ];
 
-  networking.hostName = "hamilton";  # placeholder — rename when the unit is in hand
+  networking.hostName = "hamilton";
   # DHCP reservation on the GL.iNet router is the source of truth for the IP.
   # Add this host's IP as the *secondary* DNS server in the router's DHCP
   # settings — that's the whole failover story (primary = hopper).
@@ -28,8 +29,7 @@
   };
 
   # ── Tailscale (plain client) ────────────────────────────────────────────────
-  # Not an exit node — just tailnet membership so the box (and its AdGuard UI)
-  # is reachable remotely. Reuses the same authKey secret convention as hopper.
+  # Not an exit node — just tailnet membership so the box is reachable remotely.
   sops.secrets."tailscale/authKey" = {};
   services.tailscale = {
     enable = true;
@@ -37,11 +37,6 @@
   };
   networking.firewall.trustedInterfaces = [ "tailscale0" ];
   networking.firewall.allowedUDPPorts = [ config.services.tailscale.port ];
-
-  # Note: dns.nix binds the AdGuard web UI to localhost (it expects Traefik on
-  # hopper). There's no Traefik here, so reach this box's UI over the tailnet
-  # via an SSH tunnel, or set services.adguardhome.host to the tailnet IP if
-  # you want it bound directly. DNS itself serves on :53 to the LAN regardless.
 
   # ── home-manager ──────────────────────────────────────────────────────────
   home-manager = {

@@ -24,6 +24,10 @@ let
           - "traefik.http.routers.beszel.rule=Host(`beszel.hopper.internal`)"
           - "traefik.http.routers.beszel.entrypoints=websecure"
           - "traefik.http.routers.beszel.tls=true"
+          - "traefik.http.routers.beszel-dev.rule=Host(`beszel.hopper.zjones.dev`)"
+          - "traefik.http.routers.beszel-dev.entrypoints=websecure"
+          - "traefik.http.routers.beszel-dev.tls.certresolver=letsencrypt"
+          - "traefik.http.routers.beszel-dev.service=beszel"
           - "traefik.http.services.beszel.loadbalancer.server.port=8090"
 
       beszel-agent:
