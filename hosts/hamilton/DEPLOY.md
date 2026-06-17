@@ -6,83 +6,85 @@
 
 hamilton is an `aarch64-linux` host built from nixos-hardware's `raspberry-pi-3`
 profile plus nixpkgs' `sd-image-aarch64` module — **not** raspberry-pi-nix,
-which doesn't support the Pi 3. It runs only AdGuard Home + Unbound (a backup
-resolver) and a Tailscale client. The flow mirrors hopper: flash once to
-bootstrap → enrol its sops key → deploy with `nixos-rebuild --target-host`.
-
-> **Build host note:** hamilton is `aarch64-linux`. A macOS workstation can't build it
-> natively. Build on an aarch64 Linux machine (the Pi itself via `--build-host`,
-> or another arm64 box), or use a Mac-hosted Linux builder VM — see below.
+which doesn't support the Pi 3. It runs AdGuard Home + Unbound (backup DNS
+resolver) and Tailscale. The flow: bootstrap with the official NixOS aarch64
+installer → enrol its sops key → deploy with `nixos-rebuild --target-host`.
 
 ---
 
-## 0. Build host: Nix + linux-builder on an Apple Silicon Mac
+## 0. Build host note: macOS 26 + linux-builder VM
 
-Identical to hopper — see
-[hosts/hopper/DEPLOY.md](../hopper/DEPLOY.md#0-build-host-nix--linux-builder-on-an-apple-silicon-mac)
-for the full steps. In short:
-
-1. Install Nix on the Mac (not installed by default):
-
-   ```sh
-   curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
-   ```
-
-2. Start + register the builder VM (Apple Silicon builds aarch64 natively):
-
-   ```sh
-   nix run nixpkgs#darwin.linux-builder
-   ```
-
-   Add the printed `builders = ...` line to `/etc/nix/nix.conf` (or use
-   nix-darwin's `nix.linux-builder.enable = true;`).
-
-3. Run the commands below on the Mac; Nix offloads to the VM.
-
-> A Pi 3 is very slow to build on itself, so `--build-host z@hamilton.internal` works
-> but the Mac builder VM is much more pleasant here.
+> **macOS 26 (Darwin 25.x) known issue:** The `darwin.linux-builder` VM crashes
+> immediately on macOS 26 due to a QEMU / Hypervisor.framework incompatibility
+> (`HVF SMCR_EL1 assertion failed`). This affects both nixpkgs and
+> nixpkgs-unstable as of June 2026.
+>
+> **The workaround is to build on the Pi itself** — see steps 1–3 below. A Pi 3
+> is slower than a Pi 4, but the Nix binary cache means most packages are
+> downloaded rather than compiled, so it's manageable.
+>
+> Once the linux-builder issue is resolved upstream, drop `--build-host` from
+> the deploy command and configure the VM per hopper's
+> [section 0](../hopper/DEPLOY.md#0-build-host-note-macos-26--linux-builder-vm).
 
 ---
 
-## 1. Build and flash the bootstrap image
+## 1. Bootstrap: flash the official NixOS aarch64 image
 
-The Pi 3 boots from **SD card** (USB boot is unreliable on this board):
+The Pi 3 boots from **SD card** (USB boot is unreliable on this board).
 
-```sh
-nix build .#nixosConfigurations.hamilton.config.system.build.sdImage
-```
+1. Download the official NixOS aarch64 SD image from
+   [nixos.org/download](https://nixos.org/download) → "NixOS on ARM" →
+   Raspberry Pi 3. (The same aarch64 image works for both Pi 3 and Pi 4.)
 
-The image lands in `./result/sd-image/*.img.zst`. Flash it to the SD card:
+2. Flash it to the SD card:
 
-```sh
-zstdcat result/sd-image/*.img.zst | sudo dd of=/dev/disk/<SD> bs=4M status=progress conv=fsync
-```
+   ```sh
+   zstdcat nixos-*.img.zst | sudo dd of=/dev/disk/<SD> bs=4M status=progress conv=fsync
+   ```
 
-Replace `/dev/disk/<SD>` with the real device (`lsblk` / `diskutil list`).
-**Double-check the device** — `dd` to the wrong disk is unrecoverable.
+   Replace `/dev/disk/<SD>` with the real device (`diskutil list`).
+   **Double-check the device** — `dd` to the wrong disk is unrecoverable.
 
-Insert the card, connect to the network, and power on.
+3. Insert the card, connect to the network, and power on.
 
 ## 2. First boot and networking
 
-- hamilton comes up via DHCP. Add a **DHCP reservation** on the GL.iNet router so its
-  IP is stable.
-- Confirm SSH works (your key from `common.nix` is already authorized):
+- The installer image comes up via DHCP as user `nixos` (no password).
+- Add a **DHCP reservation** on the GL.iNet router so its IP is stable, and
+  point `hamilton.internal` at it (or rely on mDNS).
+- Confirm SSH works:
 
   ```sh
-  ssh z@hamilton.internal
+  ssh nixos@hamilton.internal
   ```
 
-## 3. Enrol hamilton's sops key
+## 3. Switch to the hamilton config (on the Pi)
 
-Secrets are encrypted to hamilton's SSH host key (as an age key), which only exists
-after first boot. On hamilton:
+SSH in and build directly on the Pi. The Nix binary cache supplies pre-built
+aarch64-linux packages, so this is mostly downloading rather than compiling —
+though a Pi 3 is slower than a Pi 4, so expect it to take longer.
+
+```sh
+ssh nixos@hamilton.internal
+nix-shell -p git
+git clone <your-nixos-config-repo-url> ~/nixos-config
+cd ~/nixos-config
+sudo nixos-rebuild switch --flake .#hamilton
+```
+
+After it completes, `ssh z@hamilton.internal` works (your key is in `common.nix`).
+
+## 4. Enrol hamilton's sops key
+
+Secrets are encrypted to hamilton's SSH host key (as an age key), which only
+exists after first boot. On hamilton:
 
 ```sh
 ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub
 ```
 
-Then, in this repo:
+Then, in this repo on the Mac:
 
 1. Paste that pubkey into [`.sops.yaml`](../../.sops.yaml), replacing the
    `&hamilton` placeholder.
@@ -99,7 +101,7 @@ Then, in this repo:
 
 3. If you edited keys after creating the file: `sops updatekeys secrets/hamilton.yaml`
 
-## 3b. Cloudflare DNS records (for TLS certs)
+## 4b. Cloudflare DNS records (for TLS certs)
 
 Traefik requests a **Let's Encrypt wildcard cert** for `hamilton.zjones.dev` via
 the Cloudflare DNS-01 challenge. The challenge only needs DNS-edit permission on
@@ -109,34 +111,32 @@ records must exist so clients can resolve the name to hamilton's private IP.
 In the Cloudflare dashboard for `zjones.dev`, add (DNS-only / grey-cloud, **not**
 proxied):
 
-| Type | Name              | Content                          |
-|------|-------------------|----------------------------------|
-| A    | `hamilton`        | hamilton's LAN or Tailscale IP   |
-| A    | `*.hamilton`      | hamilton's LAN or Tailscale IP   |
+| Type | Name         | Content                        |
+|------|--------------|--------------------------------|
+| A    | `hamilton`   | hamilton's LAN or Tailscale IP |
+| A    | `*.hamilton` | hamilton's LAN or Tailscale IP |
 
 > The wildcard `*.hamilton` covers `adguard.hamilton.zjones.dev`. Pointing it at
 > a private/tailnet IP is intentional — the UI stays off the public internet
 > while still getting a valid cert.
 
-## 4. Deploy
+## 5. Redeploy with real secrets
 
-From a build host that can produce aarch64 derivations:
+Once sops is enrolled, redeploy so Tailscale and Traefik come up properly.
+From the Mac:
 
 ```sh
 nixos-rebuild switch \
   --flake .#hamilton \
   --target-host z@hamilton.internal \
+  --build-host z@hamilton.internal \
   --use-remote-sudo
 ```
 
-- Add `--build-host z@hamilton.internal` to build *on the Pi* instead of locally
-  (slow on a Pi 3 — a remote/local aarch64 builder is friendlier).
-- Use `boot` instead of `switch` if a change needs a reboot.
+`--build-host z@hamilton.internal` builds on the Pi itself — no Mac builder VM
+needed. For subsequent deploys this is the standard command.
 
-Locally on hamilton you can also use the `nrs` / `nrt` aliases from
-[home.nix](home.nix).
-
-## 5. Post-deploy checklist
+## 6. Post-deploy checklist
 
 - **Tailscale:** plain client (not an exit node) — no admin-console approval
   needed. Confirm it joined the tailnet: `tailscale status`.
@@ -148,16 +148,14 @@ Locally on hamilton you can also use the `nrs` / `nrt` aliases from
   dig @hamilton.internal example.com
   ```
 
-- **AdGuard UI:** fronted by Traefik (`traefik-hamilton.nix`) at
-  `adguard.hamilton.internal` (self-signed) and `adguard.hamilton.zjones.dev`
-  (Let's Encrypt). `dns.nix` binds AdGuard to localhost; Traefik proxies to it.
-  Config is declarative (`mutableSettings = false`), so the UI is effectively
-  read-only for settings — client names and filter lists live in `dns.nix`
+- **AdGuard UI:** fronted by Traefik at `adguard.hamilton.internal` (self-signed)
+  and `adguard.hamilton.zjones.dev` (Let's Encrypt). Config is declarative
+  (`mutableSettings = false`) — client names and filter lists live in `dns.nix`
   (shared with hopper), not the UI.
 
 ## TLS certs: staging → production
 
-Like hopper, the Traefik module here pins the **Let's Encrypt staging CA** so
+Like hopper, the Traefik module pins the **Let's Encrypt staging CA** so
 debugging can't burn production rate limits. Staging certs trip browser warnings
 — expected. Confirm issuance with `docker logs traefik` on hamilton.
 
@@ -176,8 +174,12 @@ To switch to production:
 ## Routine updates
 
 ```sh
-git pull          # on the build host
-nixos-rebuild switch --flake .#hamilton --target-host z@hamilton.internal --use-remote-sudo
+git pull
+nixos-rebuild switch \
+  --flake .#hamilton \
+  --target-host z@hamilton.internal \
+  --build-host z@hamilton.internal \
+  --use-remote-sudo
 ```
 
 No reflashing — that's only for the initial install or a corrupted card.
