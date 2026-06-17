@@ -66,8 +66,8 @@ in
     upsmon = {
       monitor.cyberpower = {
         system = "cyberpower@localhost";
-        # master = this host powers down the UPS at the end of a shutdown.
-        type = "master";
+        # primary = this host powers down the UPS at the end of a shutdown.
+        type = "primary";
         user = "upsmon";
         passwordFile = config.sops.secrets."nut/upsmonPassword".path;
       };
@@ -75,20 +75,21 @@ in
         # Route every notification through upssched so we can debounce/route
         # to ntfy from one place.
         NOTIFYCMD = "${pkgs.nut}/bin/upssched";
-        # SYSLOG+EXEC so events both log and trigger NOTIFYCMD.
+        # SYSLOG+EXEC so events both log and trigger NOTIFYCMD. Each directive
+        # is a list of args (NUT settings render repeated keys as list-of-lists).
         NOTIFYFLAG = [
-          "ONBATT SYSLOG+EXEC"
-          "ONLINE SYSLOG+EXEC"
-          "LOWBATT SYSLOG+EXEC"
-          "COMMBAD SYSLOG+EXEC"
-          "COMMOK SYSLOG+EXEC"
+          [ "ONBATT" "SYSLOG+EXEC" ]
+          [ "ONLINE" "SYSLOG+EXEC" ]
+          [ "LOWBATT" "SYSLOG+EXEC" ]
+          [ "COMMBAD" "SYSLOG+EXEC" ]
+          [ "COMMOK" "SYSLOG+EXEC" ]
         ];
       };
     };
 
     users.upsmon = {
       passwordFile = config.sops.secrets."nut/upsmonPassword".path;
-      upsmon = "master";
+      upsmon = "primary";
     };
 
     schedulerRules = "${upsschedConf}";

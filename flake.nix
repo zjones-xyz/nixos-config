@@ -43,6 +43,7 @@
         system = "aarch64-linux";
         modules = [
           raspberry-pi-nix.nixosModules.raspberry-pi
+          raspberry-pi-nix.nixosModules.sd-image  # defines root fs + image partitions
           ./hosts/hopper/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
