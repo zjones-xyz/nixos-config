@@ -6,7 +6,7 @@
     ../../modules/nixos/dns.nix
   ];
 
-  networking.hostName = "pi3";  # placeholder — rename when the unit is in hand
+  networking.hostName = "hamilton";  # placeholder — rename when the unit is in hand
   # DHCP reservation on the GL.iNet router is the source of truth for the IP.
   # Add this host's IP as the *secondary* DNS server in the router's DHCP
   # settings — that's the whole failover story (primary = hopper).
@@ -20,10 +20,10 @@
 
   # ── sops-nix ──────────────────────────────────────────────────────────────
   # After first boot:  ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub
-  # then put that pubkey in .sops.yaml (replacing the pi3 placeholder) and
-  #   sops updatekeys secrets/pi3.yaml
+  # then put that pubkey in .sops.yaml (replacing the hamilton placeholder) and
+  #   sops updatekeys secrets/hamilton.yaml
   sops = {
-    defaultSopsFile = ../../secrets/pi3.yaml;
+    defaultSopsFile = ../../secrets/hamilton.yaml;
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
   };
 

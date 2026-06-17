@@ -15,8 +15,8 @@ keys:
   - &memory-alpha age13790dgm55mp5luu7pdpqewjxh0he5dlhnagp5wuk9dte0ks5gc6qp09882
   # TODO: replace with hopper's real age pubkey after first boot.
   - &hopper age1placeholderreplacewithhoppersrealagekeyafterfirstboot000000000
-  # TODO: replace with pi3's real age pubkey after first boot.
-  - &pi3 age1placeholderreplacewithpi3srealagekeyafterfirstboot00000000000000
+  # TODO: replace with hamilton's real age pubkey after first boot.
+  - &hamilton age1placeholderreplacewithhamiltonsrealagekeyafterfirstboot00000000000000
 
 creation_rules:
   - path_regex: secrets/memory-alpha\.yaml$
@@ -27,7 +27,7 @@ creation_rules:
     key_groups:
       - age:
           - *hopper
-  - path_regex: secrets/pi3\.yaml$
+  - path_regex: secrets/hamilton\.yaml$
     key_groups:
       - age:
-          - *pi3
+          - *hamilton

@@ -49,19 +49,19 @@
         ];
       };
 
-      # pi3 — Raspberry Pi 3 (bcm2837), backup AdGuard/Unbound resolver.
+      # hamilton — Raspberry Pi 3 (bcm2837), backup AdGuard/Unbound resolver.
       # Placeholder name; rename once the unit is in hand. raspberry-pi-nix
       # doesn't support the Pi 3, so this uses nixos-hardware's rpi-3 profile
       # plus nixpkgs' sd-image-aarch64 builder (SD-card boot).
       #
       # Build the SD image with:
-      #   nix build .#nixosConfigurations.pi3.config.system.build.sdImage
-      pi3 = nixpkgs.lib.nixosSystem {
+      #   nix build .#nixosConfigurations.hamilton.config.system.build.sdImage
+      hamilton = nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
         modules = [
           nixos-hardware.nixosModules.raspberry-pi-3
           "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
-          ./hosts/pi3/configuration.nix
+          ./hosts/hamilton/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
         ];

@@ -15,8 +15,8 @@
     enable = true;
     shellAliases = {
       ll = "ls -la";
-      nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#pi3";
-      nrt = "sudo nixos-rebuild test --flake ~/nixos-config#pi3";
+      nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#hamilton";
+      nrt = "sudo nixos-rebuild test --flake ~/nixos-config#hamilton";
       npull = "git -C ~/nixos-config pull";
     };
   };

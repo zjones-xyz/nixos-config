@@ -137,7 +137,7 @@ Locally on hopper you can also use the `nrs` / `nrt` aliases from
 - **Tailscale exit node:** approve it in the admin console
   (Machines → hopper → Edit route settings → Use as exit node).
 - **DNS:** set hopper as the **primary** DNS server in the GL.iNet DHCP
-  settings (pi3 secondary, once it exists). Verify:
+  settings (hamilton secondary, once it exists). Verify:
 
   ```sh
   dig @hopper.internal example.com
