@@ -106,12 +106,33 @@ Then, in this repo:
    ```
 
    Populate the keys the modules expect (see the placeholder file for the list):
+   - `cloudflare/apiToken` — Cloudflare API token with DNS-edit perms (reuse
+     memory-alpha's token); needed for the Let's Encrypt DNS challenge
    - `tailscale/authKey` — reusable/ephemeral key from the Tailscale admin console
    - `nut/upsmonPassword` — any password; matches the upsd user
    - `beszel/agentKey` — `KEY=ssh-ed25519 ...`, the Beszel hub's public key
    - `speedtest-tracker/appKey` — `APP_KEY=base64:...` (`openssl rand -base64 32`)
 
 3. If you edited keys after creating the file: `sops updatekeys secrets/hopper.yaml`
+
+## 3b. Cloudflare DNS records (for TLS certs)
+
+Traefik requests a **Let's Encrypt wildcard cert** for `hopper.zjones.dev` via
+the Cloudflare DNS-01 challenge. The challenge only needs DNS-edit permission on
+the zone — the host does **not** need to be publicly reachable — but the A
+records must exist so clients can resolve the names to hopper's private IP.
+
+In the Cloudflare dashboard for `zjones.dev`, add (DNS-only / grey-cloud, **not**
+proxied):
+
+| Type | Name                  | Content                        |
+|------|-----------------------|--------------------------------|
+| A    | `hopper`              | hopper's LAN or Tailscale IP   |
+| A    | `*.hopper`            | hopper's LAN or Tailscale IP   |
+
+> The wildcard `*.hopper` covers `adguard.hopper.zjones.dev`, `beszel...`, etc.
+> Pointing these at a private/tailnet IP is intentional — services stay off the
+> public internet while still getting valid certs.
 
 ## 4. Deploy
 
@@ -152,9 +173,30 @@ Locally on hopper you can also use the `nrs` / `nrt` aliases from
 
   Trigger a test notification by pulling UPS mains power briefly and confirm an
   ntfy push arrives on the `ups` topic.
-- **Web UIs:** reachable at `*.hopper.internal` via Traefik (self-signed TLS) —
-  `traefik`, `adguard`, `kuma`, `ntfy`, `beszel`, `speedtest`, and Homepage at
-  the root `hopper.internal`.
+- **Web UIs:** reachable via Traefik as `*.hopper.internal` (self-signed) and
+  `*.hopper.zjones.dev` (Let's Encrypt) — `traefik`, `adguard`, `kuma`, `ntfy`,
+  `beszel`, `speedtest`, and Homepage at the root `hopper.zjones.dev`.
+
+## TLS certs: staging → production
+
+The Traefik module ships with the **Let's Encrypt staging CA** pinned
+(`acme.caserver=...staging...`) so debugging can't burn the strict production
+rate limits. Staging certs are issued by an untrusted root, so browsers will
+warn — that's expected. Use this phase to confirm the DNS challenge succeeds
+(check `docker logs traefik` for "certificate obtained").
+
+Once certs are issuing cleanly, switch to production:
+
+1. Remove the `caserver` line from
+   [`modules/nixos/traefik-local.nix`](../../modules/nixos/traefik-local.nix).
+2. **Delete the cached staging certs** on hopper — Traefik won't re-request if a
+   cert already exists in the file:
+
+   ```sh
+   ssh z@hopper.internal 'rm /home/z/traefik/letsencrypt/acme.json'
+   ```
+
+3. Redeploy. Traefik requests fresh production certs on startup.
 
 ## Routine updates
 

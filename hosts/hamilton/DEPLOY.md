@@ -92,10 +92,31 @@ Then, in this repo:
    sops secrets/hamilton.yaml
    ```
 
-   hamilton needs only one secret:
+   hamilton needs two secrets:
+   - `cloudflare/apiToken` — Cloudflare API token with DNS-edit perms (reuse
+     memory-alpha's token); needed for the Let's Encrypt DNS challenge
    - `tailscale/authKey` — reusable/ephemeral key from the Tailscale admin console
 
 3. If you edited keys after creating the file: `sops updatekeys secrets/hamilton.yaml`
+
+## 3b. Cloudflare DNS records (for TLS certs)
+
+Traefik requests a **Let's Encrypt wildcard cert** for `hamilton.zjones.dev` via
+the Cloudflare DNS-01 challenge. The challenge only needs DNS-edit permission on
+the zone — the host does **not** need to be publicly reachable — but the A
+records must exist so clients can resolve the name to hamilton's private IP.
+
+In the Cloudflare dashboard for `zjones.dev`, add (DNS-only / grey-cloud, **not**
+proxied):
+
+| Type | Name              | Content                          |
+|------|-------------------|----------------------------------|
+| A    | `hamilton`        | hamilton's LAN or Tailscale IP   |
+| A    | `*.hamilton`      | hamilton's LAN or Tailscale IP   |
+
+> The wildcard `*.hamilton` covers `adguard.hamilton.zjones.dev`. Pointing it at
+> a private/tailnet IP is intentional — the UI stays off the public internet
+> while still getting a valid cert.
 
 ## 4. Deploy
 
@@ -127,17 +148,30 @@ Locally on hamilton you can also use the `nrs` / `nrt` aliases from
   dig @hamilton.internal example.com
   ```
 
-- **AdGuard UI:** `dns.nix` binds the web UI to localhost and there's no Traefik
-  on this box. Reach it over the tailnet via an SSH tunnel:
+- **AdGuard UI:** fronted by Traefik (`traefik-hamilton.nix`) at
+  `adguard.hamilton.internal` (self-signed) and `adguard.hamilton.zjones.dev`
+  (Let's Encrypt). `dns.nix` binds AdGuard to localhost; Traefik proxies to it.
+  Config is declarative (`mutableSettings = false`), so the UI is effectively
+  read-only for settings — client names and filter lists live in `dns.nix`
+  (shared with hopper), not the UI.
 
-  ```sh
-  ssh -L 3000:127.0.0.1:3000 z@hamilton.internal   # then open http://localhost:3000
-  ```
+## TLS certs: staging → production
 
-  (Or set `services.adguardhome.host` to the tailnet IP if you want it bound
-  directly.) Config is declarative (`mutableSettings = false`), so the UI is
-  effectively read-only for settings — mirror hopper's filter lists in
-  `dns.nix` rather than editing in the UI.
+Like hopper, the Traefik module here pins the **Let's Encrypt staging CA** so
+debugging can't burn production rate limits. Staging certs trip browser warnings
+— expected. Confirm issuance with `docker logs traefik` on hamilton.
+
+To switch to production:
+
+1. Remove the `caserver` line from
+   [`modules/nixos/traefik-hamilton.nix`](../../modules/nixos/traefik-hamilton.nix).
+2. Delete the cached staging cert (Traefik won't re-request otherwise):
+
+   ```sh
+   ssh z@hamilton.internal 'rm /home/z/traefik/letsencrypt/acme.json'
+   ```
+
+3. Redeploy.
 
 ## Routine updates
 
