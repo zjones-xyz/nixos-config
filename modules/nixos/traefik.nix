@@ -1,6 +1,26 @@
 { config, pkgs, lib, ... }:
 
 let
+  # File provider config for non-Docker services.
+  # Traefik watches this directory for YAML files at runtime.
+  jellyfinConfig = pkgs.writeText "jellyfin.yml" ''
+    http:
+      routers:
+        jellyfin:
+          rule: "Host(`jellyfin.zjones.dev`)"
+          entrypoints:
+            - websecure
+          tls:
+            certResolver: letsencrypt
+          service: jellyfin-svc
+
+      services:
+        jellyfin-svc:
+          loadBalancer:
+            servers:
+              - url: "http://host.docker.internal:8096"
+  '';
+
   composeFile = pkgs.writeText "traefik-compose.yml" ''
     networks:
       proxy:
@@ -15,11 +35,18 @@ let
           - "--providers.docker=true"
           - "--providers.docker.exposedByDefault=false"
           - "--providers.docker.network=proxy"
+          - "--providers.file.directory=/traefik-config"
+          - "--providers.file.watch=true"
           - "--entrypoints.web.address=:80"
           - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
           - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
           - "--entrypoints.websecure.address=:443"
           - "--entrypoints.websecure.http.middlewares=secure-headers@docker"
+          - "--certificatesresolvers.letsencrypt.acme.email=zoejonestx91@gmail.com"
+          - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+          - "--certificatesresolvers.letsencrypt.acme.dnschallenge=true"
+          - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare"
+          - "--certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,1.0.0.1:53"
           - "--api.dashboard=true"
           - "--accesslog=true"
           - "--accesslog.format=json"
@@ -31,16 +58,37 @@ let
           options:
             max-size: "10m"
             max-file: "5"
+        environment:
+          - CF_DNS_API_TOKEN
+        extra_hosts:
+          - "host.docker.internal:host-gateway"
         volumes:
           - "/run/user/1000/docker.sock:/var/run/docker.sock:ro"
+          - "/home/z/traefik/letsencrypt:/letsencrypt"
+          - "${jellyfinConfig}:/traefik-config/jellyfin.yml:ro"
+          - "${config.sops.secrets."traefik/dashboardAuth".path}:/auth/users:ro"
         networks:
           - proxy
         labels:
           - "traefik.enable=true"
+          # Dashboard on .internal (self-signed)
           - "traefik.http.routers.traefik.rule=Host(`traefik.memory-alpha.internal`)"
           - "traefik.http.routers.traefik.entrypoints=websecure"
           - "traefik.http.routers.traefik.tls=true"
+          - "traefik.http.routers.traefik.middlewares=dashboard-auth"
           - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+          # Dashboard on .zjones.dev — also triggers the wildcard cert request
+          # for *.memory-alpha.zjones.dev, which all other .zjones.dev routers reuse.
+          - "traefik.http.routers.traefik-dev.rule=Host(`traefik.memory-alpha.zjones.dev`)"
+          - "traefik.http.routers.traefik-dev.entrypoints=websecure"
+          - "traefik.http.routers.traefik-dev.tls.certresolver=letsencrypt"
+          - "traefik.http.routers.traefik-dev.tls.domains[0].main=memory-alpha.zjones.dev"
+          - "traefik.http.routers.traefik-dev.tls.domains[0].sans=*.memory-alpha.zjones.dev"
+          - "traefik.http.routers.traefik-dev.service=traefik"
+          - "traefik.http.routers.traefik-dev.middlewares=dashboard-auth"
+          # Dashboard basic auth — credentials read from mounted sops secret
+          - "traefik.http.middlewares.dashboard-auth.basicauth.usersfile=/auth/users"
+          # Secure headers middleware
           - "traefik.http.middlewares.secure-headers.headers.frameDeny=true"
           - "traefik.http.middlewares.secure-headers.headers.contentTypeNosniff=true"
           - "traefik.http.middlewares.secure-headers.headers.referrerPolicy=strict-origin-when-cross-origin"
@@ -50,16 +98,16 @@ in
 {
   networking.firewall.allowedTCPPorts = [ 80 443 ];
 
-  # Rootless Docker can't bind ports < 1024 by default; lower the threshold
-  # so Traefik can publish 80/443. ip_forward is needed for bridge networking.
   boot.kernel.sysctl = {
     "net.ipv4.ip_unprivileged_port_start" = 80;
     "net.ipv4.ip_forward" = 1;
   };
 
-  # Single owner for the shared `proxy` network. Both Traefik and Dockge
-  # reference it as `external: true`, avoiding compose project-ownership
-  # conflicts that caused Traefik to ignore its own container.
+  # Both secrets are read by the traefik service, which runs as `z`, so they
+  # must be owned by z rather than the sops-nix default of root:0400.
+  sops.secrets."cloudflare/apiToken".owner = "z";
+  sops.secrets."traefik/dashboardAuth".owner = "z";
+
   systemd.services.docker-proxy-network = {
     description = "Create shared Docker proxy network";
     after = [ "user@1000.service" ];
@@ -89,10 +137,12 @@ in
       User = "z";
       Restart = "on-failure";
       RestartSec = "10s";
+      ExecStartPre = "+${pkgs.bash}/bin/bash -c 'mkdir -p /home/z/traefik/letsencrypt && chown -R z:users /home/z/traefik'";
       ExecStop = "${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name traefik down";
     };
 
     script = ''
+      export CF_DNS_API_TOKEN="$(cat ${config.sops.secrets."cloudflare/apiToken".path})"
       exec ${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name traefik up --remove-orphans
     '';
   };

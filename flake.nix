@@ -21,9 +21,17 @@
     # Hardware profiles for older/other boards. Used for the Pi 3, which
     # raspberry-pi-nix doesn't cover; paired with nixpkgs' sd-image module.
     nixos-hardware.url = "github:NixOS/nixos-hardware";
+
+    # Declarative disk partitioning. Used for hopper's nixos-anywhere bootstrap
+    # (the linux-builder VM is broken on macOS 26, so we bootstrap via
+    # nixos-anywhere --build-on-remote with Raspberry Pi OS as the carrier OS).
+    disko = {
+      url = "github:nix-community/disko";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, raspberry-pi-nix, nixos-hardware, ... }: {
+  outputs = { self, nixpkgs, home-manager, sops-nix, raspberry-pi-nix, nixos-hardware, disko, ... }: {
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
@@ -43,7 +51,7 @@
         system = "aarch64-linux";
         modules = [
           raspberry-pi-nix.nixosModules.raspberry-pi
-          raspberry-pi-nix.nixosModules.sd-image  # defines root fs + image partitions
+          disko.nixosModules.disko  # declarative disk layout for nixos-anywhere bootstrap
           ./hosts/hopper/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops

@@ -1,8 +1,9 @@
 # Deploying hopper (Raspberry Pi 4)
 
 hopper is an `aarch64-linux` host built with `raspberry-pi-nix`. The flow is:
-bootstrap with the official NixOS aarch64 installer → enrol its sops key →
-deploy normally with `nixos-rebuild --target-host` from then on.
+bootstrap with nixos-anywhere (using Raspberry Pi OS as the carrier OS) →
+enrol its sops key → deploy normally with `nixos-rebuild --target-host` from
+then on.
 
 ---
 
@@ -13,7 +14,10 @@ deploy normally with `nixos-rebuild --target-host` from then on.
 > (`HVF SMCR_EL1 assertion failed`). This affects both nixpkgs and
 > nixpkgs-unstable as of June 2026.
 >
-> **The workaround is to build on the Pi itself** — see step 1 below.
+> **The workaround is `nixos-anywhere --build-on-remote`** — see step 1 below.
+> This builds on the Pi itself and ships the closure locally, so no Mac builder
+> VM is needed.
+>
 > Once the linux-builder issue is resolved upstream, you can resume building
 > from the Mac and shipping the closure via `--target-host`. At that point,
 > register the builder by running `nix run nixpkgs#darwin.linux-builder` and
@@ -21,58 +25,69 @@ deploy normally with `nixos-rebuild --target-host` from then on.
 
 ---
 
-## 1. Bootstrap: flash the official NixOS aarch64 image
+## 1. Bootstrap: install via nixos-anywhere
 
-Instead of building the sdImage from the Mac (blocked by the linux-builder
-issue above), use the official NixOS aarch64 installer to get NixOS onto the
-Pi, then switch to the hopper config directly on the hardware.
+Because the official NixOS aarch64 installer ships as a `.zst` SD image that
+can be hard to find, and the generic ISO won't boot on a Pi (no EFI), we use
+**nixos-anywhere** on top of **Raspberry Pi OS** as the carrier OS.
 
-1. Download the official NixOS aarch64 SD image from
-   [nixos.org/download](https://nixos.org/download) → "NixOS on ARM" →
-   Raspberry Pi 4.
+### 1a. Flash Raspberry Pi OS to the USB SSD
 
-2. Flash it to the **USB SSD** (preferred over SD — rebuilds chew through SD
-   cards):
+Raspberry Pi OS is the carrier OS — nixos-anywhere will wipe it and replace it
+with NixOS. Use the Pi's SD card slot as a staging medium, or flash directly to
+the USB SSD if you have a USB adapter.
+
+1. Download **Raspberry Pi OS Lite (64-bit)** from
+   [raspberrypi.com/software](https://www.raspberrypi.com/software/operating-systems/)
+   — choose the "Lite" (no desktop) variant.
+
+2. Flash it to the **SD card** with Raspberry Pi Imager (or `dd`). In Imager's advanced settings:
+   - Set hostname: `hopper`
+   - Enable SSH (key-based)
+   - Paste your public key (same key already in `modules/nixos/common.nix`)
+
+3. Insert/attach the SSD, connect hopper to the network, power it on.
+
+4. Add a **DHCP reservation** on the GL.iNet router so hopper's IP is stable,
+   and point `hopper.internal` at it (or rely on mDNS).
+
+5. Confirm SSH works:
 
    ```sh
-   zstdcat nixos-*.img.zst | sudo dd of=/dev/disk/<SSD> bs=4M status=progress conv=fsync
+   ssh pi@hopper.internal
    ```
 
-   Replace `/dev/disk/<SSD>` with the real device (`diskutil list`).
-   **Double-check the device** — `dd` to the wrong disk is unrecoverable.
+   (Default user is `pi` on Raspberry Pi OS if you didn't override it in
+   Imager; or whatever username you set.)
 
-3. Set the Pi 4 to boot USB-first (EEPROM `BOOT_ORDER=0xf41`) per the notes in
-   [configuration.nix](configuration.nix), connect it to the network, and power
-   it on.
+### 1b. Run nixos-anywhere
 
-## 2. First boot and networking
-
-- The installer image comes up via DHCP as user `nixos` (no password).
-- Add a **DHCP reservation** on the GL.iNet router so its IP is stable, and
-  point `hopper.internal` at it (or rely on mDNS).
-- Confirm SSH works:
-
-  ```sh
-  ssh nixos@hopper.internal
-  ```
-
-## 3. Switch to the hopper config (on the Pi)
-
-SSH in and build directly on the Pi. The Nix binary cache supplies pre-built
-aarch64-linux packages, so this is mostly downloading rather than compiling.
+From this repo on the Mac:
 
 ```sh
-ssh nixos@hopper.internal
-nix-shell -p git
-git clone <your-nixos-config-repo-url> ~/nixos-config
-cd ~/nixos-config
-sudo nixos-rebuild switch --flake .#hopper
+nix run nixpkgs#nixos-anywhere -- \
+  --flake .#hopper \
+  --build-on-remote \
+  --target-host pi@hopper.internal \
+  --ssh-option StrictHostKeyChecking=no
 ```
 
-This replaces the installer system with the full hopper config. After it
-completes, `ssh z@hopper.internal` works (your key is in `common.nix`).
+`--build-on-remote` builds NixOS on the Pi itself (no Mac builder needed).
+`nixos-anywhere` will:
+1. Copy the flake to the Pi.
+2. Run disko to partition and format `/dev/sda`.
+3. Install NixOS and reboot.
 
-## 4. Enrol hopper's sops key
+> **Heads up:** disko will **wipe `/dev/mmcblk0`** (the SD card) completely.
+> Confirm with `lsblk` on the Pi before proceeding.
+
+After the reboot, SSH in as your normal user:
+
+```sh
+ssh z@hopper.internal
+```
+
+## 2. Enrol hopper's sops key
 
 Secrets are encrypted to hopper's SSH host key (as an age key), which only
 exists after first boot. On hopper:
@@ -101,7 +116,7 @@ Then, in this repo on the Mac:
 
 3. If you edited keys after creating the file: `sops updatekeys secrets/hopper.yaml`
 
-## 4b. Cloudflare DNS records (for TLS certs)
+## 2b. Cloudflare DNS records (for TLS certs)
 
 Traefik requests a **Let's Encrypt wildcard cert** for `hopper.zjones.dev` via
 the Cloudflare DNS-01 challenge. The challenge only needs DNS-edit permission on
@@ -120,7 +135,7 @@ proxied):
 > Pointing these at a private/tailnet IP is intentional — services stay off the
 > public internet while still getting valid certs.
 
-## 5. Redeploy with real secrets
+## 3. Redeploy with real secrets
 
 Once sops is enrolled, redeploy so the secrets-dependent services (Tailscale,
 Traefik, NUT, Beszel, speedtest-tracker) come up properly. From the Mac:
@@ -134,10 +149,10 @@ nixos-rebuild switch \
 ```
 
 `--build-host z@hopper.internal` tells Nix to compile on the Pi and ship the
-result there — no Mac builder VM needed. For subsequent deploys this is the
-standard command.
+result there — no Mac builder VM needed. This is the standard command for all
+subsequent deploys too.
 
-## 6. Post-deploy checklist
+## 4. Post-deploy checklist
 
 - **Tailscale exit node:** approve it in the admin console
   (Machines → hopper → Edit route settings → Use as exit node).
@@ -195,7 +210,7 @@ nixos-rebuild switch \
   --use-remote-sudo
 ```
 
-No reflashing — that's only for the initial install or a corrupted disk. If the
-macOS linux-builder issue is resolved and you'd prefer to build on the Mac
-instead of the Pi, drop `--build-host` and configure the builder per the note
-in section 0.
+No reflashing or re-running disko — that's only for the initial install.
+If the macOS linux-builder issue is resolved and you'd prefer to build on the
+Mac instead of the Pi, drop `--build-host` and configure the builder per the
+note in section 0.

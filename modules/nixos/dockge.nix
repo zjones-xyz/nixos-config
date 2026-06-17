@@ -24,6 +24,10 @@ let
           - "traefik.http.routers.dockge.rule=Host(`dockge.memory-alpha.internal`)"
           - "traefik.http.routers.dockge.entrypoints=websecure"
           - "traefik.http.routers.dockge.tls=true"
+          - "traefik.http.routers.dockge-dev.rule=Host(`dockge.memory-alpha.zjones.dev`)"
+          - "traefik.http.routers.dockge-dev.entrypoints=websecure"
+          - "traefik.http.routers.dockge-dev.tls.certresolver=letsencrypt"
+          - "traefik.http.routers.dockge-dev.service=dockge"
           - "traefik.http.services.dockge.loadbalancer.server.port=5001"
   '';
 in
