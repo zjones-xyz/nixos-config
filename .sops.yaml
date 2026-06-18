@@ -14,9 +14,11 @@
 keys:
   - &admin age10xxhjwmlntkw3q7wggqhq3jvjr0eycscrtdknpf7kw6mmmy75p0syt2twm
   - &memory-alpha age13790dgm55mp5luu7pdpqewjxh0he5dlhnagp5wuk9dte0ks5gc6qp09882
-  # TODO: replace with hopper's real age pubkey after first boot.
+  # TODO: replace with hopper's real age pubkey after first boot, then add
+  #   *hopper to the hopper rule below and run: sops updatekeys secrets/hopper.yaml
   - &hopper age1placeholderreplacewithhoppersrealagekeyafterfirstboot000000000
-  # TODO: replace with hamilton's real age pubkey after first boot.
+  # TODO: replace with hamilton's real age pubkey after first boot, then add
+  #   *hamilton to the hamilton rule below and run: sops updatekeys secrets/hamilton.yaml
   - &hamilton age1placeholderreplacewithhamiltonsrealagekeyafterfirstboot00000000000000
 
 creation_rules:
@@ -25,13 +27,17 @@ creation_rules:
       - age:
           - *admin
           - *memory-alpha
+  # hopper/hamilton: until each Pi has booted and its real age key is known, the
+  # files are encrypted to admin (edit from the Mac) + memory-alpha (the build
+  # host, which validates secrets at image-build time). Add *hopper / *hamilton
+  # after first boot so the host itself can decrypt at activation.
   - path_regex: secrets/hopper\.yaml$
     key_groups:
       - age:
           - *admin
-          - *hopper
+          - *memory-alpha
   - path_regex: secrets/hamilton\.yaml$
     key_groups:
       - age:
           - *admin
-          - *hamilton
+          - *memory-alpha
