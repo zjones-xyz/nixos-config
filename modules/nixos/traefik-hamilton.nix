@@ -1,27 +1,31 @@
 { config, pkgs, lib, ... }:
 
 let
-  # File provider config for non-Docker services.
-  # Traefik watches this directory for YAML files at runtime.
-  jellyfinConfig = pkgs.writeText "jellyfin.yml" ''
+  # File-provider routes for hamilton's native services (AdGuard Home only).
+  # Two routers per service: *.hamilton.internal (self-signed) and
+  # *.hamilton.zjones.dev (Let's Encrypt wildcard, DNS challenge via Cloudflare).
+  nativeRoutes = pkgs.writeText "native-hamilton.yml" ''
     http:
       routers:
-        jellyfin:
-          rule: "Host(`jellyfin.zjones.dev`)"
-          entrypoints:
-            - websecure
+        adguard:
+          rule: "Host(`adguard.hamilton.internal`)"
+          entrypoints: [websecure]
+          tls: {}
+          service: adguard-svc
+        adguard-dev:
+          rule: "Host(`adguard.hamilton.zjones.dev`)"
+          entrypoints: [websecure]
           tls:
             certResolver: letsencrypt
-          service: jellyfin-svc
+          service: adguard-svc
 
       services:
-        jellyfin-svc:
+        adguard-svc:
           loadBalancer:
-            servers:
-              - url: "http://host.docker.internal:8096"
+            servers: [{ url: "http://host.docker.internal:3000" }]
   '';
 
-  composeFile = pkgs.writeText "traefik-compose.yml" ''
+  composeFile = pkgs.writeText "traefik-hamilton-compose.yml" ''
     networks:
       proxy:
         external: true
@@ -41,15 +45,13 @@ let
           - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
           - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
           - "--entrypoints.websecure.address=:443"
-          - "--entrypoints.websecure.http.middlewares=secure-headers@docker"
           - "--certificatesresolvers.letsencrypt.acme.email=zoejonestx91@gmail.com"
           - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+          - "--certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
           - "--certificatesresolvers.letsencrypt.acme.dnschallenge=true"
           - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare"
           - "--certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,1.0.0.1:53"
-          - "--api.dashboard=true"
-          - "--accesslog=true"
-          - "--accesslog.format=json"
+          - "--api.dashboard=false"
         ports:
           - "80:80"
           - "443:443"
@@ -65,55 +67,36 @@ let
         volumes:
           - "/run/user/1000/docker.sock:/var/run/docker.sock:ro"
           - "/home/z/traefik/letsencrypt:/letsencrypt"
-          - "${jellyfinConfig}:/traefik-config/jellyfin.yml:ro"
-          - "${config.sops.secrets."traefik/dashboardAuth".path}:/auth/users:ro"
+          - "${nativeRoutes}:/traefik-config/native.yml:ro"
         networks:
           - proxy
         labels:
           - "traefik.enable=true"
-          # Dashboard on .internal (self-signed)
-          - "traefik.http.routers.traefik.rule=Host(`traefik.memory-alpha.internal`)"
-          - "traefik.http.routers.traefik.entrypoints=websecure"
-          - "traefik.http.routers.traefik.tls=true"
-          - "traefik.http.routers.traefik.middlewares=dashboard-auth"
-          - "traefik.http.services.traefik.loadbalancer.server.port=8080"
-          # Dashboard on .zjones.dev — also triggers the wildcard cert request
-          # for *.memory-alpha.zjones.dev, which all other .zjones.dev routers reuse.
-          - "traefik.http.routers.traefik-dev.rule=Host(`traefik.memory-alpha.zjones.dev`)"
+          # Wildcard cert anchor — triggers the LE DNS challenge for
+          # hamilton.zjones.dev + *.hamilton.zjones.dev once; all other
+          # *.hamilton.zjones.dev routers reuse the issued cert.
+          - "traefik.http.routers.traefik-dev.rule=Host(`traefik.hamilton.zjones.dev`)"
           - "traefik.http.routers.traefik-dev.entrypoints=websecure"
           - "traefik.http.routers.traefik-dev.tls.certresolver=letsencrypt"
-          - "traefik.http.routers.traefik-dev.tls.domains[0].main=memory-alpha.zjones.dev"
-          - "traefik.http.routers.traefik-dev.tls.domains[0].sans=*.memory-alpha.zjones.dev"
-          - "traefik.http.routers.traefik-dev.service=traefik"
-          - "traefik.http.routers.traefik-dev.middlewares=dashboard-auth"
-          # Dashboard basic auth — credentials read from mounted sops secret
-          - "traefik.http.middlewares.dashboard-auth.basicauth.usersfile=/auth/users"
-          # Secure headers middleware
-          - "traefik.http.middlewares.secure-headers.headers.frameDeny=true"
-          - "traefik.http.middlewares.secure-headers.headers.contentTypeNosniff=true"
-          - "traefik.http.middlewares.secure-headers.headers.referrerPolicy=strict-origin-when-cross-origin"
-          - "traefik.http.middlewares.secure-headers.headers.browserXssFilter=true"
+          - "traefik.http.routers.traefik-dev.tls.domains[0].main=hamilton.zjones.dev"
+          - "traefik.http.routers.traefik-dev.tls.domains[0].sans=*.hamilton.zjones.dev"
+          - "traefik.http.routers.traefik-dev.service=api@internal"
   '';
 in
 {
+  sops.secrets."cloudflare/apiToken".owner = "z";
+
   networking.firewall.allowedTCPPorts = [ 80 443 ];
 
-  boot.kernel.sysctl = {
-    "net.ipv4.ip_unprivileged_port_start" = 80;
-    "net.ipv4.ip_forward" = 1;
-  };
-
-  # Both secrets are read by the traefik service, which runs as `z`, so they
-  # must be owned by z rather than the sops-nix default of root:0400.
-  sops.secrets."cloudflare/apiToken".owner = "z";
-  sops.secrets."traefik/dashboardAuth".owner = "z";
+  # Rootless Docker can't bind <1024 without this.
+  boot.kernel.sysctl."net.ipv4.ip_unprivileged_port_start" = 80;
 
   systemd.services.docker-proxy-network = {
     description = "Create shared Docker proxy network";
     after = [ "user@1000.service" ];
     wants = [ "user@1000.service" ];
-    before = [ "traefik-docker.service" "dockge.service" ];
-    requiredBy = [ "traefik-docker.service" "dockge.service" ];
+    before = [ "traefik-docker.service" ];
+    requiredBy = [ "traefik-docker.service" ];
 
     environment.DOCKER_HOST = "unix:///run/user/1000/docker.sock";
 

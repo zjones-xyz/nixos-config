@@ -17,6 +17,23 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
+  # ── aarch64 emulation (build host for the Pis) ──────────────────────────────
+  # Registers QEMU user-mode emulation for aarch64-linux via binfmt_misc, so
+  # this x86_64 box can build aarch64 derivations. The Mac's linux-builder VM
+  # is broken on macOS 26, and the Pis themselves are slow, so memory-alpha
+  # becomes the aarch64 build host for hopper/hamilton.
+  #
+  # Use it as a remote build host when deploying a Pi:
+  #   nixos-rebuild switch --flake .#hopper \
+  #     --target-host z@hopper.internal \
+  #     --build-host z@memory-alpha.internal \
+  #     --use-remote-sudo
+  #
+  # Emulated builds are slower than native, but memory-alpha is far faster than
+  # a Pi 4 even with the QEMU overhead — and it spares the Pi's SD card the
+  # write churn of compiling.
+  boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
+
   # systemd-based initrd (26.05 default) — required for LUKS SSH unlock
   boot.initrd.systemd.enable = true;
 
