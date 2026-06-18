@@ -12,6 +12,7 @@
 # then replace the placeholder below and run `sops updatekeys secrets/hopper.yaml`.
 
 keys:
+  - &admin age10xxhjwmlntkw3q7wggqhq3jvjr0eycscrtdknpf7kw6mmmy75p0syt2twm
   - &memory-alpha age13790dgm55mp5luu7pdpqewjxh0he5dlhnagp5wuk9dte0ks5gc6qp09882
   # TODO: replace with hopper's real age pubkey after first boot.
   - &hopper age1placeholderreplacewithhoppersrealagekeyafterfirstboot000000000
@@ -22,12 +23,15 @@ creation_rules:
   - path_regex: secrets/memory-alpha\.yaml$
     key_groups:
       - age:
+          - *admin
           - *memory-alpha
   - path_regex: secrets/hopper\.yaml$
     key_groups:
       - age:
+          - *admin
           - *hopper
   - path_regex: secrets/hamilton\.yaml$
     key_groups:
       - age:
+          - *admin
           - *hamilton
