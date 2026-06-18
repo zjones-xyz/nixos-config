@@ -1,6 +1,10 @@
 { config, pkgs, lib, ... }:
 
 {
+  imports = [
+    ./letsencrypt.nix
+  ];
+
   nix = {
     settings = {
       experimental-features = [ "nix-command" "flakes" ];

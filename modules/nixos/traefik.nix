@@ -1,6 +1,18 @@
 { config, pkgs, lib, ... }:
 
 let
+  # Let's Encrypt CA + storage, switched by config.homelab.letsencryptStaging.
+  # Staging and production certs live in separate files so flipping the flag
+  # never requires deleting cached certs.
+  acmeCaServer =
+    if config.homelab.letsencryptStaging
+    then "https://acme-staging-v02.api.letsencrypt.org/directory"
+    else "https://acme-v02.api.letsencrypt.org/directory";
+  acmeStorage =
+    if config.homelab.letsencryptStaging
+    then "/letsencrypt/acme-staging.json"
+    else "/letsencrypt/acme.json";
+
   # File provider config for non-Docker services.
   # Traefik watches this directory for YAML files at runtime.
   jellyfinConfig = pkgs.writeText "jellyfin.yml" ''
@@ -43,10 +55,8 @@ let
           - "--entrypoints.websecure.address=:443"
           - "--entrypoints.websecure.http.middlewares=secure-headers@docker"
           - "--certificatesresolvers.letsencrypt.acme.email=zoejonestx91@gmail.com"
-          - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-          # Staging CA during bring-up — avoids burning production rate limits.
-          # Remove this line (and delete acme.json) to switch to production.
-          - "--certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+          - "--certificatesresolvers.letsencrypt.acme.storage=${acmeStorage}"
+          - "--certificatesresolvers.letsencrypt.acme.caserver=${acmeCaServer}"
           - "--certificatesresolvers.letsencrypt.acme.dnschallenge=true"
           - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare"
           - "--certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,1.0.0.1:53"

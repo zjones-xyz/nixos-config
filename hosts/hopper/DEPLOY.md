@@ -162,24 +162,27 @@ Pi never compiles. This is the standard command for all subsequent deploys.
 
 ## TLS certs: staging → production
 
-The Traefik module ships with the **Let's Encrypt staging CA** pinned
-(`acme.caserver=...staging...`) so debugging can't burn the strict production
-rate limits. Staging certs are issued by an untrusted root, so browsers will
-warn — that's expected. Use this phase to confirm the DNS challenge succeeds
-(check `docker logs traefik` for "certificate obtained").
+All hosts default to the **Let's Encrypt staging CA** via the shared
+`homelab.letsencryptStaging` flag (declared in
+[`modules/nixos/letsencrypt.nix`](../../modules/nixos/letsencrypt.nix)), so
+debugging can't burn the strict production rate limits. Staging certs are
+issued by an untrusted root, so browsers will warn — that's expected. Use this
+phase to confirm the DNS challenge succeeds (check `docker logs traefik` for
+"certificate obtained").
 
-Once certs are issuing cleanly, switch to production:
+Once certs are issuing cleanly, flip to production by setting the flag to
+`false` — per host in its `configuration.nix`, or once in
+[`modules/nixos/common.nix`](../../modules/nixos/common.nix) to switch every
+host:
 
-1. Remove the `caserver` line from
-   [`modules/nixos/traefik-local.nix`](../../modules/nixos/traefik-local.nix).
-2. **Delete the cached staging certs** on hopper — Traefik won't re-request if a
-   cert already exists in the file:
+```nix
+homelab.letsencryptStaging = false;
+```
 
-   ```sh
-   ssh z@hopper.internal 'rm /home/z/traefik/letsencrypt/acme.json'
-   ```
-
-3. Redeploy. Traefik requests fresh production certs on startup.
+Then redeploy. Staging and production certs use **separate** `acme.json` files
+(`acme-staging.json` vs `acme.json`), so no manual cert deletion is needed —
+Traefik just requests fresh production certs into the production file on
+startup. Flipping back to staging reuses the cached staging certs.
 
 ## Routine updates
 

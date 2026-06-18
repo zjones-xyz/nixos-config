@@ -153,21 +153,22 @@ slow Pi 3 never compiles. This is the standard command for all subsequent deploy
 
 ## TLS certs: staging → production
 
-Like hopper, the Traefik module pins the **Let's Encrypt staging CA** so
+Like hopper, hamilton defaults to the **Let's Encrypt staging CA** via the
+shared `homelab.letsencryptStaging` flag
+([`modules/nixos/letsencrypt.nix`](../../modules/nixos/letsencrypt.nix)) so
 debugging can't burn production rate limits. Staging certs trip browser warnings
 — expected. Confirm issuance with `docker logs traefik` on hamilton.
 
-To switch to production:
+To switch to production, set the flag to `false` (per host in its
+`configuration.nix`, or once in
+[`modules/nixos/common.nix`](../../modules/nixos/common.nix) for every host):
 
-1. Remove the `caserver` line from
-   [`modules/nixos/traefik-hamilton.nix`](../../modules/nixos/traefik-hamilton.nix).
-2. Delete the cached staging cert (Traefik won't re-request otherwise):
+```nix
+homelab.letsencryptStaging = false;
+```
 
-   ```sh
-   ssh z@hamilton.internal 'rm /home/z/traefik/letsencrypt/acme.json'
-   ```
-
-3. Redeploy.
+Then redeploy. Staging and production certs use separate `acme.json` files, so
+no manual cert deletion is needed.
 
 ## Routine updates
 
