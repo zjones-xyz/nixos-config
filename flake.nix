@@ -54,12 +54,16 @@
       };
 
       # hamilton — Raspberry Pi 3 (bcm2837), backup AdGuard/Unbound resolver.
-      # Placeholder name; rename once the unit is in hand. raspberry-pi-nix
-      # doesn't support the Pi 3, so this uses nixos-hardware's rpi-3 profile
-      # plus nixpkgs' sd-image-aarch64 builder (SD-card boot).
+      # raspberry-pi-nix doesn't support the Pi 3, so this uses nixos-hardware's
+      # rpi-3 profile plus nixpkgs' sd-image-aarch64 builder (SD-card boot).
       #
-      # Build the SD image with:
+      # Bootstrap: build the SD image on memory-alpha (aarch64 via binfmt) and
+      # flash it — boots straight into this config. See hosts/hamilton/DEPLOY.md.
       #   nix build .#nixosConfigurations.hamilton.config.system.build.sdImage
+      # Routine deploys, with memory-alpha as the aarch64 build host:
+      #   nixos-rebuild switch --flake .#hamilton \
+      #     --target-host z@hamilton.internal \
+      #     --build-host z@memory-alpha.internal --use-remote-sudo
       hamilton = nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
         modules = [

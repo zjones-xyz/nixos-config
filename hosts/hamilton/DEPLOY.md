@@ -1,81 +1,78 @@
 # Deploying hamilton (Raspberry Pi 3 — backup DNS)
 
-> **Placeholder name.** This host is scaffolded as `hamilton`; rename it (hostname,
-> flake output, `secrets/hamilton.yaml`, `.sops.yaml` regex, the `nrs`/`nrt` aliases)
-> once the real unit is in hand. The commands below use `hamilton`.
-
 hamilton is an `aarch64-linux` host built from nixos-hardware's `raspberry-pi-3`
 profile plus nixpkgs' `sd-image-aarch64` module — **not** raspberry-pi-nix,
 which doesn't support the Pi 3. It runs AdGuard Home + Unbound (backup DNS
-resolver) and Tailscale. The flow: bootstrap with the official NixOS aarch64
-installer → enrol its sops key → deploy with `nixos-rebuild --target-host`.
+resolver) and Tailscale. The flow mirrors hopper: build a complete SD image on
+**memory-alpha** (which emulates aarch64 via binfmt) → flash it → boot straight
+into the full hamilton config → enrol its sops key → deploy with
+`nixos-rebuild --target-host`.
 
 ---
 
-## 0. Build host note: macOS 26 + linux-builder VM
+## 0. Build host: memory-alpha (not the Mac, not the Pi)
 
 > **macOS 26 (Darwin 25.x) known issue:** The `darwin.linux-builder` VM crashes
 > immediately on macOS 26 due to a QEMU / Hypervisor.framework incompatibility
 > (`HVF SMCR_EL1 assertion failed`). This affects both nixpkgs and
 > nixpkgs-unstable as of June 2026.
 >
-> **The workaround is to build on the Pi itself** — see steps 1–3 below. A Pi 3
-> is slower than a Pi 4, but the Nix binary cache means most packages are
-> downloaded rather than compiled, so it's manageable.
->
-> Once the linux-builder issue is resolved upstream, drop `--build-host` from
-> the deploy command and configure the VM per hopper's
-> [section 0](../hopper/DEPLOY.md#0-build-host-note-macos-26--linux-builder-vm).
+> **memory-alpha is the aarch64 build host instead.** It registers QEMU
+> user-mode emulation via `boot.binfmt.emulatedSystems = [ "aarch64-linux" ]`
+> (see its `configuration.nix`), so it can build aarch64 closures and images.
+> This matters even more for hamilton than hopper — a Pi 3 is slow enough that
+> building on the device itself is genuinely painful. Emulated builds on
+> memory-alpha are far faster.
 
 ---
 
-## 1. Bootstrap: flash the official NixOS aarch64 image
+## 1. Bootstrap: build and flash the hamilton SD image
 
 The Pi 3 boots from **SD card** (USB boot is unreliable on this board).
 
-1. Download the official NixOS aarch64 SD image from
-   [nixos.org/download](https://nixos.org/download) → "NixOS on ARM" →
-   Raspberry Pi 3. (The same aarch64 image works for both Pi 3 and Pi 4.)
+### 1a. Build the image on memory-alpha
 
-2. Flash it to the SD card:
-
-   ```sh
-   zstdcat nixos-*.img.zst | sudo dd of=/dev/disk/<SD> bs=4M status=progress conv=fsync
-   ```
-
-   Replace `/dev/disk/<SD>` with the real device (`diskutil list`).
-   **Double-check the device** — `dd` to the wrong disk is unrecoverable.
-
-3. Insert the card, connect to the network, and power on.
-
-## 2. First boot and networking
-
-- The installer image comes up via DHCP as user `nixos` (no password).
-- Add a **DHCP reservation** on the GL.iNet router so its IP is stable, and
-  point `hamilton.internal` at it (or rely on mDNS).
-- Confirm SSH works:
-
-  ```sh
-  ssh nixos@hamilton.internal
-  ```
-
-## 3. Switch to the hamilton config (on the Pi)
-
-SSH in and build directly on the Pi. The Nix binary cache supplies pre-built
-aarch64-linux packages, so this is mostly downloading rather than compiling —
-though a Pi 3 is slower than a Pi 4, so expect it to take longer.
+SSH into memory-alpha, clone this repo, and build hamilton's SD image. Because
+memory-alpha has aarch64 binfmt emulation, this just works:
 
 ```sh
-ssh nixos@hamilton.internal
-nix-shell -p git
+ssh z@memory-alpha.internal
+nix-shell -p git    # if git isn't already available
 git clone <your-nixos-config-repo-url> ~/nixos-config
 cd ~/nixos-config
-sudo nixos-rebuild switch --flake .#hamilton
+nix build .#nixosConfigurations.hamilton.config.system.build.sdImage
 ```
 
-After it completes, `ssh z@hamilton.internal` works (your key is in `common.nix`).
+The finished image lands in `result/sd-image/*.img.zst`.
 
-## 4. Enrol hamilton's sops key
+### 1b. Flash it to the SD card
+
+Copy the image off memory-alpha (or flash from memory-alpha directly if the
+card reader is attached there). To flash from the Mac:
+
+```sh
+scp z@memory-alpha.internal:~/nixos-config/result/sd-image/*.img.zst .
+diskutil list                      # find the SD card device
+diskutil unmountDisk /dev/diskN
+zstdcat *.img.zst | sudo dd of=/dev/diskN bs=4M status=progress conv=fsync
+```
+
+**Double-check the device** — `dd` to the wrong disk is unrecoverable.
+
+### 1c. First boot
+
+This image *is* the full hamilton config — there's no separate "switch to the
+real config" step. Insert the card, connect hamilton to the network, power it on.
+
+1. Add a **DHCP reservation** on the GL.iNet router so hamilton's IP is stable,
+   and point `hamilton.internal` at it (or rely on mDNS).
+2. Confirm SSH works (your key is baked in via `common.nix`):
+
+   ```sh
+   ssh z@hamilton.internal
+   ```
+
+## 2. Enrol hamilton's sops key
 
 Secrets are encrypted to hamilton's SSH host key (as an age key), which only
 exists after first boot. On hamilton:
@@ -101,7 +98,7 @@ Then, in this repo on the Mac:
 
 3. If you edited keys after creating the file: `sops updatekeys secrets/hamilton.yaml`
 
-## 4b. Cloudflare DNS records (for TLS certs)
+## 2b. Cloudflare DNS records (for TLS certs)
 
 Traefik requests a **Let's Encrypt wildcard cert** for `hamilton.zjones.dev` via
 the Cloudflare DNS-01 challenge. The challenge only needs DNS-edit permission on
@@ -120,23 +117,24 @@ proxied):
 > a private/tailnet IP is intentional — the UI stays off the public internet
 > while still getting a valid cert.
 
-## 5. Redeploy with real secrets
+## 3. Redeploy with real secrets
 
 Once sops is enrolled, redeploy so Tailscale and Traefik come up properly.
-From the Mac:
+From the Mac, with memory-alpha as the aarch64 build host:
 
 ```sh
 nixos-rebuild switch \
   --flake .#hamilton \
   --target-host z@hamilton.internal \
-  --build-host z@hamilton.internal \
+  --build-host z@memory-alpha.internal \
   --use-remote-sudo
 ```
 
-`--build-host z@hamilton.internal` builds on the Pi itself — no Mac builder VM
-needed. For subsequent deploys this is the standard command.
+`--build-host z@memory-alpha.internal` offloads the aarch64 build to
+memory-alpha and ships the closure to hamilton — no Mac builder needed, and the
+slow Pi 3 never compiles. This is the standard command for all subsequent deploys.
 
-## 6. Post-deploy checklist
+## 4. Post-deploy checklist
 
 - **Tailscale:** plain client (not an exit node) — no admin-console approval
   needed. Confirm it joined the tailnet: `tailscale status`.
@@ -178,7 +176,7 @@ git pull
 nixos-rebuild switch \
   --flake .#hamilton \
   --target-host z@hamilton.internal \
-  --build-host z@hamilton.internal \
+  --build-host z@memory-alpha.internal \
   --use-remote-sudo
 ```
 
