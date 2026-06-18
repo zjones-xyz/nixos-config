@@ -66,7 +66,7 @@ let
           - "/run/user/1000/docker.sock:/var/run/docker.sock:ro"
           - "/home/z/traefik/letsencrypt:/letsencrypt"
           - "${jellyfinConfig}:/traefik-config/jellyfin.yml:ro"
-          - "${config.sops.secrets."traefik/dashboardAuth".path}:/auth/users:ro"
+          - "/home/z/traefik/auth/htpasswd:/auth/users:ro"
         networks:
           - proxy
         labels:
@@ -137,7 +137,10 @@ in
       User = "z";
       Restart = "on-failure";
       RestartSec = "10s";
-      ExecStartPre = "+${pkgs.bash}/bin/bash -c 'mkdir -p /home/z/traefik/letsencrypt && chown -R z:users /home/z/traefik'";
+      # Runs as root (+) so it can read the sops secret and copy it to a path
+      # rootless Docker can bind-mount. Docker can't mount directly from
+      # /run/secrets because rootless Docker's namespace can't mkdir there.
+      ExecStartPre = "+${pkgs.bash}/bin/bash -c 'mkdir -p /home/z/traefik/letsencrypt /home/z/traefik/auth && cp ${config.sops.secrets."traefik/dashboardAuth".path} /home/z/traefik/auth/htpasswd && chmod 640 /home/z/traefik/auth/htpasswd && chown -R z:users /home/z/traefik'";
       ExecStop = "${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name traefik down";
     };
 
