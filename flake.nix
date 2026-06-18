@@ -21,17 +21,9 @@
     # Hardware profiles for older/other boards. Used for the Pi 3, which
     # raspberry-pi-nix doesn't cover; paired with nixpkgs' sd-image module.
     nixos-hardware.url = "github:NixOS/nixos-hardware";
-
-    # Declarative disk partitioning. Used for hopper's nixos-anywhere bootstrap
-    # (the linux-builder VM is broken on macOS 26, so we bootstrap via
-    # nixos-anywhere --build-on-remote with Raspberry Pi OS as the carrier OS).
-    disko = {
-      url = "github:nix-community/disko";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, raspberry-pi-nix, nixos-hardware, disko, ... }: {
+  outputs = { self, nixpkgs, home-manager, sops-nix, raspberry-pi-nix, nixos-hardware, ... }: {
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
@@ -43,15 +35,18 @@
       };
 
       # hopper — Raspberry Pi 4 (bcm2711), network-core node.
-      # Deploy from a build host with:
+      # Bootstrap: build the SD image on memory-alpha (aarch64 via binfmt) and
+      # flash it — boots straight into this config. See hosts/hopper/DEPLOY.md.
+      #   nix build .#nixosConfigurations.hopper.config.system.build.sdImage
+      # Routine deploys, with memory-alpha as the aarch64 build host:
       #   nixos-rebuild switch --flake .#hopper \
-      #     --target-host z@hopper.internal --use-remote-sudo
-      # (build natively on the Pi, or add --build-host for a remote/cross build).
+      #     --target-host z@hopper.internal \
+      #     --build-host z@memory-alpha.internal --use-remote-sudo
       hopper = nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
         modules = [
           raspberry-pi-nix.nixosModules.raspberry-pi
-          disko.nixosModules.disko  # declarative disk layout for nixos-anywhere bootstrap
+          raspberry-pi-nix.nixosModules.sd-image  # defines root fs + image partitions
           ./hosts/hopper/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops

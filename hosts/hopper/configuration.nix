@@ -2,7 +2,6 @@
 
 {
   imports = [
-    ./disk.nix
     ../../modules/nixos/common.nix
     ../../modules/nixos/tailscale.nix
     ../../modules/nixos/dns.nix

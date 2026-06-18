@@ -1,91 +1,74 @@
 # Deploying hopper (Raspberry Pi 4)
 
 hopper is an `aarch64-linux` host built with `raspberry-pi-nix`. The flow is:
-bootstrap with nixos-anywhere (using Raspberry Pi OS as the carrier OS) →
-enrol its sops key → deploy normally with `nixos-rebuild --target-host` from
-then on.
+build a complete SD image on **memory-alpha** (which emulates aarch64 via
+binfmt) → flash it → boot straight into the full hopper config → enrol its
+sops key → deploy normally with `nixos-rebuild --target-host` from then on.
 
 ---
 
-## 0. Build host note: macOS 26 + linux-builder VM
+## 0. Build host: memory-alpha (not the Mac)
 
 > **macOS 26 (Darwin 25.x) known issue:** The `darwin.linux-builder` VM crashes
 > immediately on macOS 26 due to a QEMU / Hypervisor.framework incompatibility
 > (`HVF SMCR_EL1 assertion failed`). This affects both nixpkgs and
 > nixpkgs-unstable as of June 2026.
 >
-> **The workaround is `nixos-anywhere --build-on-remote`** — see step 1 below.
-> This builds on the Pi itself and ships the closure locally, so no Mac builder
-> VM is needed.
+> **memory-alpha is the aarch64 build host instead.** It registers QEMU
+> user-mode emulation via `boot.binfmt.emulatedSystems = [ "aarch64-linux" ]`
+> (see its `configuration.nix`), so it can build aarch64 closures and images
+> natively-ish. Emulated builds are slower than native but far faster than a
+> Pi 4, and they spare the Pi's SD card the compile churn.
 >
-> Once the linux-builder issue is resolved upstream, you can resume building
-> from the Mac and shipping the closure via `--target-host`. At that point,
-> register the builder by running `nix run nixpkgs#darwin.linux-builder` and
-> adding the printed `builders = ...` line to `/etc/nix/nix.conf`.
+> We also tried `nixos-anywhere`, but it requires `kexec` on the target and the
+> Raspberry Pi OS kernel ships without `CONFIG_KEXEC`, so that path is dead for
+> a Pi-OS carrier. Building the image directly sidesteps it entirely.
 
 ---
 
-## 1. Bootstrap: install via nixos-anywhere
+## 1. Bootstrap: build and flash the hopper SD image
 
-Because the official NixOS aarch64 installer ships as a `.zst` SD image that
-can be hard to find, and the generic ISO won't boot on a Pi (no EFI), we use
-**nixos-anywhere** on top of **Raspberry Pi OS** as the carrier OS.
+### 1a. Build the image on memory-alpha
 
-### 1a. Flash Raspberry Pi OS to the USB SSD
+SSH into memory-alpha, clone this repo, and build hopper's SD image. Because
+memory-alpha has aarch64 binfmt emulation, this just works:
 
-Raspberry Pi OS is the carrier OS — nixos-anywhere will wipe it and replace it
-with NixOS. Use the Pi's SD card slot as a staging medium, or flash directly to
-the USB SSD if you have a USB adapter.
+```sh
+ssh z@memory-alpha.internal
+nix-shell -p git    # if git isn't already available
+git clone <your-nixos-config-repo-url> ~/nixos-config
+cd ~/nixos-config
+nix build .#nixosConfigurations.hopper.config.system.build.sdImage
+```
 
-1. Download **Raspberry Pi OS Lite (64-bit)** from
-   [raspberrypi.com/software](https://www.raspberrypi.com/software/operating-systems/)
-   — choose the "Lite" (no desktop) variant.
+The finished image lands in `result/sd-image/*.img.zst`.
 
-2. Flash it to the **SD card** with Raspberry Pi Imager (or `dd`). In Imager's advanced settings:
-   - Set hostname: `hopper`
-   - Enable SSH (key-based)
-   - Paste your public key (same key already in `modules/nixos/common.nix`)
+### 1b. Flash it to the SD card
 
-3. Insert/attach the SSD, connect hopper to the network, power it on.
+Copy the image off memory-alpha (or flash from memory-alpha directly if the
+card reader is attached there). To flash from the Mac:
 
-4. Add a **DHCP reservation** on the GL.iNet router so hopper's IP is stable,
+```sh
+scp z@memory-alpha.internal:~/nixos-config/result/sd-image/*.img.zst .
+diskutil list                      # find the SD card device
+diskutil unmountDisk /dev/diskN
+zstdcat *.img.zst | sudo dd of=/dev/diskN bs=4M status=progress conv=fsync
+```
+
+**Double-check the device** — `dd` to the wrong disk is unrecoverable.
+
+### 1c. First boot
+
+This image *is* the full hopper config — there's no separate "switch to the
+real config" step. Insert the card, connect hopper to the network, power it on.
+
+1. Add a **DHCP reservation** on the GL.iNet router so hopper's IP is stable,
    and point `hopper.internal` at it (or rely on mDNS).
-
-5. Confirm SSH works:
+2. Confirm SSH works (your key is baked in via `common.nix`):
 
    ```sh
-   ssh pi@hopper.internal
+   ssh z@hopper.internal
    ```
-
-   (Default user is `pi` on Raspberry Pi OS if you didn't override it in
-   Imager; or whatever username you set.)
-
-### 1b. Run nixos-anywhere
-
-From this repo on the Mac:
-
-```sh
-nix run nixpkgs#nixos-anywhere -- \
-  --flake .#hopper \
-  --build-on-remote \
-  --target-host pi@hopper.internal \
-  --ssh-option StrictHostKeyChecking=no
-```
-
-`--build-on-remote` builds NixOS on the Pi itself (no Mac builder needed).
-`nixos-anywhere` will:
-1. Copy the flake to the Pi.
-2. Run disko to partition and format `/dev/sda`.
-3. Install NixOS and reboot.
-
-> **Heads up:** disko will **wipe `/dev/mmcblk0`** (the SD card) completely.
-> Confirm with `lsblk` on the Pi before proceeding.
-
-After the reboot, SSH in as your normal user:
-
-```sh
-ssh z@hopper.internal
-```
 
 ## 2. Enrol hopper's sops key
 
@@ -138,19 +121,20 @@ proxied):
 ## 3. Redeploy with real secrets
 
 Once sops is enrolled, redeploy so the secrets-dependent services (Tailscale,
-Traefik, NUT, Beszel, speedtest-tracker) come up properly. From the Mac:
+Traefik, NUT, Beszel, speedtest-tracker) come up properly. From the Mac, with
+memory-alpha as the aarch64 build host:
 
 ```sh
 nixos-rebuild switch \
   --flake .#hopper \
   --target-host z@hopper.internal \
-  --build-host z@hopper.internal \
+  --build-host z@memory-alpha.internal \
   --use-remote-sudo
 ```
 
-`--build-host z@hopper.internal` tells Nix to compile on the Pi and ship the
-result there — no Mac builder VM needed. This is the standard command for all
-subsequent deploys too.
+`--build-host z@memory-alpha.internal` offloads the aarch64 build to
+memory-alpha and ships the closure to hopper — no Mac builder needed, and the
+Pi never compiles. This is the standard command for all subsequent deploys.
 
 ## 4. Post-deploy checklist
 
@@ -206,11 +190,8 @@ git pull
 nixos-rebuild switch \
   --flake .#hopper \
   --target-host z@hopper.internal \
-  --build-host z@hopper.internal \
+  --build-host z@memory-alpha.internal \
   --use-remote-sudo
 ```
 
-No reflashing or re-running disko — that's only for the initial install.
-If the macOS linux-builder issue is resolved and you'd prefer to build on the
-Mac instead of the Pi, drop `--build-host` and configure the builder per the
-note in section 0.
+No reflashing — that's only for the initial install or a corrupted card.
