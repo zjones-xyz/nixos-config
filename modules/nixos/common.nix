@@ -9,14 +9,6 @@
     settings = {
       experimental-features = [ "nix-command" "flakes" ];
       auto-optimise-store = true;
-      # raspberry-pi-nix builds a custom RPi kernel that isn't in
-      # cache.nixos.org. Its CI pushes prebuilt kernels here, so adding this
-      # substituter turns a multi-hour (emulated) kernel compile into a
-      # download. Needed on any host that builds the Pi images.
-      extra-substituters = [ "https://nix-community.cachix.org" ];
-      extra-trusted-public-keys = [
-        "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
-      ];
     };
     gc = {
       automatic = true;

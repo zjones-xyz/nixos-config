@@ -3,6 +3,7 @@
 {
   imports = [
     ../../modules/nixos/common.nix
+    ../../modules/nixos/rpi-common.nix
     ../../modules/nixos/dns.nix
     ../../modules/nixos/traefik-hamilton.nix
   ];
@@ -18,6 +19,7 @@
   # sd-image-aarch64 module (wired up in flake.nix). The Pi 3 boots from SD —
   # USB boot is unreliable on this board, so don't rely on it. As a backup
   # resolver this host rebuilds rarely, so SD wear isn't a real concern.
+  # The mainline-kernel pin lives in the shared rpi-common.nix.
 
   # ── sops-nix ──────────────────────────────────────────────────────────────
   # After first boot:  ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub

@@ -14,16 +14,16 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Raspberry Pi board support (firmware, kernel, SD/USB image builder).
-    # Supports Pi 4 (bcm2711) and Pi 5 (bcm2712) only — NOT the Pi 3.
-    raspberry-pi-nix.url = "github:nix-community/raspberry-pi-nix";
-
-    # Hardware profiles for older/other boards. Used for the Pi 3, which
-    # raspberry-pi-nix doesn't cover; paired with nixpkgs' sd-image module.
+    # Hardware profiles for the Raspberry Pis. Both hopper (Pi 4) and hamilton
+    # (Pi 3) use these profiles plus nixpkgs' generic aarch64 sd-image module,
+    # which boots via u-boot on the mainline kernel — and the mainline kernel
+    # is in cache.nixos.org, so the images build without compiling a kernel.
+    # (We deliberately avoid raspberry-pi-nix: its downstream kernel isn't
+    # cached, forcing a multi-hour emulated compile on every bump.)
     nixos-hardware.url = "github:NixOS/nixos-hardware";
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, raspberry-pi-nix, nixos-hardware, ... }: {
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, ... }: {
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
@@ -34,7 +34,10 @@
         ];
       };
 
-      # hopper — Raspberry Pi 4 (bcm2711), network-core node.
+      # hopper — Raspberry Pi 4, network-core node. Uses nixos-hardware's rpi-4
+      # profile plus nixpkgs' generic sd-image-aarch64 builder (mainline kernel,
+      # cached — see the nixos-hardware input comment above).
+      #
       # Bootstrap: build the SD image on memory-alpha (aarch64 via binfmt) and
       # flash it — boots straight into this config. See hosts/hopper/DEPLOY.md.
       #   nix build .#nixosConfigurations.hopper.config.system.build.sdImage
@@ -45,8 +48,8 @@
       hopper = nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
         modules = [
-          raspberry-pi-nix.nixosModules.raspberry-pi
-          raspberry-pi-nix.nixosModules.sd-image  # defines root fs + image partitions
+          nixos-hardware.nixosModules.raspberry-pi-4
+          "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
           ./hosts/hopper/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
@@ -54,8 +57,8 @@
       };
 
       # hamilton — Raspberry Pi 3 (bcm2837), backup AdGuard/Unbound resolver.
-      # raspberry-pi-nix doesn't support the Pi 3, so this uses nixos-hardware's
-      # rpi-3 profile plus nixpkgs' sd-image-aarch64 builder (SD-card boot).
+      # Same approach as hopper: nixos-hardware's rpi-3 profile plus nixpkgs'
+      # sd-image-aarch64 builder (SD-card boot).
       #
       # Bootstrap: build the SD image on memory-alpha (aarch64 via binfmt) and
       # flash it — boots straight into this config. See hosts/hamilton/DEPLOY.md.

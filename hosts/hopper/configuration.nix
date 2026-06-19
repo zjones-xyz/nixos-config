@@ -3,6 +3,7 @@
 {
   imports = [
     ../../modules/nixos/common.nix
+    ../../modules/nixos/rpi-common.nix
     ../../modules/nixos/tailscale.nix
     ../../modules/nixos/dns.nix
     ../../modules/nixos/nut.nix
@@ -20,18 +21,11 @@
   networking.networkmanager.enable = true;
 
   # ── Raspberry Pi 4 ──────────────────────────────────────────────────────────
-  # raspberry-pi-nix supplies the firmware, kernel, and bootloader; there is no
-  # nixos-generate-config hardware-configuration.nix on the Pi.
-  raspberry-pi-nix.board = "bcm2711";  # Pi 4 / CM4
-
-  # Prefer booting from a USB SSD over the SD card — rebuilds churn writes and
-  # SD cards wear out fast. Flash the image to the SSD and set the Pi's boot
-  # order to USB-first (bootloader config / EEPROM). If you boot from SD, the
-  # rootfs lives on the SD partition raspberry-pi-nix creates.
-  #
-  # The Pi 4 EEPROM boot order is configured outside NixOS (rpi-eeprom-config
-  # or raspi-config on the vendor OS); see raspberry-pi-nix docs for setting
-  # BOOT_ORDER=0xf41 (USB then SD).
+  # Board support comes from nixos-hardware's raspberry-pi-4 profile plus
+  # nixpkgs' sd-image-aarch64 module (wired up in flake.nix). These supply
+  # u-boot and the SD partition layout — there is no nixos-generate-config
+  # hardware-configuration.nix on the Pi. Booting is from the SD card.
+  # The mainline-kernel pin lives in the shared rpi-common.nix.
 
   # ── sops-nix ──────────────────────────────────────────────────────────────
   # Uses the host's SSH ed25519 key as the age identity. After first boot:
