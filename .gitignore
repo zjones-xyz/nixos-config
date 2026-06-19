@@ -10,3 +10,9 @@ result-*
 
 # Local Claude Code config
 .claude/
+
+# SSH keypairs (e.g. the remote-build builder key) — never commit private keys
+keys/
+
+# VM disk images (e.g. local linux-builder / test VMs)
+*.qcow2
