@@ -2,7 +2,7 @@
 
 This document is the spec for the Docker Compose stacks that run on **hopper**
 (Raspberry Pi 4) and **hamilton** (Raspberry Pi 3). Both run Raspberry Pi OS
-Lite (64-bit, Bookworm) with **rootful Docker** already installed by the host
+Lite (64-bit, Trixie) with **rootful Docker** already installed by the host
 bootstrap. Your job is to author the Compose stacks in the `homelab_stacks`
 repo. This spec is derived from a previous NixOS configuration that defined all
 of these services — ports, domains, and behaviour below are the source of truth.
