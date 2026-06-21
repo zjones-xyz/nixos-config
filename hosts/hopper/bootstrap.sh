@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# hopper — Raspberry Pi OS Lite (64-bit, Bookworm) host bootstrap
+# hopper — Raspberry Pi OS Lite (64-bit, Trixie) host bootstrap
 # ─────────────────────────────────────────────────────────────────────────────
 # This is the ONE-TIME OS-level setup for hopper. It does NOT install the
 # application services — those live in the homelab_stacks repo as Docker
@@ -40,7 +40,7 @@ usermod -aG docker "$TARGET_USER"
 systemctl enable --now docker
 
 echo "==> [3/6] Free port 53 for AdGuard Home"
-# AdGuard Home (a container in homelab_stacks) must own :53 on the LAN. Bookworm
+# AdGuard Home (a container in homelab_stacks) must own :53 on the LAN. Trixie
 # Lite normally doesn't run systemd-resolved, but disable its stub listener if
 # present so nothing squats on 53. The Pi resolves via 127.0.0.1 once AdGuard
 # is up; until then, fall back to a public resolver so apt/curl keep working.

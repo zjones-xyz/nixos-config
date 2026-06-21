@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# hamilton — Raspberry Pi OS Lite (64-bit, Bookworm) host bootstrap
+# hamilton — Raspberry Pi OS Lite (64-bit, Trixie) host bootstrap
 # ─────────────────────────────────────────────────────────────────────────────
 # One-time OS-level setup for hamilton, the BACKUP DNS resolver (Pi 3). It runs
 # a smaller stack than hopper: just Traefik + AdGuard Home + Unbound, all in

@@ -1,6 +1,6 @@
 # Raspberry Pi hosts — Raspberry Pi OS Lite
 
-hopper (Pi 4) and hamilton (Pi 3) run **Raspberry Pi OS Lite (64-bit, Bookworm)**,
+hopper (Pi 4) and hamilton (Pi 3) run **Raspberry Pi OS Lite (64-bit, Trixie)**,
 not NixOS. After fighting uncached kernel builds and a non-booting SD image, the
 NixOS-on-Pi route was abandoned for these two boxes. memory-alpha stays on NixOS.
 
