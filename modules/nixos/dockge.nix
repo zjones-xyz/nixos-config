@@ -15,6 +15,10 @@ let
           - /run/user/1000/docker.sock:/var/run/docker.sock
           - /home/z/dockge/data:/app/data
           - /home/z/homelab-stacks/memory-alpha:/opt/stacks
+          # NixOS stores docker in the Nix store, not at a standard path.
+          # Dockge spawns `docker compose` as a child process and needs the
+          # binary visible inside the container at a standard PATH location.
+          - ${pkgs.docker}/bin/docker:/usr/local/bin/docker:ro
         environment:
           - DOCKGE_STACKS_DIR=/opt/stacks
         networks:
