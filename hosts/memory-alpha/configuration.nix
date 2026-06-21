@@ -107,5 +107,7 @@
     users.z = import ./home.nix;
   };
 
+  homelab.letsencryptStaging = false;
+
   system.stateVersion = "26.05";
 }
