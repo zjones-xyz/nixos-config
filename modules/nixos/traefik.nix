@@ -97,6 +97,8 @@ let
           - "traefik.http.routers.traefik-dev.tls.certresolver=letsencrypt"
           - "traefik.http.routers.traefik-dev.tls.domains[0].main=memory-alpha.zjones.dev"
           - "traefik.http.routers.traefik-dev.tls.domains[0].sans=*.memory-alpha.zjones.dev"
+          - "traefik.http.routers.traefik-dev.tls.domains[1].main=monitor.zjones.dev"
+          - "traefik.http.routers.traefik-dev.tls.domains[1].sans=*.monitor.zjones.dev"
           - "traefik.http.routers.traefik-dev.service=traefik"
           - "traefik.http.routers.traefik-dev.middlewares=dashboard-auth"
           # Dashboard basic auth — credentials read from mounted sops secret
