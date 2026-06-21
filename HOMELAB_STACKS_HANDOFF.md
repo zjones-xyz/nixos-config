@@ -219,6 +219,12 @@ instead). Publishes `80`/`443`, Cloudflare DNS challenge.
   in bootstrap) — they *are* the DNS servers.
 - **AdGuard web UI setup port `3000`** is only needed for first-run; after the
   config exists it serves the UI on `3000` directly behind Traefik.
+- **Dockge requires absolute bind-mount paths.** Dockge itself runs as a
+  container; when it spawns `docker compose up` for a managed stack, relative
+  paths (e.g. `./foo:/bar`) resolve to `/opt/stacks/<stack>/foo` inside the
+  Dockge container — a path that doesn't exist on the host. Docker then fails
+  with `mkdir /opt/stacks: permission denied`. Always use absolute host paths
+  for bind-mount sources in any compose file managed by Dockge.
 
 ---
 
