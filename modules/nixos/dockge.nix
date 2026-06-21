@@ -36,6 +36,15 @@ let
   '';
 in
 {
+  # Dockge resolves relative paths in managed compose files against its
+  # internal stacks dir (/opt/stacks). When Docker creates bind-mount source
+  # directories via the socket it uses that same path on the HOST — so
+  # /opt/stacks must exist and point at the real stacks directory.
+  systemd.tmpfiles.rules = [
+    "d /opt        0755 root root -"
+    "L /opt/stacks -    -    -    - /home/z/homelab-stacks/memory-alpha"
+  ];
+
   systemd.services.dockge = {
     description = "Dockge Docker compose manager";
     after = [ "network-online.target" "user@1000.service" "docker-proxy-network.service" "traefik-docker.service" ];
