@@ -29,9 +29,16 @@
       url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Declarative KDE Plasma via Home Manager (used on pegasus).
+    plasma-manager = {
+      url = "github:nix-community/plasma-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.home-manager.follows = "home-manager";
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, ... }: {
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, ... }: {
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
@@ -55,6 +62,8 @@
           ./hosts/pegasus/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
+          # Make plasma-manager's HM options available to hosts/pegasus/home.nix.
+          { home-manager.sharedModules = [ plasma-manager.homeModules.plasma-manager ]; }
         ];
       };
 
