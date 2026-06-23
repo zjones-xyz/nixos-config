@@ -43,6 +43,21 @@
         ];
       };
 
+      # pegasus — AM4 Ryzen + RTX 4070 workstation: gaming desktop (Plasma 6 /
+      # Wayland) and the primary GPU inference endpoint (ollama + Olla router).
+      # Migrated from CachyOS onto the stock latest kernel + scx schedulers.
+      # NOTE: hosts/pegasus/hardware-configuration.nix is a PLACEHOLDER — the
+      # real one must be generated on the machine (or driven by
+      # hosts/pegasus/disko.nix) before deploying. See hosts/pegasus/MANUAL-STEPS.md.
+      pegasus = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          ./hosts/pegasus/configuration.nix
+          home-manager.nixosModules.home-manager
+          sops-nix.nixosModules.sops
+        ];
+      };
+
       # hopper — Raspberry Pi 4, network-core node. Uses nixos-hardware's rpi-4
       # profile plus nixpkgs' generic sd-image-aarch64 builder (mainline kernel,
       # cached — see the nixos-hardware input comment above).
