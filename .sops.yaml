@@ -20,6 +20,9 @@ keys:
   # TODO: replace with hamilton's real age pubkey after first boot, then add
   #   *hamilton to the hamilton rule below and run: sops updatekeys secrets/hamilton.yaml
   - &hamilton age1placeholderreplacewithhamiltonsrealagekeyafterfirstboot00000000000000
+  # TODO: replace with pegasus's real age pubkey after first boot, then add
+  #   *pegasus to the pegasus rule below and run: sops updatekeys secrets/pegasus.yaml
+  - &pegasus age1placeholderreplacewithpegasussrealagekeyafterfirstboot0000000000000000
 
 creation_rules:
   - path_regex: secrets/memory-alpha\.yaml$
@@ -41,3 +44,10 @@ creation_rules:
       - age:
           - *admin
           - *memory-alpha
+  # pegasus: until it has booted and its real age key is known, encrypt to admin
+  # only (edit from the Mac). Add *pegasus after first boot so the host can
+  # decrypt at activation, then `sops updatekeys secrets/pegasus.yaml`.
+  - path_regex: secrets/pegasus\.yaml$
+    key_groups:
+      - age:
+          - *admin
