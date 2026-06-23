@@ -15,6 +15,8 @@ in
     ../../modules/nixos/desktop-plasma.nix
     ../../modules/nixos/gaming.nix
     ../../modules/nixos/performance.nix
+    ../../modules/nixos/ollama.nix
+    ../../modules/nixos/olla-router.nix
   ];
 
   networking.hostName = "pegasus";
