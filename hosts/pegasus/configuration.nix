@@ -13,6 +13,7 @@ in
     ../../modules/nixos/common.nix
     ../../modules/nixos/nvidia.nix
     ../../modules/nixos/desktop-plasma.nix
+    ../../modules/nixos/gaming.nix
   ];
 
   networking.hostName = "pegasus";
