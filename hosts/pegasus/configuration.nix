@@ -14,6 +14,7 @@ in
     ../../modules/nixos/nvidia.nix
     ../../modules/nixos/desktop-plasma.nix
     ../../modules/nixos/gaming.nix
+    ../../modules/nixos/performance.nix
   ];
 
   networking.hostName = "pegasus";
