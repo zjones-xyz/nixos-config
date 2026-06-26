@@ -31,7 +31,10 @@
     vim
   ];
 
-  programs.bash.enable = true;
+  # System-level zsh integration so /etc/zshrc sources the nix-darwin
+  # environment (PATH to systemPackages, etc.). Determinate still owns the
+  # Nix-specific shell hooks.
+  programs.zsh.enable = true;
 
   # nix-darwin state version (integer, unlike NixOS). 7 is the current max for
   # nix-darwin-26.05 (config.system.maxStateVersion); valid range is 1–7.

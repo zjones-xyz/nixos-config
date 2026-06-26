@@ -26,13 +26,11 @@
     nix-direnv.enable = true;
   };
 
-  # Shell. bash on both platforms keeps behaviour identical; host home.nix adds
-  # the machine-specific rebuild aliases on top of these portable ones.
-  programs.bash = {
-    enable = true;
-    shellAliases = {
-      ll = "ls -la";
-    };
+  # Shell-agnostic aliases — applied to whichever shell each host enables (bash
+  # on the Linux hosts, zsh on the Mac). Shell choice itself is per-host, so this
+  # module does not enable a shell; each home.nix does.
+  home.shellAliases = {
+    ll = "ls -la";
   };
 
   # Git identity (portable).
