@@ -25,6 +25,11 @@
     home = "/Users/z";
   };
 
+  # The user that per-user options (homebrew, system.defaults, …) apply to.
+  # Not strictly required yet, but the homebrew module — next on the list for
+  # the Brewfile — asserts on it, so set it now.
+  system.primaryUser = "z";
+
   # Minimal baseline. Grow as Zoe migrates Mac config into nix-darwin.
   environment.systemPackages = with pkgs; [
     git

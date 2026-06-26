@@ -100,6 +100,9 @@
         {
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;
+          # Back up pre-existing dotfiles HM would otherwise refuse to clobber
+          # (e.g. the Mac's hand-written ~/.zshrc → ~/.zshrc.before-nix-darwin).
+          home-manager.backupFileExtension = "before-nix-darwin";
           home-manager.users.z = import ./hosts/serenity/home.nix;
         }
       ];
