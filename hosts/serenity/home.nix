@@ -15,8 +15,8 @@
   # macOS rebuild aliases (darwin-rebuild, not nixos-rebuild). home.shellAliases
   # applies to zsh and merges with the shared `ll` from common.nix.
   home.shellAliases = {
-    drs = "sudo darwin-rebuild switch --flake ~/nixos-config#serenity";
-    npull = "git -C ~/nixos-config pull";
+    drs = "sudo darwin-rebuild switch --flake ~/Code/nixos-config#serenity";
+    npull = "git -C ~/Code/nixos-config pull";
   };
 
   home.stateVersion = "26.05";
