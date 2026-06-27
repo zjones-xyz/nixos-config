@@ -8,6 +8,20 @@
   home.username = "z";
   home.homeDirectory = "/Users/z";
 
+  # CLI tools moved off Homebrew — nixpkgs provides these (jq already comes from
+  # modules/home/common.nix). Could be promoted to common.nix later if wanted on
+  # the Linux hosts too.
+  home.packages = with pkgs; [
+    bash
+    curl
+    f3
+    gh
+    neovim
+    nmap
+    unzip
+    wget
+  ];
+
   # zsh is the macOS default login shell; let Home Manager manage ~/.zshrc
   # (starship + direnv from common.nix hook into it automatically).
   programs.zsh.enable = true;

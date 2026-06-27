@@ -11,35 +11,27 @@
 
     onActivation = {
       # The declared lists below are authoritative: anything installed but not
-      # listed is uninstalled on switch (dependencies are kept). Currently a
-      # no-op — installed state already matches these lists.
+      # listed is uninstalled on switch (dependencies are kept).
       cleanup = "uninstall";
       autoUpdate = false; # don't `brew update` on every switch
       upgrade = false; # don't upgrade installed packages on switch (flip if wanted)
     };
 
+    # homebrew/cask-drivers was archived upstream (merged into homebrew/cask);
+    # qmk-toolbox now resolves from the default cask source, so it's dropped.
     taps = [
       "ferdium/ferdium"
       "macos-fuse-t/cask"
-      # NOTE: deprecated/archived upstream (merged into homebrew/cask). Kept for
-      # a faithful migration; safe to drop once qmk-toolbox is confirmed to
-      # resolve from the default cask source (cleanup will then untap it).
-      "homebrew/cask-drivers"
     ];
 
+    # Plain cross-platform CLI tools that nixpkgs provides are kept in nix
+    # instead (see hosts/serenity/home.nix). Homebrew keeps only what's awkward
+    # to get from nixpkgs on darwin: asdf (shell-integrated runtime manager),
+    # handbrake (CLI), and immich-go.
     brews = [
       "asdf"
-      "bash"
-      "curl"
-      "f3"
-      "gh"
       "handbrake"
       "immich-go"
-      "jq"
-      "neovim"
-      "nmap"
-      "unzip"
-      "wget"
     ];
 
     casks = [
