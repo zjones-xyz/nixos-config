@@ -8,6 +8,10 @@
 # (The flake attribute stays lowercase `serenity` for ergonomics; the machine
 # name below is the capitalised "Serenity".)
 {
+  imports = [
+    ../../modules/darwin/homebrew.nix
+  ];
+
   networking.hostName = "Serenity";
   networking.computerName = "Serenity";
 
