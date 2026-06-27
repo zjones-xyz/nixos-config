@@ -52,6 +52,7 @@
       "orcaslicer"
       "qmk-toolbox"
       "serial"
+      "steam"
       "ticktick"
     ];
   };
