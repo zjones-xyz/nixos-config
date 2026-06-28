@@ -54,6 +54,7 @@
       "serial"
       "steam"
       "ticktick"
+      "warp"
     ];
   };
 }

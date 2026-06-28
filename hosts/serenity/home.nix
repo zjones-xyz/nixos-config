@@ -13,6 +13,7 @@
   # the Linux hosts too.
   home.packages = with pkgs; [
     bash
+    claude-code
     curl
     f3
     gh
