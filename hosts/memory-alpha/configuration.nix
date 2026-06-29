@@ -34,6 +34,19 @@
   # write churn of compiling.
   boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
 
+  # Legacy iptables kernel modules required by Tailscale's kernel-mode router
+  # (TS_USERSPACE=false). NixOS defaults to nftables but does not load these
+  # modules automatically; without them Tailscale fails to create its filter/nat
+  # chains and MagicDNS DNAT breaks. The firewall backend stays as nftables.
+  boot.kernelModules = [
+    "ip_tables"
+    "iptable_filter"
+    "iptable_nat"
+    "xt_conntrack"
+    "xt_mark"
+    "xt_MASQUERADE"
+  ];
+
   # systemd-based initrd (26.05 default) — required for LUKS SSH unlock
   boot.initrd.systemd.enable = true;
 
