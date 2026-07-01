@@ -21,6 +21,18 @@
     nmap
     unzip
     wget
+
+    # ── Backend / frontend dev tooling ─────────────────────────────────────
+    # .NET 8 SDK — nixpkgs build is not broken on aarch64-darwin (meta.broken=false).
+    # If you hit runtime linker issues or SDK resolution problems, remove this line
+    # and add "dotnet-sdk" to the Homebrew casks in modules/darwin/homebrew.nix
+    # as a fallback. Note: dotnet-ef (EF Core CLI) is NOT packaged in Nix or
+    # Homebrew — install it per-project: dotnet tool install --global dotnet-ef
+    dotnet-sdk_8
+    nodejs_22    # Node 22 LTS (nodejs_20 is EOL Apr 2026, flagged insecure in nixpkgs)
+    sqlite       # sqlite3 CLI
+    httpie       # HTTPie — manual API endpoint testing (http/https commands)
+    sqlitebrowser  # GUI SQLite viewer (Qt; nixpkgs build supports aarch64-darwin)
   ];
 
   # zsh is the macOS default login shell; let Home Manager manage ~/.zshrc
