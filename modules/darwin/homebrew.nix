@@ -47,6 +47,7 @@
       "ferdium"
       "fuse-t"
       "macos-fuse-t/cask/fuse-t-sshfs"
+      "jetbrains-toolbox"
       "makemkv"
       "obsidian"
       "openscad"
