@@ -12,7 +12,9 @@ let
         container_name: dockge
         restart: unless-stopped
         volumes:
-          - /run/user/1000/docker.sock:/var/run/docker.sock
+          # Dockge manages stacks, so it needs full read/write socket access
+          # (unlike Traefik, which goes through the read-only socket proxy).
+          - /run/docker.sock:/var/run/docker.sock
           - /home/z/dockge/data:/app/data
           - /home/z/homelab-stacks/memory-alpha:/opt/stacks
           # NixOS stores docker in the Nix store, not at a standard path.
@@ -47,11 +49,9 @@ in
 
   systemd.services.dockge = {
     description = "Dockge Docker compose manager";
-    after = [ "network-online.target" "user@1000.service" "docker-proxy-network.service" "traefik-docker.service" ];
-    wants = [ "network-online.target" "user@1000.service" ];
+    after = [ "network-online.target" "docker.service" "docker-proxy-network.service" "traefik-docker.service" ];
+    wants = [ "network-online.target" "docker.service" ];
     wantedBy = [ "multi-user.target" ];
-
-    environment.DOCKER_HOST = "unix:///run/user/1000/docker.sock";
 
     serviceConfig = {
       User = "z";

@@ -39,12 +39,36 @@ let
         external: true
 
     services:
+      # Hardened, read-only gateway to the rootful Docker socket. Traefik talks to
+      # this over TCP instead of mounting /run/docker.sock directly, so a Traefik
+      # compromise can't reach the root-equivalent socket. Only the container API
+      # is exposed (CONTAINERS=1); writes are denied (POST=0). The socket itself is
+      # mounted :ro here and nowhere else public-facing.
+      docker-socket-proxy:
+        image: tecnativa/docker-socket-proxy:latest
+        container_name: docker-socket-proxy
+        restart: unless-stopped
+        environment:
+          - CONTAINERS=1   # Traefik reads container labels/state
+          - NETWORKS=1     # …and resolves the `proxy` network
+          - EVENTS=1       # …and watches for container start/stop
+          - POST=0         # deny all write endpoints
+          - PING=1
+          - VERSION=1
+        volumes:
+          - "/run/docker.sock:/var/run/docker.sock:ro"
+        networks:
+          - proxy
+
       traefik:
         image: traefik:v3
         container_name: traefik
         restart: unless-stopped
+        depends_on:
+          - docker-socket-proxy
         command:
           - "--providers.docker=true"
+          - "--providers.docker.endpoint=tcp://docker-socket-proxy:2375"
           - "--providers.docker.exposedByDefault=false"
           - "--providers.docker.network=proxy"
           - "--providers.file.directory=/traefik-config"
@@ -76,7 +100,8 @@ let
         extra_hosts:
           - "host.docker.internal:host-gateway"
         volumes:
-          - "/run/user/1000/docker.sock:/var/run/docker.sock:ro"
+          # Socket access is brokered by docker-socket-proxy above — Traefik no
+          # longer mounts the Docker socket directly.
           - "/home/z/traefik/letsencrypt:/letsencrypt"
           - "${jellyfinConfig}:/traefik-config/jellyfin.yml:ro"
           - "/home/z/traefik/auth/htpasswd:/auth/users:ro"
@@ -113,10 +138,17 @@ in
 {
   networking.firewall.allowedTCPPorts = [ 80 443 ];
 
-  boot.kernel.sysctl = {
-    "net.ipv4.ip_unprivileged_port_start" = 80;
-    "net.ipv4.ip_forward" = 1;
-  };
+  # Traefik runs in Docker but proxies the native Jellyfin service (port 8096 on
+  # the host) via host.docker.internal:host-gateway. Under rootless that path
+  # bypassed the host INPUT firewall; under the rootful bridge it does not, so
+  # trust the pinned proxy bridge to let containers reach host-published services
+  # like Jellyfin. Scoped to br-proxy rather than all docker bridges.
+  networking.firewall.trustedInterfaces = [ "br-proxy" ];
+
+  # The rootful daemon binds 80/443 as root, so the rootless-era
+  # ip_unprivileged_port_start lowering is no longer needed. ip_forward stays on
+  # for container networking (Docker would set it anyway).
+  boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
 
   # Both secrets are read by the traefik service, which runs as `z`, so they
   # must be owned by z rather than the sops-nix default of root:0400.
@@ -125,36 +157,36 @@ in
 
   systemd.services.docker-proxy-network = {
     description = "Create shared Docker proxy network";
-    after = [ "user@1000.service" ];
-    wants = [ "user@1000.service" ];
+    after = [ "docker.service" ];
+    wants = [ "docker.service" ];
     before = [ "traefik-docker.service" "dockge.service" ];
     requiredBy = [ "traefik-docker.service" "dockge.service" ];
-
-    environment.DOCKER_HOST = "unix:///run/user/1000/docker.sock";
 
     serviceConfig = {
       User = "z";
       Type = "oneshot";
       RemainAfterExit = true;
-      ExecStart = "${pkgs.bash}/bin/bash -c '${pkgs.docker}/bin/docker network inspect proxy >/dev/null 2>&1 || ${pkgs.docker}/bin/docker network create proxy'";
+      # Pin the bridge interface name (br-proxy) so the host firewall can trust
+      # it deterministically — Traefik reaches the native Jellyfin service over
+      # this bridge via host.docker.internal:host-gateway (see below).
+      ExecStart = "${pkgs.bash}/bin/bash -c '${pkgs.docker}/bin/docker network inspect proxy >/dev/null 2>&1 || ${pkgs.docker}/bin/docker network create --opt com.docker.network.bridge.name=br-proxy proxy'";
     };
   };
 
   systemd.services.traefik-docker = {
     description = "Traefik reverse proxy";
-    after = [ "network-online.target" "user@1000.service" "docker-proxy-network.service" ];
-    wants = [ "network-online.target" "user@1000.service" ];
+    after = [ "network-online.target" "docker.service" "docker-proxy-network.service" ];
+    wants = [ "network-online.target" "docker.service" ];
     wantedBy = [ "multi-user.target" ];
-
-    environment.DOCKER_HOST = "unix:///run/user/1000/docker.sock";
 
     serviceConfig = {
       User = "z";
       Restart = "on-failure";
       RestartSec = "10s";
-      # Runs as root (+) so it can read the sops secret and copy it to a path
-      # rootless Docker can bind-mount. Docker can't mount directly from
-      # /run/secrets because rootless Docker's namespace can't mkdir there.
+      # Runs as root (+) so it can read the sops secret and stage it for the
+      # container bind-mount. (Kept from the rootless era; with the rootful
+      # daemon the mount would also work straight from /run/secrets, but staging
+      # under /home/z keeps ownership predictable.)
       ExecStartPre = "+${pkgs.bash}/bin/bash -c 'mkdir -p /home/z/traefik/letsencrypt /home/z/traefik/auth && cp ${config.sops.secrets."traefik/dashboardAuth".path} /home/z/traefik/auth/htpasswd && chmod 640 /home/z/traefik/auth/htpasswd && chown -R z:users /home/z/traefik'";
       ExecStop = "${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name traefik down";
     };
