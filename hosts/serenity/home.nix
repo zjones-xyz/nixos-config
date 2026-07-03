@@ -34,6 +34,12 @@
     sqlite       # sqlite3 CLI
     httpie       # HTTPie — manual API endpoint testing (http/https commands)
     sqlitebrowser  # GUI SQLite viewer (Qt; nixpkgs build supports aarch64-darwin)
+
+    # 1Password CLI — used by scripts/unlock-memory-alpha.sh to pull the LUKS
+    # passphrase via the desktop app's biometric integration instead of
+    # copy-pasting from 1Password. Requires the 1Password.app "Integrate with
+    # 1Password CLI" toggle enabled in Settings → Developer.
+    _1password-cli
   ];
 
   # zsh is the macOS default login shell; let Home Manager manage ~/.zshrc
@@ -45,6 +51,7 @@
   home.shellAliases = {
     drs = "sudo darwin-rebuild switch --flake ~/Code/nixos-config#serenity";
     npull = "git -C ~/Code/nixos-config pull";
+    unlock-memory-alpha = "~/Code/nixos-config/scripts/unlock-memory-alpha.sh";
   };
 
   home.stateVersion = "26.05";
