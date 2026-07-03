@@ -15,6 +15,7 @@
     fd
     jq
     btop
+    micro
   ];
 
   # Prompt.
@@ -40,9 +41,11 @@
     settings.user.email = "zoej7@protonmail.com";
   };
 
-  # Editor.
-  programs.vim = {
-    enable = true;
-    defaultEditor = true;
+  # Editor — micro as default; vim kept as fallback.
+  home.sessionVariables = {
+    EDITOR = "micro";
+    VISUAL = "micro";
   };
+
+  programs.vim.enable = true;
 }
