@@ -50,11 +50,17 @@
     wget
     curl
     htop
+    micro
     vim
     age
     ssh-to-age
     sops
   ];
+
+  environment.variables = {
+    EDITOR = "micro";
+    VISUAL = "micro";
+  };
 
   services.openssh = {
     enable = true;
