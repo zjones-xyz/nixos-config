@@ -13,7 +13,7 @@ set -euo pipefail
 
 HOST="${1:-memory-alpha.internal}"
 PORT=2222
-OP_REF="${2:-op://Private/memory-alpha LUKS/password}"
+OP_REF="${2:-op://System Keys/memory-alpha luks/password}"
 
 if command -v op >/dev/null 2>&1 && PASSPHRASE="$(op read "$OP_REF" 2>/dev/null)"; then
   echo "Got passphrase from 1Password ($OP_REF)."
