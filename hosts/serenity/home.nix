@@ -19,6 +19,7 @@
     gh
     neovim
     nmap
+    sl  # for lolz — steam locomotive when you fat-finger `ls`
     unzip
     wget
 
