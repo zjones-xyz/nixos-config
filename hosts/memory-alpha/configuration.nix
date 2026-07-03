@@ -1,5 +1,25 @@
 { config, pkgs, lib, ... }:
 
+let
+  # Predictable interface names (enp0s13f0u1u3c2, ...) encode the USB *port
+  # path*, not the device — replugging either dongle into a different port
+  # renames it. Pin friendly names to each dongle's MAC instead, which is
+  # burned into the adapter and stays put regardless of which port it's in.
+  # Applied both to the running system and the initrd stage so the LUKS SSH
+  # unlock (below) sees the same names.
+  #   eth-primary   = 6c:1f:f7:bc:55:f5 — the one DNS resolves memory-alpha.internal to
+  #   eth-secondary = 9c:69:d3:4c:c5:16 — second USB-C Ethernet dongle
+  ethLinks = {
+    "10-eth-primary" = {
+      matchConfig.MACAddress = "6c:1f:f7:bc:55:f5";
+      linkConfig.Name = "eth-primary";
+    };
+    "10-eth-secondary" = {
+      matchConfig.MACAddress = "9c:69:d3:4c:c5:16";
+      linkConfig.Name = "eth-secondary";
+    };
+  };
+in
 {
   imports = [
     ./hardware-configuration.nix
@@ -12,6 +32,8 @@
 
   networking.hostName = "memory-alpha";
   networking.networkmanager.enable = true;
+
+  systemd.network.links = ethLinks;
 
   # ── Boot ──────────────────────────────────────────────────────────────────
   boot.loader.systemd-boot.enable = true;
@@ -69,6 +91,8 @@
     "cdc_ncm"
     "mii"
   ];
+
+  boot.initrd.systemd.network.links = ethLinks;
 
   # LUKS SSH unlock — lets you decrypt the drive remotely after a reboot.
   #
