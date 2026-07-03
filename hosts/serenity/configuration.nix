@@ -10,6 +10,7 @@
 {
   imports = [
     ../../modules/darwin/homebrew.nix
+    ../../modules/darwin/nfs-mounts.nix
   ];
 
   networking.hostName = "Serenity";
