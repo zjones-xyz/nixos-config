@@ -50,6 +50,21 @@
   # systemd-based initrd (26.05 default) — required for LUKS SSH unlock
   boot.initrd.systemd.enable = true;
 
+  # Both of memory-alpha's NICs are USB Ethernet dongles (rndis_host on one,
+  # cdc_ncm/cdc_ether on the other — see `ethtool -i`/sysfs driver links).
+  # hardware-configuration.nix's boot.initrd.availableKernelModules only
+  # covers USB *storage* (xhci_pci, usb_storage, ...), not USB *networking*,
+  # so the NIC never came up in the initrd stage — which is why the LUKS SSH
+  # unlock below was unreachable and a KVM was required. Without this, DHCP
+  # in the initrd has no interface to run on.
+  boot.initrd.availableKernelModules = lib.mkAfter [
+    "usbnet"
+    "cdc_ether"
+    "cdc_ncm"
+    "rndis_host"
+    "mii"
+  ];
+
   # LUKS SSH unlock — lets you decrypt the drive remotely after a reboot.
   #
   # How it works:
