@@ -40,6 +40,16 @@
     # copy-pasting from 1Password. Requires the 1Password.app "Integrate with
     # 1Password CLI" toggle enabled in Settings → Developer.
     _1password-cli
+
+    # expect — drives the LUKS-unlock ssh session for
+    # scripts/unlock-memory-alpha.sh. Needed instead of a plain ssh -tt +
+    # heredoc because that races systemd-tty-ask-password-agent's echo-off:
+    # if the piped input lands on the remote pty before the agent disables
+    # echo, it gets echoed straight back into our terminal in cleartext
+    # (this happened once — see memory). expect waits for the actual prompt
+    # text to appear before sending, so the agent has already disabled echo
+    # by the time anything is sent.
+    expect
   ];
 
   # zsh is the macOS default login shell; let Home Manager manage ~/.zshrc
