@@ -1,5 +1,25 @@
 { config, pkgs, lib, ... }:
 
+let
+  # Predictable interface names (enp0s13f0u1u3c2, ...) encode the USB *port
+  # path*, not the device — replugging either dongle into a different port
+  # renames it. Pin friendly names to each dongle's MAC instead, which is
+  # burned into the adapter and stays put regardless of which port it's in.
+  # Applied both to the running system and the initrd stage so the LUKS SSH
+  # unlock (below) sees the same names.
+  #   eth-primary   = 6c:1f:f7:bc:55:f5 — the one DNS resolves memory-alpha.internal to
+  #   eth-secondary = 9c:69:d3:4c:c5:16 — second USB-C Ethernet dongle
+  ethLinks = {
+    "10-eth-primary" = {
+      matchConfig.MACAddress = "6c:1f:f7:bc:55:f5";
+      linkConfig.Name = "eth-primary";
+    };
+    "10-eth-secondary" = {
+      matchConfig.MACAddress = "9c:69:d3:4c:c5:16";
+      linkConfig.Name = "eth-secondary";
+    };
+  };
+in
 {
   imports = [
     ./hardware-configuration.nix
@@ -12,6 +32,8 @@
 
   networking.hostName = "memory-alpha";
   networking.networkmanager.enable = true;
+
+  systemd.network.links = ethLinks;
 
   # ── Boot ──────────────────────────────────────────────────────────────────
   boot.loader.systemd-boot.enable = true;
@@ -49,6 +71,46 @@
 
   # systemd-based initrd (26.05 default) — required for LUKS SSH unlock
   boot.initrd.systemd.enable = true;
+
+  # Both of memory-alpha's real uplink NICs are identical USB-C Ethernet
+  # dongles using the cdc_ncm/cdc_ether class drivers (confirmed via sysfs
+  # driver links: /sys/class/net/<iface>/device/driver). hardware-configuration.nix's
+  # boot.initrd.availableKernelModules only covers USB *storage*
+  # (xhci_pci, usb_storage, ...), not USB *networking*, so no NIC ever came
+  # up in the initrd stage — which is why the LUKS SSH unlock below was
+  # unreachable and a KVM was required. Without this, DHCP in the initrd has
+  # no interface to run on.
+  #
+  # (A third interface sometimes seen in `ip link` — enp0s20f0u1u4 — isn't a
+  # host NIC at all: it's the NanoKVM's own composite-USB management
+  # interface (RNDIS), present only while the KVM is plugged in. Irrelevant
+  # to this fix.)
+  boot.initrd.availableKernelModules = lib.mkAfter [
+    "usbnet"
+    "cdc_ether"
+    "cdc_ncm"
+    "mii"
+  ];
+
+  boot.initrd.systemd.network.links = ethLinks;
+
+  # NixOS normally auto-generates a DHCP .network unit for the initrd
+  # (genericDhcpNetworks in nixos/modules/tasks/network-interfaces-systemd.nix)
+  # whenever boot.initrd.network.enable = true — but only when
+  # networking.useDHCP is true. networking.networkmanager.enable = true above
+  # implicitly sets networking.useDHCP = false (NetworkManager manages DHCP
+  # for the *running* system instead), and that same flag gates the initrd's
+  # auto-generated DHCP config, so no lease was ever requested in the initrd —
+  # the NIC came up at the link layer but never got an IP. Define the DHCP
+  # match explicitly here, scoped to the initrd only, independent of the main
+  # system's NetworkManager-driven config.
+  boot.initrd.systemd.network.networks."99-ethernet-default-dhcp" = {
+    matchConfig = {
+      Type = "ether";
+      Kind = "!*";
+    };
+    DHCP = "yes";
+  };
 
   # LUKS SSH unlock — lets you decrypt the drive remotely after a reboot.
   #
