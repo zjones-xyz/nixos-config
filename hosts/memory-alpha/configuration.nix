@@ -50,18 +50,23 @@
   # systemd-based initrd (26.05 default) — required for LUKS SSH unlock
   boot.initrd.systemd.enable = true;
 
-  # Both of memory-alpha's NICs are USB Ethernet dongles (rndis_host on one,
-  # cdc_ncm/cdc_ether on the other — see `ethtool -i`/sysfs driver links).
-  # hardware-configuration.nix's boot.initrd.availableKernelModules only
-  # covers USB *storage* (xhci_pci, usb_storage, ...), not USB *networking*,
-  # so the NIC never came up in the initrd stage — which is why the LUKS SSH
-  # unlock below was unreachable and a KVM was required. Without this, DHCP
-  # in the initrd has no interface to run on.
+  # Both of memory-alpha's real uplink NICs are identical USB-C Ethernet
+  # dongles using the cdc_ncm/cdc_ether class drivers (confirmed via sysfs
+  # driver links: /sys/class/net/<iface>/device/driver). hardware-configuration.nix's
+  # boot.initrd.availableKernelModules only covers USB *storage*
+  # (xhci_pci, usb_storage, ...), not USB *networking*, so no NIC ever came
+  # up in the initrd stage — which is why the LUKS SSH unlock below was
+  # unreachable and a KVM was required. Without this, DHCP in the initrd has
+  # no interface to run on.
+  #
+  # (A third interface sometimes seen in `ip link` — enp0s20f0u1u4 — isn't a
+  # host NIC at all: it's the NanoKVM's own composite-USB management
+  # interface (RNDIS), present only while the KVM is plugged in. Irrelevant
+  # to this fix.)
   boot.initrd.availableKernelModules = lib.mkAfter [
     "usbnet"
     "cdc_ether"
     "cdc_ncm"
-    "rndis_host"
     "mii"
   ];
 
