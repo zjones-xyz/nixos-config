@@ -54,6 +54,7 @@
       "serial"
       "steam"
       "ticktick"
+      "visual-studio-code"
       "warp"
     ];
   };
