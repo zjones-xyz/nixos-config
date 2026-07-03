@@ -42,6 +42,7 @@
       "antigravity-ide"
       "arc"
       "balenaetcher"
+      "bambu-studio"
       "claude"
       "ferdium"
       "fuse-t"
