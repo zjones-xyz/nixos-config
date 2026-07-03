@@ -94,6 +94,24 @@ in
 
   boot.initrd.systemd.network.links = ethLinks;
 
+  # NixOS normally auto-generates a DHCP .network unit for the initrd
+  # (genericDhcpNetworks in nixos/modules/tasks/network-interfaces-systemd.nix)
+  # whenever boot.initrd.network.enable = true — but only when
+  # networking.useDHCP is true. networking.networkmanager.enable = true above
+  # implicitly sets networking.useDHCP = false (NetworkManager manages DHCP
+  # for the *running* system instead), and that same flag gates the initrd's
+  # auto-generated DHCP config, so no lease was ever requested in the initrd —
+  # the NIC came up at the link layer but never got an IP. Define the DHCP
+  # match explicitly here, scoped to the initrd only, independent of the main
+  # system's NetworkManager-driven config.
+  boot.initrd.systemd.network.networks."99-ethernet-default-dhcp" = {
+    matchConfig = {
+      Type = "ether";
+      Kind = "!*";
+    };
+    DHCP = "yes";
+  };
+
   # LUKS SSH unlock — lets you decrypt the drive remotely after a reboot.
   #
   # How it works:
