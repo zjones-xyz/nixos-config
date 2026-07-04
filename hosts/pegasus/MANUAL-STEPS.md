@@ -3,6 +3,45 @@
 Everything below requires real hardware or secrets and was deliberately NOT done
 by the authoring session. Roughly in order.
 
+## 0. Before Wednesday — gather from the running CachyOS system
+
+Do this *now*, while CachyOS boots fine, to de-risk install day. The pegasus
+config was authored blind (placeholder UUIDs, generic module lists); running
+these on the live box and pasting the output back lets the real values get
+reconciled into the config ahead of time. Nothing here changes anything — all
+read-only.
+
+```bash
+# 1. Drive identity — MOST IMPORTANT. Records the CachyOS drive's model+serial
+#    so that, once the new blank NVMe is installed, you can positively identify
+#    which /dev/disk/by-id/ path is the NEW drive (by elimination) before disko
+#    ever touches it. Do NOT trust nvme0n1 vs nvme1n1 with two drives present.
+lsblk -o NAME,SIZE,MODEL,SERIAL,TYPE,MOUNTPOINTS
+ls -l /dev/disk/by-id/ | grep -i nvme
+
+# 2. GPU — confirm it's the RTX 4070 and see the in-use kernel driver.
+lspci -nnk | grep -iA3 -E 'vga|3d controller'
+
+# 3. CPU — confirm AMD (feeds kvm-amd + microcode in hardware-configuration.nix).
+lscpu | grep -iE 'model name|vendor'
+
+# 4. NIC — driver + interface name + MAC (feeds networking / later tailscale).
+lspci -nnk | grep -iA3 -E 'ethernet|network controller'
+ip -o link | grep -v 'lo:'
+
+# 5. RAM — sanity-check zram sizing (config uses memoryPercent = 90).
+free -h
+
+# 6. Board + BIOS — model informs the M.2-slot / SATA lane-sharing question
+#    (matters for the Windows SATA SSD) and whether a BIOS update is wanted.
+sudo dmidecode -t bios -t baseboard | grep -iE 'vendor|version|manufacturer|product name'
+
+# 7. TPM — confirm fTPM is exposable (needed for Windows 11 later).
+ls -l /sys/class/tpm/ 2>/dev/null || echo "no TPM device — enable fTPM in BIOS"
+```
+
+Paste the output back and it'll be folded into the config before install day.
+
 ## 1. Bare-metal NixOS install (dual-NVMe — CachyOS stays untouched)
 
 pegasus's existing NVMe (CachyOS, LUKS+btrfs, in use) is left alone entirely.
