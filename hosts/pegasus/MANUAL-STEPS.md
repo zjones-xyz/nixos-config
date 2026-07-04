@@ -3,20 +3,36 @@
 Everything below requires real hardware or secrets and was deliberately NOT done
 by the authoring session. Roughly in order.
 
-## 1. Bare-metal NixOS install
+## 1. Bare-metal NixOS install (dual-NVMe — CachyOS stays untouched)
 
-1. Boot the NixOS installer on pegasus (wipes CachyOS — back up first).
-2. Partition + format. Either:
+pegasus's existing NVMe (CachyOS, LUKS+btrfs, in use) is left alone entirely.
+NixOS installs onto a second, blank NVMe added just for this bring-up — no
+partition resizing, no live-USB filesystem surgery, no risk to the CachyOS
+install. Once NixOS is proven out, decide whether to keep both drives or pull
+the CachyOS one.
+
+1. Physically install the second NVMe, boot the NixOS installer.
+2. **Identify the blank drive by serial, not by `/dev/nvmeXn1` index** — with
+   two NVMes present, which index is "old" vs "new" depends on PCIe slot/boot
+   order and is not safe to assume. Run `ls -l /dev/disk/by-id/ | grep nvme`
+   and confirm which `by-id` path is the new, blank drive (e.g. by capacity, or
+   by process of elimination against the CachyOS drive's model/serial).
+   **Do not proceed until you're certain which one is blank.**
+3. Partition + format the confirmed-blank drive. Either:
    - **disko (recommended):** edit `hosts/pegasus/disko.nix` so `device` is the
-     real NVMe (e.g. `/dev/nvme0n1`), then
+     `/dev/disk/by-id/...` path for the new drive (the file has a `CHANGEME`
+     placeholder — do not run it as-is), then
      `nix run github:nix-community/disko -- --mode disko ./hosts/pegasus/disko.nix`
    - **or by hand** matching the `@ @home @nix @snapshots @games` BTRFS-on-LUKS
      layout described in `hardware-configuration.nix`.
-3. **Regenerate the real hardware config** (the committed one is a PLACEHOLDER
+4. **Regenerate the real hardware config** (the committed one is a PLACEHOLDER
    with fake UUIDs):
    `nixos-generate-config --no-filesystems --root /mnt` then reconcile, OR
    `nixos-generate-config --root /mnt` and replace
    `hosts/pegasus/hardware-configuration.nix` with the result. Commit it.
+5. In the UEFI boot menu (F8/F11/F12 at POST, or the BIOS boot-order screen),
+   the two NVMes show up as independent boot targets — pick either OS at boot
+   without needing to touch the other drive's ESP or bootloader.
 
 ## 2. First switch (Phase 1 only — have a TTY reachable)
 

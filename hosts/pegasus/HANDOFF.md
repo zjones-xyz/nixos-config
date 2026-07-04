@@ -12,8 +12,13 @@ then the deeper docs alongside it.
   hopper, hamilton). **Nothing has been built or activated on hardware** — this
   Mac (aarch64-darwin) has no Linux builder, so building pegasus is itself a
   manual step on the box.
-- pegasus is still running CachyOS; serenity (the Mac) has no nix-darwin
-  activation yet.
+- pegasus is still running CachyOS on its existing NVMe; serenity (the Mac) has
+  nix-darwin activated already (PR #7).
+- **Plan changed to dual-NVMe**: a second, blank NVMe is being added specifically
+  for the NixOS install, so CachyOS's drive is never touched during bring-up.
+  See MANUAL-STEPS.md §1 — `disko.nix`'s `device` must be set to the new drive's
+  `/dev/disk/by-id/...` path (identified by serial), not an ambiguous `nvmeXn1`
+  index.
 
 ## Read these (don't re-derive)
 
