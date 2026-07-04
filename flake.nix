@@ -21,9 +21,17 @@
     # (We deliberately avoid raspberry-pi-nix: its downstream kernel isn't
     # cached, forcing a multi-hour emulated compile on every bump.)
     nixos-hardware.url = "github:NixOS/nixos-hardware";
+
+    # nix-darwin for the Mac (Serenity). nix-darwin uses release branches that
+    # must match the nixpkgs release — nix-darwin-26.05 pairs with nixpkgs 26.05
+    # (master is a newer release and is rejected by nix-darwin's release check).
+    nix-darwin = {
+      url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, ... }: {
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, ... }: {
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
@@ -77,6 +85,27 @@
           sops-nix.nixosModules.sops
         ];
       };
+    };
+
+    # ── Darwin (macOS) ──────────────────────────────────────────────────────
+    # Serenity — Zoe's Mac. Shares modules/home/common.nix with the Linux hosts
+    # via Home Manager. Build/activate on the Mac with:
+    #   nix run nix-darwin -- switch --flake .#serenity
+    # nix.enable = false in the host config so it coexists with Determinate Nix.
+    darwinConfigurations.serenity = nix-darwin.lib.darwinSystem {
+      system = "aarch64-darwin";
+      modules = [
+        ./hosts/serenity/configuration.nix
+        home-manager.darwinModules.home-manager
+        {
+          home-manager.useGlobalPkgs = true;
+          home-manager.useUserPackages = true;
+          # Back up pre-existing dotfiles HM would otherwise refuse to clobber
+          # (e.g. the Mac's hand-written ~/.zshrc → ~/.zshrc.before-nix-darwin).
+          home-manager.backupFileExtension = "before-nix-darwin";
+          home-manager.users.z = import ./hosts/serenity/home.nix;
+        }
+      ];
     };
   };
 }

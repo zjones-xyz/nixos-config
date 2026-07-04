@@ -1,0 +1,62 @@
+{ config, pkgs, lib, ... }:
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Serenity — nix-darwin config for Zoe's Mac (aarch64-darwin / Apple Silicon).
+# ─────────────────────────────────────────────────────────────────────────────
+# Build/activate on the Mac itself:
+#   nix run nix-darwin -- switch --flake .#serenity
+# (The flake attribute stays lowercase `serenity` for ergonomics; the machine
+# name below is the capitalised "Serenity".)
+{
+  imports = [
+    ../../modules/darwin/homebrew.nix
+    ../../modules/darwin/nfs-mounts.nix
+  ];
+
+  networking.hostName = "Serenity";
+  networking.computerName = "Serenity";
+
+  # This Mac runs Determinate Nix, which manages the Nix installation itself.
+  # nix-darwin must NOT also manage nix or the two fight over /etc/nix and the
+  # daemon. Let Determinate own it.
+  nix.enable = false;
+
+  nixpkgs.hostPlatform = "aarch64-darwin";
+  nixpkgs.config.allowUnfree = true;
+
+  # Home Manager's darwin integration derives home.homeDirectory from this.
+  users.users.z = {
+    name = "z";
+    home = "/Users/z";
+  };
+
+  # The user that per-user options (homebrew, system.defaults, …) apply to.
+  # Not strictly required yet, but the homebrew module — next on the list for
+  # the Brewfile — asserts on it, so set it now.
+  system.primaryUser = "z";
+
+  # Minimal baseline. Grow as Zoe migrates Mac config into nix-darwin.
+  # (vim isn't listed here — it's already provided per-user via
+  # programs.vim.enable in modules/home/common.nix.)
+  environment.systemPackages = with pkgs; [
+    git
+  ];
+
+  # System-level zsh integration so /etc/zshrc sources the nix-darwin
+  # environment (PATH to systemPackages, etc.). Determinate still owns the
+  # Nix-specific shell hooks.
+  programs.zsh.enable = true;
+
+  # NFS shares to auto-mount via macOS autofs (modules/darwin/nfs-mounts.nix
+  # provides the mechanism; this is host data). STUB — no shares wired up yet.
+  # Uncomment/edit once you know the export + local mount point you want.
+  # Modeled on the Tower NFS exports memory-alpha already mounts.
+  services.macNfsAutomounts = [
+    # { mountPoint = "/mnt/media"; export = "tower.internal:/mnt/user/jellyfin"; }
+    # { mountPoint = "/mnt/arr_managed_data"; export = "tower.internal:/mnt/user/arr_managed_data"; }
+  ];
+
+  # nix-darwin state version (integer, unlike NixOS). 7 is the current max for
+  # nix-darwin-26.05 (config.system.maxStateVersion); valid range is 1–7.
+  system.stateVersion = 7;
+}
