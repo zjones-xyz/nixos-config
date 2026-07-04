@@ -59,20 +59,28 @@ or display-manager state doesn't lock you out:
 Mount/validate the existing Steam library on the `/games` subvolume and add it in
 Steam → Settings → Storage so installs land there (survives reinstalls).
 
-## 5. Olla router — fill in the package hashes
+## 5. Olla router — fill in the last package hash
 
-Olla isn't in nixpkgs and is built from source with PLACEHOLDER hashes. To get
-real values:
+Mostly done ahead of time (2026-07-03): `modules/nixos/olla-router.nix` is
+pinned to olla **v0.0.28** with a real `src.hash`, and its YAML config schema
+was verified against that tag's shipped `config/config.yaml` + `types.go`
+(flat `model_url`/`health_check_url`/`check_interval` endpoint fields, and
+`proxy.load_balancer: "priority"` so the 4070→1070 failover actually honours
+priority). Only **`vendorHash` remains a placeholder** — buildGoModule can only
+compute it from an x86_64-linux Go build, which couldn't run on the Mac.
 
-1. Set `version` in `modules/nixos/olla-router.nix` to a real released tag.
-2. Build once; Nix prints the correct `src` hash — paste it in.
-3. Build again; it prints the correct `vendorHash` — paste it in.
-   (Or use `nix-prefetch-github thushan olla --rev vX.Y.Z` for the src hash and
-   `nix run nixpkgs#nix-prefetch -- ...` / a `lib.fakeHash` build cycle for
-   `vendorHash`.)
-4. Verify Olla's YAML config schema (`discovery`/`endpoints`/`health_check`)
-   against current Olla docs and fix `ollaConfig` if it drifted. Set the real
-   hostname of the 1070 node (placeholder: `gpu1070.internal`).
+On pegasus (native x86_64 build):
+
+1. `nixos-rebuild build --flake .#pegasus`. It fails with a hash mismatch and
+   prints the real `vendorHash`.
+2. Paste that into `vendorHash` in `modules/nixos/olla-router.nix`, rebuild,
+   commit.
+3. **Set the real hostname of the 1070 node** (placeholder: `gpu1070.internal`)
+   in `ollaConfig`.
+
+To bump Olla's version later: change `version`, re-run
+`nix-prefetch-github thushan olla --rev vX.Y.Z` for the new `src.hash`, then the
+fakeHash build cycle above for `vendorHash`.
 
 ## 6. Inference behaviour
 

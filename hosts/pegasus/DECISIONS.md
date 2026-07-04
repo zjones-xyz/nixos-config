@@ -51,11 +51,17 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
    nixpkgs. Trivially swappable via `services.scx.scheduler`.
 3. **Router → Olla** — *alt:* LiteLLM (heavier; virtual keys/budgets). *Why:* the
    brief's choice; single Go binary, local-first, health-check failover. Packaged
-   from source in `modules/nixos/olla-router.nix`. **Olla is not in nixpkgs**, so
-   the package uses PLACEHOLDER hashes (`lib.fakeHash`) — it evaluates but must
-   have real `version`/`src.hash`/`vendorHash` filled in before it will *build*
-   (see MANUAL-STEPS). Olla's YAML config schema here is illustrative — verify
-   against current Olla docs.
+   from source in `modules/nixos/olla-router.nix`. **Olla is not in nixpkgs.**
+   Pinned to **v0.0.28** with a real `src.hash` (2026-07-03); only `vendorHash`
+   is still a placeholder (needs an x86_64-linux build — resolves on first build
+   on pegasus, see MANUAL-STEPS §5). The YAML config was verified against
+   v0.0.28's shipped `config/config.yaml` + `internal/config/types.go`: endpoints
+   use flat `model_url`/`health_check_url`/`check_interval`/`check_timeout`
+   fields (the initial scaffold's nested `health_check: {path, interval}` was
+   wrong), and `proxy.load_balancer` is set to `"priority"` — the default
+   `least-connections` ignores endpoint priority, which would have broken the
+   intended "prefer 4070, fail over to 1070" behaviour. Olla overlays the file
+   onto `DefaultConfig()`, so the config only lists overrides.
 4. **Deploy mechanism → `nixos-rebuild --flake` matching the repo**; for pegasus
    (an x86_64 box) builds are native, so no remote `--build-host` is needed (unlike
    the aarch64 Pis). Run deploys from the Mac or another host, never on pegasus

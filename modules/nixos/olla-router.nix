@@ -6,20 +6,25 @@ let
   # multiple OpenAI/Ollama-compatible endpoints and load-balances with health
   # checks. It is not in nixpkgs, so we build it here.
   #
-  # PLACEHOLDER HASHES: `version`, `src.hash`, and `vendorHash` below are stubs
-  # (lib.fakeHash). The closure EVALUATES with them, but BUILDING olla will fail
-  # until they are filled in with real values. This is a MANUAL step — see
-  # hosts/pegasus/MANUAL-STEPS.md for the one-liner to obtain them.
+  # `version` and `src.hash` are REAL (pinned to olla v0.0.28, resolved
+  # 2026-07-03 via `nix-prefetch-github thushan olla --rev v0.0.28`). Only
+  # `vendorHash` remains a PLACEHOLDER: buildGoModule computes it from a Go
+  # build that must run on the package's own system (x86_64-linux), and this was
+  # authored on aarch64-darwin with no Linux builder. It resolves on the first
+  # real build on pegasus — see hosts/pegasus/MANUAL-STEPS.md §5 (one hash now,
+  # not three). To bump the version later: change `version`, re-run
+  # nix-prefetch-github for the new `hash`, then a fakeHash build cycle for
+  # `vendorHash`.
   olla = pkgs.buildGoModule rec {
     pname = "olla";
-    version = "0.0.0"; # PLACEHOLDER — set to a real released tag
+    version = "0.0.28";
     src = pkgs.fetchFromGitHub {
       owner = "thushan";
       repo = "olla";
       rev = "v${version}";
-      hash = lib.fakeHash; # PLACEHOLDER
+      hash = "sha256-/nXMEs50kixi8j/1oyaYnMB9Rju7gCbsY85m06NK8As=";
     };
-    vendorHash = lib.fakeHash; # PLACEHOLDER
+    vendorHash = lib.fakeHash; # PLACEHOLDER — resolves on first build on pegasus
     # Most Olla releases embed version via ldflags; harmless if ignored.
     ldflags = [ "-s" "-w" ];
     meta = {
@@ -29,36 +34,46 @@ let
     };
   };
 
-  # Olla configuration. SCHEMA IS ILLUSTRATIVE — verify against Olla's current
-  # docs before relying on it (see hosts/pegasus/DECISIONS.md). Two upstreams:
+  # Olla configuration — schema verified against olla v0.0.28's shipped
+  # config/config.yaml and internal/config/types.go (2026-07-03). Olla starts
+  # from DefaultConfig() and overlays this file, so a partial config is safe:
+  # anything omitted keeps Olla's built-in default. We override only what pegasus
+  # needs. Two upstreams:
   #   - pegasus's own ollama on localhost (drained automatically while gaming)
   #   - the separate dual-GTX-1070 Ollama node, reached over Tailscale
   ollaConfig = pkgs.writeText "olla.yaml" ''
     server:
       host: "0.0.0.0"        # tailnet-only in practice (firewall trusts tailscale0)
-      port: 40114
+      port: 40114            # default, but pinned here to match the firewall note
 
-    # Health checks drain an endpoint from the pool when it is down — this is
-    # what makes the pegasus gaming-window pause "just work": when ollama is
-    # stopped, pegasus fails its health check and traffic routes to the 1070 node.
+    # priority (not the default least-connections) is what makes the failover
+    # design work: Olla always routes to the highest-priority *healthy* endpoint.
+    # So all traffic hits the 4070 while it's up, and only spills to the 1070
+    # when the 4070's health check fails — which is exactly what happens when the
+    # gaming-window pause stops ollama (see modules/nixos/ollama.nix).
+    proxy:
+      load_balancer: "priority"
+
     discovery:
-      type: static
+      type: "static"
       static:
         endpoints:
-          - name: pegasus-4070
+          - name: "pegasus-4070"
             url: "http://127.0.0.1:11434"
-            type: ollama
+            type: "ollama"
             priority: 100          # prefer the faster Ada card
-            health_check:
-              path: "/api/tags"
-              interval: 10s
-          - name: gpu1070-node      # PLACEHOLDER hostname — the Pascal box
+            model_url: "/api/tags"
+            health_check_url: "/"
+            check_interval: 5s
+            check_timeout: 2s
+          - name: "gpu1070-node"    # PLACEHOLDER hostname — the Pascal box
             url: "http://gpu1070.internal:11434"
-            type: ollama
+            type: "ollama"
             priority: 50
-            health_check:
-              path: "/api/tags"
-              interval: 10s
+            model_url: "/api/tags"
+            health_check_url: "/"
+            check_interval: 5s
+            check_timeout: 2s
   '';
 in
 {
