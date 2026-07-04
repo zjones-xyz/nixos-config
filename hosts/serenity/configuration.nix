@@ -36,15 +36,25 @@
   system.primaryUser = "z";
 
   # Minimal baseline. Grow as Zoe migrates Mac config into nix-darwin.
+  # (vim isn't listed here — it's already provided per-user via
+  # programs.vim.enable in modules/home/common.nix.)
   environment.systemPackages = with pkgs; [
     git
-    vim
   ];
 
   # System-level zsh integration so /etc/zshrc sources the nix-darwin
   # environment (PATH to systemPackages, etc.). Determinate still owns the
   # Nix-specific shell hooks.
   programs.zsh.enable = true;
+
+  # NFS shares to auto-mount via macOS autofs (modules/darwin/nfs-mounts.nix
+  # provides the mechanism; this is host data). STUB — no shares wired up yet.
+  # Uncomment/edit once you know the export + local mount point you want.
+  # Modeled on the Tower NFS exports memory-alpha already mounts.
+  services.macNfsAutomounts = [
+    # { mountPoint = "/mnt/media"; export = "tower.internal:/mnt/user/jellyfin"; }
+    # { mountPoint = "/mnt/arr_managed_data"; export = "tower.internal:/mnt/user/arr_managed_data"; }
+  ];
 
   # nix-darwin state version (integer, unlike NixOS). 7 is the current max for
   # nix-darwin-26.05 (config.system.maxStateVersion); valid range is 1–7.

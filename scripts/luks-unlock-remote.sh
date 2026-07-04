@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Remotely unlock memory-alpha's LUKS root volume over the initrd SSH server,
+# Remotely unlock a LUKS root volume over a host's initrd SSH server,
 # pulling the passphrase from 1Password instead of copy-pasting it.
 #
 # This drives the session with `expect` rather than a plain `ssh -tt <<<
@@ -13,12 +13,15 @@
 # — no race. `log_user 0` also means nothing from the remote session (prompt
 # text, echoed characters, anything) is ever printed to our own stdout.
 #
-# Usage: unlock-memory-alpha [host] [op://vault/item/field]
+# Generic across hosts — see home.nix shell aliases for per-host invocations
+# (e.g. `unlock-memory-alpha`) rather than duplicating this file per host.
+#
+# Usage: luks-unlock-remote.sh <host> <op://vault/item/field> [port=2222]
 set -euo pipefail
 
-HOST="${1:-memory-alpha.internal}"
-PORT=2222
-OP_REF="${2:-op://System Keys/memory-alpha luks/password}"
+HOST="${1:?Usage: luks-unlock-remote.sh <host> <op://vault/item/field> [port]}"
+OP_REF="${2:?Usage: luks-unlock-remote.sh <host> <op://vault/item/field> [port]}"
+PORT="${3:-2222}"
 
 if command -v op >/dev/null 2>&1 && PASSPHRASE="$(op read "$OP_REF" 2>/dev/null)"; then
   echo "Got passphrase from 1Password ($OP_REF)."

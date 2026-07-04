@@ -35,14 +35,14 @@
     httpie       # HTTPie — manual API endpoint testing (http/https commands)
     sqlitebrowser  # GUI SQLite viewer (Qt; nixpkgs build supports aarch64-darwin)
 
-    # 1Password CLI — used by scripts/unlock-memory-alpha.sh to pull the LUKS
-    # passphrase via the desktop app's biometric integration instead of
+    # 1Password CLI — used by scripts/luks-unlock-remote.sh to pull LUKS
+    # passphrases via the desktop app's biometric integration instead of
     # copy-pasting from 1Password. Requires the 1Password.app "Integrate with
     # 1Password CLI" toggle enabled in Settings → Developer.
     _1password-cli
 
     # expect — drives the LUKS-unlock ssh session for
-    # scripts/unlock-memory-alpha.sh. Needed instead of a plain ssh -tt +
+    # scripts/luks-unlock-remote.sh. Needed instead of a plain ssh -tt +
     # heredoc because that races systemd-tty-ask-password-agent's echo-off:
     # if the piped input lands on the remote pty before the agent disables
     # echo, it gets echoed straight back into our terminal in cleartext
@@ -58,10 +58,14 @@
 
   # macOS rebuild aliases (darwin-rebuild, not nixos-rebuild). home.shellAliases
   # applies to zsh and merges with the shared `ll` from common.nix.
+  #
+  # unlock-memory-alpha is a thin per-host binding onto the generic
+  # scripts/luks-unlock-remote.sh — add one alias like this per host rather
+  # than copy-pasting the script itself (pegasus is next in line for this).
   home.shellAliases = {
     drs = "sudo darwin-rebuild switch --flake ~/Code/nixos-config#serenity";
     npull = "git -C ~/Code/nixos-config pull";
-    unlock-memory-alpha = "~/Code/nixos-config/scripts/unlock-memory-alpha.sh";
+    unlock-memory-alpha = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh memory-alpha.internal "op://System Keys/memory-alpha luks/password"'';
   };
 
   home.stateVersion = "26.05";
