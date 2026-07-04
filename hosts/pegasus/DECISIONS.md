@@ -73,6 +73,28 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
 
 ## Other decisions
 
+- **Storage / OS layout → drive-per-OS, not shared partitions.** *alt:* shrink
+  CachyOS's existing LUKS+btrfs NVMe and carve partitions for NixOS (and later
+  Windows) out of it. *Why:* CachyOS's free space is inside the encrypted btrfs
+  volume, so making room means resizing an in-use LUKS container — risky and
+  unnecessary. Instead:
+  - **NixOS → its own second NVMe** (added for bring-up). CachyOS's drive is
+    never touched; NixOS installs to a blank drive identified by
+    `/dev/disk/by-id/` serial (see MANUAL-STEPS §1 and `disko.nix`). Once NixOS
+    is proven, the CachyOS drive can be pulled, freeing its M.2 slot.
+  - **Windows → its own SATA SSD** (LOCKED 2026-07-03). *alt:* a partition on
+    the NixOS NVMe. *Why:* Windows Update rewrites the ESP/boot order and clobbers
+    other OSes' entries; a separate drive with its own ESP contains that to a
+    one-line firmware boot-order fix. Also, most AM4 boards have only two M.2
+    slots — both used by CachyOS + NixOS during bring-up — so a SATA SSD is the
+    slot that's actually free. Windows is occasional-use (things Linux can't do
+    at all), so it doesn't need NVMe speed. Notes for when it's installed: enable
+    fTPM + UEFI (Win11); expect to keep Secure Boot *off* (the NixOS kernel's
+    out-of-tree NVIDIA module isn't signed without lanzaboote); disable Windows
+    Fast Startup; reconcile the RTC (Windows localtime vs Linux UTC) via
+    `time.hardwareClockInLocalTime = true;` or a Windows registry tweak. None of
+    this touches the pegasus closure today — systemd-boot auto-discovers the
+    Windows entry via firmware boot order when the time comes.
 - **Tailscale inline, not via `modules/nixos/tailscale.nix`** — that module is
   hopper-flavoured (advertises an exit node). pegasus is a plain tailnet member
   (inference endpoint), so it enables Tailscale directly with `--ssh` only.
