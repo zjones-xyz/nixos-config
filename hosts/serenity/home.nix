@@ -14,7 +14,7 @@
   home.packages = with pkgs; [
     bash
     claude-code
-    codex  # OpenAI Codex CLI — ChatGPT-powered coding agent, terminal counterpart to the ChatGPT app cask
+    codex
     curl
     f3
     gh
