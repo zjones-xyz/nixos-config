@@ -43,6 +43,7 @@
       "arc"
       "balenaetcher"
       "bambu-studio"
+      "chatgpt"
       "claude"
       "ferdium"
       "fuse-t"
