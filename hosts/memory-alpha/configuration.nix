@@ -151,6 +151,51 @@ in
     };
   };
 
+  # Audible chimes at the two initrd milestones that matter when unlocking
+  # headlessly: (1) the SSH unlock server is up and reachable, and (2) LUKS
+  # has actually been decrypted and boot is continuing. Without these there's
+  # no feedback loop — you're left guessing whether `ssh root@... -p 2222` is
+  # worth trying yet, or whether a submitted passphrase was accepted.
+  #
+  # Both just write BEL (\a) to /dev/console. The kernel's VT layer toggles
+  # the PC speaker directly for that (kd_mksound, in drivers/tty/vt/vt.c) —
+  # no ALSA, no `beep` package, nothing that needs to survive into the
+  # initrd's minimal closure. Different beep counts/spacing so the two events
+  # are distinguishable by ear alone.
+  boot.initrd.systemd.services.chime-waiting-unlock = {
+    description = "Chime: initrd SSH unlock server ready";
+    after = [ "sshd.service" ];
+    wantedBy = [ "initrd.target" ];
+    before = [ "shutdown.target" ];
+    conflicts = [ "shutdown.target" ];
+    unitConfig.DefaultDependencies = false;
+    serviceConfig.Type = "oneshot";
+    path = [ pkgs.coreutils ];
+    script = ''
+      for i in 1 2 3; do
+        printf '\a' > /dev/console
+        sleep 0.15
+      done
+    '';
+  };
+
+  boot.initrd.systemd.services.chime-unlock-finished = {
+    description = "Chime: LUKS unlock finished";
+    after = [ "cryptsetup.target" ];
+    wantedBy = [ "initrd.target" ];
+    before = [ "shutdown.target" ];
+    conflicts = [ "shutdown.target" ];
+    unitConfig.DefaultDependencies = false;
+    serviceConfig.Type = "oneshot";
+    path = [ pkgs.coreutils ];
+    script = ''
+      for i in 1 2; do
+        printf '\a' > /dev/console
+        sleep 0.5
+      done
+    '';
+  };
+
   # ── sops-nix ──────────────────────────────────────────────────────────────
   # Uses the host's SSH ed25519 key as the age identity.
   # Get the age pubkey with:  ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub
