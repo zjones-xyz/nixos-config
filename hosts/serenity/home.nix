@@ -14,6 +14,7 @@
   home.packages = with pkgs; [
     bash
     claude-code
+    codex
     curl
     f3
     gh
