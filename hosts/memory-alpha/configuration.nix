@@ -112,6 +112,28 @@ in
     DHCP = "yes";
   };
 
+  # switch-root doesn't reset interface state — the initrd's DHCP-assigned
+  # addresses/routes on eth-primary/eth-secondary (needed above for the LUKS
+  # SSH unlock) survive into the real system. NetworkManager then finds those
+  # interfaces already configured and adopts them as "connected (externally)"
+  # instead of running its own DHCP client — which is the only thing that
+  # populates /etc/resolv.conf. Net effect: routing works but DNS is empty on
+  # every boot. Flush the addresses right before switch-root so NetworkManager
+  # always starts from a clean interface and does its own full DHCP
+  # negotiation, DNS included.
+  boot.initrd.systemd.services.flush-network-before-switch-root = {
+    description = "Flush initrd DHCP state so NetworkManager re-negotiates DNS";
+    before = [ "initrd-switch-root.target" ];
+    wantedBy = [ "initrd-switch-root.target" ];
+    unitConfig.DefaultDependencies = false;
+    serviceConfig.Type = "oneshot";
+    path = [ pkgs.iproute2 ];
+    script = ''
+      ip addr flush dev eth-primary || true
+      ip addr flush dev eth-secondary || true
+    '';
+  };
+
   # LUKS SSH unlock — lets you decrypt the drive remotely after a reboot.
   #
   # How it works:
