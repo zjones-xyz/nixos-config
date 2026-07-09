@@ -3,11 +3,11 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared Home Manager layer — portable across platforms.
 # ─────────────────────────────────────────────────────────────────────────────
-# Consumed by BOTH nixosConfigurations.pegasus and darwinConfigurations.<mac>.
-# Keep this strictly cross-platform: only prefs that make sense on Linux *and*
-# macOS. Anything host- or platform-specific (username, homeDirectory,
-# stateVersion, the `nrs`/`nrt` rebuild aliases, Plasma config) stays in the
-# per-host home.nix. See hosts/pegasus/DECISIONS.md for what lives where.
+# Consumed by every host: nixosConfigurations.{hamilton,hopper,memory-alpha}
+# and darwinConfigurations.serenity. Keep this strictly cross-platform: only
+# prefs that make sense on Linux *and* macOS. Anything host- or
+# platform-specific (username, homeDirectory, stateVersion, the `nrs`/`nrt`/
+# `npull` rebuild aliases, extra packages) stays in the per-host home.nix.
 {
   # Core CLI tooling.
   home.packages = with pkgs; [
@@ -19,7 +19,28 @@
   ];
 
   # Prompt.
-  programs.starship.enable = true;
+  programs.starship = {
+    enable = true;
+    settings = {
+      # Only show the hostname over SSH (matches starship's own default —
+      # made explicit here so it doesn't silently change on a starship
+      # upgrade), so the local prompt on each host stays uncluttered while
+      # an SSH'd-in session still tells you which box you're on.
+      hostname = {
+        ssh_only = true;
+        format = "[$hostname]($style) ";
+        style = "bold dimmed green";
+      };
+
+      # Only show command duration for commands that actually take a while,
+      # so quick commands don't clutter the prompt with a "took 12ms".
+      cmd_duration = {
+        min_time = 3000;
+        format = "took [$duration]($style) ";
+        style = "bold yellow";
+      };
+    };
+  };
 
   # Per-directory env + fast nix-shell caching.
   programs.direnv = {
