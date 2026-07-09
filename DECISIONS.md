@@ -60,9 +60,10 @@ Stopped here pending answers — no Arcane-related code written yet.
   add:
   ```yaml
   arcane:
-      encryptionKey: <32-byte random, e.g. `openssl rand -hex 32`>
-      jwtSecret: <32-byte random, e.g. `openssl rand -hex 32`>
+      encryptionKey: <32-character random, e.g. `openssl rand -hex 16`>
+      jwtSecret: <32-character random, e.g. `openssl rand -hex 16`>
   ```
+  (Verified against the real `docker/examples/compose.basic.yaml` in getarcaneapp/arcane: the placeholder is `replace_me_with_a_random_32_char_value` — 32 characters, not 32 bytes. `openssl rand -hex 32` would produce 64 characters, double what's wanted.)
 - **Domain**: `arcane.memory-alpha.internal` (self-signed) + `arcane.memory-alpha.zjones.dev` (LE, reuses the existing wildcard anchor — no new Cloudflare record needed beyond the wildcard that already covers every other `*.memory-alpha.zjones.dev` service).
 - **Image**: researched directly rather than guessing — `ghcr.io/getarcaneapp/manager` and `ghcr.io/getarcaneapp/arcane` are the same image (identical digests) under two package names; likewise `ghcr.io/getarcaneapp/agent` and `ghcr.io/getarcaneapp/arcane-headless` are the same image. Tags use a `v` prefix (`v2.3.2`, not `2.3.2` — the brief's own example and initial guess were both missing it). Latest **stable** release as of 2026-07-09 is `v2.3.2` (2026-07-04). Pinned the manager to `ghcr.io/getarcaneapp/manager:v2.3.2`.
 - **Not yet done (needs a live manager + hands-on access this session doesn't have)**: bringing the container up, verifying the UI, creating the initial admin account. These are manual per the brief's own sequencing note — flagging here rather than claiming them done.
