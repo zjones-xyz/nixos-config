@@ -21,6 +21,7 @@
     neovim
     nmap
     sl  # for lolz — steam locomotive when you fat-finger `ls`
+    sops
     unzip
     wget
 
@@ -56,6 +57,13 @@
   # zsh is the macOS default login shell; let Home Manager manage ~/.zshrc
   # (starship + direnv from common.nix hook into it automatically).
   programs.zsh.enable = true;
+
+  # sops' age identity for this Mac. Without this, sops falls back to probing
+  # default locations (~/.ssh/id_ed25519, etc.) and fails to decrypt anything
+  # this admin key is a recipient for.
+  home.sessionVariables = {
+    SOPS_AGE_KEY_FILE = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
+  };
 
   # macOS rebuild aliases (darwin-rebuild, not nixos-rebuild). home.shellAliases
   # applies to zsh and merges with the shared `ll` from common.nix.
