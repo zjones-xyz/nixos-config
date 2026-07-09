@@ -3,6 +3,7 @@
 {
   imports = [
     ./letsencrypt.nix
+    ./motd.nix
   ];
 
   nix = {

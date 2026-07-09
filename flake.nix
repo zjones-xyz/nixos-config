@@ -35,6 +35,7 @@
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
+        specialArgs = { inherit self; };
         modules = [
           ./hosts/memory-alpha/configuration.nix
           home-manager.nixosModules.home-manager
@@ -55,6 +56,7 @@
       #     --build-host z@memory-alpha.internal --use-remote-sudo
       hopper = nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
+        specialArgs = { inherit self; };
         modules = [
           nixos-hardware.nixosModules.raspberry-pi-4
           "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
@@ -77,6 +79,7 @@
       #     --build-host z@memory-alpha.internal --use-remote-sudo
       hamilton = nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
+        specialArgs = { inherit self; };
         modules = [
           nixos-hardware.nixosModules.raspberry-pi-3
           "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
