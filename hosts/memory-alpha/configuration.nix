@@ -28,6 +28,7 @@ in
     ../../modules/nixos/newt.nix
     ../../modules/nixos/traefik.nix
     ../../modules/nixos/dockge.nix
+    ../../modules/nixos/arcane.nix
   ];
 
   networking.hostName = "memory-alpha";
