@@ -19,7 +19,28 @@
   ];
 
   # Prompt.
-  programs.starship.enable = true;
+  programs.starship = {
+    enable = true;
+    settings = {
+      # Only show the hostname over SSH (matches starship's own default —
+      # made explicit here so it doesn't silently change on a starship
+      # upgrade), so the local prompt on each host stays uncluttered while
+      # an SSH'd-in session still tells you which box you're on.
+      hostname = {
+        ssh_only = true;
+        format = "[$hostname]($style) ";
+        style = "bold dimmed green";
+      };
+
+      # Only show command duration for commands that actually take a while,
+      # so quick commands don't clutter the prompt with a "took 12ms".
+      cmd_duration = {
+        min_time = 3000;
+        format = "took [$duration]($style) ";
+        style = "bold yellow";
+      };
+    };
+  };
 
   # Per-directory env + fast nix-shell caching.
   programs.direnv = {
