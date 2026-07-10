@@ -1,8 +1,6 @@
 { config, pkgs, lib, ... }:
 
 let
-  # TODO confirm towerUpsName against Tower's Unraid NUT plugin settings
-  # page before deploying (commonly "ups", but verify).
   towerUpsName = "ups";
   towerMonitorUser = "monuser";
 in
@@ -41,4 +39,15 @@ in
   # you set for the monitor user on Tower's NUT plugin (mirrors the same
   # key already present in secrets/hopper.yaml).
   sops.secrets."nut/upsmonPassword" = {};
+
+  # Without this, upsmon starts as soon as multi-user.target allows, which
+  # can be before DNS/network is actually usable — its first connection
+  # attempt to tower.internal then fails ("No such host" / "Communications
+  # ... lost") before self-healing on retry a few seconds later. Wait for
+  # real network readiness so that false "lost" log line doesn't happen on
+  # every boot.
+  systemd.services.upsmon = {
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+  };
 }
