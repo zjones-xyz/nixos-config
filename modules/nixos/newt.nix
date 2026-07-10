@@ -5,6 +5,13 @@
   # Creates a persistent tunnel to pangolin.zjones.xyz so public-facing
   # Docker services on memory-alpha are reachable without opening inbound ports.
   # Runs as a systemd service (not Docker) so it's up before containers start.
+  #
+  # Because this runs directly on the host (not joined to any Docker network),
+  # Pangolin resource targets for services here must be host-resolvable
+  # addresses — e.g. `localhost:<port>` for same-host services, or
+  # `memory-alpha.internal:<port>` — never a Docker container name. Contrast
+  # with Tower's Newt (homelab-stacks/tower/pangolin-newt), which runs as a
+  # container on the shared `proxy` network, where container names do resolve.
 
   sops.secrets."newt/clientSecret" = {};
 
