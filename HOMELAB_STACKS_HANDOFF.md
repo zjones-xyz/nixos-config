@@ -342,3 +342,59 @@ When hopper is stable, this stack moves there. The main changes:
 - Homepage service URLs update from `memory-alpha.internal` to `hopper.internal`.
 - Speedtest Tracker can be added to hopper's stack at that point if wanted.
 - Remove this stack from memory-alpha once hopper is confirmed stable.
+
+---
+
+## Addendum (2026-07-09): Arcane agent for hopper
+
+The nixos-config repo now runs an [Arcane](https://getarcane.app) manager on
+memory-alpha (`modules/nixos/arcane.nix`, reachable at
+`arcane.memory-alpha.zjones.dev`). hopper is meant to be one of its remote
+"environments," but since hopper's real services live here in Compose (not in
+nixos-config's dead NixOS config for hopper — see `hosts/README-rpi-os.md`),
+the agent belongs in **this repo's** `hopper/docker-compose.yml`, not there.
+`modules/nixos/arcane-agent.nix` in nixos-config is the reference for the
+shape (env vars, edge-mode reasoning) — port it to a Compose service here.
+
+### ⚠️ arm64 blocker — confirmed, not assumed
+
+hopper is `aarch64` (Pi 4). The current **stable** Arcane agent image
+(`ghcr.io/getarcaneapp/arcane-headless:v2.3.2`, same digest as
+`ghcr.io/getarcaneapp/agent:v2.3.2`) was checked directly against the GHCR
+manifest list and **only publishes `amd64` + `riscv64`** — no `arm64` manifest
+exists at that tag. `arm64`/`arm` variants do exist under the `:latest` and
+`v2.4.0-next.*` tags, i.e. arm64 support landed after v2.3.2 but hasn't reached
+a stable release yet as of 2026-07-09.
+
+This directly contradicts the original assumption that Arcane's multi-arch
+manifests "resolve automatically" — they do, but only for architectures the
+pinned tag actually publishes. Options, in order of preference:
+1. Wait for the next stable release that includes `arm64` and pin to that.
+2. Pin to a specific `v2.4.0-next.N` digest (by `sha256:` digest, not the
+   floating `next` tag) if the agent is needed sooner — treat this as a
+   temporary exception to "pin tags, not `:latest`," and re-pin to a real
+   stable tag the moment one ships.
+3. Confirm current architecture with `docker manifest inspect
+   ghcr.io/getarcaneapp/arcane-headless:<tag>` before deploying — don't trust
+   this note to still be accurate by the time you act on it.
+
+### Env vars for the agent service (edge mode — dials out, no inbound port)
+
+```yaml
+arcane-agent:
+  image: ghcr.io/getarcaneapp/arcane-headless:<tag per above>
+  restart: unless-stopped
+  environment:
+    - EDGE_AGENT=true
+    - EDGE_TRANSPORT=auto
+    - MANAGER_API_URL=https://arcane.memory-alpha.zjones.dev
+    - AGENT_TOKEN=${ARCANE_AGENT_TOKEN}
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+```
+
+`ARCANE_AGENT_TOKEN` goes in hopper's `.env` (plain, per this repo's existing
+convention — no sops here), generated from the manager's *Settings →
+Environments* page once the manager is live and reachable. One token per host;
+don't reuse hopper's token for hamilton or anything else.
+
