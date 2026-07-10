@@ -39,6 +39,7 @@ in
     ../../modules/nixos/traefik.nix
     ../../modules/nixos/dockge.nix
     ../../modules/nixos/arcane.nix
+    ../../modules/nixos/nut-client.nix
   ];
 
   networking.hostName = "memory-alpha";
