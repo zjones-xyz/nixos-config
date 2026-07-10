@@ -145,6 +145,16 @@ in
     '';
   };
 
+  # `path = [ pkgs.iproute2 ]` above only sets $PATH inside the unit — the
+  # initrd-systemd module doesn't trace that back to copy the `ip` binary
+  # into the initrd image itself. Without this, `ip` was silently
+  # "command not found" (the script's `|| true` swallowed the failure),
+  # the flush never ran, and every boot inherited stale initrd DHCP state:
+  # NetworkManager saw the interfaces as already "connected (externally)",
+  # skipped its own DHCP negotiation, and /etc/resolv.conf ended up with
+  # no nameservers. This is what actually gets the binary copied in.
+  boot.initrd.systemd.storePaths = [ "${pkgs.iproute2}/bin/ip" ];
+
   # LUKS SSH unlock — lets you decrypt the drive remotely after a reboot.
   #
   # How it works:
