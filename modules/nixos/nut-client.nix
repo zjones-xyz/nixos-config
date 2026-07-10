@@ -39,13 +39,10 @@ let
     AT COMMOK     * EXECUTE commok
   '';
 
-  # TODO confirm against Tower's Unraid NUT plugin settings page before
-  # deploying: the UPS name it exposes (commonly "ups") and the remote
-  # monitor username it expects (the plugin needs "allow remote
-  # monitoring" turned on, with a username/password, if that's not
-  # already enabled).
+  # TODO confirm towerUpsName against Tower's Unraid NUT plugin settings
+  # page before deploying (commonly "ups", but verify).
   towerUpsName = "ups";
-  towerMonitorUser = "upsmon";
+  towerMonitorUser = "monuser";
 in
 {
   # NUT client — Tower (Unraid, tower.internal) is the NUT server for its
