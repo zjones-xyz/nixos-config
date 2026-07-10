@@ -5,6 +5,8 @@
   #
   # Requires: media mounted at /mnt/media (NFS from Tower).
   # Access: http://memory-alpha.internal:8096
+  # Pangolin resource target: http://localhost:8096 (Newt runs on this same
+  # host — see newt.nix; a container name like `jellyfin` does NOT resolve).
   #
   # After first enable, complete setup at the web UI — Jellyfin generates its
   # own config/state in /var/lib/jellyfin.
