@@ -5,12 +5,7 @@ let
 
   pretranscodePlugin = pkgs.fetchurl {
     url = "https://github.com/SalMutt/jellyfin-pretranscode/releases/download/v1.0.0/Jellyfin.Plugin.PreTranscode.dll";
-    # Placeholder — this sandboxed session couldn't reach
-    # github.com/*/releases/download/* to compute the real hash.
-    # `nixos-rebuild switch --flake .#memory-alpha` will fail on first
-    # build with a hash mismatch error reporting the correct sha256;
-    # paste it in here and rebuild.
-    sha256 = lib.fakeHash;
+    sha256 = "sha256-0GrjZe/O+3Jw6w28G+3djj7hiIIVa6N5uzX7WCTAZO8=";
   };
 in
 {
