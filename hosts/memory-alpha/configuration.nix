@@ -8,7 +8,17 @@ let
   # Applied both to the running system and the initrd stage so the LUKS SSH
   # unlock (below) sees the same names.
   #   eth-primary   = 6c:1f:f7:bc:55:f5 — the one DNS resolves memory-alpha.internal to
-  #   eth-secondary = 9c:69:d3:4c:c5:16 — second USB-C Ethernet dongle
+  #   eth-secondary = 9c:69:d3:4c:c5:16 — second USB-C Ethernet dongle. Now
+  #                   the ipvlan parent for the Bambuddy virtual-printer
+  #                   network in homelab-stacks
+  #                   (memory-alpha/bambuddy/compose.yaml) — replacing what
+  #                   was previously the raw enp0s13f0u1u3c2 device name
+  #                   there. The addresses on that ipvlan network (Bambuddy's
+  #                   own control address 192.168.8.98 /
+  #                   memory-alpha-2.internal, plus three per-printer
+  #                   addresses 192.168.8.95-97 for VP-athena/VP-conway/
+  #                   VP-queue) are container-only — not addresses assigned
+  #                   to eth-secondary itself.
   ethLinks = {
     "10-eth-primary" = {
       matchConfig.MACAddress = "6c:1f:f7:bc:55:f5";
