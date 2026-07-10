@@ -19,6 +19,17 @@ then the deeper docs alongside it.
   See MANUAL-STEPS.md §1 — `disko.nix`'s `device` must be set to the new drive's
   `/dev/disk/by-id/...` path (identified by serial), not an ambiguous `nvmeXn1`
   index.
+- **Rebased onto `main` (2026-07-10)** to pick up ~40 commits of fleet drift
+  (memory-alpha NUT/reboot fixes, jellyfin-pretranscode, the Arcane
+  manager/agent module, shared starship/direnv/interactive-zsh unification,
+  etc.). No textual conflicts — the PR only touches `hosts/pegasus/`,
+  `flake.{nix,lock}`, `.sops.yaml`, `CLAUDE.md`, and net-new `modules/nixos/*`
+  files, none of which main also changed. Re-validated green with
+  `.claude/hooks/flake-check-sandboxed.sh --all-systems --impure`. Note: the
+  `arcane-agent` module (`modules/nixos/arcane-agent.nix`) now exists on
+  `main` but is still **not** wired into `hosts/pegasus/configuration.nix` —
+  that wiring is still gated on real hardware existing to generate a manager
+  token from, per `DECISIONS.md`'s original note, so it's out of scope here.
 
 ## Read these (don't re-derive)
 
