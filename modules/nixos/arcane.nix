@@ -37,20 +37,17 @@ let
           - "traefik.http.routers.arcane.rule=Host(`arcane.memory-alpha.internal`)"
           - "traefik.http.routers.arcane.entrypoints=websecure"
           - "traefik.http.routers.arcane.tls=true"
-          - "traefik.http.routers.arcane.middlewares=dashboard-auth"
           - "traefik.http.routers.arcane-dev.rule=Host(`arcane.memory-alpha.zjones.dev`)"
           - "traefik.http.routers.arcane-dev.entrypoints=websecure"
           - "traefik.http.routers.arcane-dev.tls.certresolver=letsencrypt"
           - "traefik.http.routers.arcane-dev.service=arcane"
-          - "traefik.http.routers.arcane-dev.middlewares=dashboard-auth"
           - "traefik.http.services.arcane.loadbalancer.server.port=3552"
   '';
 in
 {
-  # `dashboard-auth` (basic auth, htpasswd) is defined once via labels on the
-  # traefik container itself (modules/nixos/traefik.nix) and is available
-  # globally to any router Traefik's Docker provider discovers — reused here
-  # rather than minting a second htpasswd secret.
+  # No Traefik-level basic-auth in front of this one (unlike the Traefik
+  # dashboard) — Arcane's own login (forces a password change off the
+  # `admin`/`arcane-admin` default on first login) is the only auth layer.
   sops.secrets."arcane/encryptionKey".owner = "z";
   sops.secrets."arcane/jwtSecret".owner = "z";
 
