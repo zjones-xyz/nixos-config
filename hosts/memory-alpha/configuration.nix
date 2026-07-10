@@ -35,6 +35,7 @@ in
     ./hardware-configuration.nix
     ../../modules/nixos/common.nix
     ../../modules/nixos/jellyfin.nix
+    ../../modules/nixos/jellyfin-pretranscode.nix
     ../../modules/nixos/newt.nix
     ../../modules/nixos/traefik.nix
     ../../modules/nixos/dockge.nix
