@@ -73,6 +73,14 @@
     # Winetricks operations scoped to a specific Proton prefix — common
     # companion to protonup-qt/lutris for troubleshooting individual games.
     protontricks
+
+    # Epic/GOG/Amazon Prime Gaming — same rationale as itch above: lutris has
+    # no native store integration for these either.
+    heroic
+
+    # Parametric GUI CAD, pairs with openscad (script-only) in the 3D-printing
+    # pipeline.
+    freecad
   ] ++ [
     # Claude Desktop — not in nixpkgs (Anthropic's official Linux beta only
     # shipped 2026-06-30, too recent). claudeDesktop comes from the
