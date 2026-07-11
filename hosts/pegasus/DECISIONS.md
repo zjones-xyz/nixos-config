@@ -124,3 +124,15 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
 - **Gaming GPU drain via a symmetric `ollama-pause` oneshot**, hooked to
   gamemode's `custom.start`/`end`. The "what counts as a game launching" signal is
   a documented stub — confirm/replace per MANUAL-STEPS.
+- **LUKS SSH remote unlock, added 2026-07-11** (requested mid-bring-up — Zoe
+  wanted to be able to unlock from serenity without walking over). Mirrors
+  memory-alpha's `boot.initrd.network.ssh` setup almost verbatim; two
+  deliberate simplifications since pegasus has one stock onboard NIC instead
+  of two renamed USB dongles: (1) no `systemd.network.links` MAC-pinning, (2)
+  the pre-switch-root DHCP-flush oneshot loops over any `type ether`
+  interface instead of hardcoding names. One thing memory-alpha's writeup
+  flagged that's **unverified here**: whether the onboard NIC's driver needs
+  adding to `boot.initrd.availableKernelModules` to come up before LUKS
+  unlock (memory-alpha's USB dongles needed `usbnet`/`cdc_ether`/`cdc_ncm`/
+  `mii` added explicitly). First reboot after this lands is the real test —
+  see MANUAL-STEPS.md.

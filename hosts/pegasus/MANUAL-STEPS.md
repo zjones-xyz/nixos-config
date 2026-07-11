@@ -92,28 +92,28 @@ or display-manager state doesn't lock you out:
 Mount/validate the existing Steam library on the `/games` subvolume and add it in
 Steam → Settings → Storage so installs land there (survives reinstalls).
 
-## 5. Olla router — fill in the last package hash
+## 5. Olla router — DISABLED, needs re-enabling when you want it back
 
-Mostly done ahead of time (2026-07-03): `modules/nixos/olla-router.nix` is
-pinned to olla **v0.0.28** with a real `src.hash`, and its YAML config schema
-was verified against that tag's shipped `config/config.yaml` + `types.go`
-(flat `model_url`/`health_check_url`/`check_interval` endpoint fields, and
-`proxy.load_balancer: "priority"` so the 4070→1070 failover actually honours
-priority). Only **`vendorHash` remains a placeholder** — buildGoModule can only
-compute it from an x86_64-linux Go build, which couldn't run on the Mac.
+Done as of 2026-07-11: `modules/nixos/olla-router.nix`'s `version`, `src.hash`,
+and `vendorHash` are all real now — the last one resolved from the actual
+hash-mismatch error on pegasus's native x86_64 build, as planned. But the
+import is currently **commented out** in `hosts/pegasus/configuration.nix`:
+olla's own Go test suite includes a wall-clock throughput assertion
+(`pkg/eventbus` `TestEventBus_HighVolumePublishing`) that fails under the Nix
+sandbox's constrained CPU scheduling, not a real defect. To bring it back:
 
-On pegasus (native x86_64 build):
-
-1. `nixos-rebuild build --flake .#pegasus`. It fails with a hash mismatch and
-   prints the real `vendorHash`.
-2. Paste that into `vendorHash` in `modules/nixos/olla-router.nix`, rebuild,
-   commit.
+1. Uncomment the `../../modules/nixos/olla-router.nix` import in
+   `hosts/pegasus/configuration.nix`.
+2. Add `doCheck = false;` to the `olla = pkgs.buildGoModule` derivation in
+   `modules/nixos/olla-router.nix` (skips upstream's test suite — standard
+   practice for packaging a binary you don't maintain), or file the test's
+   flakiness upstream first if you'd rather not skip it.
 3. **Set the real hostname of the 1070 node** (placeholder: `gpu1070.internal`)
-   in `ollaConfig`.
+   in `ollaConfig` — still outstanding regardless of the above.
 
 To bump Olla's version later: change `version`, re-run
-`nix-prefetch-github thushan olla --rev vX.Y.Z` for the new `src.hash`, then the
-fakeHash build cycle above for `vendorHash`.
+`nix-prefetch-github thushan olla --rev vX.Y.Z` for the new `src.hash`, then a
+`lib.fakeHash` build cycle for the new `vendorHash`.
 
 ## 6. Inference behaviour
 
@@ -134,10 +134,42 @@ See `SECRETS-TODO.md` — create `secrets/pegasus.yaml`, add pegasus's age key t
 
 ## 8. Mac (serenity) — nix-darwin activation
 
-On the Mac, not here:
+Already done (PR #7) — pegasus's bring-up doesn't need to touch this. For
+reference: `scutil --get LocalHostName` confirmed the hostname; bootstrapped
+via `nix run nix-darwin -- switch --flake ~/nixos-config#serenity`.
 
-1. Confirm the hostname: `scutil --get LocalHostName` (config assumes `serenity`).
-2. Confirm the nix-darwin `system.stateVersion` value expected by the installed
-   nix-darwin (config uses `6`).
-3. Bootstrap: `nix run nix-darwin -- switch --flake ~/nixos-config#serenity`
-   (Determinate Nix stays in charge of Nix itself — `nix.enable = false`).
+## 9. LUKS remote unlock (SSH-in-initrd)
+
+Added 2026-07-11, mirroring memory-alpha's setup. Before the next
+`nixos-rebuild switch` that includes this change:
+
+1. **Generate the dedicated initrd-only SSH host key** (on pegasus, as root —
+   this must exist on disk before the closure can build, since
+   `boot.initrd.network.ssh.hostKeys` reads it at build time):
+   ```
+   sudo mkdir -p /etc/secrets/initrd
+   sudo ssh-keygen -t ed25519 -N "" -f /etc/secrets/initrd/ssh_host_ed25519_key
+   ```
+   This is deliberately a *different* key from the main host SSH key — it
+   lives unencrypted outside the LUKS volume (initrd runs before unlock), so
+   keeping it separate limits the blast radius if it ever leaks. Never commit
+   this key anywhere.
+2. `nixos-rebuild switch --flake .#pegasus`, then reboot to actually test it
+   (a `switch` alone doesn't touch the initrd you boot into next time until
+   you reboot).
+3. **On reboot, verify the initrd SSH server comes up at all**: from
+   serenity, `ssh -p 2222 root@<pegasus-ip>` while pegasus is sitting at the
+   LUKS prompt. If this doesn't connect (not even connection-refused —
+   nothing), the onboard NIC's driver likely isn't in
+   `boot.initrd.availableKernelModules` and needs adding explicitly — see the
+   `UNVERIFIED` comment in `hosts/pegasus/configuration.nix` right above the
+   `boot.initrd.network` block, and mirror memory-alpha's
+   `usbnet`/`cdc_ether`/`cdc_ncm`/`mii` pattern with whatever driver your NIC
+   actually uses (check `lspci -nnk | grep -iA3 ethernet` while booted
+   normally to find it).
+4. Once confirmed, unlock from serenity with `unlock-pegasus` (needs
+   `pegasus.internal` to resolve — add an AdGuard DNS rewrite for it if it
+   doesn't yet, same as the other `.internal` hosts; substitute the raw LAN
+   IP in the meantime). Optionally add the LUKS passphrase to 1Password as
+   `System Keys/pegasus luks/password` for the fully automated path — without
+   it, the script just prompts you interactively instead.

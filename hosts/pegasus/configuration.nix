@@ -58,6 +58,114 @@ in
   networking.firewall.trustedInterfaces = [ "tailscale0" ];
   networking.firewall.allowedUDPPorts = [ config.services.tailscale.port ];
 
+  # ── LUKS SSH unlock ─────────────────────────────────────────────────────────
+  # Lets you decrypt the drive remotely (e.g. `unlock-pegasus` from serenity)
+  # instead of needing to be physically at the box after every reboot. Mirrors
+  # hosts/memory-alpha/configuration.nix's setup — see that file for the full
+  # writeup of *why* each piece exists — simplified here since pegasus has one
+  # stock onboard NIC (no USB dongles to rename/re-drive).
+  #
+  # Setup step required before this can build (does NOT block the current
+  # install — only the next `nixos-rebuild switch` that picks up this change):
+  #   ssh-keygen -t ed25519 -N "" -f /etc/secrets/initrd/ssh_host_ed25519_key
+  # This is a dedicated initrd-only host key, deliberately NOT the main host
+  # key — it lives unencrypted (outside the LUKS volume, since initrd runs
+  # before unlock) at the path below. See hosts/pegasus/MANUAL-STEPS.md.
+  boot.initrd.systemd.enable = true; # required for LUKS SSH unlock
+
+  boot.initrd.network = {
+    enable = true;
+    ssh = {
+      enable = true;
+      port = 2222;
+      authorizedKeys = [
+        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCfTHdojQvKOlTaaTYT2RmYMNKQ/6rBQwn6V+bPnrtASaI/G5E7RW67XGbZHi3K7EctyB9UP9Uw54sayEu4ebixI/dNFVVWeZ2byBQ49FoXh5o9Cfok0Qwf0QM7g9Td8O6Iu2ElnI8e+9cr8ThrfPpKmP68e6mpuYDvhQb4omcx8kRhxnsuNxkL2xCTNVxG/jw68o/1KHX++6tRqf0E3PBCjZ3Z8HMTdS8ouEBa8Y96GGeUvslwDJ9cUtLNCUhR5t3mGu3iSS9RYpFg/JujyTT9yhe2O/0og+OhBeSayGZMOXGWngGUEItExlbq2I4rMV5pFB1q+OyqksvlUfkJ/j3yJOii5uwonYvkWLZfR02yhn2b/bgOfYaimO5rfKj5jAC8bMRnWqLJAiG2qRDwtJT+ijyYlTKgLpz73sOGAQVvZygq11Vc35cZMFojlMeqAHdZMGi6XkUHnfZt8gyplw6VPV5EQnyDI4bRfY9sknuFvjHqdEzNyNrIEXtlmIB870s= z@Serenity.local"
+      ];
+      hostKeys = [ "/etc/secrets/initrd/ssh_host_ed25519_key" ];
+    };
+  };
+
+  # UNVERIFIED: unlike memory-alpha's USB Ethernet dongles (which needed
+  # usbnet/cdc_ether/cdc_ncm/mii added to boot.initrd.availableKernelModules
+  # before the NIC came up in the initrd at all — see that host's config for
+  # the diagnosis), pegasus's onboard NIC driver may or may not already be
+  # built into the stock kernel. hardware-configuration.nix's generated
+  # module list has no Ethernet driver in it, which could mean "built in,
+  # nothing needed" or "not detected because it's only needed pre-root".
+  # First reboot after this lands is the real test — see MANUAL-STEPS.md. If
+  # `unlock-pegasus` can't reach the initrd SSH server at all (not even a
+  # connection refused/timeout distinguishable from "not booted yet"), this
+  # is the first thing to check: add the onboard NIC's driver module here via
+  # lib.mkAfter, matching memory-alpha's pattern.
+
+  # Same NetworkManager/initrd-DHCP interaction memory-alpha hit: with
+  # networking.networkmanager.enable = true (implicitly networking.useDHCP =
+  # false), switch-root leaves the initrd's DHCP-assigned address/routes in
+  # place, and NetworkManager then adopts the interface as "connected
+  # (externally)" instead of re-negotiating — which is the only thing that
+  # populates /etc/resolv.conf. Net effect without this: routing works, DNS is
+  # empty, every boot. Flush right before switch-root so NetworkManager always
+  # starts clean. Generalized over any ethernet-type interface rather than a
+  # hardcoded name (pegasus doesn't rename its NIC via systemd.network.links
+  # the way memory-alpha does for its USB dongles).
+  boot.initrd.systemd.services.flush-network-before-switch-root = {
+    description = "Flush initrd DHCP state so NetworkManager re-negotiates DNS";
+    before = [ "initrd-switch-root.target" ];
+    wantedBy = [ "initrd-switch-root.target" ];
+    unitConfig.DefaultDependencies = false;
+    serviceConfig.Type = "oneshot";
+    path = [ pkgs.iproute2 pkgs.gawk ];
+    script = ''
+      for iface in $(ip -o link show type ether | awk -F': ' '{print $2}'); do
+        ip addr flush dev "$iface" || true
+      done
+    '';
+  };
+
+  # path = [ pkgs.iproute2 ] only sets $PATH inside the unit — it doesn't get
+  # `ip` copied into the initrd image itself. Without this the flush above
+  # silently no-ops (`|| true` swallows the "command not found") and every
+  # boot inherits stale DHCP state. See memory-alpha's configuration.nix for
+  # how this one was actually diagnosed.
+  boot.initrd.systemd.storePaths = [ "${pkgs.iproute2}/bin/ip" ];
+
+  # Audible chimes at the two initrd milestones that matter when unlocking
+  # headlessly. Both just write BEL (\a) to /dev/console — no ALSA, nothing
+  # extra needed in the initrd's minimal closure.
+  boot.initrd.systemd.services.chime-waiting-unlock = {
+    description = "Chime: initrd SSH unlock server ready";
+    after = [ "sshd.service" ];
+    wantedBy = [ "initrd.target" ];
+    before = [ "shutdown.target" ];
+    conflicts = [ "shutdown.target" ];
+    unitConfig.DefaultDependencies = false;
+    serviceConfig.Type = "oneshot";
+    path = [ pkgs.coreutils ];
+    script = ''
+      for i in 1 2 3; do
+        printf '\a' > /dev/console
+        sleep 0.15
+      done
+    '';
+  };
+
+  boot.initrd.systemd.services.chime-unlock-finished = {
+    description = "Chime: LUKS unlock finished";
+    after = [ "cryptsetup.target" ];
+    wantedBy = [ "initrd.target" ];
+    before = [ "shutdown.target" ];
+    conflicts = [ "shutdown.target" ];
+    unitConfig.DefaultDependencies = false;
+    serviceConfig.Type = "oneshot";
+    path = [ pkgs.coreutils ];
+    script = ''
+      for i in 1 2; do
+        printf '\a' > /dev/console
+        sleep 0.5
+      done
+    '';
+  };
+
   # ── sops-nix ────────────────────────────────────────────────────────────────
   # Uses the host's SSH ed25519 key as the age identity. After first boot:
   #   ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub
