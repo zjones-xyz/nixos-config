@@ -182,6 +182,11 @@ in
   users.users.z.hashedPasswordFile =
     lib.mkIf hasSops config.sops.secrets."z/hashedPassword".path;
 
+  # Elgato Stream Deck — udev rule for non-root /dev/hidraw access. The
+  # streamdeck-ui package (installed via home.packages in home.nix) ships
+  # this rule but doesn't wire it in automatically; needs registering here.
+  services.udev.packages = [ pkgs.streamdeck-ui ];
+
   # ── home-manager ──────────────────────────────────────────────────────────
   home-manager = {
     useGlobalPkgs = true;
