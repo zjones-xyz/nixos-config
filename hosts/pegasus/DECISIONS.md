@@ -88,6 +88,14 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
     never touched; NixOS installs to a blank drive identified by
     `/dev/disk/by-id/` serial (see MANUAL-STEPS §1 and `disko.nix`). Once NixOS
     is proven, the CachyOS drive can be pulled, freeing its M.2 slot.
+  - **SUPERSEDED 2026-07-11**: at install time, Zoe pulled the CachyOS drive
+    entirely instead of dual-booting it alongside NixOS — no more shared box,
+    no more "which NVMe is blank" ambiguity to navigate. pegasus is now
+    single-NVMe. `disko.nix` and `MANUAL-STEPS.md` §1 have been updated to
+    match (still identify the drive by `/dev/disk/by-id/`, just without the
+    two-drive caution). This also frees the second M.2 slot the Windows/SATA
+    decision below was partly based on — not revisited yet, flagging for
+    later.
   - **Windows → its own SATA SSD** (LOCKED 2026-07-03). *alt:* a partition on
     the NixOS NVMe. *Why:* Windows Update rewrites the ESP/boot order and clobbers
     other OSes' entries; a separate drive with its own ESP contains that to a

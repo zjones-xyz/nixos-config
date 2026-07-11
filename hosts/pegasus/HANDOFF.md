@@ -12,13 +12,21 @@ then the deeper docs alongside it.
   hopper, hamilton). **Nothing has been built or activated on hardware** — this
   Mac (aarch64-darwin) has no Linux builder, so building pegasus is itself a
   manual step on the box.
-- pegasus is still running CachyOS on its existing NVMe; serenity (the Mac) has
-  nix-darwin activated already (PR #7).
-- **Plan changed to dual-NVMe**: a second, blank NVMe is being added specifically
-  for the NixOS install, so CachyOS's drive is never touched during bring-up.
-  See MANUAL-STEPS.md §1 — `disko.nix`'s `device` must be set to the new drive's
-  `/dev/disk/by-id/...` path (identified by serial), not an ambiguous `nvmeXn1`
-  index.
+- serenity (the Mac) has nix-darwin activated already (PR #7).
+- **Install is in progress on real hardware (2026-07-11).** CachyOS's drive was
+  pulled entirely rather than dual-booted — pegasus is now single-NVMe (see
+  the "SUPERSEDED 2026-07-11" note in `DECISIONS.md` and updated
+  `MANUAL-STEPS.md` §1 / `disko.nix`). First install attempt skipped
+  `disko.nix` and used the installer's auto-partitioner instead, giving the
+  wrong layout (no `@snapshots`/`@games`, a real LUKS swap partition instead
+  of zram) — being redone with `disko.nix` properly.
+- **SSH bootstrapping note**: the plain generated `/etc/nixos/configuration.nix`
+  used for the first install attempt doesn't carry `modules/nixos/common.nix`'s
+  `services.openssh` + authorized-key wiring — that only lands once the real
+  `nixos-rebuild switch --flake .#pegasus` happens. Until then, SSH into the
+  installed system needs `services.openssh.enable = true;` added to the local
+  generated config by hand (see chat history, not written up as a doc step
+  since it's a one-time bootstrap quirk, not a repeatable procedure).
 - **Rebased onto `main` (2026-07-10)** to pick up ~40 commits of fleet drift
   (memory-alpha NUT/reboot fixes, jellyfin-pretranscode, the Arcane
   manager/agent module, shared starship/direnv/interactive-zsh unification,

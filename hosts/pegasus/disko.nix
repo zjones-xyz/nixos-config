@@ -10,15 +10,15 @@
 #   nix run github:nix-community/disko -- --mode disko ./hosts/pegasus/disko.nix
 # then `nixos-generate-config --no-filesystems --root /mnt` and reconcile.
 #
-# pegasus is dual-NVMe during bring-up: CachyOS stays on its existing drive,
-# NixOS installs to a second, blank NVMe added specifically for this. With two
-# NVMes in the box, `/dev/nvme0n1` vs `/dev/nvme1n1` is NOT reliably "old drive"
-# vs "new drive" — it depends on PCIe slot/boot order, and disko will happily
-# wipe whatever `device` points at. Before running, identify the blank drive by
-# serial, not by ambiguous index:
+# pegasus is single-NVMe: the CachyOS drive was physically removed before
+# install (2026-07-11), so NixOS owns the one remaining NVMe outright — no
+# dual-boot, no "which drive is blank" ambiguity. Still identify it by
+# /dev/disk/by-id/ rather than /dev/nvmeXn1 (index can still shift if other
+# NVMes are ever added later):
 #   ls -l /dev/disk/by-id/ | grep nvme
 # then set `device` below to the matching /dev/disk/by-id/nvme-<model>_<serial>
-# path for the NEW drive. Do not point this at the drive CachyOS is on.
+# path. disko will wipe whatever `device` points at, so don't run this against
+# a drive with anything else on it (e.g. one of the SATA/USB Windows drives).
 {
   disko.devices = {
     disk.main = {
