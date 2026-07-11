@@ -180,7 +180,7 @@ Added 2026-07-11, mirroring memory-alpha's setup. Before the next
    `System Keys/pegasus luks/password` for the fully automated path — without
    it, the script just prompts you interactively instead.
 
-## 10. Lock the claude-desktop-debian flake input
+## 10. Lock the claude-desktop-debian flake input (done 2026-07-11)
 
 `flake.lock` doesn't have a resolved entry for `claude-desktop-debian` yet —
 this authoring session's GitHub access is scoped to this repo only, and the
@@ -197,3 +197,38 @@ git add flake.lock
 git commit -m "Lock claude-desktop-debian"
 git push origin pegasus-bringup
 ```
+
+## 11. Dragonized theme — deferred, revisit once at the desktop
+
+Requested 2026-07-11, held off for now. Findings, so this doesn't need
+re-researching:
+
+- "Dragonized" (Garuda Linux's "Dr460nized" theme) isn't one downloadable
+  package — it's an assembled look: a top panel + bottom dock both rendered
+  by **Latte Dock**, the Sweet Plasma theme, a matching icon set, custom
+  SDDM/GRUB/Plymouth themes, plus `kwin-effects-forceblur` and rounded
+  corners.
+- **Latte Dock isn't supported on Plasma 6.** The original KDE project
+  stopped porting it. Garuda's own migration guide for it is literally
+  titled "Dr460nized Plasma 6 migration (**Deprecated 2025-01-01**)" —
+  Garuda themselves moved off the classic Latte-based layout for their own
+  Plasma 6 port.
+- Two community successors fill the same niche on Plasma 6/Wayland —
+  **Krema** and **Latte Dock NG** — but neither is in nixpkgs; either would
+  need the same from-source custom packaging treatment as Olla or Claude
+  Desktop, with no way to verify from here whether the result actually
+  reproduces Garuda's look well.
+- Options, roughly in order of confidence:
+  1. **Theme/colors/icons only** via a Global Theme package (KDE Store has
+     a "Dragon global theme" — store.kde.org/p/1389264), applied through
+     `programs.plasma.workspace.lookAndFeel` like the current
+     `org.kde.breezedark.desktop`. Skips the Latte panel restructuring
+     entirely — you'd get Dragonized colors/icons on a normal single-panel
+     layout, not the dual-panel look. Needs packaging as a custom Nix
+     derivation since KDE Store isn't a plain fetchable URL (resolved
+     through their API).
+  2. **Chase the full panel layout** with Krema or Latte Dock NG — closer
+     to the real thing, unproven, more packaging work.
+  3. Skip it.
+- Zoe's call once she's actually at the desktop and can see what Plasma 6
+  looks like bare, per `hosts/pegasus/DECISIONS.md`.
