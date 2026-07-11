@@ -186,3 +186,22 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
     next `nixos-rebuild switch --flake .#pegasus`, which auto-updates the
     lock for new inputs) on pegasus itself — full internet, no scope
     restriction — then commit the resulting `flake.lock` diff.
+    **Resolved 2026-07-11** — `nix flake lock` run on pegasus itself, pushed,
+    and re-verified end-to-end from this session (nested
+    `--override-input` paths for `flake-parts`/`nixpkgs-lib`, since they're
+    transitive to `claude-desktop-debian` rather than direct root inputs).
+- **COSMIC, added 2026-07-11 as a secondary session, not primary DE.**
+  `services.desktopManager.cosmic` has been a first-class NixOS module since
+  25.05 (well before this flake's 26.05 pin) — no third-party flake needed.
+  Added via a new `modules/nixos/desktop-cosmic.nix`, deliberately *not*
+  enabling `services.displayManager.cosmic-greeter` — SDDM (from
+  `desktop-plasma.nix`) stays the sole display manager, and just gains a
+  second selectable "COSMIC" session alongside Plasma, since NixOS
+  desktop-manager modules install session files any active display manager
+  picks up. *Why not primary:* as of COSMIC Epoch 1.2.0 (2026-06-30, ~2
+  weeks old at time of writing) there's no `plasma-manager` equivalent yet
+  — anything customized in COSMIC lives unmanaged in `~/.config/cosmic/`,
+  not declared in this repo — and VRR/HDR still haven't landed, which
+  matters concretely here since `gamescopeSession` in `gaming.nix` was
+  specifically chosen for NVIDIA + VRR. Revisit primary-DE status once
+  those land.
