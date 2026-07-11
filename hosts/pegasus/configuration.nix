@@ -187,6 +187,14 @@ in
   # this rule but doesn't wire it in automatically; needs registering here.
   services.udev.packages = [ pkgs.streamdeck-ui ];
 
+  # @games (see hardware-configuration.nix / disko.nix) is a freshly created
+  # BTRFS subvolume root — owned by root:root with 0755 perms by default,
+  # like any subvolume root, since nothing at mkfs/install time set it
+  # otherwise. Steam runs as z and couldn't create a library there at all
+  # until this is fixed. Declarative rather than a one-off `chown` so it
+  # survives a reinstall without a manual step.
+  systemd.tmpfiles.rules = [ "d /games 0755 z users - -" ];
+
   # ── home-manager ──────────────────────────────────────────────────────────
   home-manager = {
     useGlobalPkgs = true;

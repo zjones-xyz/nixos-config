@@ -89,8 +89,12 @@ or display-manager state doesn't lock you out:
 
 ## 4. Steam library on @games
 
-Mount/validate the existing Steam library on the `/games` subvolume and add it in
-Steam → Settings → Storage so installs land there (survives reinstalls).
+**Hit and fixed (2026-07-11)**: `/games` is a freshly created BTRFS subvolume
+root, owned by `root:root` at 0755 like any subvolume root — Steam (running as
+`z`) couldn't create a library there at all until `systemd.tmpfiles.rules` in
+`hosts/pegasus/configuration.nix` fixed the ownership declaratively. After a
+switch that includes that fix, add the library in Steam → Settings → Storage
+so installs land on `/games` (survives reinstalls).
 
 ## 5. Olla router — DISABLED, needs re-enabling when you want it back
 
