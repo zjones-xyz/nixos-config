@@ -52,12 +52,10 @@
 
       # pegasus — AM4 Ryzen + RTX 4070 workstation: gaming desktop (Plasma 6 /
       # Wayland) and the primary GPU inference endpoint (ollama + Olla router).
-      # Migrated from CachyOS onto the stock latest kernel + scx schedulers.
-      # NOTE: hosts/pegasus/hardware-configuration.nix is a PLACEHOLDER — the
-      # real one must be generated on the machine (or driven by
-      # hosts/pegasus/disko.nix) before deploying. See hosts/pegasus/MANUAL-STEPS.md.
+      # Single NVMe, installed via hosts/pegasus/disko.nix (2026-07-11).
       pegasus = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
+        specialArgs = { inherit self; };
         modules = [
           ./hosts/pegasus/configuration.nix
           home-manager.nixosModules.home-manager
