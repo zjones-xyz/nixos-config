@@ -57,6 +57,22 @@
     # Elgato Stream Deck control — needs the udev rule in
     # hosts/pegasus/configuration.nix for non-root USB access.
     streamdeck-ui
+
+    # Streaming/capture — added alongside streamdeck-ui, which is otherwise a
+    # control surface with nothing to control.
+    obs-studio
+
+    # GPU monitoring — htop-equivalent for the 4070, useful for confirming
+    # ollama.nix's gaming-drain oneshot is actually freeing VRAM/compute.
+    nvtopPackages.nvidia
+
+    # Archive handling — wasn't anywhere in the package set (system or home).
+    unzip
+    p7zip
+
+    # Winetricks operations scoped to a specific Proton prefix — common
+    # companion to protonup-qt/lutris for troubleshooting individual games.
+    protontricks
   ] ++ [
     # Claude Desktop — not in nixpkgs (Anthropic's official Linux beta only
     # shipped 2026-06-30, too recent). claudeDesktop comes from the
