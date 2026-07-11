@@ -45,6 +45,15 @@
     jellyfin-desktop
     vlc
 
+    # itch.io's official client — handles login/library/downloads/updates.
+    # lutris has no native itch.io integration (no account sync), so this is
+    # the actual client, not a duplicate of lutris's job.
+    itch
+
+    # Qt6 build (not plain libreoffice) for native Plasma 6 theming/integration
+    # rather than pulling in GTK.
+    libreoffice-qt6
+
     # Elgato Stream Deck control — needs the udev rule in
     # hosts/pegasus/configuration.nix for non-root USB access.
     streamdeck-ui
