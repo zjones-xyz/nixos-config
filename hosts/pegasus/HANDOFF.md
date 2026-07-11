@@ -72,6 +72,17 @@ re-checked if the lock moves: `services.ollama` uses `pkgs.ollama-cuda` (the old
 `acceleration` option is gone); `services.scx.scheduler = "scx_lavd"`. Re-run
 `nix flake check --no-build --all-systems --impure` after any `nix flake update`.
 
+**`nix flake check` has a blind spot, confirmed 2026-07-11**: it did not catch
+a missing `specialArgs = { inherit self; };` on `pegasus`'s `nixosSystem` call
+(needed by `modules/nixos/motd.nix`, which landed on `main` after this branch
+forked) — `nixos-install` failed on the real box with `attribute 'self'
+missing` even though `flake check` reported green. `flake check` doesn't force
+the same evaluation depth as an actual build. To catch this class of bug
+before hardware, force it directly:
+`nix eval --impure .#nixosConfigurations.<host>.config.system.build.toplevel.drvPath`
+(with the same per-input `--override-input` overrides
+`flake-check-sandboxed.sh` uses, if running from a web session).
+
 ## Not blocking pegasus (separate, pre-existing)
 
 memory-alpha prod-cert flip (PR #5) and the other carried-over homelab tasks are
