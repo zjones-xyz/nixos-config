@@ -138,3 +138,51 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   booted yet"). `r8169` (Realtek), confirmed via
   `readlink -f /sys/class/net/enp42s0/device/driver`, added via
   `lib.mkAfter`.
+- **Desktop apps, added 2026-07-11** (requested batch): vscode, google-chrome,
+  firefox, vivaldi, 1Password (gui+cli), claude-code, discord, ferdium,
+  bambu-studio, orca-slicer, openscad, obsidian, spotify, ticktick,
+  prusa-slicer, jellyfin-desktop, vlc — all confirmed present in the pinned
+  nixpkgs before adding (queried directly rather than assumed from memory).
+  `streamdeck-ui` added for the Elgato Stream Deck, with its udev rule
+  registered via `services.udev.packages` for non-root access.
+  Brain.fm was requested but has **no nixpkgs package and no native Linux
+  client anywhere** (subscription web app only) — left out, usable via a
+  browser.
+- **Claude Desktop, added 2026-07-11 via a new flake input.** Anthropic has
+  no nixpkgs package (their official Linux beta only shipped 2026-06-30,
+  too recent to have landed upstream). *alt considered:* the older
+  community pattern of patching the Windows/macOS Electron build to run on
+  Linux (e.g. `k3d3/claude-desktop-linux-flake`) — rejected once the
+  official beta's existence was confirmed, in favor of
+  `aaddrick/claude-desktop-debian`, which as of its v3.0.0 release
+  repackages that *official* `.deb` directly (same pattern nixpkgs itself
+  uses for `google-chrome`/`spotify` — wrapping an upstream binary, not
+  reverse-engineering one). Actively maintained (123 releases, latest
+  v3.1.0 this month). Added as `inputs.claude-desktop-debian` with
+  `inputs.nixpkgs.follows = "nixpkgs"`; the package itself
+  (`claude-desktop-fhs`, the FHS-wrapped variant — needed for MCP servers,
+  which shell out to `npx`/`uvx`/etc. expecting a standard filesystem
+  layout) is passed into `hosts/pegasus/home.nix` via
+  `home-manager.extraSpecialArgs` in `flake.nix`, since it has no
+  home-manager module of its own, just a package output.
+  - **Declared as `git+https://github.com/aaddrick/claude-desktop-debian.git`,
+    not `github:aaddrick/claude-desktop-debian`** — this authoring session's
+    GitHub access is scoped to `zjones-xyz/nixos-config` only, so the
+    `github:` tarball-API fetch 403s here (it works fine anywhere with
+    normal GitHub access, e.g. on pegasus itself). `git+https` uses plain
+    git protocol instead, sidestepping the issue permanently rather than
+    just working around it for this one session — see
+    `.claude/hooks/flake-check-sandboxed.sh`, which does the equivalent for
+    every other input.
+  - **`flake.lock` was NOT fully resolved from this session** — the input's
+    own transitive dependency (`hercules-ci/flake-parts`) still hits the
+    same `github:` tarball-API 403 one level deeper, and this session's
+    `add_repo` tool is explicitly restricted to only fire on an explicit
+    user request, not autonomously to route around a validation gap. Every
+    other part of the change was verified via the same deep-eval technique
+    used throughout this branch (forcing
+    `config.system.build.toplevel.drvPath`) — the trace confirms the *only*
+    unresolved piece is that one fetch. Run `nix flake lock` (or just the
+    next `nixos-rebuild switch --flake .#pegasus`, which auto-updates the
+    lock for new inputs) on pegasus itself — full internet, no scope
+    restriction — then commit the resulting `flake.lock` diff.

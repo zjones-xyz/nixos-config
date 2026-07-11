@@ -175,3 +175,21 @@ Added 2026-07-11, mirroring memory-alpha's setup. Before the next
    IP in the meantime). Optionally add the LUKS passphrase to 1Password as
    `System Keys/pegasus luks/password` for the fully automated path — without
    it, the script just prompts you interactively instead.
+
+## 10. Lock the claude-desktop-debian flake input
+
+`flake.lock` doesn't have a resolved entry for `claude-desktop-debian` yet —
+this authoring session's GitHub access is scoped to this repo only, and the
+input's own transitive dependency (`flake-parts`) couldn't be fetched from
+here. On pegasus (normal internet, no scope restriction):
+```
+cd ~/nixos-config
+nix flake lock
+```
+(or just run the next `nixos-rebuild switch --flake .#pegasus` — it
+auto-updates the lock file for inputs that aren't pinned yet). Then:
+```
+git add flake.lock
+git commit -m "Lock claude-desktop-debian"
+git push origin pegasus-bringup
+```

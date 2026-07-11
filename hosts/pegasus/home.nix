@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, claudeDesktop, ... }:
 
 {
   imports = [
@@ -23,11 +23,8 @@
   # ticktick/obsidian/bambu-studio are all unfree and need it; firefox/
   # ferdium/openscad/orca-slicer/streamdeck-ui are free/open.
   #
-  # Two requested apps have no nixpkgs package and were left out rather than
-  # guessed at: Brain.fm (subscription web app, no native Linux client
-  # anywhere) and the Claude desktop chat app (Anthropic doesn't ship an
-  # official Linux client — only claude-code, the CLI, which is included
-  # below). Both are usable via firefox/chrome in the meantime.
+  # Brain.fm was left out — no nixpkgs package, no native Linux client
+  # anywhere (subscription web app only); usable via firefox/chrome.
   home.packages = with pkgs; [
     vscode
     google-chrome
@@ -44,10 +41,20 @@
     obsidian
     spotify
     ticktick
+    prusa-slicer
+    jellyfin-desktop
+    vlc
 
     # Elgato Stream Deck control — needs the udev rule in
     # hosts/pegasus/configuration.nix for non-root USB access.
     streamdeck-ui
+  ] ++ [
+    # Claude Desktop — not in nixpkgs (Anthropic's official Linux beta only
+    # shipped 2026-06-30, too recent). claudeDesktop comes from the
+    # claude-desktop-debian flake input via home-manager.extraSpecialArgs in
+    # flake.nix — the FHS-wrapped variant, needed for MCP servers to work
+    # (they shell out to npx/uvx/etc. expecting a standard FHS layout).
+    claudeDesktop
   ];
 
   # ── Declarative Plasma 6 (plasma-manager) ───────────────────────────────────
