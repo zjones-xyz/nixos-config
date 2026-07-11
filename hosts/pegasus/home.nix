@@ -81,6 +81,13 @@
     # Parametric GUI CAD, pairs with openscad (script-only) in the 3D-printing
     # pipeline.
     freecad
+
+    # General-Wine-prefix tooling (not Steam/Proton — protontricks above
+    # covers that). Needed for the Lutris-managed Fusion 360 install: yad
+    # resolves some known installer issues, winetricks handles dependency
+    # setup outside a Proton prefix.
+    winetricks
+    yad
   ] ++ [
     # Claude Desktop — not in nixpkgs (Anthropic's official Linux beta only
     # shipped 2026-06-30, too recent). claudeDesktop comes from the
