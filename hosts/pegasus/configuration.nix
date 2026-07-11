@@ -16,7 +16,18 @@ in
     ../../modules/nixos/gaming.nix
     ../../modules/nixos/performance.nix
     ../../modules/nixos/ollama.nix
-    ../../modules/nixos/olla-router.nix
+    # olla-router.nix is DISABLED for now (2026-07-11): its build runs olla's
+    # own Go test suite, and pkg/eventbus's TestEventBus_HighVolumePublishing
+    # is a wall-clock throughput assertion that fails under the Nix sandbox's
+    # constrained/throttled CPU scheduling (expects >=1000 of 100k events
+    # delivered, got 220) — not a real defect in what we're packaging. Fastest
+    # unblock was skipping Olla entirely; ollama.nix works standalone (binds
+    # 127.0.0.1 only, no hard dependency on the router). To bring Olla back:
+    # either re-add this import with `doCheck = false;` set on the
+    # `olla = pkgs.buildGoModule` derivation in olla-router.nix (skips
+    # upstream's test suite, standard for packaging binaries we don't
+    # maintain), or file the flakiness upstream first.
+    # ../../modules/nixos/olla-router.nix
   ];
 
   networking.hostName = "pegasus";
