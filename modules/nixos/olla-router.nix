@@ -6,15 +6,14 @@ let
   # multiple OpenAI/Ollama-compatible endpoints and load-balances with health
   # checks. It is not in nixpkgs, so we build it here.
   #
-  # `version` and `src.hash` are REAL (pinned to olla v0.0.28, resolved
-  # 2026-07-03 via `nix-prefetch-github thushan olla --rev v0.0.28`). Only
-  # `vendorHash` remains a PLACEHOLDER: buildGoModule computes it from a Go
-  # build that must run on the package's own system (x86_64-linux), and this was
-  # authored on aarch64-darwin with no Linux builder. It resolves on the first
-  # real build on pegasus — see hosts/pegasus/MANUAL-STEPS.md §5 (one hash now,
-  # not three). To bump the version later: change `version`, re-run
-  # nix-prefetch-github for the new `hash`, then a fakeHash build cycle for
-  # `vendorHash`.
+  # `version`, `src.hash`, and `vendorHash` are all REAL now (pinned to olla
+  # v0.0.28; `src.hash` resolved 2026-07-03 via `nix-prefetch-github thushan
+  # olla --rev v0.0.28`; `vendorHash` resolved 2026-07-11 from the real
+  # x86_64-linux build on pegasus — buildGoModule can only compute it from a
+  # build that runs on the package's own system, which the authoring session
+  # (aarch64-darwin, no Linux builder) couldn't do). To bump the version
+  # later: change `version`, re-run nix-prefetch-github for the new `hash`,
+  # then a fakeHash build cycle for `vendorHash`.
   olla = pkgs.buildGoModule rec {
     pname = "olla";
     version = "0.0.28";
@@ -24,7 +23,7 @@ let
       rev = "v${version}";
       hash = "sha256-/nXMEs50kixi8j/1oyaYnMB9Rju7gCbsY85m06NK8As=";
     };
-    vendorHash = lib.fakeHash; # PLACEHOLDER — resolves on first build on pegasus
+    vendorHash = "sha256-6RjPRUwneF1lPMpomqJNKt86duDIZFwBoN79ioeApPM=";
     # Most Olla releases embed version via ldflags; harmless if ignored.
     ldflags = [ "-s" "-w" ];
     meta = {
