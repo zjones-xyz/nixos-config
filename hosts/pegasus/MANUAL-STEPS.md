@@ -157,16 +157,18 @@ Added 2026-07-11, mirroring memory-alpha's setup. Before the next
 2. `nixos-rebuild switch --flake .#pegasus`, then reboot to actually test it
    (a `switch` alone doesn't touch the initrd you boot into next time until
    you reboot).
-3. **On reboot, verify the initrd SSH server comes up at all**: from
-   serenity, `ssh -p 2222 root@<pegasus-ip>` while pegasus is sitting at the
-   LUKS prompt. If this doesn't connect (not even connection-refused —
-   nothing), the onboard NIC's driver likely isn't in
-   `boot.initrd.availableKernelModules` and needs adding explicitly — see the
-   `UNVERIFIED` comment in `hosts/pegasus/configuration.nix` right above the
-   `boot.initrd.network` block, and mirror memory-alpha's
-   `usbnet`/`cdc_ether`/`cdc_ncm`/`mii` pattern with whatever driver your NIC
-   actually uses (check `lspci -nnk | grep -iA3 ethernet` while booted
-   normally to find it).
+3. **Verify the initrd SSH server comes up at all**: from serenity,
+   `ssh -p 2222 root@pegasus.internal` while pegasus is confirmed (on-screen)
+   sitting at the LUKS prompt — a plain timeout is indistinguishable from
+   "not booted that far yet," so don't trust it without eyes on the KVM.
+   **Already hit and fixed (2026-07-11)**: the onboard NIC (`r8169`, Realtek)
+   wasn't in `boot.initrd.availableKernelModules` by default and needed
+   adding explicitly — done via `lib.mkAfter` in
+   `hosts/pegasus/configuration.nix`. If a future kernel/hardware change
+   ever breaks this again, `readlink -f /sys/class/net/<iface>/device/driver`
+   while booted normally is the fast way to re-identify the driver (no
+   `lspci`/`pciutils` in the base package set — `nix run nixpkgs#pciutils`
+   works too if you want the fuller picture).
 4. Once confirmed, unlock from serenity with `unlock-pegasus` (needs
    `pegasus.internal` to resolve — add an AdGuard DNS rewrite for it if it
    doesn't yet, same as the other `.internal` hosts; substitute the raw LAN

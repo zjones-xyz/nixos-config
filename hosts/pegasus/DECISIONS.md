@@ -130,9 +130,11 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   deliberate simplifications since pegasus has one stock onboard NIC instead
   of two renamed USB dongles: (1) no `systemd.network.links` MAC-pinning, (2)
   the pre-switch-root DHCP-flush oneshot loops over any `type ether`
-  interface instead of hardcoding names. One thing memory-alpha's writeup
-  flagged that's **unverified here**: whether the onboard NIC's driver needs
-  adding to `boot.initrd.availableKernelModules` to come up before LUKS
-  unlock (memory-alpha's USB dongles needed `usbnet`/`cdc_ether`/`cdc_ncm`/
-  `mii` added explicitly). First reboot after this lands is the real test —
-  see MANUAL-STEPS.md.
+  interface instead of hardcoding names. The one thing memory-alpha's
+  writeup flagged as needing verification — whether the onboard NIC's driver
+  needs adding to `boot.initrd.availableKernelModules` — turned out yes:
+  the first real reboot test hit exactly this (initrd SSH timed out with
+  pegasus confirmed sitting at the LUKS prompt on-screen, not just "not
+  booted yet"). `r8169` (Realtek), confirmed via
+  `readlink -f /sys/class/net/enp42s0/device/driver`, added via
+  `lib.mkAfter`.

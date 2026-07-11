@@ -85,18 +85,14 @@ in
     };
   };
 
-  # UNVERIFIED: unlike memory-alpha's USB Ethernet dongles (which needed
-  # usbnet/cdc_ether/cdc_ncm/mii added to boot.initrd.availableKernelModules
-  # before the NIC came up in the initrd at all — see that host's config for
-  # the diagnosis), pegasus's onboard NIC driver may or may not already be
-  # built into the stock kernel. hardware-configuration.nix's generated
-  # module list has no Ethernet driver in it, which could mean "built in,
-  # nothing needed" or "not detected because it's only needed pre-root".
-  # First reboot after this lands is the real test — see MANUAL-STEPS.md. If
-  # `unlock-pegasus` can't reach the initrd SSH server at all (not even a
-  # connection refused/timeout distinguishable from "not booted yet"), this
-  # is the first thing to check: add the onboard NIC's driver module here via
-  # lib.mkAfter, matching memory-alpha's pattern.
+  # Onboard NIC (enp42s0) is Realtek, driver confirmed 2026-07-11 via
+  # `readlink -f /sys/class/net/enp42s0/device/driver` while booted normally
+  # — r8169, not built into the initrd by default (hardware-configuration.nix's
+  # generated module list only covers storage). Without this the NIC never
+  # comes up pre-unlock, which is exactly what the first LUKS-remote-unlock
+  # test hit: initrd SSH just timed out, indistinguishable from the box not
+  # being at the prompt yet, until confirmed on-screen that it genuinely was.
+  boot.initrd.availableKernelModules = lib.mkAfter [ "r8169" ];
 
   # Same NetworkManager/initrd-DHCP interaction memory-alpha hit: with
   # networking.networkmanager.enable = true (implicitly networking.useDHCP =
