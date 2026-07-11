@@ -23,7 +23,8 @@
   disko.devices = {
     disk.main = {
       type = "disk";
-      device = "/dev/disk/by-id/CHANGEME-verify-the-new-drives-serial"; # REQUIRED: set before running
+      # PNY CS3250 2TB, confirmed via `ls -l /dev/disk/by-id/ | grep -i nvme` (2026-07-11).
+      device = "/dev/disk/by-id/nvme-PNY_CS3250_2TB_SSD_PNY25372509080100257";
       content = {
         type = "gpt";
         partitions = {
