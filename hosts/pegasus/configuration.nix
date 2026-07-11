@@ -175,7 +175,16 @@ in
     defaultSopsFile = ../../secrets/pegasus.yaml;
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
     secrets."tailscale/authKey" = { };
+    # Declarative login password for z (2026-07-11) — without this, a fresh
+    # install leaves the account genuinely passwordless/locked (NixOS doesn't
+    # set one unless told to), which is exactly what caused every SDDM login
+    # attempt to fail PAM auth on first boot here. SSH still worked throughout
+    # since that's key-based, not password-based — see hosts/pegasus/DECISIONS.md.
+    secrets."z/hashedPassword".neededForUsers = true;
   };
+
+  users.users.z.hashedPasswordFile =
+    lib.mkIf hasSops config.sops.secrets."z/hashedPassword".path;
 
   # ── home-manager ──────────────────────────────────────────────────────────
   home-manager = {
