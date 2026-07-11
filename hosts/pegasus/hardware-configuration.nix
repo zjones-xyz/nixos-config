@@ -1,26 +1,20 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# PLACEHOLDER — regenerate with `nixos-generate-config` on the real machine.
+# Real hardware config, reconciled 2026-07-11 after installing via disko.nix
+# onto the single NVMe (PNY CS3250 2TB; CachyOS's drive was removed — see
+# DECISIONS.md). Module list from `nixos-generate-config --no-filesystems`;
+# UUIDs from `lsblk -f` against the disko-driven layout.
 # ─────────────────────────────────────────────────────────────────────────────
-# Pegasus is not NixOS yet (currently CachyOS). This stub exists ONLY so the
-# system closure evaluates and `nixos-rebuild build --flake .#pegasus` succeeds
-# off the real hardware. The UUIDs below are fake. Do NOT deploy with this file:
-# generate the real one on the box and commit it, OR drive the install with the
-# disko spec in ./disko.nix (see hosts/pegasus/DECISIONS.md).
-#
-# Intended layout (mirrored by disko.nix): a single LUKS container on the NVMe
-# holding a BTRFS filesystem with subvolumes @ @home @nix @snapshots @games.
 { config, lib, pkgs, modulesPath, ... }:
 
 {
   imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
 
-  # PLACEHOLDER module lists — regenerate on real hardware.
-  boot.initrd.availableKernelModules = [ "nvme" "xhci_pci" "ahci" "usbhid" "usb_storage" "sd_mod" ];
+  boot.initrd.availableKernelModules = [ "xhci_pci" "ahci" "nvme" "usbhid" "usb_storage" "sd_mod" ];
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ "kvm-amd" ];
   boot.extraModulePackages = [ ];
 
-  # ── BTRFS subvolumes on a LUKS container (placeholder UUIDs) ────────────────
+  # ── BTRFS subvolumes on a LUKS container ─────────────────────────────────
   fileSystems."/" = {
     device = "/dev/mapper/cryptroot";
     fsType = "btrfs";
@@ -52,11 +46,15 @@
     options = [ "subvol=@games" "compress=zstd" "noatime" ];
   };
 
-  boot.initrd.luks.devices."cryptroot".device =
-    "/dev/disk/by-uuid/00000000-0000-0000-0000-000000000000"; # PLACEHOLDER
+  boot.initrd.luks.devices."cryptroot" = {
+    device = "/dev/disk/by-uuid/be8611f1-dc26-4197-bc1c-4772af1a0880";
+    # Matches disko.nix's settings.allowDiscards = true — lets fstrim.enable
+    # (modules/nixos/performance.nix) actually pass TRIM through to the NVMe.
+    allowDiscards = true;
+  };
 
   fileSystems."/boot" = {
-    device = "/dev/disk/by-uuid/0000-0000"; # PLACEHOLDER (EFI system partition)
+    device = "/dev/disk/by-uuid/FCCA-8FEB";
     fsType = "vfat";
     options = [ "fmask=0077" "dmask=0077" ];
   };
