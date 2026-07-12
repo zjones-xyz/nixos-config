@@ -283,16 +283,30 @@ Two cosmetic gaps found and fixed from that login:
   `pkgs.fira-sans` via `fonts.packages` (not `environment.systemPackages`
   — fontconfig won't discover it from there).
 
-**Found but not yet fixed** — the same `defaults` file also sets
-`cursorTheme=Sweet-cursors`, `ColorScheme=Sweet`, and the `Sweet-Dark`
-KWin window-decoration theme, all from a separate "Sweet KDE" theme suite
+**Round 2 also surfaced two bugs, both fixed:**
+- Window Title applet crashed outright ("module
+  org.kde.plasma.private.appmenu is not installed") — confirmed nixpkgs'
+  `plasma-workspace` genuinely doesn't build that QML plugin, and confirmed
+  the applet's own source never actually uses it anywhere else in the
+  file (dead leftover import). Stripped via `sed` in the derivation build.
+- Window minimize/maximize/close controls were missing entirely, not just
+  differently styled — KWin couldn't load the Sweet-Dark aurorae theme
+  (part of the still-unpackaged "Sweet KDE" suite, see below) and fell
+  back to no decoration at all. Patched the look-and-feel's `defaults`
+  file to use `org.kde.breeze` instead — same decoration already proven
+  working on the daily-driver session. Also fixed the lock-screen
+  wallpaper in the same file, which pointed at a nonexistent Arch
+  filesystem path.
+
+**Found but not yet fixed** — that same `defaults` file also sets
+`cursorTheme=Sweet-cursors`, `ColorScheme=Sweet`, and (now overridden)
+the `Sweet-Dark` decoration, all from a separate "Sweet KDE" theme suite
 that isn't packaged anywhere in this repo — Garuda's own
 `garuda-dr460nized` source only ships a small config *override* for
 Sweet-Dark (`usr/share/aurorae/themes/Sweet-Dark/Sweet-Darkrc-dr460nized`),
 not the actual theme (aurorae SVGs, cursor theme, color scheme). Expect
-window borders/cursor/colors to be using whatever fallback is active
-rather than the intended look, until this is sourced and packaged
-separately.
+cursor/colors to be using whatever fallback is active rather than the
+intended look, until this is sourced and packaged separately.
 
 **Still not wired in this pass:**
 1. Kickoff launcher icon (`distributor-logo-garuda`) — cosmetic, not
