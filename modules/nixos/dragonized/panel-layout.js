@@ -74,8 +74,9 @@ digitalclock.writeConfig("fontWeight", 400)
 digitalclock.writeConfig("fontSize", 72)
 digitalclock.writeConfig("showWeekNumbers", true)
 
-// Add Right Expandable Spacer
-var spacer = panel.addWidget("org.kde.plasma.panelspacer")
+// No right spacer here (deliberately) — the single left spacer above eats
+// all the slack, pushing the clock flush against the system tray at the
+// panel's far right edge instead of centering it in the middle.
 
 // System Tray
 var systray = panel.addWidget("org.kde.plasma.systemtray")
