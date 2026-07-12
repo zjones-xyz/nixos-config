@@ -113,15 +113,24 @@ in
   # session — this can't affect that session no matter what, since they
   # don't share any config state.
   #
-  # X-Plasma-Shell in Garuda's layout templates declares "plasma-garuda", a
-  # shell package not present here — UNVERIFIED whether that's enforced by
-  # loadTemplate() or just GUI-picker metadata. First real login is the
-  # test; if the panels don't appear at all, start there.
+  # Confirmed working end-to-end 2026-07-11: X-Plasma-Shell: "plasma-garuda"
+  # in Garuda's layout templates does NOT block loadTemplate() — panels,
+  # dock, wallpaper, and Kickoff all loaded correctly on first real login,
+  # after fixing the plasma-apply-lookandfeel crash (see git history). Two
+  # cosmetic gaps found on that login, both from PKGBUILD dependencies the
+  # fast-subset scoping skipped (theme data + one plasmoid only): Kickoff's
+  # category icons need the BeautyLine icon theme (font/icon-theme-dependent
+  # names, not bundled with any app), and the panel clock (configured with
+  # autoFontAndSize = false) needs Fira Sans specifically or it renders
+  # tiny using a mismatched fallback. Both added below.
   environment.systemPackages = [
     dr460nizedTheme
     windowTitleApplet
     pkgs.kdePackages.qtstyleplugin-kvantum
+    pkgs.beauty-line-icon-theme
   ];
+
+  fonts.packages = [ pkgs.fira-sans ];
 
   services.displayManager.sessionPackages = [ dragonizedSessionFile ];
 }
