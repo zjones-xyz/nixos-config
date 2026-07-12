@@ -268,33 +268,46 @@ handling. Also now wipes the isolated profile dirs on every login instead
 of just `mkdir -p`, so stale state from the crashed round 1 attempt won't
 carry forward.
 
-**What's still genuinely unverified — needs eyes on a real login:**
+**Round 2 (2026-07-11): it worked.** Logged in successfully — top panel,
+bottom dock, Kickoff launcher, Malefor wallpaper all present. Confirms
+`X-Plasma-Shell: "plasma-garuda"` does **not** block `loadTemplate()` —
+that was purely GUI-picker metadata, as suspected but unconfirmed before.
 
-1. Select "Plasma (Dragonized)" at the SDDM login screen again. If the
-   panels don't appear **at all** (blank/default Plasma instead, but the
-   session at least *stays up* this time rather than bouncing back), the
-   next thing to check is whether `X-Plasma-Shell: "plasma-garuda"` in
-   Garuda's layout templates (`org.garuda.desktop.defaultPanel`/`defaultDock`)
-   is actually enforced by the `loadTemplate()` scripting call, not just
-   informational metadata for the System Settings template picker (which
-   is what the authoring session's research suggested, but couldn't
-   confirm without a live Plasma session).
-2. If panels appear: expect a fairly plain-looking top panel + bottom dock
-   (Dr460nized colors/fonts, but no blur/translucency — that's
-   `luisbocanegra.panel.colorizer`, deferred) and normal KWin-decorated
-   window buttons (not the panel-embedded ones — `org.kde.windowbuttons`,
-   also deferred).
-3. Kickoff launcher icon (`distributor-logo-garuda`) will likely be
-   missing/fallback — that icon isn't packaged here, cosmetic only.
-4. SDDM theme selection wasn't wired in this pass — the packaged
-   `Dr460nized`/`Dr460nized-Sugar-Candy` SDDM themes are available under
-   `/run/current-system/sw/share/sddm/themes/` but `services.displayManager.sddm`
-   still uses its default theme. Separate step if wanted — set
+Two cosmetic gaps found and fixed from that login:
+- Kickoff's category icons rendered as plain dots →
+  `kdeglobals[Icons] Theme=BeautyLine` (set by the look-and-feel's own
+  `defaults` file) had no icon theme installed to satisfy it. Added
+  `pkgs.beauty-line-icon-theme`.
+- Panel clock rendered tiny → configured with `autoFontAndSize = false`
+  and `fontFamily "Fira Sans ExtraBold"`, which wasn't installed. Added
+  `pkgs.fira-sans` via `fonts.packages` (not `environment.systemPackages`
+  — fontconfig won't discover it from there).
+
+**Found but not yet fixed** — the same `defaults` file also sets
+`cursorTheme=Sweet-cursors`, `ColorScheme=Sweet`, and the `Sweet-Dark`
+KWin window-decoration theme, all from a separate "Sweet KDE" theme suite
+that isn't packaged anywhere in this repo — Garuda's own
+`garuda-dr460nized` source only ships a small config *override* for
+Sweet-Dark (`usr/share/aurorae/themes/Sweet-Dark/Sweet-Darkrc-dr460nized`),
+not the actual theme (aurorae SVGs, cursor theme, color scheme). Expect
+window borders/cursor/colors to be using whatever fallback is active
+rather than the intended look, until this is sourced and packaged
+separately.
+
+**Still not wired in this pass:**
+1. Kickoff launcher icon (`distributor-logo-garuda`) — cosmetic, not
+   packaged.
+2. SDDM theme selection — the packaged `Dr460nized`/`Dr460nized-Sugar-Candy`
+   SDDM themes are available under
+   `/run/current-system/sw/share/sddm/themes/` but
+   `services.displayManager.sddm` still uses its default theme. Set
    `services.displayManager.sddm.theme = "Dr460nized";` (or the
-   Sugar-Candy variant) in `desktop-dragonized.nix` or `desktop-plasma.nix`.
-5. Kvantum theme is packaged but not set as the active Qt style anywhere —
-   would need `qt6ct`/Kvantum configured to actually select "Dr460nized"
-   inside the isolated session's config once it exists.
+   Sugar-Candy variant) if wanted.
+3. Kvantum theme is packaged and the `defaults` file does set
+   `kvantum.kvconfig[General] theme=Dr460nized` (applied automatically,
+   same mechanism as the icon theme), but whether the Kvantum Qt style
+   itself is actually selected as the active Qt platform theme inside the
+   isolated session hasn't been confirmed visually yet.
 
 Report back what actually happens — this determines whether to invest in
 the three deferred compiled plasmoids next, or reconsider.
