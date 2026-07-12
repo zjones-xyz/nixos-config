@@ -99,6 +99,27 @@
 
     # GPU-accelerated terminal emulator.
     ghostty
+
+    # ── Found on Serenity's /Applications, not yet replicated (2026-07-12) ────
+    calibre # ebook library management
+    makemkv # disc ripping, pairs with the jellyfin/vlc media stack
+    filebot # media file renaming/organizing, same media stack
+    arduino-ide
+    proton-vpn # renamed from protonvpn-gui upstream
+    protonmail-desktop
+    dropbox
+    zoom-us # NOT `zoom` — that's an unrelated Z-code/interactive-fiction player
+    prismlauncher # Minecraft — better-maintained than the bare official launcher on Linux
+    zeal # offline API docs, the real Linux equivalent of Dash
+    speedtest-cli
+    jetbrains-toolbox
+    teams-for-linux # Microsoft dropped their own Linux client; this is the maintained community one
+    android-file-transfer
+    affine
+
+    # ykman CLI — Yubico dropped the GUI (yubikey-manager-qt) upstream in
+    # favor of this; pairs with the PAM/udev setup in modules/nixos/yubikey.nix.
+    yubikey-manager
   ] ++ [
     # Claude Desktop — not in nixpkgs (Anthropic's official Linux beta only
     # shipped 2026-06-30, too recent). claudeDesktop comes from the
