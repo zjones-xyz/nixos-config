@@ -65,6 +65,13 @@ digitalclock.writeConfig("enabledCalendarPlugins", "alternatecalendar,astronomic
 digitalclock.writeConfig("fontFamily", "Fira Sans ExtraBold")
 digitalclock.writeConfig("fontStyleName", "Regular")
 digitalclock.writeConfig("fontWeight", 400)
+// autoFontAndSize=false above disables Plasma's normal "scale text to fill
+// the panel" behavior — without an explicit fontSize the clock falls back
+// to a tiny fixed 10pt. KDE's own digitalclock_migrate_font_settings.js
+// (plasma-desktop) sets this to 72 for the same reason: it's a ceiling, not
+// a literal size — the applet still shrinks it to fit the actual panel
+// height, so this restores the auto-fit look while keeping the custom font.
+digitalclock.writeConfig("fontSize", 72)
 digitalclock.writeConfig("showWeekNumbers", true)
 
 // Add Right Expandable Spacer
