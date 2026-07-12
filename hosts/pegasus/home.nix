@@ -120,6 +120,16 @@
     # ykman CLI — Yubico dropped the GUI (yubikey-manager-qt) upstream in
     # favor of this; pairs with the PAM/udev setup in modules/nixos/yubikey.nix.
     yubikey-manager
+
+    # Logitech webcam control. cameractrls has a genuine Logitech extension
+    # (BRIO field-of-view, LED mode/frequency, relative pan/tilt, PTZ
+    # presets) — the real equivalent of Logi Tune/Logitech Capture's settings
+    # panel, not just a generic V4L2 GUI. v4l-utils underneath it for
+    # v4l2-ctl (scripting/one-off tweaks). webcamoid for background-blur/
+    # virtual-background effects on video calls outside OBS.
+    cameractrls-gtk4
+    v4l-utils
+    webcamoid
   ] ++ [
     # Claude Desktop — not in nixpkgs (Anthropic's official Linux beta only
     # shipped 2026-06-30, too recent). claudeDesktop comes from the
