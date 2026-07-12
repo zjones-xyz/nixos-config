@@ -96,6 +96,9 @@
     # setup outside a Proton prefix.
     winetricks
     yad
+
+    # GPU-accelerated terminal emulator.
+    ghostty
   ] ++ [
     # Claude Desktop — not in nixpkgs (Anthropic's official Linux beta only
     # shipped 2026-06-30, too recent). claudeDesktop comes from the
