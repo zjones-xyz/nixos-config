@@ -66,14 +66,30 @@ let
   dragonizedStart = pkgs.writeShellScriptBin "startplasma-dragonized" ''
     set -e
     # Isolated profile dirs — never touches the daily-driver Plasma config
-    # under the normal $HOME/.config. Re-applies the look-and-feel on every
-    # login so this session always boots into a known, reproducible state
-    # rather than accumulating drift.
+    # under the normal $HOME/.config. Wiped and recreated on every login so
+    # this session always boots from a known, reproducible state rather than
+    # accumulating drift.
     export XDG_CONFIG_HOME="$HOME/.config-dragonized"
     export XDG_DATA_HOME="$HOME/.local/share-dragonized"
     export XDG_CACHE_HOME="$HOME/.cache-dragonized"
+    rm -rf "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
     mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
-    ${pkgs.kdePackages.plasma-workspace}/bin/plasma-apply-lookandfeel -a Dr460nized
+
+    # NOT plasma-apply-lookandfeel here — it's a Qt tool that needs an
+    # already-running Wayland compositor to talk to (it *applies* a change
+    # to a live session), and at this point in the script there's no
+    # compositor running yet. Confirmed the hard way (2026-07-11): running
+    # it standalone over SSH with no display aborts identically to what
+    # happened at the real login attempt — same root cause, just easier to
+    # see outside the greeter. Pre-seeding kdeglobals instead is the
+    # standard mechanism KDE itself uses to auto-apply a distro's default
+    # theme on a fresh profile's first-ever login — no live session needed,
+    # Plasma reads this as it starts up.
+    cat > "$XDG_CONFIG_HOME/kdeglobals" <<'KDEGLOBALS'
+    [KDE]
+    LookAndFeelPackage=Dr460nized
+    KDEGLOBALS
+
     exec ${pkgs.kdePackages.plasma-workspace}/bin/startplasma-wayland
   '';
 
