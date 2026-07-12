@@ -15,15 +15,21 @@ widgetStyle=kvantum-dark
 [kwinrc][Windows]
 BorderlessMaximizedWindows=false
 
-# Fast-subset build (see hosts/pegasus/DECISIONS.md): upstream points this at
-# the Sweet-Dark aurorae theme, part of the separate "Sweet KDE" theme suite
-# that isn't packaged here — KWin couldn't load a nonexistent theme, which is
-# why window minimize/maximize/close controls were missing entirely (no
-# decoration loaded at all, not just a different-looking one). Falls back to
-# org.kde.breeze, the same decoration already proven working on the
-# daily-driver Plasma session.
+# Upstream points this at the Sweet-Dark aurorae theme (part of the separate
+# "Sweet KDE" suite). That theme has no reliable git source — every lead
+# (EliverLara/Sweet-kde is the *desktoptheme*, not the decoration; the actual
+# aurorae SVGs are Pling/KDE-Store-only downloads, and even Garuda's own users
+# report this same "missing window decoration" gap on their forum) dead-ended,
+# so this uses Klassy instead — packaged in nixpkgs, no provenance risk,
+# highly configurable, actively maintained for Plasma 6.
+#
+# The [org.kde.kdecoration2] config *group* name is legacy/stable — KWin still
+# reads "which decoration library" from it even on Plasma 6.6, where the
+# actual plugin ABI moved to kdecoration3 (confirmed: both breeze.so and
+# klassy.so install to lib/qt-6/plugins/org.kde.kdecoration3/ now). The
+# library= value is just the plugin's .so basename, same as org.kde.breeze.
 [kwinrc][org.kde.kdecoration2]
-library=org.kde.breeze
+library=org.kde.klassy
 
 [plasmarc][Theme]
 name=Dr460nized

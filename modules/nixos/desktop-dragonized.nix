@@ -140,6 +140,10 @@ in
     windowTitleApplet
     pkgs.kdePackages.qtstyleplugin-kvantum
     pkgs.beauty-line-icon-theme
+
+    # Window decoration — see lookandfeel-defaults for why this replaces the
+    # unpackageable Sweet-Dark aurorae theme upstream actually wants.
+    pkgs.klassy
   ];
 
   fonts.packages = [ pkgs.fira-sans ];
