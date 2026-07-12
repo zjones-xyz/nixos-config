@@ -254,16 +254,31 @@ patched layout scripts confirmed to have dropped the deferred-plasmoid
 references and the Arch-only pinned taskbar launchers. The full flake
 evaluates clean end-to-end including this module.
 
-**What's genuinely unverified — needs eyes on a real login:**
+**Round 1 (2026-07-11): crashed straight back to the login screen.** Root
+cause: the wrapper script called `plasma-apply-lookandfeel` *before*
+`exec startplasma-wayland` — that tool needs an already-running Wayland
+compositor to talk to (it applies a change to a live session), so it had
+nothing to connect to and aborted (confirmed by running it standalone over
+SSH with no display: identical abort). Fixed by pre-seeding `kdeglobals`'
+`LookAndFeelPackage` key instead — the actual mechanism KDE uses to
+auto-apply a theme on a fresh profile's first login, no live session
+needed. Verified this time by physically building the wrapper script and
+inspecting the rendered output, not just reasoning about the Nix string
+handling. Also now wipes the isolated profile dirs on every login instead
+of just `mkdir -p`, so stale state from the crashed round 1 attempt won't
+carry forward.
 
-1. Select "Plasma (Dragonized)" at the SDDM login screen. If the panels
-   don't appear **at all** (blank/default Plasma instead), the first thing
-   to check is whether `X-Plasma-Shell: "plasma-garuda"` in Garuda's layout
-   templates (`org.garuda.desktop.defaultPanel`/`defaultDock`) is actually
-   enforced by the `loadTemplate()` scripting call, not just informational
-   metadata for the System Settings template picker (which is what the
-   authoring session's research suggested, but couldn't confirm without a
-   live Plasma session).
+**What's still genuinely unverified — needs eyes on a real login:**
+
+1. Select "Plasma (Dragonized)" at the SDDM login screen again. If the
+   panels don't appear **at all** (blank/default Plasma instead, but the
+   session at least *stays up* this time rather than bouncing back), the
+   next thing to check is whether `X-Plasma-Shell: "plasma-garuda"` in
+   Garuda's layout templates (`org.garuda.desktop.defaultPanel`/`defaultDock`)
+   is actually enforced by the `loadTemplate()` scripting call, not just
+   informational metadata for the System Settings template picker (which
+   is what the authoring session's research suggested, but couldn't
+   confirm without a live Plasma session).
 2. If panels appear: expect a fairly plain-looking top panel + bottom dock
    (Dr460nized colors/fonts, but no blur/translucency — that's
    `luisbocanegra.panel.colorizer`, deferred) and normal KWin-decorated
