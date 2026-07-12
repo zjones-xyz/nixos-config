@@ -10,8 +10,16 @@
 
   # Host-specific rebuild aliases (layered on top of the shared portable ones
   # from modules/home/common.nix's home.shellAliases).
+  #
+  # home.shellAliases, NOT programs.bash.shellAliases: the login shell is
+  # bash, but modules/home/interactive-zsh.nix execs every interactive bash
+  # session straight into zsh before it ever reaches a prompt (matches
+  # Serenity's default shell) — so bash-specific aliases never actually took
+  # effect interactively. This was dead code since the very first authoring
+  # session; nobody had tested an interactive login until now. The
+  # shell-agnostic option applies to whichever shell is actually running.
   programs.bash.enable = true;
-  programs.bash.shellAliases = {
+  home.shellAliases = {
     nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#pegasus";
     nrt = "sudo nixos-rebuild test --flake ~/nixos-config#pegasus";
     npull = "git -C ~/nixos-config pull";
