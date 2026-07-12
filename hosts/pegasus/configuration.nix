@@ -179,6 +179,19 @@ in
     # attempt to fail PAM auth on first boot here. SSH still worked throughout
     # since that's key-based, not password-based — see hosts/pegasus/DECISIONS.md.
     secrets."z/hashedPassword".neededForUsers = true;
+    # z's outbound SSH key (2026-07-11) — for git/ssh from pegasus itself
+    # (GitHub, the other fleet hosts), not to be confused with the host's
+    # own SSH key (used as the sops/age identity, above) or the LUKS
+    # remote-unlock initrd key (deliberately kept OUTSIDE sops, unencrypted,
+    # since initrd runs before secrets are decryptable — see the LUKS SSH
+    # unlock section of this file). sops-nix decrypts straight to the target
+    # path, creating parent dirs as needed — no home-manager wiring required.
+    secrets."ssh/z_ed25519" = {
+      owner = "z";
+      group = "users";
+      mode = "0400";
+      path = "/home/z/.ssh/id_ed25519";
+    };
   };
 
   users.users.z.hashedPasswordFile =
