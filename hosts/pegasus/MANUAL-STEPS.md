@@ -230,5 +230,56 @@ re-researching:
   2. **Chase the full panel layout** with Krema or Latte Dock NG — closer
      to the real thing, unproven, more packaging work.
   3. Skip it.
-- Zoe's call once she's actually at the desktop and can see what Plasma 6
-  looks like bare, per `hosts/pegasus/DECISIONS.md`.
+
+**Superseded 2026-07-11** — none of the above was needed. Garuda's *actual
+current* Dr460nized package (v4.7.1) already uses native Plasma 6 panels,
+not Latte Dock at all — the deferral above was based on the old,
+now-replaced setup. Implemented as a "fast subset" — see §12.
+
+## 12. Dragonized fast-subset session — verify on first login
+
+Added 2026-07-11 as a third selectable SDDM session, "Plasma (Dragonized)"
+— fully isolated from the daily-driver Plasma session (separate
+`XDG_CONFIG_HOME`/`XDG_DATA_HOME`/`XDG_CACHE_HOME`), can't affect it.
+Packages Garuda's real `garuda-dr460nized` v4.7.1 source (native Plasma 6
+panels) plus `org.kde.windowtitle` (pure QML). Deferred: `org.kde.windowbuttons`,
+`luisbocanegra.panel.colorizer`, and the `a2n.blur` wallpaper plugin — all
+three need a compiled C++ backend, not just QML/JSON data, and are a
+separate follow-up if the fast subset looks worth finishing.
+
+Verified from the authoring session: both custom derivations (the theme
+data pack and the window-title applet) actually built — not just
+evaluated — via a standalone `nix-build`, output structure spot-checked,
+patched layout scripts confirmed to have dropped the deferred-plasmoid
+references and the Arch-only pinned taskbar launchers. The full flake
+evaluates clean end-to-end including this module.
+
+**What's genuinely unverified — needs eyes on a real login:**
+
+1. Select "Plasma (Dragonized)" at the SDDM login screen. If the panels
+   don't appear **at all** (blank/default Plasma instead), the first thing
+   to check is whether `X-Plasma-Shell: "plasma-garuda"` in Garuda's layout
+   templates (`org.garuda.desktop.defaultPanel`/`defaultDock`) is actually
+   enforced by the `loadTemplate()` scripting call, not just informational
+   metadata for the System Settings template picker (which is what the
+   authoring session's research suggested, but couldn't confirm without a
+   live Plasma session).
+2. If panels appear: expect a fairly plain-looking top panel + bottom dock
+   (Dr460nized colors/fonts, but no blur/translucency — that's
+   `luisbocanegra.panel.colorizer`, deferred) and normal KWin-decorated
+   window buttons (not the panel-embedded ones — `org.kde.windowbuttons`,
+   also deferred).
+3. Kickoff launcher icon (`distributor-logo-garuda`) will likely be
+   missing/fallback — that icon isn't packaged here, cosmetic only.
+4. SDDM theme selection wasn't wired in this pass — the packaged
+   `Dr460nized`/`Dr460nized-Sugar-Candy` SDDM themes are available under
+   `/run/current-system/sw/share/sddm/themes/` but `services.displayManager.sddm`
+   still uses its default theme. Separate step if wanted — set
+   `services.displayManager.sddm.theme = "Dr460nized";` (or the
+   Sugar-Candy variant) in `desktop-dragonized.nix` or `desktop-plasma.nix`.
+5. Kvantum theme is packaged but not set as the active Qt style anywhere —
+   would need `qt6ct`/Kvantum configured to actually select "Dr460nized"
+   inside the isolated session's config once it exists.
+
+Report back what actually happens — this determines whether to invest in
+the three deferred compiled plasmoids next, or reconsider.

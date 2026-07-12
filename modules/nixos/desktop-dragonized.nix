@@ -14,6 +14,7 @@ let
     url = "https://gitlab.com/garuda-linux/themes-and-settings/settings/garuda-dr460nized.git";
     rev = "35eb3abbc534f4046257c43ad9e05a9c010235cf";
     narHash = "sha256-4kRU4h3WRuVjixhK5B/x19bIxtHc9vcfbv5QPjFMBfc=";
+    shallow = true;
   };
 
   # org.kde.windowtitle — pure QML, no compiled backend, unlike
@@ -23,6 +24,7 @@ let
     url = "https://github.com/dhruv8sh/plasma6-window-title-applet.git";
     rev = "a6eaf5086a473919ed2fffc5d3b8d98237c2dd41";
     narHash = "sha256-pFXVySorHq5EpgsBz01vZQ0sLAy2UrF4VADMjyz2YLs=";
+    shallow = true;
   };
 
   # Static theme data (Look-and-Feel package, panel/dock layout templates,
