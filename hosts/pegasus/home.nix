@@ -130,6 +130,14 @@
     cameractrls-gtk4
     v4l-utils
     webcamoid
+
+    # Alfred-style launchers (Alfred replacement research, 2026-07-12) — both
+    # installed to compare hands-on. See DECISIONS.md for the writeup: Albert
+    # relicensed to proprietary freeware at v0.21.0 (disputed legitimacy,
+    # hence nixpkgs' license = unfree), Vicinae is GPL-3.0 and runs actual
+    # Raycast extensions natively.
+    albert
+    vicinae
   ] ++ [
     # Claude Desktop — not in nixpkgs (Anthropic's official Linux beta only
     # shipped 2026-06-30, too recent). claudeDesktop comes from the
@@ -147,6 +155,24 @@
   programs.plasma = {
     enable = true;
     workspace.lookAndFeel = "org.kde.breezedark.desktop";
+
+    # Freed up for Albert/Vicinae (2026-07-12) — both installed above.
+    krunner.shortcuts = {
+      launch = "none";
+      runCommandOnClipboard = "none";
+    };
+
+    # Kickoff's "Activate Application Launcher" action — registered as a
+    # plain KGlobalAccel shortcut on the plasmashell component (confirmed via
+    # plasma-workspace's shellcorona.cpp: default binds both Meta and
+    # Alt+F1), not a KWin-level "modifier-only" mechanism. Clearing this
+    # frees the bare Meta key; Vicinae's own hotkey still needs setting
+    # separately (through its own settings UI, most likely — it registers
+    # via the XDG GlobalShortcuts portal at runtime rather than a static KDE
+    # config file, so it can't be pre-seeded here the same way).
+    shortcuts."plasmashell" = {
+      "activate application launcher" = "none";
+    };
   };
 
   home.stateVersion = "26.05";
