@@ -72,6 +72,12 @@ digitalclock.writeConfig("customDateFormat", "MMM d,")
 digitalclock.writeConfig("dateDisplayFormat", "BesideTime")
 digitalclock.writeConfig("dateFormat", "custom")
 digitalclock.writeConfig("enabledCalendarPlugins", "alternatecalendar,astronomicalevents,holidaysevents")
+// use24hFormat is an index into the KCM's combobox model [12-Hour, Use
+// region defaults, 24-Hour] (confirmed via applets/digital-clock/
+// configAppearance.qml in plasma-workspace's own source, since main.xml's
+// <default>1</default> only tells you the *default* index, not what the
+// values mean) — 2 forces 24-hour regardless of locale.
+digitalclock.writeConfig("use24hFormat", 2)
 digitalclock.writeConfig("fontFamily", "Fira Sans ExtraBold")
 digitalclock.writeConfig("fontStyleName", "Regular")
 digitalclock.writeConfig("fontWeight", 400)
