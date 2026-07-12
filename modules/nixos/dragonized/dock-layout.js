@@ -1,15 +1,15 @@
 var plasma = getApiVersion(1)
 
-// Create bottom panel (Dock) //
+// Create left-edge panel (Dock) //
 
 const dock = new Panel
 
 // Basic Dock Geometry
-dock.alignment = "left"
+dock.alignment = "center"
 dock.height = Math.round(gridUnit * 3.8)
 dock.hiding = "dodgewindows"
 dock.lengthMode = "fit"
-dock.location = "bottom"
+dock.location = "left"
 
 // Fast-subset build (see hosts/pegasus/DECISIONS.md): luisbocanegra.panel.colorizer
 // dropped — needs a compiled C++ backend, not just QML. This dock renders
