@@ -41,6 +41,8 @@ let
 
     cp ${./dragonized/lookandfeel-layout.js} \
       $out/share/plasma/look-and-feel/Dr460nized/contents/layouts/org.kde.plasma.desktop-layout.js
+    cp ${./dragonized/lookandfeel-defaults} \
+      $out/share/plasma/look-and-feel/Dr460nized/contents/defaults
     cp ${./dragonized/panel-layout.js} \
       $out/share/plasma/layout-templates/org.garuda.desktop.defaultPanel/contents/layout.js
     cp ${./dragonized/dock-layout.js} \
@@ -61,6 +63,16 @@ let
     mkdir -p $out/share/plasma/plasmoids/org.kde.windowtitle
     cp -r ${windowTitleAppletSrc}/contents $out/share/plasma/plasmoids/org.kde.windowtitle/contents
     cp ${windowTitleAppletSrc}/metadata.json $out/share/plasma/plasmoids/org.kde.windowtitle/metadata.json
+    chmod -R u+w $out/share/plasma/plasmoids/org.kde.windowtitle
+    # Dead import (never actually referenced anywhere else in the applet —
+    # confirmed 2026-07-11) for org.kde.plasma.private.appmenu, a QML plugin
+    # nixpkgs' plasma-workspace build doesn't include (checked its full
+    # lib/qt-6/qml/org/kde/plasma/private/ tree — every other private module
+    # is there, this one isn't). Caused a hard "error loading Window Title"
+    # on first real login. Stripped rather than packaging a missing KDE QML
+    # plugin from source just to satisfy an import nothing uses.
+    sed -i '/org\.kde\.plasma\.private\.appmenu/d' \
+      $out/share/plasma/plasmoids/org.kde.windowtitle/contents/ui/main.qml
   '';
 
   dragonizedStart = pkgs.writeShellScriptBin "startplasma-dragonized" ''
