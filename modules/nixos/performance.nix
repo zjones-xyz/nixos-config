@@ -34,6 +34,20 @@
   # Periodic TRIM for the NVMe SSD.
   services.fstrim.enable = true;
 
+  # ── Never sleep ──────────────────────────────────────────────────────────────
+  # pegasus runs Ollama and has LUKS remote-unlock wired up for headless/remote
+  # access — an always-on workstation, not a laptop. enable = false symlinks
+  # each target to /dev/null (confirmed via nixos/lib/systemd-unit-options.nix),
+  # a real mask — blocks suspend from every trigger (idle timeout, power
+  # button, KDE's own power-management GUI, a stray `systemctl suspend`), not
+  # just whichever one you happened to test.
+  systemd.targets = {
+    sleep.enable = false;
+    suspend.enable = false;
+    hibernate.enable = false;
+    hybrid-sleep.enable = false;
+  };
+
   # ── VM / kernel sysctls ─────────────────────────────────────────────────────
   # Modelled on the Garuda GNS performance-tweaks (used as a reference only — we
   # do NOT import garudaSystem). Tuned for a desktop with abundant RAM + zram.
