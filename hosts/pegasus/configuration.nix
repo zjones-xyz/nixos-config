@@ -19,6 +19,7 @@ in
     ../../modules/nixos/performance.nix
     ../../modules/nixos/ollama.nix
     ../../modules/nixos/yubikey.nix
+    ../../modules/nixos/nzxt-kraken.nix
     # olla-router.nix is DISABLED for now (2026-07-11): its build runs olla's
     # own Go test suite, and pkg/eventbus's TestEventBus_HighVolumePublishing
     # is a wall-clock throughput assertion that fails under the Nix sandbox's
