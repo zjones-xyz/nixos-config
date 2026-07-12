@@ -51,10 +51,20 @@ title.writeConfig("visible", false)
 // Window Global Menu
 var plasmaappmenu = panel.addWidget("org.kde.plasma.appmenu")
 
-// Add Left Expandable Spacer
+// Add Left Expandable Spacer — the only spacer in this panel, so it eats
+// all the slack and pushes everything after it (tray, clock, switcher)
+// flush to the panel's far right edge.
 var spacer = panel.addWidget("org.kde.plasma.panelspacer")
 
-// Digital Clock
+// System Tray
+var systray = panel.addWidget("org.kde.plasma.systemtray")
+systray.currentConfigGroup = ["General"]
+// In Plasma 6, 'scaleIconsToFit' is the boolean that toggles
+// between "Small" (false) and "Scale with Panel height" (true)
+systray.writeConfig("scaleIconsToFit", true)
+systray.writeConfig("iconSize", 0) // Optional: If you want to ensure it doesn't default to a tiny fixed size
+
+// Digital Clock — placed after the tray so it sits to the tray's right.
 var digitalclock = panel.addWidget("org.kde.plasma.digitalclock")
 digitalclock.currentConfigGroup = ["Appearance"]
 digitalclock.writeConfig("autoFontAndSize", false)
@@ -73,18 +83,6 @@ digitalclock.writeConfig("fontWeight", 400)
 // height, so this restores the auto-fit look while keeping the custom font.
 digitalclock.writeConfig("fontSize", 72)
 digitalclock.writeConfig("showWeekNumbers", true)
-
-// No right spacer here (deliberately) — the single left spacer above eats
-// all the slack, pushing the clock flush against the system tray at the
-// panel's far right edge instead of centering it in the middle.
-
-// System Tray
-var systray = panel.addWidget("org.kde.plasma.systemtray")
-systray.currentConfigGroup = ["General"]
-// In Plasma 6, 'scaleIconsToFit' is the boolean that toggles
-// between "Small" (false) and "Scale with Panel height" (true)
-systray.writeConfig("scaleIconsToFit", true)
-systray.writeConfig("iconSize", 0) // Optional: If you want to ensure it doesn't default to a tiny fixed size
 
 // User Switcher
 var switcher = panel.addWidget("org.kde.plasma.userswitcher")

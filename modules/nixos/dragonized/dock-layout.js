@@ -5,7 +5,7 @@ var plasma = getApiVersion(1)
 const dock = new Panel
 
 // Basic Dock Geometry
-dock.alignment = "center"
+dock.alignment = "left"
 dock.height = Math.round(gridUnit * 3.8)
 dock.hiding = "dodgewindows"
 dock.lengthMode = "fit"
