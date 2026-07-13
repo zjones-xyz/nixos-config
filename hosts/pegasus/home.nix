@@ -98,8 +98,9 @@
     winetricks
     yad
 
-    # GPU-accelerated terminal emulator.
+    # GPU-accelerated terminal emulators.
     ghostty
+    kitty
 
     # ── Found on Serenity's /Applications, not yet replicated (2026-07-12) ────
     calibre # ebook library management
