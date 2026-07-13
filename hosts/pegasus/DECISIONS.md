@@ -229,18 +229,31 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   shortcuts — clobbering unrelated overrides already sitting in
   `kglobalshortcutsrc` (confirmed: this silently reset KRunner's shortcut
   back to its default) — while the new entry's own `X-KDE-Shortcuts`
-  *didn't* reliably get auto-applied either. The one mechanism proven
-  reliable end-to-end: write `kglobalshortcutsrc` explicitly for every
-  binding (`programs.plasma.shortcuts."services/<name>.desktop"._launch`),
-  and order it *after* any `kbuildsycoca6` rebuild, not before — so your
-  explicit values are the last word, not a target for the rebuild to
-  clobber. See `hosts/pegasus/home.nix` and `modules/nixos/
-  desktop-dragonized.nix` for the actual working pattern.
+  *didn't* reliably get auto-applied either.
+  Next attempt: write `kglobalshortcutsrc` explicitly for every binding
+  (`programs.plasma.shortcuts."services/<name>.desktop"._launch`), ordered
+  *after* the `kbuildsycoca6` rebuild rather than before. This is the
+  pattern used in `hosts/pegasus/home.nix` (daily-driver session) and it's
+  fine there — but for Dragonized specifically, **it still wasn't enough**:
+  KRunner's shortcut kept resetting regardless of ordering. Best working
+  theory: because Dragonized wipes its whole profile on *every* login (not
+  just once, ever), KDE's "is this a service I've seen before" bookkeeping
+  never persists, so it looks like a first-ever login every single time —
+  no ordering trick inside one script run can outrun that.
+  **Final fix for Dragonized (`modules/nixos/desktop-dragonized.nix`):**
+  stopped fighting it declaratively. `kglobalshortcutsrc` is now exempted
+  from the wipe — backed up before `rm -rf`, restored after the session's
+  setup completes. Configure shortcuts once through System Settings'
+  native GUI (proven to work cleanly throughout this entire saga, every
+  single time it was tried) and they persist across logins from then on,
+  while everything else in the profile still gets the normal clean reset.
   This whole saga was also tangled up with an unrelated, genuinely separate
   bug (see MANUAL-STEPS.md §13/14) — Dragonized's isolated
   `XDG_CONFIG_HOME` meant the *first* few fix attempts were silently
   targeting the wrong session's config entirely, which delayed finding
-  this real bug considerably. If debugging a Dragonized-session
+  the real bugs considerably. If debugging a Dragonized-session
   shortcut/config issue again: verify against the actual running store
   path (`find /nix/store -maxdepth 1 -iname "*<name>*"` + compare hashes)
-  before assuming a fix didn't work.
+  before assuming a fix didn't work — and remember the isolated profile is
+  wiped every login, which defeats any "first-run only" assumption KDE's
+  own subsystems make.
