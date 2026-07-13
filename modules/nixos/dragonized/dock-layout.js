@@ -6,7 +6,7 @@ const dock = new Panel
 
 // Basic Dock Geometry
 dock.alignment = "center"
-dock.height = Math.round(gridUnit * 3.8)
+dock.height = Math.round(gridUnit * 1.9) // half the original 3.8
 dock.hiding = "dodgewindows"
 dock.lengthMode = "fit"
 dock.location = "left"
@@ -21,17 +21,14 @@ var tasks = dock.addWidget("org.kde.plasma.icontasks")
 tasks.currentConfigGroup = ["General"]
 tasks.writeConfig("fill", false)
 tasks.writeConfig("iconSpacing", 2)
-// Upstream also pins garuda-toolbox.desktop, snapper-tools.desktop, and
-// octopi.desktop — Arch/Garuda-only tools with no NixOS equivalent, dropped
-// rather than left dangling on unresolvable .desktop IDs.
-//
-// System Settings pinned as org.kde.systemsettings.desktop upstream (Arch's
-// reverse-DNS Plasma 6 ID) — nixpkgs ships it as plain systemsettings.desktop
-// instead, so icontasks couldn't resolve the pin (broken icon, clicking it
-// threw a "System Notifications: Unknown application folder" toast).
-// Confirmed via `ls /run/current-system/sw/share/applications | grep -i
-// systemsettings` on pegasus (2026-07-11).
-tasks.writeConfig("launchers", "applications:org.kde.konsole.desktop,preferred://browser,preferred://filemanager,applications:org.kde.plasma-systemmonitor.desktop,applications:systemsettings.desktop")
+// Pinned launchers replaced (2026-07-12) — every .desktop ID below was
+// confirmed against the actual nixpkgs package source (not guessed), the
+// same lesson learned from the System Settings bug: e.g. vivaldi's .deb
+// keeps its original vivaldi-stable.desktop filename even though nixpkgs
+// substitutes vivaldi-stable -> vivaldi inside the file's *contents*, and
+// ferdium/discord/vscode/ticktick are each confirmed via their own
+// makeDesktopItem/substituteInPlace calls in nixpkgs.
+tasks.writeConfig("launchers", "applications:com.mitchellh.ghostty.desktop,applications:vivaldi-stable.desktop,applications:ferdium.desktop,applications:discord.desktop,applications:code.desktop,applications:ticktick.desktop,applications:org.kde.dolphin.desktop")
 tasks.writeConfig("maxStripes", 1)
 tasks.writeConfig("showOnlyCurrentDesktop", false)
 tasks.writeConfig("showOnlyCurrentScreen", false)
