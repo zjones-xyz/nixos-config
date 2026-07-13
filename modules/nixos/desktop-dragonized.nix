@@ -132,11 +132,26 @@ let
     # $HOME/.config/systemd/user path, and systemd --user is already running
     # (spawned by PAM) before this script's XDG_CONFIG_HOME override even
     # takes effect — the same isolation trap kglobalshortcutsrc hit above.
-    # Backgrounding it directly here sidesteps systemd user-unit discovery
-    # entirely; it inherits the XDG_*_HOME exported above, so Vicinae's own
-    # config/state lives in the isolated profile like everything else here.
-    ${pkgs.vicinae}/bin/vicinae server --replace &
-    disown
+    #
+    # Backgrounding it directly here (an earlier version of this fix) crashed
+    # instead — confirmed via a real coredump (signal 6/ABRT,
+    # .vicinae-server): it's a Qt/Wayland GUI process (qt6.qtwayland,
+    # layer-shell-qt) started here BEFORE `exec startplasma-wayland`, so it
+    # tried connecting to a compositor that doesn't exist yet. Same failure
+    # class as the very first Dragonized crash this session
+    # (plasma-apply-lookandfeel needing an already-running session). XDG
+    # autostart is the actual correct mechanism for "launch once the Plasma
+    # session is up" — Plasma reads $XDG_CONFIG_HOME/autostart on its own
+    # after the compositor is live, so this can't race it.
+    mkdir -p "$XDG_CONFIG_HOME/autostart"
+    cat > "$XDG_CONFIG_HOME/autostart/vicinae-server.desktop" <<VICINAEAUTOSTART
+    [Desktop Entry]
+    Type=Application
+    Name=Vicinae Server
+    Exec=${pkgs.vicinae}/bin/vicinae server --replace
+    NoDisplay=true
+    X-KDE-autostart-phase=1
+    VICINAEAUTOSTART
 
     exec ${pkgs.kdePackages.plasma-workspace}/bin/startplasma-wayland
   '';
