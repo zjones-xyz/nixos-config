@@ -11,6 +11,12 @@
   };
   services.desktopManager.plasma6.enable = true;
 
+  # Pre-selects Dragonized in SDDM's session chooser — "plasma-dragonized" is
+  # dragonizedSessionFile's declared providedSessions value (see
+  # desktop-dragonized.nix), the only valid value for this option since it's
+  # checked directly against every session package's providedSessions list.
+  services.displayManager.defaultSession = "plasma-dragonized";
+
   # Audio: PipeWire is the modern default for a desktop.
   services.pulseaudio.enable = false;
   security.rtkit.enable = true;
