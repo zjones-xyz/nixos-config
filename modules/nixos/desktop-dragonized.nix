@@ -126,32 +126,41 @@ let
     KGLOBALSHORTCUTSRC
 
     # vicinae toggle (bound above) needs its background server already
-    # running to connect to — normally handled by the packaged
-    # systemd --user unit (vicinae.service, WantedBy=graphical-session.target),
-    # but that only gets auto-discovered under the standard
-    # $HOME/.config/systemd/user path, and systemd --user is already running
-    # (spawned by PAM) before this script's XDG_CONFIG_HOME override even
-    # takes effect — the same isolation trap kglobalshortcutsrc hit above.
+    # running to connect to. Two earlier approaches both failed:
+    #   1. Backgrounding it directly here, before `exec startplasma-wayland`
+    #      — crashed (real coredump, signal 6/ABRT, .vicinae-server): a
+    #      Qt/Wayland GUI process (qt6.qtwayland, layer-shell-qt) trying to
+    #      connect to a compositor that doesn't exist yet. Same failure
+    #      class as the very first Dragonized crash this session
+    #      (plasma-apply-lookandfeel needing an already-running session).
+    #   2. Seeding an XDG autostart .desktop entry into
+    #      $XDG_CONFIG_HOME/autostart, the mechanism Plasma itself uses to
+    #      launch things once the session is actually up — confirmed the
+    #      file was present with correct content, but it never fired
+    #      (`vicinae toggle` failed with "No such file or directory" on the
+    #      socket; `pgrep vicinae` found nothing). Traced the real KDE
+    #      source (plasma-workspace's AutoStart::loadAutoStartList() /
+    #      PlasmaAutostart::autostarts()) and ruled out both an
+    #      OnlyShowIn=KDE requirement and a TryExec requirement by diffing
+    #      against a known-working reference entry (kglobalacceld.desktop)
+    #      — neither actually gates the check, so something deeper in
+    #      Dragonized's autostart-phase progression is off. Not worth
+    #      chasing further given a known-working alternative exists.
     #
-    # Backgrounding it directly here (an earlier version of this fix) crashed
-    # instead — confirmed via a real coredump (signal 6/ABRT,
-    # .vicinae-server): it's a Qt/Wayland GUI process (qt6.qtwayland,
-    # layer-shell-qt) started here BEFORE `exec startplasma-wayland`, so it
-    # tried connecting to a compositor that doesn't exist yet. Same failure
-    # class as the very first Dragonized crash this session
-    # (plasma-apply-lookandfeel needing an already-running session). XDG
-    # autostart is the actual correct mechanism for "launch once the Plasma
-    # session is up" — Plasma reads $XDG_CONFIG_HOME/autostart on its own
-    # after the compositor is live, so this can't race it.
-    mkdir -p "$XDG_CONFIG_HOME/autostart"
-    cat > "$XDG_CONFIG_HOME/autostart/vicinae-server.desktop" <<VICINAEAUTOSTART
-    [Desktop Entry]
-    Type=Application
-    Name=Vicinae Server
-    Exec=${pkgs.vicinae}/bin/vicinae server --replace
-    NoDisplay=true
-    X-KDE-autostart-phase=1
-    VICINAEAUTOSTART
+    # Manually running `vicinae server --replace` from an already-open
+    # terminal works perfectly with zero issues, confirming the server
+    # itself is fine — the only problem is timing relative to the
+    # compositor. So: actually wait for the Wayland socket to exist rather
+    # than either racing it (attempt 1) or trusting a mechanism that isn't
+    # firing here for reasons not worth spending more time on (attempt 2).
+    (
+      for i in $(seq 1 150); do
+        compgen -G "''${XDG_RUNTIME_DIR}/wayland-*" > /dev/null && break
+        sleep 0.2
+      done
+      exec ${pkgs.vicinae}/bin/vicinae server --replace
+    ) &
+    disown
 
     exec ${pkgs.kdePackages.plasma-workspace}/bin/startplasma-wayland
   '';
