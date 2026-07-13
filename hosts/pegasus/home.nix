@@ -166,12 +166,20 @@
     # plain KGlobalAccel shortcut on the plasmashell component (confirmed via
     # plasma-workspace's shellcorona.cpp: default binds both Meta and
     # Alt+F1), not a KWin-level "modifier-only" mechanism. Clearing this
-    # frees the bare Meta key; Vicinae's own hotkey still needs setting
-    # separately (through its own settings UI, most likely — it registers
-    # via the XDG GlobalShortcuts portal at runtime rather than a static KDE
-    # config file, so it can't be pre-seeded here the same way).
+    # frees the bare Meta key for Vicinae below.
     shortcuts."plasmashell" = {
       "activate application launcher" = "none";
+    };
+
+    # Vicinae has no built-in global-shortcut support at all (confirmed via
+    # its own docs/FAQ) — by design, you're expected to bind the DE's own
+    # shortcut mechanism to its CLI toggle. This registers a proper
+    # KGlobalAccel shortcut (not a khotkeys command trigger) via
+    # plasma-manager's hotkeys module.
+    hotkeys.commands."vicinae-toggle" = {
+      key = "Meta";
+      command = "${pkgs.vicinae}/bin/vicinae toggle";
+      comment = "Toggle Vicinae";
     };
   };
 
