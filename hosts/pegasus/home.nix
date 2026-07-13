@@ -177,8 +177,17 @@
     # shortcut mechanism to its CLI toggle. This registers a proper
     # KGlobalAccel shortcut (not a khotkeys command trigger) via
     # plasma-manager's hotkeys module.
+    #
+    # Moved off bare Meta (2026-07-13) — neither a ksycoca rebuild, a
+    # plasma-kglobalaccel service restart, nor a full reboot got Meta to
+    # actually fire. Alt+Space (KRunner's old slot, already freed above) is
+    # a normal multi-key combo rather than a modifier-only sequence, which
+    # goes through a materially different KWin grab path — worth testing
+    # whether that's what was actually failing, independent of daemon
+    # staleness. If Alt+Space works, Meta is free again for Kickoff or
+    # anything else.
     hotkeys.commands."vicinae-toggle" = {
-      key = "Meta";
+      key = "Alt+Space";
       command = "${pkgs.vicinae}/bin/vicinae toggle";
       comment = "Toggle Vicinae";
     };
