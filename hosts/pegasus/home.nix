@@ -118,6 +118,10 @@
     android-file-transfer
     affine
 
+    # Local LLM inference GUI — pairs with the RTX 4070 and the existing
+    # ollama.nix setup for a GUI-driven alternative to the CLI.
+    lmstudio
+
     # ykman CLI — Yubico dropped the GUI (yubikey-manager-qt) upstream in
     # favor of this; pairs with the PAM/udev setup in modules/nixos/yubikey.nix.
     yubikey-manager
