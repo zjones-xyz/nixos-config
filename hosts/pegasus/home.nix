@@ -1,4 +1,4 @@
-{ config, pkgs, claudeDesktop, ... }:
+{ config, pkgs, lib, claudeDesktop, ... }:
 
 {
   imports = [
@@ -183,6 +183,19 @@
       comment = "Toggle Vicinae";
     };
   };
+
+  # plasma-manager's hotkeys.commands synthesizes a hidden
+  # plasma-manager-commands.desktop entry + action for each command, but
+  # never triggers a ksycoca rebuild afterward — kglobalaccel resolves a
+  # desktop-entry-action shortcut through ksycoca, so a stale cache means the
+  # binding sits in kglobalshortcutsrc correctly but silently never fires
+  # (confirmed real, open upstream: nix-community/plasma-manager#571 — "app
+  # flashes briefly in the taskbar, keybind doesn't work"). Force the
+  # rebuild ourselves on every activation rather than requiring a full
+  # logout each time this changes.
+  home.activation.rebuildKSycoca = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    $DRY_RUN_CMD ${pkgs.kdePackages.kservice}/bin/kbuildsycoca6 $VERBOSE_ARG
+  '';
 
   home.stateVersion = "26.05";
 }
