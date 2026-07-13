@@ -102,6 +102,29 @@ let
     LookAndFeelPackage=Dr460nized
     KDEGLOBALS
 
+    # Root cause of the Vicinae-hotkey debugging saga (2026-07-13): this
+    # session's XDG_CONFIG_HOME is wiped fresh every login (by design, see
+    # above), so kglobalaccel here reads/writes its OWN
+    # kglobalshortcutsrc — completely separate from the one home-manager's
+    # programs.plasma writes to under the normal $HOME/.config for the
+    # daily-driver session. No ksycoca rebuild, plasma-kglobalaccel
+    # restart, or reboot was ever going to fix it, because the running
+    # Dragonized session was never reading the file we were writing to.
+    # Seeded here the same way kdeglobals is above — keep in sync by hand
+    # with home.nix's programs.plasma.krunner.shortcuts /
+    # shortcuts."plasmashell" / hotkeys.commands if those ever change.
+    cat > "$XDG_CONFIG_HOME/kglobalshortcutsrc" <<'KGLOBALSHORTCUTSRC'
+    [plasmashell]
+    activate application launcher=none,,
+
+    [plasma-manager-commands.desktop]
+    vicinae-toggle=Alt+Space,,Toggle Vicinae
+
+    [services/org.kde.krunner.desktop]
+    _launch=none
+    RunClipboard=none
+    KGLOBALSHORTCUTSRC
+
     exec ${pkgs.kdePackages.plasma-workspace}/bin/startplasma-wayland
   '';
 
