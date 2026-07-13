@@ -220,17 +220,27 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   System Settings' native "Add Custom Shortcut" flow (Plasma 6.1+) worked
   with zero glitching.
   **Fix/pattern going forward:** don't use `hotkeys.commands` at all. Use a
-  plain, standalone, single-`Exec` desktop entry with `X-KDE-Shortcuts` set
-  directly in `[Desktop Entry]` — via home-manager's real
-  `xdg.desktopEntries.<name>.settings.X-KDE-Shortcuts`, the same mechanism
-  real KDE apps use for their own default shortcuts (and almost certainly
-  what the native GUI flow produces under the hood). Needs a `kbuildsycoca6`
-  rebuild after any change for KGlobalAccel to pick it up — see
-  `home.activation.rebuildKSycoca` in `hosts/pegasus/home.nix`. This whole
-  saga was also tangled up with an unrelated, genuinely separate bug (see
-  MANUAL-STEPS.md §13/14) — Dragonized's isolated `XDG_CONFIG_HOME` meant
-  the *first* few fix attempts were silently targeting the wrong session's
-  config entirely, which delayed finding this real bug considerably. If
-  debugging a Dragonized-session shortcut/config issue again: verify against
-  the actual running store path (`find /nix/store -maxdepth 1 -iname
-  "*<name>*"` + compare hashes) before assuming a fix didn't work.
+  plain, standalone, single-`Exec` desktop entry (`xdg.desktopEntries`) for
+  the *launch target* — but do NOT rely on `X-KDE-Shortcuts` in that entry
+  to bind the actual key. That was this session's first attempt and it's
+  *also* unreliable: rebuilding ksycoca (needed for KGlobalAccel to
+  discover the new entry at all) appears to make KDE treat previously-known
+  services as newly-discovered and auto-apply their compiled-in default
+  shortcuts — clobbering unrelated overrides already sitting in
+  `kglobalshortcutsrc` (confirmed: this silently reset KRunner's shortcut
+  back to its default) — while the new entry's own `X-KDE-Shortcuts`
+  *didn't* reliably get auto-applied either. The one mechanism proven
+  reliable end-to-end: write `kglobalshortcutsrc` explicitly for every
+  binding (`programs.plasma.shortcuts."services/<name>.desktop"._launch`),
+  and order it *after* any `kbuildsycoca6` rebuild, not before — so your
+  explicit values are the last word, not a target for the rebuild to
+  clobber. See `hosts/pegasus/home.nix` and `modules/nixos/
+  desktop-dragonized.nix` for the actual working pattern.
+  This whole saga was also tangled up with an unrelated, genuinely separate
+  bug (see MANUAL-STEPS.md §13/14) — Dragonized's isolated
+  `XDG_CONFIG_HOME` meant the *first* few fix attempts were silently
+  targeting the wrong session's config entirely, which delayed finding
+  this real bug considerably. If debugging a Dragonized-session
+  shortcut/config issue again: verify against the actual running store
+  path (`find /nix/store -maxdepth 1 -iname "*<name>*"` + compare hashes)
+  before assuming a fix didn't work.
