@@ -34,6 +34,7 @@
   # Brain.fm was left out — no nixpkgs package, no native Linux client
   # anywhere (subscription web app only); usable via firefox/chrome.
   home.packages = with pkgs; [
+    sl # for the inevitable `sl` typo
     vscode
     google-chrome
     firefox
