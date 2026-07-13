@@ -257,3 +257,27 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   before assuming a fix didn't work — and remember the isolated profile is
   wiped every login, which defeats any "first-run only" assumption KDE's
   own subsystems make.
+- **iDrive — deferred, not packaged yet, 2026-07-13.** Not in nixpkgs.
+  Investigated packaging `IDriveForLinux.deb` (v1.8.0, direct download from
+  `idrivedownloads.com` — this session's environment can't fetch that URL
+  itself, policy-blocked at the proxy; user downloaded and provided
+  `sha256sum`/`dpkg-deb -I`/`dpkg-deb -c` output instead). Turns out to be a
+  much bigger lift than the other Electron-app packages in this repo
+  (Discord, Ferdium, etc.): its declared `Depends:` include
+  `redis-server|valkey`, `cron`, `python3-nautilus`, `python3-pip`,
+  `python3-watchdog`, `python3-psutil`, `gir1.2-nautilus-4.0`, `rsync`,
+  `attr`, `xdotool` — a Redis-backed background daemon, cron-scheduled
+  backups, and a Nautilus (file manager) right-click extension, all wired
+  up by a 900-line `postinst` script doing real system-level setup
+  (Nautilus extension registration, likely `pip install` of Python deps,
+  cron configuration) at install time. A simple `home.nix` Electron-wrapper
+  package (the pattern used for every other unfree Electron app here) would
+  only get the GUI window running — scheduled backups, Nautilus
+  integration, and the daemon itself would silently not work.
+  **Decided:** worth doing properly as a real NixOS module (a redis/valkey
+  service, Nautilus extension wiring, bundled Python deps via
+  `python3.withPackages`, cron/systemd-timer handling) — closer in scope to
+  `ollama.nix` than a package add — rather than a late-night rush job. Not
+  started. Package name reference if picked up later: `idriveforlinux`,
+  main binary `/opt/IDriveForLinux/idriveforlinux %U`, icon
+  `idriveforlinux`, `StartupWMClass=IDriveForLinux`.
