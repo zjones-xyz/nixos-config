@@ -102,6 +102,34 @@ let
     LookAndFeelPackage=Dr460nized
     KDEGLOBALS
 
+    # vicinae-toggle is a plain, standalone, single-Exec desktop entry (not
+    # plasma-manager's hotkeys.commands — see home.nix for why: it
+    # synthesizes a multi-action entry that KGlobalAccel doesn't actually
+    # resolve correctly, open upstream bug nix-community/plasma-manager#571,
+    # confirmed via a clean A/B test against System Settings' native "Add
+    # Custom Shortcut" flow).
+    mkdir -p "$XDG_DATA_HOME/applications"
+    cat > "$XDG_DATA_HOME/applications/vicinae-toggle.desktop" <<'VICINAETOGGLE'
+    [Desktop Entry]
+    Type=Application
+    Name=Vicinae Toggle
+    Exec=${pkgs.vicinae}/bin/vicinae toggle
+    NoDisplay=true
+    VICINAETOGGLE
+
+    # Rebuild ksycoca BEFORE writing kglobalshortcutsrc below, not after
+    # (2026-07-13 fix). Discovered the hard way: running it after clobbered
+    # KRunner's shortcut back to its compiled-in default (Alt+Space) —
+    # rebuilding ksycoca in this freshly-wiped profile appears to make KDE
+    # treat previously-known services as newly-discovered and auto-apply
+    # their default shortcuts, overwriting whatever was already in the
+    # config file. Also dropped X-KDE-Shortcuts from the entry above
+    # entirely — it never got auto-applied reliably either. Writing
+    # kglobalshortcutsrc last, explicitly, for every binding (including our
+    # own new entry) is the one mechanism proven reliable throughout this
+    # whole saga; nothing runs after it to clobber it again.
+    ${pkgs.kdePackages.kservice}/bin/kbuildsycoca6
+
     # Root cause of the Vicinae-hotkey debugging saga (2026-07-13): this
     # session's XDG_CONFIG_HOME is wiped fresh every login (by design, see
     # above), so kglobalaccel here reads/writes its OWN
@@ -120,33 +148,10 @@ let
     [services/org.kde.krunner.desktop]
     _launch=none
     RunClipboard=none
+
+    [services/vicinae-toggle.desktop]
+    _launch=Alt+Space
     KGLOBALSHORTCUTSRC
-
-    # vicinae-toggle is NOT seeded into kglobalshortcutsrc directly (see
-    # home.nix for the full story): plasma-manager's hotkeys.commands
-    # synthesizes a multi-action desktop entry that KGlobalAccel doesn't
-    # actually resolve correctly (open upstream bug,
-    # nix-community/plasma-manager#571) — confirmed via a clean A/B test
-    # against System Settings' native "Add Custom Shortcut" flow, which
-    # worked with zero glitching. Same fix here: a plain, standalone,
-    # single-Exec desktop entry with X-KDE-Shortcuts set directly, the
-    # mechanism real KDE apps use for their own default shortcuts.
-    mkdir -p "$XDG_DATA_HOME/applications"
-    cat > "$XDG_DATA_HOME/applications/vicinae-toggle.desktop" <<'VICINAETOGGLE'
-    [Desktop Entry]
-    Type=Application
-    Name=Vicinae Toggle
-    Exec=${pkgs.vicinae}/bin/vicinae toggle
-    NoDisplay=true
-    X-KDE-Shortcuts=Alt+Space
-    VICINAETOGGLE
-
-    # ksycoca needs to know about the new desktop entry above before
-    # KGlobalAccel can resolve its shortcut — this session's cache lives
-    # under the isolated $XDG_CACHE_HOME exported above, entirely separate
-    # from the daily-driver session's, so it needs its own rebuild here
-    # rather than relying on home.nix's activation-time one.
-    ${pkgs.kdePackages.kservice}/bin/kbuildsycoca6
 
     # vicinae toggle (bound above) needs its background server already
     # running to connect to. Two earlier approaches both failed:

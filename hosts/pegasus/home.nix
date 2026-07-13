@@ -172,6 +172,16 @@
       "activate application launcher" = "none";
     };
 
+    # vicinae-toggle's binding, explicit — NOT via X-KDE-Shortcuts on the
+    # desktop entry below (see xdg.desktopEntries.vicinae-toggle for why:
+    # unreliable auto-application, confirmed hands-on 2026-07-13 — it also
+    # has the side effect of resetting *other* services' shortcuts, like
+    # krunner above, back to their compiled-in defaults whenever ksycoca
+    # gets rebuilt). Writing kglobalshortcutsrc explicitly is the one
+    # mechanism proven reliable throughout this whole saga.
+    shortcuts."services/vicinae-toggle.desktop" = {
+      _launch = "Alt+Space";
+    };
   };
 
   # Vicinae has no built-in global-shortcut support at all (confirmed via
@@ -188,18 +198,15 @@
   # binding the same command through System Settings' native "Add Custom
   # Shortcut" flow (Plasma 6.1+) worked with zero glitching.
   #
-  # This is a plain, standalone, single-Exec desktop entry with
-  # X-KDE-Shortcuts set directly — the same mechanism real KDE apps use for
-  # their own default shortcuts (confirmed via ksycoca — this is what
-  # KGlobalAccel actually resolves correctly, unlike the multi-action
-  # synthesis above), and almost certainly what that native GUI flow
-  # produces under the hood.
+  # This is a plain, standalone, single-Exec desktop entry — same mechanism
+  # real KDE apps use for their own default shortcuts — but the shortcut
+  # itself is bound explicitly above via programs.plasma.shortcuts, not
+  # X-KDE-Shortcuts here (see that comment for why).
   xdg.desktopEntries.vicinae-toggle = {
     name = "Vicinae Toggle";
     type = "Application";
     exec = "${pkgs.vicinae}/bin/vicinae toggle";
     noDisplay = true;
-    settings.X-KDE-Shortcuts = "Alt+Space";
   };
 
   # ksycoca needs to know about the new/changed desktop entry above (and any
