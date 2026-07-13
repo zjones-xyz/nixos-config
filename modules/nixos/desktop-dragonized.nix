@@ -125,6 +125,19 @@ let
     RunClipboard=none
     KGLOBALSHORTCUTSRC
 
+    # vicinae toggle (bound above) needs its background server already
+    # running to connect to — normally handled by the packaged
+    # systemd --user unit (vicinae.service, WantedBy=graphical-session.target),
+    # but that only gets auto-discovered under the standard
+    # $HOME/.config/systemd/user path, and systemd --user is already running
+    # (spawned by PAM) before this script's XDG_CONFIG_HOME override even
+    # takes effect — the same isolation trap kglobalshortcutsrc hit above.
+    # Backgrounding it directly here sidesteps systemd user-unit discovery
+    # entirely; it inherits the XDG_*_HOME exported above, so Vicinae's own
+    # config/state lives in the isolated profile like everything else here.
+    ${pkgs.vicinae}/bin/vicinae server --replace &
+    disown
+
     exec ${pkgs.kdePackages.plasma-workspace}/bin/startplasma-wayland
   '';
 
