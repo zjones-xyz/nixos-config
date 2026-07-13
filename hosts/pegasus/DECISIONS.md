@@ -205,3 +205,32 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   matters concretely here since `gamescopeSession` in `gaming.nix` was
   specifically chosen for NVIDIA + VRR. Revisit primary-DE status once
   those land.
+- **`programs.plasma.hotkeys.commands` (plasma-manager) is broken — don't use
+  it, 2026-07-13.** Confirmed hands-on after an extremely long debugging saga
+  (Vicinae's global toggle hotkey, bound via this module, appeared to fire —
+  correct entry in `kglobalshortcutsrc`, "Started Plasma Manager" in the
+  journal — but the actual window just flashed in the dock and closed a
+  second later, no matter the key). Root cause: this module synthesizes a
+  hidden multi-action desktop entry (one `.desktop` file, N actions), and
+  KGlobalAccel doesn't correctly resolve the shortcut to the specific named
+  action — it launches the entry's own (empty) main `Exec` instead. This
+  matches the open upstream issue nix-community/plasma-manager#571 exactly
+  ("app flashes briefly in the taskbar, keybind doesn't function").
+  Confirmed via a clean A/B test: binding the identical command through
+  System Settings' native "Add Custom Shortcut" flow (Plasma 6.1+) worked
+  with zero glitching.
+  **Fix/pattern going forward:** don't use `hotkeys.commands` at all. Use a
+  plain, standalone, single-`Exec` desktop entry with `X-KDE-Shortcuts` set
+  directly in `[Desktop Entry]` — via home-manager's real
+  `xdg.desktopEntries.<name>.settings.X-KDE-Shortcuts`, the same mechanism
+  real KDE apps use for their own default shortcuts (and almost certainly
+  what the native GUI flow produces under the hood). Needs a `kbuildsycoca6`
+  rebuild after any change for KGlobalAccel to pick it up — see
+  `home.activation.rebuildKSycoca` in `hosts/pegasus/home.nix`. This whole
+  saga was also tangled up with an unrelated, genuinely separate bug (see
+  MANUAL-STEPS.md §13/14) — Dragonized's isolated `XDG_CONFIG_HOME` meant
+  the *first* few fix attempts were silently targeting the wrong session's
+  config entirely, which delayed finding this real bug considerably. If
+  debugging a Dragonized-session shortcut/config issue again: verify against
+  the actual running store path (`find /nix/store -maxdepth 1 -iname
+  "*<name>*"` + compare hashes) before assuming a fix didn't work.

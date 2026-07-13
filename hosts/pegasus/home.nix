@@ -172,36 +172,40 @@
       "activate application launcher" = "none";
     };
 
-    # Vicinae has no built-in global-shortcut support at all (confirmed via
-    # its own docs/FAQ) — by design, you're expected to bind the DE's own
-    # shortcut mechanism to its CLI toggle. This registers a proper
-    # KGlobalAccel shortcut (not a khotkeys command trigger) via
-    # plasma-manager's hotkeys module.
-    #
-    # Moved off bare Meta (2026-07-13) — neither a ksycoca rebuild, a
-    # plasma-kglobalaccel service restart, nor a full reboot got Meta to
-    # actually fire. Alt+Space (KRunner's old slot, already freed above) is
-    # a normal multi-key combo rather than a modifier-only sequence, which
-    # goes through a materially different KWin grab path — worth testing
-    # whether that's what was actually failing, independent of daemon
-    # staleness. If Alt+Space works, Meta is free again for Kickoff or
-    # anything else.
-    hotkeys.commands."vicinae-toggle" = {
-      key = "Alt+Space";
-      command = "${pkgs.vicinae}/bin/vicinae toggle";
-      comment = "Toggle Vicinae";
-    };
   };
 
-  # plasma-manager's hotkeys.commands synthesizes a hidden
-  # plasma-manager-commands.desktop entry + action for each command, but
-  # never triggers a ksycoca rebuild afterward — kglobalaccel resolves a
-  # desktop-entry-action shortcut through ksycoca, so a stale cache means the
-  # binding sits in kglobalshortcutsrc correctly but silently never fires
-  # (confirmed real, open upstream: nix-community/plasma-manager#571 — "app
-  # flashes briefly in the taskbar, keybind doesn't work"). Force the
-  # rebuild ourselves on every activation rather than requiring a full
-  # logout each time this changes.
+  # Vicinae has no built-in global-shortcut support at all (confirmed via
+  # its own docs/FAQ) — by design, you're expected to bind the DE's own
+  # shortcut mechanism to its CLI toggle.
+  #
+  # NOT plasma-manager's programs.plasma.hotkeys.commands — confirmed real,
+  # reproduced hands-on (2026-07-13): it synthesizes a hidden multi-action
+  # desktop entry, and KGlobalAccel doesn't actually invoke the specific
+  # named action tied to the shortcut — it launches the entry's main (empty)
+  # Exec instead, producing exactly the "app flashes briefly in the
+  # taskbar, keybind doesn't work" symptom from the open upstream issue
+  # nix-community/plasma-manager#571. Confirmed via a clean A/B test:
+  # binding the same command through System Settings' native "Add Custom
+  # Shortcut" flow (Plasma 6.1+) worked with zero glitching.
+  #
+  # This is a plain, standalone, single-Exec desktop entry with
+  # X-KDE-Shortcuts set directly — the same mechanism real KDE apps use for
+  # their own default shortcuts (confirmed via ksycoca — this is what
+  # KGlobalAccel actually resolves correctly, unlike the multi-action
+  # synthesis above), and almost certainly what that native GUI flow
+  # produces under the hood.
+  xdg.desktopEntries.vicinae-toggle = {
+    name = "Vicinae Toggle";
+    type = "Application";
+    exec = "${pkgs.vicinae}/bin/vicinae toggle";
+    noDisplay = true;
+    settings.X-KDE-Shortcuts = "Alt+Space";
+  };
+
+  # ksycoca needs to know about the new/changed desktop entry above (and any
+  # other desktop-entry-based shortcut) before KGlobalAccel can resolve it —
+  # rebuild on every activation rather than requiring a full logout each
+  # time this changes.
   home.activation.rebuildKSycoca = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     $DRY_RUN_CMD ${pkgs.kdePackages.kservice}/bin/kbuildsycoca6 $VERBOSE_ARG
   '';
