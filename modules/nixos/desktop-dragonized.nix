@@ -84,6 +84,21 @@ let
     export XDG_CONFIG_HOME="$HOME/.config-dragonized"
     export XDG_DATA_HOME="$HOME/.local/share-dragonized"
     export XDG_CACHE_HOME="$HOME/.cache-dragonized"
+
+    # kglobalshortcutsrc is exempted from the wipe below (2026-07-13) — every
+    # declarative attempt to seed/pin its content got fought by KDE's own
+    # default-reassignment logic on session startup (see DECISIONS.md for
+    # the full saga: reordering around kbuildsycoca6 wasn't enough, it kept
+    # resetting KRunner's shortcut back to default regardless). Configure
+    # shortcuts once via System Settings' native GUI — proven to work
+    # cleanly in testing — and this preserves it across logins instead of
+    # fighting the mechanism further. Empty/absent on first-ever login,
+    # which just means KDE's own defaults apply until configured.
+    SHORTCUTS_BACKUP="$(mktemp)"
+    if [ -f "$XDG_CONFIG_HOME/kglobalshortcutsrc" ]; then
+      cp "$XDG_CONFIG_HOME/kglobalshortcutsrc" "$SHORTCUTS_BACKUP"
+    fi
+
     rm -rf "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
     mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
 
@@ -117,41 +132,15 @@ let
     NoDisplay=true
     VICINAETOGGLE
 
-    # Rebuild ksycoca BEFORE writing kglobalshortcutsrc below, not after
-    # (2026-07-13 fix). Discovered the hard way: running it after clobbered
-    # KRunner's shortcut back to its compiled-in default (Alt+Space) —
-    # rebuilding ksycoca in this freshly-wiped profile appears to make KDE
-    # treat previously-known services as newly-discovered and auto-apply
-    # their default shortcuts, overwriting whatever was already in the
-    # config file. Also dropped X-KDE-Shortcuts from the entry above
-    # entirely — it never got auto-applied reliably either. Writing
-    # kglobalshortcutsrc last, explicitly, for every binding (including our
-    # own new entry) is the one mechanism proven reliable throughout this
-    # whole saga; nothing runs after it to clobber it again.
     ${pkgs.kdePackages.kservice}/bin/kbuildsycoca6
 
-    # Root cause of the Vicinae-hotkey debugging saga (2026-07-13): this
-    # session's XDG_CONFIG_HOME is wiped fresh every login (by design, see
-    # above), so kglobalaccel here reads/writes its OWN
-    # kglobalshortcutsrc — completely separate from the one home-manager's
-    # programs.plasma writes to under the normal $HOME/.config for the
-    # daily-driver session. No ksycoca rebuild, plasma-kglobalaccel
-    # restart, or reboot was ever going to fix it, because the running
-    # Dragonized session was never reading the file we were writing to.
-    # Seeded here the same way kdeglobals is above — keep in sync by hand
-    # with home.nix's programs.plasma.krunner.shortcuts /
-    # shortcuts."plasmashell" if those ever change.
-    cat > "$XDG_CONFIG_HOME/kglobalshortcutsrc" <<'KGLOBALSHORTCUTSRC'
-    [plasmashell]
-    activate application launcher=none,,
-
-    [services/org.kde.krunner.desktop]
-    _launch=none
-    RunClipboard=none
-
-    [services/vicinae-toggle.desktop]
-    _launch=Alt+Space
-    KGLOBALSHORTCUTSRC
+    # Restore kglobalshortcutsrc last, right before the session actually
+    # starts — see the SHORTCUTS_BACKUP comment above for why this is
+    # preserved rather than declaratively seeded.
+    if [ -s "$SHORTCUTS_BACKUP" ]; then
+      cp "$SHORTCUTS_BACKUP" "$XDG_CONFIG_HOME/kglobalshortcutsrc"
+    fi
+    rm -f "$SHORTCUTS_BACKUP"
 
     # vicinae toggle (bound above) needs its background server already
     # running to connect to. Two earlier approaches both failed:
