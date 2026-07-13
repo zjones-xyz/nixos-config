@@ -102,6 +102,13 @@
     ghostty
     kitty
 
+    # Doxie Q2 (DX320) scan management — the scanner itself needs no driver
+    # (mounts as plain USB mass storage; Wi-Fi direct-to-cloud setup is the
+    # one piece still gated behind the proprietary Mac/Windows app). naps2
+    # covers the rest of what Doxie's own desktop app would otherwise do:
+    # organizing/renaming/combining scans into PDFs.
+    naps2
+
     # ── Found on Serenity's /Applications, not yet replicated (2026-07-12) ────
     calibre # ebook library management
     makemkv # disc ripping, pairs with the jellyfin/vlc media stack
