@@ -5,65 +5,55 @@ then the deeper docs alongside it.
 
 ## Where things stand
 
-- **All authoring is done and committed** (6 per-phase commits, `[pegasus]`/
-  `[serenity]` prefixed). Branch is pushed; PR #6 is open against `main`.
-- **Validated by eval only.** `nix flake check --no-build --all-systems` is green
-  and every closure instantiates to a `.drv` (pegasus, serenity, memory-alpha,
-  hopper, hamilton). **Nothing has been built or activated on hardware** — this
-  Mac (aarch64-darwin) has no Linux builder, so building pegasus is itself a
-  manual step on the box.
+- **pegasus is installed on real hardware and in daily use** (single NVMe,
+  CachyOS drive removed). Base, gaming, performance, Ollama, and all three
+  desktop sessions (Plasma, COSMIC, Dragonized) have been switched to and
+  exercised — this is well past the original "first switch" milestone.
 - serenity (the Mac) has nix-darwin activated already (PR #7).
-- **Install is in progress on real hardware (2026-07-11).** CachyOS's drive was
-  pulled entirely rather than dual-booted — pegasus is now single-NVMe (see
-  the "SUPERSEDED 2026-07-11" note in `DECISIONS.md` and updated
-  `MANUAL-STEPS.md` §1 / `disko.nix`). First install attempt skipped
-  `disko.nix` and used the installer's auto-partitioner instead, giving the
-  wrong layout (no `@snapshots`/`@games`, a real LUKS swap partition instead
-  of zram) — being redone with `disko.nix` properly.
-- **SSH bootstrapping note**: the plain generated `/etc/nixos/configuration.nix`
-  used for the first install attempt doesn't carry `modules/nixos/common.nix`'s
-  `services.openssh` + authorized-key wiring — that only lands once the real
-  `nixos-rebuild switch --flake .#pegasus` happens. Until then, SSH into the
-  installed system needs `services.openssh.enable = true;` added to the local
-  generated config by hand (see chat history, not written up as a doc step
-  since it's a one-time bootstrap quirk, not a repeatable procedure).
-- **Rebased onto `main` (2026-07-10)** to pick up ~40 commits of fleet drift
-  (memory-alpha NUT/reboot fixes, jellyfin-pretranscode, the Arcane
-  manager/agent module, shared starship/direnv/interactive-zsh unification,
-  etc.). No textual conflicts — the PR only touches `hosts/pegasus/`,
-  `flake.{nix,lock}`, `.sops.yaml`, `CLAUDE.md`, and net-new `modules/nixos/*`
-  files, none of which main also changed. Re-validated green with
-  `.claude/hooks/flake-check-sandboxed.sh --all-systems --impure`. Note: the
-  `arcane-agent` module (`modules/nixos/arcane-agent.nix`) now exists on
-  `main` but is still **not** wired into `hosts/pegasus/configuration.nix` —
-  that wiring is still gated on real hardware existing to generate a manager
-  token from, per `DECISIONS.md`'s original note, so it's out of scope here.
+- `hosts/pegasus/hardware-configuration.nix` is the real, reconciled config
+  from the actual install (regenerated 2026-07-11 via `disko.nix`), not a
+  placeholder.
+- `secrets/pegasus.yaml` exists and is committed (sops-encrypted), and
+  `.sops.yaml` carries pegasus's real age key — the sops/Tailscale wiring in
+  `configuration.nix` is live, not inert.
+- Rebased onto `main` (2026-07-10) with no textual conflicts — the PR only
+  touches `hosts/pegasus/`, `flake.{nix,lock}`, `.sops.yaml`, `CLAUDE.md`, and
+  net-new `modules/nixos/*` files.
+- Validated throughout by `nix flake check --no-build --all-systems` plus a
+  forced `.drv` eval (see "flake check has a blind spot" below for why the
+  deeper eval matters).
 
 ## Read these (don't re-derive)
 
-- `DECISIONS.md` — every choice + deviation, incl. why this is one branch instead
-  of the brief's five, and the gated-sops approach.
-- `MANUAL-STEPS.md` — the install → first-switch → validation → activation
-  checklist that is Zoe's to drive.
-- `SECRETS-TODO.md` — `secrets/pegasus.yaml` provisioning.
+- `DECISIONS.md` — every choice + deviation, including the full Dragonized
+  debugging saga and the plasma-manager `hotkeys.commands` bug writeup.
+- `MANUAL-STEPS.md` — the live checklist; the section numbers referenced below
+  point back into it for full detail.
+- `SECRETS-TODO.md` — kept for reference; the `secrets/pegasus.yaml`
+  provisioning it walks through is now done.
 
-## Top things to remember when you resume
+## Genuinely still open
 
-1. **`hardware-configuration.nix` is a PLACEHOLDER** (fake UUIDs). Regenerate on
-   real hardware (or drive the install with `disko.nix`) before any deploy.
-2. **Olla won't build yet** — `modules/nixos/olla-router.nix` uses `lib.fakeHash`
-   for `version`/`src.hash`/`vendorHash`. Fill them in (MANUAL-STEPS §5), and
-   verify Olla's YAML config schema against its current docs (the schema here is
-   illustrative) and the 1070 node hostname (placeholder `gpu1070.internal`).
-3. **Confirm the Mac hostname `serenity`** (`scutil --get LocalHostName`) before
-   activating the darwin config. nix-darwin is pinned to `nix-darwin-26.05`;
-   `nix.enable = false` so it coexists with Determinate Nix.
-4. **First switch should be Phase-1-only** (comment the gaming/perf/ollama/olla
-   imports), from a TTY/other host — never over the display pegasus is
-   reconfiguring. Re-enable the rest on a second switch.
-5. **sops/tailscale wiring is inert** until `secrets/pegasus.yaml` exists (gated on
-   `builtins.pathExists`), so eval stays green meanwhile. `.sops.yaml` already has
-   a pegasus placeholder key + creation rule.
+1. **Olla router is disabled.** `modules/nixos/olla-router.nix`'s
+   `version`/`src.hash`/`vendorHash` are real (resolved on-device), but its
+   import is commented out in `configuration.nix` — Olla's own Go test suite
+   fails under the Nix sandbox's constrained CPU scheduling
+   (`TestEventBus_HighVolumePublishing`), not a real defect. Re-enabling needs
+   `doCheck = false;` (or an upstream fix) plus the real 1070-node hostname
+   (still the `gpu1070.internal` placeholder). See MANUAL-STEPS §5.
+2. **Dragonized has a few open cosmetic gaps**: the Sweet cursor/color theme
+   has no packageable source and falls back to something else, the Kickoff
+   distributor-logo icon isn't packaged, SDDM's theme selector still points at
+   its default rather than `Dr460nized`, and whether Kvantum is actually the
+   active Qt style hasn't been visually confirmed. See MANUAL-STEPS §12.
+3. **YubiKey enrollment is a manual, key-in-hand step** (`pamu2fcfg`) — not yet
+   done. See MANUAL-STEPS §13.
+4. **Gaming-window GPU drain and the overnight batch job are stubs** — the
+   gamemode start/end hook needs confirming against real usage, and the batch
+   script just logs a TODO. See MANUAL-STEPS §6.
+5. **iDrive backup client is deferred entirely** (2026-07-13) — needs a real
+   NixOS module (redis/valkey, Nautilus extension, cron/timer), not a simple
+   package add. Not started.
 
 ## Verify-before-trusting
 
@@ -76,9 +66,10 @@ re-checked if the lock moves: `services.ollama` uses `pkgs.ollama-cuda` (the old
 a missing `specialArgs = { inherit self; };` on `pegasus`'s `nixosSystem` call
 (needed by `modules/nixos/motd.nix`, which landed on `main` after this branch
 forked) — `nixos-install` failed on the real box with `attribute 'self'
-missing` even though `flake check` reported green. `flake check` doesn't force
-the same evaluation depth as an actual build. To catch this class of bug
-before hardware, force it directly:
+missing` even though `flake check` reported green. This is now fixed
+(`flake.nix` passes `specialArgs = { inherit self; };`), but `flake check`
+still doesn't force the same evaluation depth as an actual build in general.
+To catch this class of bug before hardware, force it directly:
 `nix eval --impure .#nixosConfigurations.<host>.config.system.build.toplevel.drvPath`
 (with the same per-input `--override-input` overrides
 `flake-check-sandboxed.sh` uses, if running from a web session).
