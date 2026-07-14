@@ -70,11 +70,21 @@
   #
   # unlock-memory-alpha is a thin per-host binding onto the generic
   # scripts/luks-unlock-remote.sh — add one alias like this per host rather
-  # than copy-pasting the script itself (pegasus is next in line for this).
+  # than copy-pasting the script itself.
+  #
+  # unlock-pegasus (2026-07-11): pegasus.internal needs an AdGuard DNS
+  # rewrite pointing at pegasus's LAN IP before this resolves by name — not
+  # something this repo declares (matches how memory-alpha.internal/
+  # hopper.internal/hamilton.internal are all provisioned out-of-band too).
+  # Until that rewrite exists, swap the hostname below for pegasus's raw LAN
+  # IP. The op:// reference is safe to leave even if that 1Password item
+  # doesn't exist yet — luks-unlock-remote.sh falls back to an interactive
+  # passphrase prompt when the lookup fails.
   home.shellAliases = {
     drs = "sudo darwin-rebuild switch --flake ~/Code/nixos-config#serenity";
     npull = "git -C ~/Code/nixos-config pull";
     unlock-memory-alpha = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh memory-alpha.internal "op://System Keys/memory-alpha luks/password"'';
+    unlock-pegasus = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh pegasus.internal "op://System Keys/pegasus luks/password"'';
   };
 
   home.stateVersion = "26.05";

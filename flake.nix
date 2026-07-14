@@ -29,9 +29,32 @@
       url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Declarative KDE Plasma via Home Manager (used on pegasus).
+    plasma-manager = {
+      url = "github:nix-community/plasma-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.home-manager.follows = "home-manager";
+    };
+
+    # Claude Desktop (used on pegasus). Anthropic shipped an official Linux
+    # beta (.deb, own apt repo) on 2026-06-30 but hasn't reached nixpkgs yet
+    # (too recent). This flake repackages that *official* .deb for Nix as of
+    # its v3.0.0 — not the older community approach of patching the Windows/
+    # macOS build to run on Linux. See hosts/pegasus/DECISIONS.md.
+    # git+https rather than github: — this session's GitHub access is
+    # scoped to zjones-xyz/nixos-config only, so the github: tarball-API
+    # fetch 403s here (though it works fine anywhere with normal GitHub
+    # access, e.g. on pegasus itself). git+https uses plain git protocol
+    # instead, unaffected either way — see .claude/hooks/flake-check-sandboxed.sh
+    # for the same workaround applied to the other inputs.
+    claude-desktop-debian = {
+      url = "git+https://github.com/aaddrick/claude-desktop-debian.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, ... }: {
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, ... }: {
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
@@ -40,6 +63,28 @@
           ./hosts/memory-alpha/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
+        ];
+      };
+
+      # pegasus — AM4 Ryzen + RTX 4070 workstation: gaming desktop (Plasma 6 /
+      # Wayland) and the primary GPU inference endpoint (ollama + Olla router).
+      # Single NVMe, installed via hosts/pegasus/disko.nix (2026-07-11).
+      pegasus = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = { inherit self; };
+        modules = [
+          ./hosts/pegasus/configuration.nix
+          home-manager.nixosModules.home-manager
+          sops-nix.nixosModules.sops
+          {
+            # Make plasma-manager's HM options available to hosts/pegasus/home.nix.
+            home-manager.sharedModules = [ plasma-manager.homeModules.plasma-manager ];
+            # claude-desktop-debian has no HM module, just a package — pass it
+            # through directly rather than adding it as a NixOS-level overlay.
+            home-manager.extraSpecialArgs = {
+              claudeDesktop = claude-desktop-debian.packages.x86_64-linux.claude-desktop-fhs;
+            };
+          }
         ];
       };
 
