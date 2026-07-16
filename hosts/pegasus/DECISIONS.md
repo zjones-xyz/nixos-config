@@ -257,6 +257,31 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   before assuming a fix didn't work — and remember the isolated profile is
   wiped every login, which defeats any "first-run only" assumption KDE's
   own subsystems make.
+- **Remote desktop → KRDP (KWin's built-in RDP server), bound to tailscale0
+  only, added 2026-07-16.** *alt considered:* TigerVNC as a headless/virtual
+  X11 session (rejected — pegasus's desktop is Wayland/KWin, so this would be
+  a second, independent desktop rather than a view of the actual running
+  session, and it's more moving parts for less payoff here); wayvnc (rejected
+  outright — it needs wlroots' screencopy protocols, which KWin doesn't
+  implement, so it can't work with Plasma at all). *Why KRDP:* it's Wayland-
+  native (uses KWin's own screencast/remote-desktop portal, so it mirrors and
+  controls whatever session is actually live, hardware-accelerated), and it
+  already ships with `services.desktopManager.plasma6.enable` (it's in that
+  module's `optionalPackages` upstream) — no new packaging.
+  *Access-model choice:* bind to `tailscale0` only (already a
+  `trustedInterfaces` member, same boundary z's SSH access already rides on)
+  rather than binding to localhost and requiring a manual `ssh -L` tunnel per
+  connection — chosen for day-to-day convenience over the more literal
+  "SSH pubkey tunnel" reading of the ask. Caveat logged in
+  `hosts/pegasus/MANUAL-STEPS.md` §14 and as an inline comment in
+  `configuration.nix`: RDP's own login is PAM password/PIN, not a pubkey —
+  KDE's Remote Desktop KCM has no NixOS module (no declarative
+  enable/port/credentials), so the actual "pubkey-gated" property comes from
+  Tailscale's device-key trust at the network layer, not the RDP handshake
+  itself. Enabling it is therefore a one-time manual step in System Settings,
+  and must be done in the daily-driver Plasma session specifically —
+  Dragonized wipes its profile every login and would silently drop the
+  setting.
 - **iDrive — deferred, not packaged yet, 2026-07-13.** Not in nixpkgs.
   Investigated packaging `IDriveForLinux.deb` (v1.8.0, direct download from
   `idrivedownloads.com` — this session's environment can't fetch that URL

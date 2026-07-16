@@ -70,6 +70,26 @@ in
   networking.firewall.trustedInterfaces = [ "tailscale0" ];
   networking.firewall.allowedUDPPorts = [ config.services.tailscale.port ];
 
+  # ── Remote Desktop (KRDP) ───────────────────────────────────────────────────
+  # Wayland-native RDP server built into KWin (Plasma 6.1+). `krdp` already
+  # ships automatically via services.desktopManager.plasma6.enable (it's in
+  # that module's optionalPackages and not excluded here) — nothing to add to
+  # environment.systemPackages. No firewall change needed either: tailscale0 is
+  # already in trustedInterfaces above, so once turned on, KRDP rides the exact
+  # same tailnet-only boundary z's SSH access already does — unreachable from
+  # the LAN or anywhere else.
+  #
+  # RDP itself has no notion of pubkey auth (PAM username/password, or a
+  # KCM-generated one-time PIN) — there's no NixOS module wrapping KRDP's
+  # enable/port/credentials, that state lives in the live KWin session's
+  # kwinrc, so the "keyed off pubkey auth" property comes from the network
+  # boundary (Tailscale's own device keys), not the RDP handshake. Turning it
+  # on is therefore a one-time interactive step, done once in the
+  # daily-driver Plasma session (not the Dragonized session — see
+  # desktop-dragonized.nix — which wipes its profile every login and would
+  # drop this setting straight back off). See hosts/pegasus/MANUAL-STEPS.md
+  # §14 for the actual click-path.
+
   # ── LUKS SSH unlock ─────────────────────────────────────────────────────────
   # Lets you decrypt the drive remotely (e.g. `unlock-pegasus` from serenity)
   # instead of needing to be physically at the box after every reboot. Mirrors

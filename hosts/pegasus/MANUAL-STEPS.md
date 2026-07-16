@@ -348,3 +348,29 @@ never turn into a lockout the way the earlier no-password bug did.
 To add a second key (backup, or a work/personal split), re-run
 `pamu2fcfg -n` and append its output line to the same file rather than
 overwriting it — see `pamu2fcfg --help`.
+
+## 14. Remote Desktop (KRDP) enrollment
+
+The `krdp` binary ships automatically with Plasma 6 — nothing to build or
+switch for. Turning it on is a one-time interactive step, done **in the
+daily-driver Plasma session** (log in normally, not via the "Plasma
+(Dragonized)" session — Dragonized wipes its isolated profile on every
+login and would drop this setting right back off):
+
+1. System Settings → Workspace → Remote Desktop.
+2. Enable "Remote control" / "Remote Desktop" (naming varies by Plasma point
+   release).
+3. Set a login (PAM account password, or generate a one-time PIN in the
+   KCM — your call). Note the port shown (default 3389) if you want to pin
+   it in an RDP client's saved connection.
+4. From another tailnet machine, connect an RDP client (Microsoft Remote
+   Desktop, Remmina, etc.) to `pegasus.<tailnet-name>.ts.net:3389` (or the
+   Tailscale IP).
+
+No firewall or NixOS changes are needed for this — `tailscale0` is already
+a trusted interface, so the port is reachable over the tailnet the moment
+KRDP is enabled, and nowhere else (confirm with `ss -tlnp | grep 3389` from
+another interface if you want to see it's not bound/reachable there).
+Since RDP's own login is a password/PIN rather than an SSH key, the actual
+"pubkey" gate here is Tailscale's device-key trust, same boundary the
+fleet's tailnet-only SSH access already rides on.
