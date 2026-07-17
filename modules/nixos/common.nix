@@ -25,11 +25,11 @@
   # crashed boot's log entirely — see docs/runbooks/unexpected-reboot.md. Cap
   # growth so persistence doesn't accumulate unbounded: whichever limit hits
   # first wins.
-  services.journald.settings = {
-    Storage = "persistent";
-    SystemMaxUse = "500M";
-    MaxRetentionSec = "2week";
-  };
+  services.journald.storage = "persistent";
+  services.journald.extraConfig = ''
+    SystemMaxUse=500M
+    MaxRetentionSec=2week
+  '';
 
   # ── Kernel panic → auto-reboot ──────────────────────────────────────────────
   # Default kernel.panic=0 means a panicking host just hangs at the panic

@@ -83,7 +83,7 @@ as you have a confident cause.
 
 Journald is persistent fleet-wide (see above), so an empty `-b -1` is itself
 an actionable finding rather than the expected default — check whether
-something on the host overrides `services.journald.settings.Storage` away
-from `"persistent"`, whether the 500M/2-week cap already rotated past the
+something on the host overrides `services.journald.storage` away from
+`"persistent"`, whether the 500M/2-week cap already rotated past the
 incident, or whether the crash itself was violent enough (power loss
 mid-write) to corrupt the on-disk journal before it could be read back.
