@@ -349,28 +349,33 @@ To add a second key (backup, or a work/personal split), re-run
 `pamu2fcfg -n` and append its output line to the same file rather than
 overwriting it — see `pamu2fcfg --help`.
 
-## 14. Remote Desktop (KRDP) enrollment
+## 14. Remote Desktop (xrdp) — verify on first connection
 
-The `krdp` binary ships automatically with Plasma 6 — nothing to build or
-switch for. Turning it on is a one-time interactive step, done **in the
-daily-driver Plasma session** (log in normally, not via the "Plasma
-(Dragonized)" session — Dragonized wipes its isolated profile on every
-login and would drop this setting right back off):
+Fully declarative (`services.xrdp` in `hosts/pegasus/configuration.nix`) —
+no manual enable step, unlike the superseded KRDP attempt (see
+DECISIONS.md). `xrdp`/`xrdp-sesman` start automatically at boot; a
+self-signed TLS cert/key is generated on first activation
+(`/etc/xrdp/{cert,key}.pem`). Still needs a first-connection check on real
+hardware, nothing here was verified beyond forced-eval from the authoring
+session:
 
-1. System Settings → Workspace → Remote Desktop.
-2. Enable "Remote control" / "Remote Desktop" (naming varies by Plasma point
-   release).
-3. Set a login (PAM account password, or generate a one-time PIN in the
-   KCM — your call). Note the port shown (default 3389) if you want to pin
-   it in an RDP client's saved connection.
-4. From another tailnet machine, connect an RDP client (Microsoft Remote
+1. From another tailnet machine, connect an RDP client (Microsoft Remote
    Desktop, Remmina, etc.) to `pegasus.<tailnet-name>.ts.net:3389` (or the
-   Tailscale IP).
+   Tailscale IP). Accept the self-signed cert prompt (expected — nothing to
+   fix, no CA behind it by design, same trust-on-first-use model as an SSH
+   host key).
+2. Log in as `z` with the normal account password (the same one used at
+   the console/SDDM — PAM, not a separate credential).
+3. Confirm this spins up an independent Plasma-over-X11 session — should
+   work identically whether the physical console is sitting at the SDDM
+   greeter, locked, or mid-session; it does not touch or depend on that
+   session at all.
+4. Watch for NVIDIA-specific glitches: xorgxrdp's Xorg driver is
+   self-contained (doesn't touch the nvidia DDX), so this is expected to be
+   fine, but hasn't been confirmed hands-on against the proprietary driver
+   yet. If Plasma fails to start or renders garbled, check
+   `journalctl -u xrdp-sesman` and `~/.xorgxrdp.*.log`.
 
-No firewall or NixOS changes are needed for this — `tailscale0` is already
-a trusted interface, so the port is reachable over the tailnet the moment
-KRDP is enabled, and nowhere else (confirm with `ss -tlnp | grep 3389` from
-another interface if you want to see it's not bound/reachable there).
-Since RDP's own login is a password/PIN rather than an SSH key, the actual
-"pubkey" gate here is Tailscale's device-key trust, same boundary the
-fleet's tailnet-only SSH access already rides on.
+No firewall changes needed — `tailscale0` is already a trusted interface
+(`openFirewall` is left `false`), so port 3389 is reachable over the
+tailnet the moment `xrdp.service` is up, and nowhere else.

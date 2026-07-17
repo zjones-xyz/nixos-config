@@ -70,25 +70,32 @@ in
   networking.firewall.trustedInterfaces = [ "tailscale0" ];
   networking.firewall.allowedUDPPorts = [ config.services.tailscale.port ];
 
-  # ── Remote Desktop (KRDP) ───────────────────────────────────────────────────
-  # Wayland-native RDP server built into KWin (Plasma 6.1+). `krdp` already
-  # ships automatically via services.desktopManager.plasma6.enable (it's in
-  # that module's optionalPackages and not excluded here) — nothing to add to
-  # environment.systemPackages. No firewall change needed either: tailscale0 is
-  # already in trustedInterfaces above, so once turned on, KRDP rides the exact
-  # same tailnet-only boundary z's SSH access already does — unreachable from
-  # the LAN or anywhere else.
+  # ── Remote Desktop (xrdp) ────────────────────────────────────────────────────
+  # SUPERSEDED KRDP (KWin's built-in RDP server) — see DECISIONS.md. KRDP only
+  # shares an already-live, already-logged-in KWin session; upstream KDE has
+  # confirmed it has no headless mode and no plans for one, which ruled it out
+  # for "reach a working desktop after any reboot/logout without walking over
+  # or needing the IP-KVM." xrdp + its bundled xorgxrdp backend (this
+  # nixpkgs's `xrdp` package already excludes every other sesman backend and
+  # keeps only `[Xorg]`) spins up an independent Xorg/Plasma-X11 session per
+  # RDP connection — decoupled from SDDM and whatever's on the physical seat,
+  # so it works the same whether the console is at the greeter, locked, or
+  # logged out. Trade-off: it's Plasma over X11, a second session, not a
+  # mirror of the physical Wayland one.
   #
-  # RDP itself has no notion of pubkey auth (PAM username/password, or a
-  # KCM-generated one-time PIN) — there's no NixOS module wrapping KRDP's
-  # enable/port/credentials, that state lives in the live KWin session's
-  # kwinrc, so the "keyed off pubkey auth" property comes from the network
-  # boundary (Tailscale's own device keys), not the RDP handshake. Turning it
-  # on is therefore a one-time interactive step, done once in the
-  # daily-driver Plasma session (not the Dragonized session — see
-  # desktop-dragonized.nix — which wipes its profile every login and would
-  # drop this setting straight back off). See hosts/pegasus/MANUAL-STEPS.md
-  # §14 for the actual click-path.
+  # No `openFirewall` and no bind-address config: tailscale0 is already a
+  # trustedInterfaces member (see the Tailscale block above), so xrdp rides
+  # the exact same tailnet-only boundary SSH already uses, the same reasoning
+  # as the superseded KRDP attempt — the NixOS xrdp module has no per-interface
+  # bind option, so this is enforced at the firewall, not the listen socket.
+  #
+  # Auth is PAM against z's actual account password (the same
+  # sops-provisioned `z/hashedPassword` secret used for console/SDDM login,
+  # see the sops block below) — no separate credential to provision.
+  services.xrdp = {
+    enable = true;
+    defaultWindowManager = "${pkgs.kdePackages.plasma-workspace}/bin/startplasma-x11";
+  };
 
   # ── LUKS SSH unlock ─────────────────────────────────────────────────────────
   # Lets you decrypt the drive remotely (e.g. `unlock-pegasus` from serenity)
