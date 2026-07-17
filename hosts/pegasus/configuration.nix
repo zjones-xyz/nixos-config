@@ -50,6 +50,12 @@ in
   # (still >= 6.12). See hosts/pegasus/DECISIONS.md.
   boot.kernelPackages = pkgs.linuxPackages_latest;
 
+  # Fleet default (modules/nixos/common.nix) reboots 10s after a panic. Pegasus
+  # has a physical display attached, so widen that to 600s — enough time to
+  # walk over and read/photograph the panic screen before it auto-reboots and
+  # the evidence is gone.
+  boot.kernel.sysctl."kernel.panic" = lib.mkForce 600;
+
   # ── Tailscale ───────────────────────────────────────────────────────────────
   # Pegasus is reached over the tailnet (it is the primary GPU inference
   # endpoint — see modules/nixos/olla-router.nix). It is NOT an exit node, so we

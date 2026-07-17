@@ -20,6 +20,25 @@
 
   nixpkgs.config.allowUnfree = true;
 
+  # ── Persistent journald ─────────────────────────────────────────────────────
+  # Default (volatile/RAM-only) storage means any hard crash or panic loses the
+  # crashed boot's log entirely — see docs/runbooks/unexpected-reboot.md. Cap
+  # growth so persistence doesn't accumulate unbounded: whichever limit hits
+  # first wins.
+  services.journald.storage = "persistent";
+  services.journald.extraConfig = ''
+    SystemMaxUse=500M
+    MaxRetentionSec=2week
+  '';
+
+  # ── Kernel panic → auto-reboot ──────────────────────────────────────────────
+  # Default kernel.panic=0 means a panicking host just hangs at the panic
+  # screen forever until someone power-cycles it — bad for headless fleet
+  # members. Reboot 10s after a panic so recoverable panics come back on their
+  # own. Hosts that want a longer window override with lib.mkForce (see
+  # pegasus, which has a physical display attached).
+  boot.kernel.sysctl."kernel.panic" = 10;
+
   time.timeZone = "America/Los_Angeles";
 
   i18n.defaultLocale = "en_US.UTF-8";
