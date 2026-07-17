@@ -12,12 +12,15 @@ as you have a confident cause.
   `ssh root@<host> -p 2222`, then `systemd-tty-ask-password-agent --query`
   (or use the KVM if initrd networking is down). Nothing below is reachable
   until that's done.
-- **Persistent journald storage is not currently configured on any host in
-  this repo.** Unless a host explicitly sets `services.journald` storage to
-  persistent, journald defaults to volatile (RAM-only) storage, and the
-  crashed boot's logs will not survive into `journalctl -b -1`. Always run
-  step A first to find out whether you even have journal data to work with
-  before spending time on step B.
+- **Journald is persistent fleet-wide** (`modules/nixos/common.nix`), capped
+  at 500M / 2 weeks retention (whichever hits first) — so the crashed boot's
+  logs should normally survive into `journalctl -b -1`. A hard power-loss can
+  still lose the last few seconds of unflushed entries (journald batches
+  fsyncs; see `SyncIntervalSec`), so step A is still worth confirming first.
+- **Kernel panics auto-reboot after 10s** (`kernel.panic` sysctl, also set in
+  `modules/nixos/common.nix`) rather than hanging forever — except
+  **pegasus**, which widens that to 600s since it has a physical display and
+  the extra window is useful for reading the panic screen before it reboots.
 
 ## A. Confirm what actually survived
 
@@ -78,7 +81,9 @@ as you have a confident cause.
 
 ## If the journal turned out empty
 
-That's itself an actionable finding: this host needs
-`services.journald.settings.Storage = "persistent"` (or equivalent) added
-to its config so the next incident is diagnosable. Worth raising as a
-follow-up rather than assuming it'll be fixed automatically.
+Journald is persistent fleet-wide (see above), so an empty `-b -1` is itself
+an actionable finding rather than the expected default — check whether
+something on the host overrides `services.journald.settings.Storage` away
+from `"persistent"`, whether the 500M/2-week cap already rotated past the
+incident, or whether the crash itself was violent enough (power loss
+mid-write) to corrupt the on-disk journal before it could be read back.
