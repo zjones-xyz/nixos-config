@@ -70,6 +70,33 @@ in
   networking.firewall.trustedInterfaces = [ "tailscale0" ];
   networking.firewall.allowedUDPPorts = [ config.services.tailscale.port ];
 
+  # ── Remote Desktop (xrdp) ────────────────────────────────────────────────────
+  # SUPERSEDED KRDP (KWin's built-in RDP server) — see DECISIONS.md. KRDP only
+  # shares an already-live, already-logged-in KWin session; upstream KDE has
+  # confirmed it has no headless mode and no plans for one, which ruled it out
+  # for "reach a working desktop after any reboot/logout without walking over
+  # or needing the IP-KVM." xrdp + its bundled xorgxrdp backend (this
+  # nixpkgs's `xrdp` package already excludes every other sesman backend and
+  # keeps only `[Xorg]`) spins up an independent Xorg/Plasma-X11 session per
+  # RDP connection — decoupled from SDDM and whatever's on the physical seat,
+  # so it works the same whether the console is at the greeter, locked, or
+  # logged out. Trade-off: it's Plasma over X11, a second session, not a
+  # mirror of the physical Wayland one.
+  #
+  # No `openFirewall` and no bind-address config: tailscale0 is already a
+  # trustedInterfaces member (see the Tailscale block above), so xrdp rides
+  # the exact same tailnet-only boundary SSH already uses, the same reasoning
+  # as the superseded KRDP attempt — the NixOS xrdp module has no per-interface
+  # bind option, so this is enforced at the firewall, not the listen socket.
+  #
+  # Auth is PAM against z's actual account password (the same
+  # sops-provisioned `z/hashedPassword` secret used for console/SDDM login,
+  # see the sops block below) — no separate credential to provision.
+  services.xrdp = {
+    enable = true;
+    defaultWindowManager = "${pkgs.kdePackages.plasma-workspace}/bin/startplasma-x11";
+  };
+
   # ── LUKS SSH unlock ─────────────────────────────────────────────────────────
   # Lets you decrypt the drive remotely (e.g. `unlock-pegasus` from serenity)
   # instead of needing to be physically at the box after every reboot. Mirrors

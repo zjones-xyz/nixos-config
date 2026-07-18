@@ -257,6 +257,61 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   before assuming a fix didn't work — and remember the isolated profile is
   wiped every login, which defeats any "first-run only" assumption KDE's
   own subsystems make.
+- **Remote desktop → xrdp + xorgxrdp (Plasma-over-X11, independent session
+  per connection), tailscale0-gated, added 2026-07-16/17.** *Real motivation
+  surfaced mid-implementation:* this is meant to eventually replace the
+  physical IP-KVM (until pegasus is wired into a desk KVM switch), which
+  changes the requirement from "view my live desktop remotely" to "get a
+  working desktop after any reboot/logout, with no dependency on the
+  physical console's state."
+  *First attempt: KRDP* (KWin's built-in RDP server, ships with
+  `services.desktopManager.plasma6.enable`, no packaging needed) — chosen
+  initially for being Wayland-native and mirroring the actual live session.
+  **Ruled out once the real requirement surfaced**: KRDP only shares an
+  *already-logged-in* KWin session — confirmed via KDE's own discussion
+  forum that it has no headless mode and no plans for one. It also has
+  real hardware-encode fragility on virtual/headless outputs (reaches for
+  VAAPI first; sessions can collapse outright if no VAAPI encoder is
+  present). A follow-up idea — SSH-triggering a headless `kwin_wayland
+  --virtual` instance as a systemd `--user` service for krdpserver to
+  attach to — was researched and dropped for the same reason: fighting an
+  explicitly-unsupported upstream path, plus added NVIDIA-proprietary +
+  virtual-output risk on top.
+  *Why xrdp instead:* mature, fully declarative NixOS module
+  (`services.xrdp`), and this nixpkgs's `xrdp` package already strips every
+  sesman backend except `[Xorg]` (uses the bundled `xorgxrdp` driver) — so
+  `defaultWindowManager = "startplasma-x11"` is the entire config. Each RDP
+  connection gets its own independent Xorg/Plasma session, decoupled from
+  SDDM and the physical seat entirely — reachable identically whether the
+  console is at the greeter, locked, or logged out, with **no autologin
+  needed** (autologin was considered and explicitly declined — see below).
+  Trade-off accepted: it's Plasma over X11, a second session, not a mirror
+  of the physical Wayland one.
+  *Access-model:* `tailscale0` only, via the existing `trustedInterfaces`
+  (not `xrdp.openFirewall`) — same boundary SSH already rides on. The
+  `services.xrdp` module has no per-interface bind option, so (as with the
+  superseded KRDP attempt) this is enforced at the firewall, not the
+  listen socket.
+  *Auth:* PAM against z's real account password (`z/hashedPassword`,
+  already sops-provisioned for console/SDDM login) — no new credential to
+  provision, and RDP still has no notion of pubkey auth, so as with KRDP
+  the "pubkey-gated" property is Tailscale's device-key trust at the
+  network layer, not the RDP handshake.
+  *Autologin — considered and declined 2026-07-17*: SDDM autologin into the
+  daily-driver session would have closed KRDP's post-reboot blind window,
+  but was rejected — leaves the physical console password-free at boot,
+  which was an unwanted trade purely to work around a KRDP limitation.
+  Moot now that xrdp doesn't share the SDDM-managed session at all.
+  *Genuinely out of scope for any software remote desktop* (KRDP or xrdp):
+  BIOS/UEFI screens, the boot-loader menu, kernel panics/hangs — none of
+  that has a Linux graphics stack yet for RDP to attach to. That gap is
+  what the eventual physical desk KVM switch is for, not this. LUKS unlock
+  is the one boot-time gap already closed, separately, via
+  `boot.initrd.network.ssh` (pre-existing).
+  **Not yet verified on real hardware** — xorgxrdp's driver is
+  self-contained (doesn't touch the nvidia DDX) so is expected to coexist
+  fine with the proprietary driver, but this needs an actual RDP connection
+  test on pegasus to confirm. See `hosts/pegasus/MANUAL-STEPS.md` §14.
 - **iDrive — deferred, not packaged yet, 2026-07-13.** Not in nixpkgs.
   Investigated packaging `IDriveForLinux.deb` (v1.8.0, direct download from
   `idrivedownloads.com` — this session's environment can't fetch that URL
