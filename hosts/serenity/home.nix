@@ -37,6 +37,14 @@
     httpie       # HTTPie — manual API endpoint testing (http/https commands)
     sqlitebrowser  # GUI SQLite viewer (Qt; nixpkgs build supports aarch64-darwin)
 
+    # uv + Python 3.12 — for MCP servers (e.g. ~/Code/pdf-import/mcp-sourcebooks)
+    # that require Python >=3.10; system Python on serenity is 3.9.6. uv can
+    # manage its own Python toolchains, but pinning python312 here too means
+    # `uv run --python 3.12` (or a project .python-version) resolves without
+    # uv needing to download anything on first use.
+    uv
+    python312
+
     # 1Password CLI — used by scripts/luks-unlock-remote.sh to pull LUKS
     # passphrases via the desktop app's biometric integration instead of
     # copy-pasting from 1Password. Requires the 1Password.app "Integrate with
