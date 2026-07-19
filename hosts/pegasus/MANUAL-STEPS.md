@@ -360,7 +360,7 @@ hardware, nothing here was verified beyond forced-eval from the authoring
 session:
 
 1. From another tailnet machine, connect an RDP client (Microsoft Remote
-   Desktop, Remmina, etc.) to `pegasus.<tailnet-name>.ts.net:3389` (or the
+   Desktop, Remmina, etc.) to `pegasus.peacock-koi.ts.net:3389` (or the
    Tailscale IP). Accept the self-signed cert prompt (expected — nothing to
    fix, no CA behind it by design, same trust-on-first-use model as an SSH
    host key).
