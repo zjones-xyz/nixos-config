@@ -56,8 +56,8 @@
                   "@games" = { mountpoint = "/games"; mountOptions = [ "compress=zstd" "noatime" ]; };
                   # microVM agent-sandbox persistent volumes — see
                   # docs/microvm-sandbox/DECISIONS.md and MANUAL-STEPS.md.
-                  "@microvm-store" = { mountpoint = "/var/lib/microvms/agent-sandbox-store"; mountOptions = [ "compress=zstd" "noatime" ]; };
-                  "@microvm-state" = { mountpoint = "/var/lib/microvms/agent-sandbox-state"; mountOptions = [ "compress=zstd" "noatime" ]; };
+                  "@microvm-store" = { mountpoint = "/var/lib/microvms/agent-sandbox-store"; mountOptions = [ "compress=zstd" "noatime" "nofail" ]; };
+                  "@microvm-state" = { mountpoint = "/var/lib/microvms/agent-sandbox-state"; mountOptions = [ "compress=zstd" "noatime" "nofail" ]; };
                 };
               };
             };

@@ -8,37 +8,42 @@ empty sections below are placeholders for phases not yet implemented.
 
 Pure documentation phase; nothing to do on hardware yet.
 
-## Phase 1 — guest boot
+## Phase 1 — guest boot — ✅ VERIFIED on Pegasus (2026-07-20/21)
 
-Code has landed (`modules/nixos/microvm-sandbox.nix`, Pegasus instantiation). Before the
-first `nixos-rebuild switch --flake .#pegasus` that picks this up:
+**Gate passed.** All three criteria confirmed live — see `DECISIONS.md`'s "Phase 1 —
+operator verification" section for the full account, including three real bugs found and
+fixed along the way (missing-subvolume emergency-mode risk, `systemd-networkd` deleting
+Tailscale's ip rules, `microvm`-user permission denied on fresh subvolumes). What follows
+is the as-verified checklist, kept for anyone re-running this from scratch (e.g. after a
+reinstall) rather than a still-open TODO:
 
-1. **Create the two new btrfs subvolumes on the real disk** (the `fileSystems.*` entries in
-   `hardware-configuration.nix` mount them but don't create them — mirrors how `@games` was
-   handled during the original bring-up):
+1. **Create the two btrfs subvolumes on the real disk before first switch** — this step
+   was missed during the actual first attempt and cascaded into a host-wide emergency-mode
+   boot (see `DECISIONS.md`). `nofail` is now on both mounts specifically so a repeat of
+   this mistake degrades to "guest doesn't start" instead of "Pegasus doesn't boot," but
+   doing this step first is still the right move:
    ```
    mount /dev/mapper/cryptroot /mnt   # or wherever it's mounted at subvol=/ (top-level)
    btrfs subvolume create /mnt/@microvm-store
    btrfs subvolume create /mnt/@microvm-state
    umount /mnt
    ```
-   (Adjust the mount invocation to however you're already accessing the top-level subvolume
-   on a live Pegasus — the exact incantation depends on whether you're doing this from a
-   running system or a rescue environment.)
-2. **Confirm KVM is actually usable for an unprivileged/cloud-hypervisor launch** (not just
-   that `kvm-amd` is loaded) — `ls -l /dev/kvm` and permissions for whatever user/group
-   cloud-hypervisor runs the guest as.
-3. **Confirm the `10.100.0.0/24` addressing doesn't collide with Pegasus's actual LAN
-   subnet** (GL.iNet router DHCP range — not recorded in this repo). If it does collide,
-   the `hostAddress`/`guestAddress` options in `homelab.agentSandbox` need different values
-   before first boot.
-4. Verify guest boot, writable `/nix` (`nix build` a trivial derivation inside the guest —
-   reachable via the host: `microvm -c agent-sandbox` or the console microvm.nix wires up;
-   check `microvm.nix`'s own docs for the exact console/login mechanism, since Phase 1 sets
-   up no SSH/agent user yet), and outbound internet from the guest.
-5. **Reminder — Phase 1 has no network containment.** The guest can currently reach the LAN
-   and tailnet; Phase 2 adds the denylist. Don't leave a Phase-1-only guest running
-   unattended past this verification.
+2. KVM access, `nixos-rebuild switch --flake .#pegasus`, and the `10.100.0.0/24` addressing
+   all confirmed clean on real hardware (LAN is `192.168.8.x`–`192.168.10.x`, no collision).
+3. **Confirmed: there is no genuine interactive console into the guest** — the systemd unit
+   wires the guest's console up as journal *output* only (no `StandardInput=`), so nothing
+   can be typed into it. Phase 1's gate (writable `/nix`, `nix build`, outbound internet)
+   was verified instead via an automated boot-time self-check
+   (`systemd.services.phase1-verify` in the guest module) whose `PASS`/`FAIL` surfaces
+   through `journalctl -u microvm@agent-sandbox` on the host. This stays in place until
+   Phase 3's SSH makes direct interactive checks possible.
+4. **Confirmed: `microvm@<name>.service` has `restartIfChanged = false`.** A host
+   `nixos-rebuild switch` does **not** restart an already-running guest — pick up any
+   guest-internal config change with an explicit
+   `sudo systemctl restart microvm@agent-sandbox` afterward.
+5. **Phase 1 has no network containment** (confirmed: wide-open NAT egress). The guest can
+   currently reach the LAN and tailnet — Phase 2 adds the denylist. Don't leave a
+   Phase-1-only guest running unattended.
 
 ## Phase 2 — network policy (once code lands)
 

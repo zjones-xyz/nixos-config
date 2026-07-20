@@ -54,16 +54,23 @@
   # MANUAL STEP before the first `nixos-rebuild switch` that picks this up:
   # `btrfs subvolume create` both on the real disk — see
   # docs/microvm-sandbox/MANUAL-STEPS.md.
+  #
+  # `nofail` (2026-07-21, live incident): before the subvolumes existed on
+  # disk, these two mounts were treated as required-for-boot by default —
+  # Pegasus dropped into emergency mode waiting on a mount that could never
+  # succeed, taking the *entire host* down with it, not just the sandbox.
+  # A missing/broken sandbox volume should never be able to hold the whole
+  # workstation's boot hostage.
   fileSystems."/var/lib/microvms/agent-sandbox-store" = {
     device = "/dev/mapper/cryptroot";
     fsType = "btrfs";
-    options = [ "subvol=@microvm-store" "compress=zstd" "noatime" ];
+    options = [ "subvol=@microvm-store" "compress=zstd" "noatime" "nofail" ];
   };
 
   fileSystems."/var/lib/microvms/agent-sandbox-state" = {
     device = "/dev/mapper/cryptroot";
     fsType = "btrfs";
-    options = [ "subvol=@microvm-state" "compress=zstd" "noatime" ];
+    options = [ "subvol=@microvm-state" "compress=zstd" "noatime" "nofail" ];
   };
 
   boot.initrd.luks.devices."cryptroot" = {

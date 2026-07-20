@@ -280,3 +280,60 @@ instantiation, logged per the brief's dispatch note:
   Both are fixed in the committed module. One benign warning remains either way:
   `cloud-hypervisor supports systemd-notify via vsock, but microvm.vsock.cid must be set` —
   optional readiness-notification wiring, not needed for Phase 1 and left unset.
+
+## Phase 1 — operator verification on Pegasus (2026-07-20/21)
+
+**Gate passed.** All three Phase 1 criteria confirmed live: guest reaches Multi-User
+System and starts a root console session; `nix build nixpkgs#hello` succeeds inside the
+guest (writable store overlay proven end-to-end, not a shared read-only store); outbound
+internet confirmed (fetched from `cache.nixos.org` within seconds of boot). Verified via
+an automated boot-time self-check (`systemd.services.phase1-verify` in the guest, added
+specifically because there's no genuine interactive console into the guest yet — the
+`microvm@<name>.service` unit wires the guest's console up as journal *output* only, no
+`StandardInput=`, so nothing can be typed into it before Phase 3's SSH lands; the
+self-check's `PHASE1-VERIFY: PASS`/`FAIL` lines surface through
+`journalctl -u microvm@agent-sandbox` on the host instead). Remove `phase1-verify` once
+Phase 3 makes this checkable directly over SSH.
+
+First boot surfaced three real bugs, none anticipated in the Phase 0 design — the kind
+that only show up on actual hardware, logged here since each is a load-bearing fix now
+baked into the committed module:
+
+1. **Missing subvolumes → emergency mode, host-wide.** The operator's first
+   `nixos-rebuild switch` ran before the `@microvm-store`/`@microvm-state` subvolumes were
+   created on disk (a manual step, easy to miss). Because the resulting `fileSystems.*`
+   mounts had no `nofail`, NixOS treated them as required for boot — a subsequent reboot
+   (with the subvolumes still missing) dropped the **entire host** into emergency mode,
+   not just the sandbox. Fixed two ways: operator created the subvolumes live via the
+   rescue shell to unblock immediately, and `nofail` is now added to both `fileSystems.*`
+   entries (`hosts/pegasus/hardware-configuration.nix`, mirrored in `disko.nix`) so this
+   class of failure can never again hold the whole workstation's boot hostage — a broken
+   sandbox volume should degrade to "guest doesn't start," not "Pegasus doesn't boot."
+2. **`systemd-networkd` deleting Tailscale's own ip rules.** Enabling `systemd.network.enable`
+   for the guest's tap interface — even with only one `.network` file, scoped to that single
+   interface — made the *daemon* assert broader authority over the host's routing-policy
+   database, actively pruning Tailscale's own rules as "foreign" (confirmed directly in
+   `tailscaled`'s log: `"somebody (likely systemd-networkd) deleted ip rules; restoring
+   Tailscale's"`). This one is a genuine host-level finding, not sandbox-specific — anyone
+   running systemd-networkd alongside Tailscale on this fleet would hit it. Fixed via
+   `systemd.network.config.networkConfig.{ManageForeignRoutingPolicyRules,ManageForeignRoutes}
+   = false`. Note the option's *path* differs from current nixpkgs-unstable docs
+   (`systemd.network.networkConfig` there vs. `systemd.network.config.networkConfig` in
+   this repo's pinned `nixos-26.05`) — confirmed against the actual pinned revision's
+   `networkd.nix`, not assumed from upstream docs, after a first attempt used the wrong path.
+3. **`microvm` user permission-denied on fresh subvolumes.** `microvm@<name>.service` runs
+   as `User=microvm Group=kvm` (fixed by microvm.nix, not configurable) but a freshly
+   created btrfs subvolume defaults to `root:root 0755` — the exact same class of bug the
+   `@games` subvolume already hit in this host's original bring-up (see
+   `hosts/pegasus/configuration.nix`), fixed here with the identical
+   `systemd.tmpfiles.rules` pattern this time scoped to the microvm's own user/group.
+4. **`systemd-networkd-wait-online` timing out (120s) every boot.** Structural, not
+   transient: the only interface networkd manages is the guest's own tap, which doesn't
+   exist until the guest itself starts (a chicken-and-egg boot-time gate). Disabled via
+   `systemd.network.wait-online.enable = false` — NetworkManager already provides real
+   boot-network-readiness independently.
+
+Also confirmed: `microvm@<name>.service` has `restartIfChanged = false` by design (so a
+host rebuild never disruptively bounces an already-running dev VM) — picking up any
+guest-internal config change requires an explicit `systemctl restart
+microvm@agent-sandbox` after the host switch; it does not happen automatically.
