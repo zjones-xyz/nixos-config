@@ -260,6 +260,19 @@ in
     # Phase 2 adds the N2 denylist on top of this) ──────────────────────────
     networking.networkmanager.unmanaged = [ "interface-name:${cfg.interfaceId}" ];
     systemd.network.enable = true;
+    # Confirmed live on Pegasus (2026-07-20): enabling systemd-networkd here —
+    # even scoped to a single .network file matching only the tap interface —
+    # still makes the *daemon* assert broader authority over the system's
+    # routing-policy database. It was pruning Tailscale's own ip rules as
+    # "foreign" (tailscaled's log: "somebody (likely systemd-networkd) deleted
+    # ip rules"), an ongoing fight, not a one-time blip. This tells networkd to
+    # leave routes/rules it didn't create alone — NetworkManager and tailscaled
+    # both manage routes/rules of their own that networkd would otherwise also
+    # consider "foreign" and prune.
+    systemd.network.config.networkConfig = {
+      ManageForeignRoutingPolicyRules = false;
+      ManageForeignRoutes = false;
+    };
     systemd.network.networks."40-${cfg.interfaceId}" = {
       matchConfig.Name = cfg.interfaceId;
       address = [ "${cfg.hostAddress}/32" ];
