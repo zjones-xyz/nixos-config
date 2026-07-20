@@ -291,5 +291,17 @@ in
       externalInterface = cfg.externalInterface;
     };
     boot.kernel.sysctl."net.ipv4.conf.all.forwarding" = true;
+
+    # Confirmed live on Pegasus (2026-07-20): microvm@<name>.service runs as
+    # User=microvm Group=kvm (fixed by microvm.nix, not configurable), but a
+    # freshly created btrfs subvolume defaults to root:root 0755 — same class
+    # of bug as @games (see hosts/pegasus/configuration.nix), which needed the
+    # identical systemd.tmpfiles.rules fix for the same reason. Without this,
+    # microvm-run fails outright trying to touch the volume image files
+    # ("Permission denied") and crash-loops.
+    systemd.tmpfiles.rules = [
+      "d ${cfg.storeVolumeDir} 0750 microvm kvm - -"
+      "d ${cfg.stateVolumeDir} 0750 microvm kvm - -"
+    ];
   };
 }
