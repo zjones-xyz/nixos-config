@@ -207,6 +207,23 @@ in
           substituters = [ "https://cache.nixos.org" ];
         };
 
+        # ── Console access (Phase 1 verification only) ──────────────────────
+        # No SSH until Phase 3, and a fresh declarative guest has no password
+        # set — without this, first boot is a login wall. Root-autologin on
+        # the console is a no-op privilege-wise: the only way to *reach* this
+        # console at all is already having host-level access to Pegasus
+        # (journalctl/microvm tooling), which is a strictly stronger position
+        # than guest-root. Kernel console is ttyS0 on x86_64 (cloud-hypervisor
+        # `--serial tty`, set by microvm.nix) — tty1's autologin option alone
+        # doesn't cover the serial getty, so both are overridden here.
+        services.getty.autologinUser = "root";
+        systemd.services."serial-getty@ttyS0".serviceConfig.ExecStart = [
+          ""
+          "${pkgs.util-linux}/sbin/agetty --autologin root --keep-baud 115200,57600,38400,9600 %I $TERM"
+        ];
+
+        environment.systemPackages = [ pkgs.curl ];
+
         # ── zram ─────────────────────────────────────────────────────────
         # Adapted from modules/nixos/performance.nix, not blind-copied:
         # keep zstd + deflateOnOOM, drop the desktop-tuned swappiness=100
