@@ -224,6 +224,38 @@ in
 
         environment.systemPackages = [ pkgs.curl ];
 
+        # ── Phase 1 gate self-check ────────────────────────────────────────
+        # There's no genuine interactive console into this guest yet (the
+        # systemd unit wires the guest's console up as journal *output* only
+        # — Phase 3's SSH is the real interactive path). Confirmed live: the
+        # guest itself boots fine, so the two remaining Phase 1 gate criteria
+        # (writable /nix, outbound internet) are checked automatically at
+        # boot instead, with the result visible via `journalctl -u
+        # microvm@agent-sandbox` on the host — StandardOutput=journal+console
+        # routes it through the guest's serial console into that unit's own
+        # journal, same path the boot messages already take. Remove once
+        # Phase 3 lands and this can just be checked interactively over SSH.
+        systemd.services.phase1-verify = {
+          description = "Phase 1 gate self-check: writable store + outbound internet";
+          after = [ "network-online.target" ];
+          wants = [ "network-online.target" ];
+          wantedBy = [ "multi-user.target" ];
+          path = [ pkgs.curl config.nix.package ];
+          serviceConfig = {
+            Type = "oneshot";
+            StandardOutput = "journal+console";
+            StandardError = "journal+console";
+          };
+          script = ''
+            echo "PHASE1-VERIFY: checking outbound internet"
+            curl -fsS https://cache.nixos.org/nix-cache-info > /dev/null
+            echo "PHASE1-VERIFY: internet OK"
+            echo "PHASE1-VERIFY: checking writable store (nix build nixpkgs#hello)"
+            nix build --extra-experimental-features 'nix-command flakes' --no-link nixpkgs#hello
+            echo "PHASE1-VERIFY: PASS"
+          '';
+        };
+
         # ── zram ─────────────────────────────────────────────────────────
         # Adapted from modules/nixos/performance.nix, not blind-copied:
         # keep zstd + deflateOnOOM, drop the desktop-tuned swappiness=100
