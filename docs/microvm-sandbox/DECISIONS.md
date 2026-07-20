@@ -16,9 +16,9 @@ Confirmed against `microvm.nix` upstream source (`lib/runners/cloud-hypervisor.n
 - **Correct reason to exclude firecracker: no virtiofs/9p share support**, not "no
   ballooning" as the brief states — firecracker *does* support a balloon device.
   cloud-hypervisor is required here because the writable-store design (below) and the
-  guest's persistent-state volume both want virtiofs-quality shares/caching, and because
-  cloud-hypervisor's memory model (`--balloon` + `--memory ...,hotplug_method=virtio-mem`)
-  is the actively-maintained resize path upstream ships.
+  guest's persistent-state volume both want virtiofs-quality shares/caching, and its
+  `--balloon` support is the give-back mechanism this design uses (see Memory below —
+  virtio-mem hotplug is also available but deliberately not used here).
 - **cloud-hypervisor supports virtiofs only**, not 9p (`microvm.shares.*.proto` must be
   `"virtiofs"`; the module's default of `"9p"` is a qemu-ism and would hard-error on
   cloud-hypervisor). Every `virtiofs` share spawns its own `virtiofsd` on the host — one
@@ -26,29 +26,48 @@ Confirmed against `microvm.nix` upstream source (`lib/runners/cloud-hypervisor.n
 - **cloud-hypervisor supports only `tap`/`macvtap` interface types**, not `user` mode.
   Confirms the routed-network design below is mandatory, not optional.
 
-## Memory: floor + resize, not "RAM + balloon ceiling"
+## Memory: flat size + balloon reclaim, not elastic virtio-mem hotplug
 
 The option surface is NOT what the brief assumes. Confirmed against
 `nixos-modules/microvm/options.nix`:
 
-- `microvm.mem` (int, MB) — the boot-time RAM, i.e. the **floor**.
+- `microvm.mem` (int, MB) — the guest's RAM size, fixed at boot.
 - `microvm.balloon` (bool, default false) + `microvm.initialBalloonMem` (MB) +
-  `microvm.deflateOnOOM` (bool, default **true**) — classic virtio-balloon, for the host
-  to *reclaim* already-given memory under host pressure.
+  `microvm.deflateOnOOM` (bool, default **true**) — classic virtio-balloon. The guest's
+  *visible* total RAM never changes; the host reclaims already-given pages (the guest just
+  sees them as "used"), reversibly, and `deflateOnOOM` auto-releases if the guest itself
+  starts running low as a result.
 - `microvm.hotplugMem` (MB) + `microvm.hotpluggedMem` (MB, defaults to `hotplugMem`) —
-  **virtio-mem** hotplug, for *growing* the guest above its floor. This is cloud-hypervisor's
-  primary resize mechanism (`--memory ...,hotplug_method=virtio-mem,hotplug_size=X`).
-- **There is no `balloonMem` option** — that name doesn't exist in current microvm.nix; do
-  not use it if copied from older writeups.
+  **virtio-mem** hotplug, for actually growing/shrinking the guest's RAM size at runtime.
+  **There is no `balloonMem` option** — that name doesn't exist in current microvm.nix.
 
-**Decision:** Pegasus guest gets `mem = 16384` (16 GB floor) with `balloon = true` +
-`deflateOnOOM = true` (so the host can reclaim under memory pressure — Pegasus also runs
-NVIDIA/gaming workloads that want headroom) and `hotplugMem` set to give a **24 GB ceiling**
-(`hotplugMem = 8192`, i.e. 16 GB floor + 8 GB hotplug = 24 GB max), leaving well over half
-of Pegasus's ~64 GB for the host. `vcpu = 6`. The memory-alpha stub (Phase 5, undeployed)
-uses `mem = 4096`, `balloon = true`, `deflateOnOOM = true`, no hotplug — a hard 4 GB floor,
-matching the brief's "always-on floor" framing more literally since memory-alpha's total
-RAM isn't recorded anywhere in this repo (flagged, not validated against real hardware).
+**Decision: skip virtio-mem hotplug entirely.** Considered `mem = 16384` (16 GB base) +
+`hotplugMem = 8192` for a 24 GB ceiling, rejected for three reasons surfaced during
+design review:
+
+1. Growth via virtio-mem is **host-triggered, not automatic** on guest memory pressure —
+   real elastic behavior needs either manual intervention (an operator issuing a resize
+   call) or extra host-side automation (something watching guest memory pressure and
+   calling cloud-hypervisor's resize API) that this task doesn't otherwise need.
+2. `hotpluggedMem` **defaults to `hotplugMem`** — without deliberately setting it lower and
+   wiring up real resize calls, the guest would simply see the full ceiling already plugged
+   in and online from the moment it boots. No genuine floor-to-ceiling growth story falls
+   out of just setting the option.
+3. **Shrinking (unplug) is best-effort, not reliable.** The guest kernel must be able to
+   evacuate the memory being reclaimed — no hugepages, no pinned/non-movable allocations in
+   those blocks — and can stall or fail under load (e.g. mid Nix-build, with zram active).
+   That fragility is a poor fit for "the host needs this memory back promptly."
+
+**Chosen instead:** a flat guest size with balloon as the sole give-back mechanism. Pegasus
+guest: `mem = 24576` (flat 24 GB, no `hotplugMem`), `balloon = true`, `deflateOnOOM = true`
+(so Pegasus's own NVIDIA/gaming workloads can reclaim under host memory pressure without
+the virtio-mem unplug fragility), `vcpu = 6` — leaving well over half of Pegasus's ~64 GB
+for the host even at the guest's full size. Host RAM usage still scales with what the
+guest actually touches (standard KVM demand-paging), so 24 GB isn't necessarily fully
+resident just because it's configured. The memory-alpha stub (Phase 5, undeployed) uses
+`mem = 4096`, `balloon = true`, `deflateOnOOM = true` — a flat 4 GB, matching the brief's
+"always-on floor" framing more literally since memory-alpha's total RAM isn't recorded
+anywhere in this repo (flagged, not validated against real hardware).
 
 ## Store design (constraint #3 — writable, NOT the read-only shared-host-store pattern)
 
