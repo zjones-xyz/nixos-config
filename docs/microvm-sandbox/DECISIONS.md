@@ -337,3 +337,64 @@ Also confirmed: `microvm@<name>.service` has `restartIfChanged = false` by desig
 host rebuild never disruptively bounces an already-running dev VM) — picking up any
 guest-internal config change requires an explicit `systemctl restart
 microvm@agent-sandbox` after the host switch; it does not happen automatically.
+
+## Phase 2 — network policy
+
+**Firewall backend: iptables, not nftables.** Confirmed by reading the pinned
+`nixos-26.05` nixpkgs directly (`nixos/modules/services/networking/nftables.nix`):
+`networking.nftables.enable` defaults to **`false`** in this revision — a wrong
+assumption on my part mid-design (I'd assumed nftables became NixOS's default around
+24.05; not true for this pin, or I misjudged which revision that landed in). This matters
+concretely: `nftables.nix`'s own module comment warns that enabling it alongside Docker
+(enabled fleet-wide) requires intervention, since Docker manages iptables directly and
+disabling `ip_tables` breaks it. Staying on the default (iptables) means the denylist
+rules below are plain `iptables`, and — usefully — they share the exact same framework
+Docker itself uses, rather than fighting a second, incompatible packet-filtering system.
+
+**`networking.nat.internalInterfaces` has no destination filtering of its own.**
+Confirmed by reading `nat-iptables.nix` directly rather than assumed: for each interface
+in `internalInterfaces`, it adds an unconditional `-A nixos-filter-forward -i <iface> ...
+-j ACCEPT` — this is exactly why Phase 1's egress was wide-open, and it means the
+denylist can't just be appended alongside it; it must be evaluated *first*.
+
+**Denylist implementation: `networking.firewall.extraCommands`/`extraStopCommands`,
+inserting at `-I FORWARD 1`, not appending.** Since NAT's own ACCEPT is unconditional,
+the only way to guarantee my DROP rules are evaluated first — regardless of whatever
+order `firewall.service` and `nat.service` happen to run in — is inserting at the literal
+top of the chain (position 1) rather than appending. Delete-then-insert (`-D ... 2>/dev/
+null || true` then `-I ... 1`) keeps repeated switches idempotent rather than
+accumulating duplicate rules.
+
+**Denylist scope: 100.64.0.0/10 + the three RFC1918 ranges — no separate rule needed for
+Pegasus's own address.** Pegasus's tailnet IP falls inside the CGNAT range and its LAN IP
+falls inside 192.168.0.0/16, so both are already covered as natural subsets of the two
+broad rules — confirmed there's no need for host-specific rules beyond them. Separately,
+traffic destined for an address *local to the receiving host* (any of Pegasus's own
+addresses, including the tap gateway itself, 10.100.0.1) never reaches the FORWARD chain
+at all — that's fundamental Linux netfilter routing, not something these rules control —
+so Pegasus's own listening services (including Olla, if ever re-enabled) are additionally
+covered by the pre-existing INPUT-chain default-deny (nothing opens a port to this
+interface). IPv6 isn't handled — the guest has no IPv6 address configured at all, so
+there's nothing to leak over v6 yet; if that changes, Tailscale's own IPv6 range
+(`fd7a:115c:a1e0::/48`, confirmed from its own log on Pegasus, not guessed) would need a
+matching `ip6tables` rule.
+
+**Scoped down from the plan: forwarded-dev-port mechanism deferred to Phase 3.**
+`networking.nat.forwardPorts` turns out to be the wrong tool for "host-only" forwarding —
+reading `nat-iptables.nix` shows every `forwardPorts` entry unconditionally gets a DNAT +
+ACCEPT rule keyed on arrival via `externalInterface`, meaning the port would be exposed to
+the *entire LAN*, not host-local only. True host-local forwarding needs a hand-rolled
+loopback-only DNAT rule (matching the pattern `forwardPorts.loopbackIPs` uses internally,
+just without the accompanying external-interface exposure) — deferred because nothing is
+actually listening on the guest yet (no agent user, no dev server; that's Phase 3), so
+there's nothing to meaningfully verify a hand-rolled rule against today.
+
+**Containment proof: extended the Phase 1 self-check pattern (`systemd.services.
+phase2-verify`), same reason as before** — no interactive console exists yet. Tests
+reachability to this host's own tailnet and LAN addresses specifically (new options
+`containmentCheckTailnetAddress`/`containmentCheckLanAddress`, set in Pegasus's own
+instantiation) rather than an arbitrary fleet address, because we *know* sshd is
+listening there (confirmed live during Phase 1) — a blocked connection is an unambiguous
+signal, not "maybe nothing's there anyway." A raw TCP connect via bash's `/dev/tcp`
+(wrapped in `timeout`, since a DROP rule causes silent packet loss rather than an
+immediate refusal) avoids needing extra guest packages for a non-HTTP port check.

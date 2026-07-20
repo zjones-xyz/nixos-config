@@ -135,6 +135,23 @@ in
       type = lib.types.str;
       description = "Host's uplink interface to masquerade guest egress through.";
     };
+
+    containmentCheckTailnetAddress = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = ''
+        This host's own tailnet IP, used only by the Phase 2 self-check to
+        prove containment (a known-listening address makes "blocked" an
+        unambiguous signal rather than "maybe nothing's there anyway"). Null
+        skips this specific check.
+      '';
+    };
+
+    containmentCheckLanAddress = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "This host's own LAN IP, same rationale as containmentCheckTailnetAddress.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -256,6 +273,63 @@ in
           '';
         };
 
+        # ── Phase 2 gate self-check ─────────────────────────────────────────
+        # Same rationale as phase1-verify: no interactive console yet. Proves
+        # containment by testing reachability to addresses we *know* have
+        # something listening (this host's own tailnet/LAN sshd, confirmed
+        # live) — a blocked connection there is an unambiguous signal, unlike
+        # testing an arbitrary address that might just have nothing running.
+        # Uses bash's /dev/tcp for a raw connect test (no nc/curl needed for
+        # non-HTTP ports); `timeout` bounds each attempt since a DROP rule
+        # causes silent packet loss, not an immediate refusal.
+        systemd.services.phase2-verify = lib.mkIf (
+          cfg.containmentCheckTailnetAddress != null || cfg.containmentCheckLanAddress != null
+        ) {
+          description = "Phase 2 gate self-check: containment denylist";
+          after = [ "network-online.target" "phase1-verify.service" ];
+          wants = [ "network-online.target" ];
+          wantedBy = [ "multi-user.target" ];
+          path = [ pkgs.curl ];
+          serviceConfig = {
+            Type = "oneshot";
+            StandardOutput = "journal+console";
+            StandardError = "journal+console";
+          };
+          script = ''
+            fail=0
+            check_blocked() {
+              local desc="$1" host="$2" port="$3"
+              if timeout 3 bash -c "echo > /dev/tcp/$host/$port" 2>/dev/null; then
+                echo "PHASE2-VERIFY: LEAK - $desc ($host:$port) is reachable!"
+                fail=1
+              else
+                echo "PHASE2-VERIFY: blocked as expected - $desc ($host:$port)"
+              fi
+            }
+
+            echo "PHASE2-VERIFY: checking internet still reachable"
+            if curl -fsS -m5 https://cache.nixos.org/nix-cache-info > /dev/null; then
+              echo "PHASE2-VERIFY: internet OK"
+            else
+              echo "PHASE2-VERIFY: FAIL - internet unreachable (denylist too broad?)"
+              fail=1
+            fi
+
+            ${lib.optionalString (cfg.containmentCheckTailnetAddress != null) ''
+              check_blocked "this host's tailnet address" "${cfg.containmentCheckTailnetAddress}" 22
+            ''}
+            ${lib.optionalString (cfg.containmentCheckLanAddress != null) ''
+              check_blocked "this host's LAN address" "${cfg.containmentCheckLanAddress}" 22
+            ''}
+
+            if [ "$fail" = "1" ]; then
+              echo "PHASE2-VERIFY: FAIL - containment leak detected"
+              exit 1
+            fi
+            echo "PHASE2-VERIFY: PASS"
+          '';
+        };
+
         # ── zram ─────────────────────────────────────────────────────────
         # Adapted from modules/nixos/performance.nix, not blind-copied:
         # keep zstd + deflateOnOOM, drop the desktop-tuned swappiness=100
@@ -331,6 +405,58 @@ in
       externalInterface = cfg.externalInterface;
     };
     boot.kernel.sysctl."net.ipv4.conf.all.forwarding" = true;
+
+    # ── N2: containment denylist (Phase 2) ──────────────────────────────────
+    # Read directly from nat-iptables.nix rather than assumed: networking.nat's
+    # own internalInterfaces mechanism (above) installs a blanket ACCEPT for
+    # this interface with no destination filtering of its own — that's exactly
+    # why Phase 1's egress was wide-open. These rules take priority by
+    # inserting at the very top of FORWARD (-I FORWARD 1) rather than
+    # appending, so they're evaluated — and match — before nat's own ACCEPT or
+    # anything Docker's chains do.
+    #
+    # Denylist: the tailnet's CGNAT range (100.64.0.0/10 — not RFC1918; an
+    # RFC1918-only rule would leak the whole tailnet, see DECISIONS.md) and the
+    # three RFC1918 ranges (covers the LAN, every other fleet host, and
+    # Pegasus's own LAN address as natural subsets of 192.168.0.0/16 — no
+    # separate per-host rule needed). Pegasus's own addresses (LAN, tailnet, or
+    # the tap gateway itself, 10.100.0.1) never actually reach these rules
+    # regardless of range: a destination that's local to the receiving host
+    # always goes through INPUT, never FORWARD. So Pegasus's own listening
+    # services (including Olla, if ever re-enabled) are covered a second way,
+    # by the existing INPUT-chain default-deny (nothing opens a port to this
+    # interface). IPv6 not handled here — the guest has no IPv6 address
+    # configured, so there's nothing to leak over v6 yet; revisit if that
+    # changes (Tailscale's own IPv6 range is fd7a:115c:a1e0::/48, confirmed
+    # from its own logs on Pegasus, not guessed).
+    networking.firewall.extraCommands =
+      let
+        denylist = [
+          "100.64.0.0/10"
+          "10.0.0.0/8"
+          "172.16.0.0/12"
+          "192.168.0.0/16"
+        ];
+        mkRule = dest: ''
+          iptables -w -D FORWARD -i ${cfg.interfaceId} -d ${dest} -j DROP 2>/dev/null || true
+          iptables -w -I FORWARD 1 -i ${cfg.interfaceId} -d ${dest} -j DROP
+        '';
+      in
+      lib.concatMapStrings mkRule denylist;
+
+    networking.firewall.extraStopCommands =
+      let
+        denylist = [
+          "100.64.0.0/10"
+          "10.0.0.0/8"
+          "172.16.0.0/12"
+          "192.168.0.0/16"
+        ];
+        mkRule = dest: ''
+          iptables -w -D FORWARD -i ${cfg.interfaceId} -d ${dest} -j DROP 2>/dev/null || true
+        '';
+      in
+      lib.concatMapStrings mkRule denylist;
 
     # Confirmed live on Pegasus (2026-07-20): microvm@<name>.service runs as
     # User=microvm Group=kvm (fixed by microvm.nix, not configurable), but a

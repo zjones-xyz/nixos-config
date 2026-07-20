@@ -256,8 +256,8 @@ in
   };
 
   # ── Isolated agent dev-sandbox (microVM) ────────────────────────────────────
-  # Phase 1 (skeleton module + boot) only — see docs/microvm-sandbox/. No agent
-  # user, no Docker, no containment denylist yet (Phases 2-3). 24 GB flat +
+  # Phases 1-2 (skeleton module + boot, network containment) — see
+  # docs/microvm-sandbox/. No agent user, no Docker yet (Phase 3). 24 GB flat +
   # balloon-only (not elastic virtio-mem — see DECISIONS.md's memory section).
   # storeVolumeDir/stateVolumeDir are dedicated btrfs subvolumes, siblings of
   # @snapshots/@games — see hardware-configuration.nix and MANUAL-STEPS.md for
@@ -274,6 +274,11 @@ in
     interfaceId = "agentvm0";
     # Onboard NIC — see the Tailscale section above for how it was confirmed.
     externalInterface = "enp42s0";
+    # Confirmed live 2026-07-20 (tailscaled log / ping respectively) — used
+    # only by the Phase 2 containment self-check, not part of the denylist
+    # itself (which matches on CIDR ranges, not specific addresses).
+    containmentCheckTailnetAddress = "100.125.226.88";
+    containmentCheckLanAddress = "192.168.8.72";
   };
 
   # Internet-facing? No — LAN/tailnet only. Traefik/LE machinery lives on

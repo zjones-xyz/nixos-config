@@ -45,22 +45,44 @@ reinstall) rather than a still-open TODO:
    currently reach the LAN and tailnet — Phase 2 adds the denylist. Don't leave a
    Phase-1-only guest running unattended.
 
-## Phase 2 — network policy (once code lands)
+## Phase 2 — network policy
 
-- From inside the guest: confirm internet reachable; confirm **every other fleet host is
-  unreachable** (memory-alpha, hopper, hamilton, Serenity, and Pegasus's own
-  LAN/tailnet addresses/services including Olla:40114) — this is the containment proof,
-  test it explicitly, don't assume the rules are right from reading them.
-  Suggested checks from inside the guest:
-  ```
-  curl -sS -m5 https://cache.nixos.org > /dev/null && echo "internet: OK"
-  ping -c1 -W2 100.<memory-alpha-tailnet-ip> && echo "LEAK: tailnet reachable" || echo "tailnet: blocked (expected)"
-  curl -sS -m3 http://<pegasus-tailnet-ip>:40114 && echo "LEAK: Olla reachable" || echo "Olla: blocked (expected)"
-  ```
-- Confirm the forwarded dev port is reachable from Pegasus itself but from nowhere else
-  (not the LAN, not the tailnet) — test from a second fleet host, expect failure.
+Code has landed: `networking.firewall.extraCommands`/`extraStopCommands` in
+`modules/nixos/microvm-sandbox.nix` insert `-I FORWARD 1` DROP rules for the tap
+interface against 100.64.0.0/10 (tailnet CGNAT) and the three RFC1918 ranges, ahead of
+`networking.nat`'s own blanket per-interface ACCEPT (confirmed by reading
+`nat-iptables.nix` directly — that ACCEPT has no destination filtering of its own, which
+is exactly why Phase 1's egress was wide-open). **Scoped down from the original plan**:
+the forwarded-dev-port mechanism is deferred to Phase 3 — `networking.nat.forwardPorts`
+turned out to be the wrong tool (it unconditionally exposes the port via the *external*
+interface, i.e. the whole LAN, not "host-only"), and there's nothing listening on the
+guest yet to meaningfully test a hand-rolled loopback-DNAT alternative against. See
+`DECISIONS.md` for the full reasoning.
+
+Since there's still no interactive console into the guest (same limitation as Phase 1 —
+Phase 3's SSH is the real fix), containment is proven the same way: an automated
+boot-time self-check (`systemd.services.phase2-verify`), gated behind
+`containmentCheckTailnetAddress`/`containmentCheckLanAddress` (set to Pegasus's own
+addresses in its instantiation — deliberately chosen because we *know* sshd is listening
+there, so a blocked connection is unambiguous, not "maybe nothing's there anyway").
+Watch for it the same way as Phase 1:
+```
+sudo systemctl restart microvm@agent-sandbox   # pick up the new guest config
+journalctl -u microvm@agent-sandbox -f          # watch for PHASE2-VERIFY: lines
+```
+Expect: `internet OK`, `blocked as expected - this host's tailnet address (...)`,
+`blocked as expected - this host's LAN address (...)`, then `PASS`. Any `LEAK` line means
+the denylist isn't working — stop and re-check the iptables rules before proceeding
+(`iptables -L FORWARD -n -v` on the host, confirm the four DROP rules sit above nat's
+ACCEPT for `agentvm0`).
+
+Also worth doing, since it's cheap and this is the containment-critical phase:
 - Confirm the above holds with Docker running on Pegasus (not just at idle) — Docker's own
-  iptables management is a known risk flagged in DECISIONS.md.
+  iptables management is a known risk flagged in DECISIONS.md; this is the first real test
+  of whether the two coexist correctly.
+- `iptables -L FORWARD -n -v` on the host after a few minutes of guest uptime — confirm the
+  DROP rules show nonzero packet/byte counters if `phase2-verify` ran (proof the rules are
+  actually being hit, not just present-but-bypassed).
 
 ## Phase 3 — agent user, Docker, agents (once code lands)
 
