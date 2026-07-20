@@ -273,6 +273,14 @@ in
       ManageForeignRoutingPolicyRules = false;
       ManageForeignRoutes = false;
     };
+    # Confirmed live on Pegasus (2026-07-20): systemd-networkd-wait-online
+    # times out (120s) at every boot/switch, because the only interface
+    # networkd manages here (the guest's tap) doesn't exist until the guest
+    # itself starts — a chicken-and-egg boot-time gate for an interface that
+    # can never be "online" at the point this runs. NetworkManager already
+    # provides real boot-network-readiness via its own wait-online mechanism;
+    # nothing needs networkd's copy of that gate to succeed.
+    systemd.network.wait-online.enable = false;
     systemd.network.networks."40-${cfg.interfaceId}" = {
       matchConfig.Name = cfg.interfaceId;
       address = [ "${cfg.hostAddress}/32" ];
