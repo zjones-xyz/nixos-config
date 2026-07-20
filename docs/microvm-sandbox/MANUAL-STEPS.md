@@ -8,15 +8,37 @@ empty sections below are placeholders for phases not yet implemented.
 
 Pure documentation phase; nothing to do on hardware yet.
 
-## Phase 1 — guest boot (once code lands)
+## Phase 1 — guest boot
 
-- Run the build/boot on Pegasus itself (native x86_64; no remote `--build-host` needed,
-  matching the existing Pegasus deploy convention).
-- Confirm KVM is actually usable for an unprivileged/cloud-hypervisor launch (not just that
-  `kvm-amd` is loaded) — `ls -l /dev/kvm` and permissions for whatever user/group
-  cloud-hypervisor runs the guest as.
-- Verify guest boot, writable `/nix` (`nix build` a trivial derivation inside the guest),
-  and outbound internet from the guest.
+Code has landed (`modules/nixos/microvm-sandbox.nix`, Pegasus instantiation). Before the
+first `nixos-rebuild switch --flake .#pegasus` that picks this up:
+
+1. **Create the two new btrfs subvolumes on the real disk** (the `fileSystems.*` entries in
+   `hardware-configuration.nix` mount them but don't create them — mirrors how `@games` was
+   handled during the original bring-up):
+   ```
+   mount /dev/mapper/cryptroot /mnt   # or wherever it's mounted at subvol=/ (top-level)
+   btrfs subvolume create /mnt/@microvm-store
+   btrfs subvolume create /mnt/@microvm-state
+   umount /mnt
+   ```
+   (Adjust the mount invocation to however you're already accessing the top-level subvolume
+   on a live Pegasus — the exact incantation depends on whether you're doing this from a
+   running system or a rescue environment.)
+2. **Confirm KVM is actually usable for an unprivileged/cloud-hypervisor launch** (not just
+   that `kvm-amd` is loaded) — `ls -l /dev/kvm` and permissions for whatever user/group
+   cloud-hypervisor runs the guest as.
+3. **Confirm the `10.100.0.0/24` addressing doesn't collide with Pegasus's actual LAN
+   subnet** (GL.iNet router DHCP range — not recorded in this repo). If it does collide,
+   the `hostAddress`/`guestAddress` options in `homelab.agentSandbox` need different values
+   before first boot.
+4. Verify guest boot, writable `/nix` (`nix build` a trivial derivation inside the guest —
+   reachable via the host: `microvm -c agent-sandbox` or the console microvm.nix wires up;
+   check `microvm.nix`'s own docs for the exact console/login mechanism, since Phase 1 sets
+   up no SSH/agent user yet), and outbound internet from the guest.
+5. **Reminder — Phase 1 has no network containment.** The guest can currently reach the LAN
+   and tailnet; Phase 2 adds the denylist. Don't leave a Phase-1-only guest running
+   unattended past this verification.
 
 ## Phase 2 — network policy (once code lands)
 

@@ -22,6 +22,7 @@ in
     ../../modules/nixos/nzxt-kraken.nix
     ../../modules/nixos/keyboards.nix
     ../../modules/nixos/mouse-tools.nix
+    ../../modules/nixos/microvm-sandbox.nix
     # olla-router.nix is DISABLED for now (2026-07-11): its build runs olla's
     # own Go test suite, and pkg/eventbus's TestEventBus_HighVolumePublishing
     # is a wall-clock throughput assertion that fails under the Nix sandbox's
@@ -252,6 +253,27 @@ in
     useGlobalPkgs = true;
     useUserPackages = true;
     users.z = import ./home.nix;
+  };
+
+  # ── Isolated agent dev-sandbox (microVM) ────────────────────────────────────
+  # Phase 1 (skeleton module + boot) only — see docs/microvm-sandbox/. No agent
+  # user, no Docker, no containment denylist yet (Phases 2-3). 24 GB flat +
+  # balloon-only (not elastic virtio-mem — see DECISIONS.md's memory section).
+  # storeVolumeDir/stateVolumeDir are dedicated btrfs subvolumes, siblings of
+  # @snapshots/@games — see hardware-configuration.nix and MANUAL-STEPS.md for
+  # the one-time `btrfs subvolume create` step required before this builds.
+  homelab.agentSandbox = {
+    enable = true;
+    guestName = "agent-sandbox";
+    mem = 24576; # 24 GiB flat
+    vcpu = 6;
+    storeVolumeDir = "/var/lib/microvms/agent-sandbox-store";
+    stateVolumeDir = "/var/lib/microvms/agent-sandbox-state";
+    # Locally administered (02: prefix), stable per-guest.
+    mac = "02:00:00:10:00:01";
+    interfaceId = "agentvm0";
+    # Onboard NIC — see the Tailscale section above for how it was confirmed.
+    externalInterface = "enp42s0";
   };
 
   # Internet-facing? No — LAN/tailnet only. Traefik/LE machinery lives on

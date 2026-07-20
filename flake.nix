@@ -52,9 +52,21 @@
       url = "git+https://github.com/aaddrick/claude-desktop-debian.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Isolated coding-agent dev-sandbox (pegasus) — hypervisor-boundary
+    # containment via cloud-hypervisor. See modules/nixos/microvm-sandbox.nix
+    # and docs/microvm-sandbox/DECISIONS.md.
+    # git+https rather than github: — same reason as claude-desktop-debian
+    # above (this session's GitHub access is scoped to this repo only, so the
+    # github: tarball-API fetch 403s here; git+https works identically
+    # everywhere, including on pegasus itself with normal access).
+    microvm = {
+      url = "git+https://github.com/microvm-nix/microvm.nix.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, ... }: {
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, microvm, ... }: {
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
@@ -76,6 +88,7 @@
           ./hosts/pegasus/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
+          microvm.nixosModules.host
           {
             # Make plasma-manager's HM options available to hosts/pegasus/home.nix.
             home-manager.sharedModules = [ plasma-manager.homeModules.plasma-manager ];

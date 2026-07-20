@@ -46,6 +46,26 @@
     options = [ "subvol=@games" "compress=zstd" "noatime" ];
   };
 
+  # ── microVM agent-sandbox persistent volumes (docs/microvm-sandbox) ───────
+  # Two dedicated subvolumes, siblings of @snapshots/@games: one for the
+  # guest's writable-store-overlay image (churny build artifacts, never
+  # snapshotted), one for its /persist state image (SSH host key = its sops
+  # age identity, agent home, Docker data — this is what btrbk snapshots).
+  # MANUAL STEP before the first `nixos-rebuild switch` that picks this up:
+  # `btrfs subvolume create` both on the real disk — see
+  # docs/microvm-sandbox/MANUAL-STEPS.md.
+  fileSystems."/var/lib/microvms/agent-sandbox-store" = {
+    device = "/dev/mapper/cryptroot";
+    fsType = "btrfs";
+    options = [ "subvol=@microvm-store" "compress=zstd" "noatime" ];
+  };
+
+  fileSystems."/var/lib/microvms/agent-sandbox-state" = {
+    device = "/dev/mapper/cryptroot";
+    fsType = "btrfs";
+    options = [ "subvol=@microvm-state" "compress=zstd" "noatime" ];
+  };
+
   boot.initrd.luks.devices."cryptroot" = {
     device = "/dev/disk/by-uuid/be8611f1-dc26-4197-bc1c-4772af1a0880";
     # Matches disko.nix's settings.allowDiscards = true — lets fstrim.enable
