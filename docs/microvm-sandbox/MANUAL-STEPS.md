@@ -45,9 +45,9 @@ reinstall) rather than a still-open TODO:
    currently reach the LAN and tailnet — Phase 2 adds the denylist. Don't leave a
    Phase-1-only guest running unattended.
 
-## Phase 2 — network policy
+## Phase 2 — network policy — ✅ VERIFIED on Pegasus (2026-07-21)
 
-`networking.firewall.extraCommands`/`extraStopCommands` in
+**Gate passed.** `networking.firewall.extraCommands`/`extraStopCommands` in
 `modules/nixos/microvm-sandbox.nix` insert `-I FORWARD 1` DROP rules for the tap
 interface against 100.64.0.0/10 (tailnet CGNAT) and the three RFC1918 ranges, ahead of
 `networking.nat`'s own blanket per-interface ACCEPT (confirmed by reading
@@ -59,44 +59,41 @@ interface, i.e. the whole LAN, not "host-only"), and there's nothing listening o
 guest yet to meaningfully test a hand-rolled loopback-DNAT alternative against. See
 `DECISIONS.md` for the full reasoning.
 
-**Rule positioning confirmed correct on Pegasus**: `sudo iptables -L FORWARD -n -v`
-showed the four DROP rules sitting at the very top, ahead of `DOCKER-USER`,
-`DOCKER-FORWARD`, `ts-forward` (Tailscale's own forward chain), and `nixos-filter-forward`
-(where nat's ACCEPT lives) — exactly the priority ordering needed.
+**Getting to a genuine pass took three rounds, two of them real bugs in the test itself
+rather than the firewall rules** — full account in `DECISIONS.md`'s Phase 2 verification
+section. Briefly: (1) testing this host's own addresses doesn't exercise `FORWARD` at all
+(local-to-host traffic goes to `INPUT` instead) — looked like a pass, wasn't; (2) the
+self-check's `timeout 3 bash -c ...` calls failed instantly because `bash` wasn't in the
+systemd unit's `path` — also looked like a pass (a fast failure reads the same as a
+blocked connection from the script's own text), confirmed by a positive control hitting
+the identical error. Both fixed. **Final result**, definitive because it's the counters,
+not the self-check's text: `iptables -L FORWARD -n -v` shows all four `agentvm0` DROP
+rules at `6 packets / 360 bytes` each (SYN retransmissions during the 3s test window) —
+nonzero, real. Rule positioning was independently confirmed correct throughout (sitting
+above `DOCKER-USER`, `DOCKER-FORWARD`, `ts-forward`, and `nixos-filter-forward`), and
+Docker was running the whole time (always-on fleet-wide) — first confirmed, not just
+hoped-for, evidence the two coexist without conflict.
 
-**The self-check went through one real correction before it actually proved anything.**
-The first version tested this host's own tailnet/LAN addresses (deliberately chosen
-because sshd is confirmed listening there) and reported a clean pass — but the DROP
-rules' packet/byte counters were **`0 0`**, meaning they'd never fired. Root cause: a
-packet destined for an address *local to the receiving host* never enters the `FORWARD`
-chain at all — the kernel routes it straight to `INPUT` instead, regardless of any
-FORWARD-chain rule. So that test was actually blocked by the pre-existing INPUT-chain
-default-deny, not by these rules — it "passed" for the wrong reason. Fixed by testing
-synthetic, non-local addresses within each denylist range instead (`100.64.0.1`,
-`10.0.0.1`, `172.16.0.1`, `192.168.1.1`) — genuinely non-local, so forwarding actually has
-to happen and the rules actually get exercised. **Lesson for next time**: a self-check
-"passing" isn't sufficient proof on its own for a firewall rule — always cross-check the
-counters directly.
+**Lesson worth generalizing**: a self-check "passing" is not proof on its own for anything
+security-relevant. Always cross-check an independent signal (here, the iptables counters)
+and include a positive control proving the test mechanism itself works before trusting
+the result — this is what caught bug 2 above, which otherwise would have looked identical
+to a real pass.
 
-Watch for it the same way as Phase 1:
+To re-run this verification from scratch:
 ```
-sudo systemctl restart microvm@agent-sandbox   # pick up the new guest config
+sudo systemctl restart microvm@agent-sandbox   # pick up the guest config
 journalctl -u microvm@agent-sandbox -f          # watch for PHASE2-VERIFY: lines
 ```
-Expect: `internet OK`, four `timed out (expected)` lines, then `PASS`. Any `LEAK` line
-means a real problem — stop and investigate. Then **confirm with the counters directly**
-(this is the actual proof, not the self-check's own text):
+Expect: `internet OK`, then four `timed out (expected)` lines each ~3 seconds apart (not
+near-instant — that would indicate the bash-in-path bug has regressed), then `PASS`. Then
+confirm with the counters directly:
 ```
 sudo iptables -L FORWARD -n -v | head -10
 ```
-All four DROP rules for `agentvm0` should show nonzero packet/byte counts after
-`phase2-verify` has run. Zero counters mean the check didn't actually exercise the rules —
-don't treat a "PASS" as sufficient on its own.
-
-Also worth doing, since it's cheap and this is the containment-critical phase: confirm
-this holds with Docker running on Pegasus (not just at idle) — Docker's own iptables
-management is a known risk flagged in DECISIONS.md, and Docker is always-on fleet-wide so
-every test here already includes it, but worth being deliberate about checking.
+All four DROP rules for `agentvm0` should show nonzero packet/byte counts. Zero counters
+mean the check didn't actually exercise the rules — don't treat a "PASS" as sufficient on
+its own.
 
 ## Phase 3 — agent user, Docker, agents (once code lands)
 

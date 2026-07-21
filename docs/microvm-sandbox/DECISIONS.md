@@ -410,18 +410,46 @@ not something started just for this test — the first *confirmed*, not just hop
 evidence the denylist and Docker's own iptables management coexist without the conflict
 flagged as a known risk during design.
 
-**But the first version of the self-check had a real, load-bearing bug**, caught by the
-operator checking the counters rather than trusting the self-check's own "PASS": it
-tested this host's *own* tailnet/LAN addresses, which reported "blocked as expected" —
-except all four DROP rules showed **`0 0`** packets/bytes, meaning they'd never fired.
-Root cause: a packet destined for an address local to the receiving host never enters
-`FORWARD` at all — the kernel sends it straight to `INPUT`, regardless of any
-FORWARD-chain rule. So the test's "blocked" result came from the pre-existing INPUT-chain
-default-deny (nothing opens port 22 to `agentvm0`), not from these Phase 2 rules — it
-passed for the wrong reason and never actually exercised what it was supposed to prove.
-Fixed by testing synthetic, non-local addresses *within* each denylist range instead
-(`100.64.0.1`, `10.0.0.1`, `172.16.0.1`, `192.168.1.1` — see the updated
-`systemd.services.phase2-verify` and its comment for the full reasoning), and the
-self-check's own output now explicitly says a timeout there isn't fully definitive on its
-own — the counters are the real proof. Re-verification with the corrected check is the
-remaining step before this gate is genuinely closed.
+**The self-check went through two real bugs before it actually proved anything — both
+caught by the operator checking the iptables counters directly rather than trusting the
+self-check's own "PASS" text.**
+
+**Bug 1: testing the wrong addresses.** The first version tested this host's *own*
+tailnet/LAN addresses, which reported "blocked as expected" — except all four DROP rules
+showed **`0 0`** packets/bytes, meaning they'd never fired. A packet destined for an
+address local to the receiving host never enters `FORWARD` at all — the kernel sends it
+straight to `INPUT`, regardless of any FORWARD-chain rule. So that "blocked" result came
+from the pre-existing INPUT-chain default-deny, not from these Phase 2 rules. Fixed by
+testing synthetic, non-local addresses *within* each denylist range instead (`100.64.0.1`,
+`10.0.0.1`, `172.16.0.1`, `192.168.1.1`).
+
+**Bug 2: the test tooling itself was broken, and looked identical to a real block.** Even
+with the corrected non-local targets, the counters *still* stayed at `0 0`. The tell was
+timing, not the pass/fail text: all four `check_blocked` calls completed within ~8ms
+total — nowhere near the 3-second `timeout` wrapper, which a silently-dropped packet
+should take the full duration of (nothing responds, so the client just waits out the
+timeout). Root cause: `check_blocked` runs `timeout 3 bash -c "echo > /dev/tcp/$host/$port"`,
+but neither `phase2-verify` nor the (now-removed) `phase2-diagnose` service had `pkgs.bash`
+in its systemd `path` — only `pkgs.curl`/`pkgs.iproute2` respectively. `timeout` launches
+`bash` as a *nested* subprocess and needs its own PATH entry to find it; the script's own
+shebang interpreter doesn't cover that. Confirmed directly in the log:
+`timeout: failed to run command 'bash': No such file or directory`. A positive control
+(the identical `/dev/tcp` mechanism against `1.1.1.1:443`, expected to succeed) hit the
+exact same error — proving the tooling itself was the problem, not a firewall issue. Every
+"timed out (expected)" result up to this point had never attempted a real connection at
+all. Fixed by adding `pkgs.bash` to both services' `path`.
+
+**With both bugs fixed, the gate is genuinely verified.** Positive control:
+`/dev/tcp` to `1.1.1.1:443` succeeded in 22ms (exit status 0) — confirms the mechanism
+itself works correctly once bash is actually reachable. The real denylist checks: each of
+the four targets now takes ~3.00s to fail (the full timeout, consistent with a silently
+dropped packet, not an instant tooling error) — `internet OK` at t+0, then failures at
+t+3.00s, t+6.00s, t+9.00s, t+12.00s. And the authoritative proof: `iptables -L FORWARD -n
+-v` now shows all four DROP rules at **`6 packets / 360 bytes`** each (SYN retransmissions
+during the 3s window) — nonzero, real, matching the genuinely-attempted connections.
+**Phase 2 gate: passed.**
+
+Lesson for next time, worth generalizing: a self-check "passing" is not proof on its own
+for anything security-relevant — always cross-check against an independent signal (here,
+the iptables counters, plus a positive control proving the test mechanism itself works)
+before trusting the result.
