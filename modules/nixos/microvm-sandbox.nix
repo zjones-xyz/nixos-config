@@ -285,7 +285,14 @@ in
           after = [ "network-online.target" "phase1-verify.service" ];
           wants = [ "network-online.target" ];
           wantedBy = [ "multi-user.target" ];
-          path = [ pkgs.curl ];
+          # bash is required here, not just for running this script itself --
+          # `timeout 3 bash -c "..."` launches bash as a *nested* subprocess,
+          # which needs its own PATH entry to be found by `timeout`. Its
+          # absence here was the actual root cause of every "timed out"
+          # result throughout this investigation (confirmed live: `timeout:
+          # failed to run command 'bash': No such file or directory`) --
+          # none of these checks ever attempted a real connection at all.
+          path = [ pkgs.curl pkgs.bash ];
           serviceConfig = {
             Type = "oneshot";
             StandardOutput = "journal+console";
@@ -339,7 +346,7 @@ in
           after = [ "network-online.target" ];
           wants = [ "network-online.target" ];
           wantedBy = [ "multi-user.target" ];
-          path = [ pkgs.iproute2 ];
+          path = [ pkgs.iproute2 pkgs.bash ];
           serviceConfig = {
             Type = "oneshot";
             StandardOutput = "journal+console";
