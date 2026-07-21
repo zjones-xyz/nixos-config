@@ -202,6 +202,42 @@ in
     '';
   };
 
+  # TEMPORARY diagnostic (2026-07-21) — remove once root-caused. unlock-pegasus's
+  # SSH connection to this initrd's sshd (port 2222) never lands: journalctl -b -1
+  # after a real reboot showed enp42s0 renamed (eth0 -> enp42s0) at initrd start but
+  # then NO further log activity for it at all — no "Gained carrier", no DHCP lease —
+  # for the entire ~2m15s the initrd ran, in contrast to a reliable ~3s carrier
+  # negotiation on the very same NIC/driver observed right after switch-root the same
+  # boot. DNS was independently confirmed correct (`dig +short pegasus.internal`
+  # matches the box's actual DHCP address), so this isn't a naming/resolution issue —
+  # it looks like the interface itself never comes up during the initrd stage on this
+  # hardware. That conclusion so far rests on the *absence* of a log line, not a
+  # direct capture — this polls the interface's actual state every 5s throughout the
+  # unlock window so the next real reboot gives a definitive answer instead of an
+  # inference. Deliberately NOT sent to the console (`journal` only, the default) —
+  # this shares /dev/console with the passphrase prompt and chimes above, and
+  # spamming it every 5s would make the prompt harder to find, the exact class of
+  # problem already hit once with the IP-KVM's scrolling during an earlier incident.
+  boot.initrd.systemd.services.diagnose-initrd-network = {
+    description = "TEMPORARY diagnostic: poll enp42s0 link/DHCP state during initrd unlock window";
+    wantedBy = [ "initrd.target" ];
+    before = [ "shutdown.target" ];
+    conflicts = [ "shutdown.target" ];
+    unitConfig.DefaultDependencies = false;
+    serviceConfig.Type = "simple";
+    path = [ pkgs.iproute2 ];
+    script = ''
+      echo "DIAGNOSE-NET: starting, polling enp42s0 every 5s for up to 5 minutes"
+      for i in $(seq 1 60); do
+        echo "DIAGNOSE-NET: poll $i (+$((i * 5))s) ---"
+        ip -d link show enp42s0 2>&1 || echo "DIAGNOSE-NET: enp42s0 not present yet"
+        ip addr show enp42s0 2>&1 || true
+        sleep 5
+      done
+      echo "DIAGNOSE-NET: done polling"
+    '';
+  };
+
   # ── sops-nix ────────────────────────────────────────────────────────────────
   # Uses the host's SSH ed25519 key as the age identity. After first boot:
   #   ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub
