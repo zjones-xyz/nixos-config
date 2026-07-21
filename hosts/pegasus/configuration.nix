@@ -274,11 +274,6 @@ in
     interfaceId = "agentvm0";
     # Onboard NIC — see the Tailscale section above for how it was confirmed.
     externalInterface = "enp42s0";
-    # Confirmed live 2026-07-20 (tailscaled log / ping respectively) — used
-    # only by the Phase 2 containment self-check, not part of the denylist
-    # itself (which matches on CIDR ranges, not specific addresses).
-    containmentCheckTailnetAddress = "100.125.226.88";
-    containmentCheckLanAddress = "192.168.8.72";
   };
 
   # Internet-facing? No — LAN/tailnet only. Traefik/LE machinery lives on

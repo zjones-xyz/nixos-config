@@ -47,7 +47,7 @@ reinstall) rather than a still-open TODO:
 
 ## Phase 2 — network policy
 
-Code has landed: `networking.firewall.extraCommands`/`extraStopCommands` in
+`networking.firewall.extraCommands`/`extraStopCommands` in
 `modules/nixos/microvm-sandbox.nix` insert `-I FORWARD 1` DROP rules for the tap
 interface against 100.64.0.0/10 (tailnet CGNAT) and the three RFC1918 ranges, ahead of
 `networking.nat`'s own blanket per-interface ACCEPT (confirmed by reading
@@ -59,30 +59,44 @@ interface, i.e. the whole LAN, not "host-only"), and there's nothing listening o
 guest yet to meaningfully test a hand-rolled loopback-DNAT alternative against. See
 `DECISIONS.md` for the full reasoning.
 
-Since there's still no interactive console into the guest (same limitation as Phase 1 —
-Phase 3's SSH is the real fix), containment is proven the same way: an automated
-boot-time self-check (`systemd.services.phase2-verify`), gated behind
-`containmentCheckTailnetAddress`/`containmentCheckLanAddress` (set to Pegasus's own
-addresses in its instantiation — deliberately chosen because we *know* sshd is listening
-there, so a blocked connection is unambiguous, not "maybe nothing's there anyway").
+**Rule positioning confirmed correct on Pegasus**: `sudo iptables -L FORWARD -n -v`
+showed the four DROP rules sitting at the very top, ahead of `DOCKER-USER`,
+`DOCKER-FORWARD`, `ts-forward` (Tailscale's own forward chain), and `nixos-filter-forward`
+(where nat's ACCEPT lives) — exactly the priority ordering needed.
+
+**The self-check went through one real correction before it actually proved anything.**
+The first version tested this host's own tailnet/LAN addresses (deliberately chosen
+because sshd is confirmed listening there) and reported a clean pass — but the DROP
+rules' packet/byte counters were **`0 0`**, meaning they'd never fired. Root cause: a
+packet destined for an address *local to the receiving host* never enters the `FORWARD`
+chain at all — the kernel routes it straight to `INPUT` instead, regardless of any
+FORWARD-chain rule. So that test was actually blocked by the pre-existing INPUT-chain
+default-deny, not by these rules — it "passed" for the wrong reason. Fixed by testing
+synthetic, non-local addresses within each denylist range instead (`100.64.0.1`,
+`10.0.0.1`, `172.16.0.1`, `192.168.1.1`) — genuinely non-local, so forwarding actually has
+to happen and the rules actually get exercised. **Lesson for next time**: a self-check
+"passing" isn't sufficient proof on its own for a firewall rule — always cross-check the
+counters directly.
+
 Watch for it the same way as Phase 1:
 ```
 sudo systemctl restart microvm@agent-sandbox   # pick up the new guest config
 journalctl -u microvm@agent-sandbox -f          # watch for PHASE2-VERIFY: lines
 ```
-Expect: `internet OK`, `blocked as expected - this host's tailnet address (...)`,
-`blocked as expected - this host's LAN address (...)`, then `PASS`. Any `LEAK` line means
-the denylist isn't working — stop and re-check the iptables rules before proceeding
-(`iptables -L FORWARD -n -v` on the host, confirm the four DROP rules sit above nat's
-ACCEPT for `agentvm0`).
+Expect: `internet OK`, four `timed out (expected)` lines, then `PASS`. Any `LEAK` line
+means a real problem — stop and investigate. Then **confirm with the counters directly**
+(this is the actual proof, not the self-check's own text):
+```
+sudo iptables -L FORWARD -n -v | head -10
+```
+All four DROP rules for `agentvm0` should show nonzero packet/byte counts after
+`phase2-verify` has run. Zero counters mean the check didn't actually exercise the rules —
+don't treat a "PASS" as sufficient on its own.
 
-Also worth doing, since it's cheap and this is the containment-critical phase:
-- Confirm the above holds with Docker running on Pegasus (not just at idle) — Docker's own
-  iptables management is a known risk flagged in DECISIONS.md; this is the first real test
-  of whether the two coexist correctly.
-- `iptables -L FORWARD -n -v` on the host after a few minutes of guest uptime — confirm the
-  DROP rules show nonzero packet/byte counters if `phase2-verify` ran (proof the rules are
-  actually being hit, not just present-but-bypassed).
+Also worth doing, since it's cheap and this is the containment-critical phase: confirm
+this holds with Docker running on Pegasus (not just at idle) — Docker's own iptables
+management is a known risk flagged in DECISIONS.md, and Docker is always-on fleet-wide so
+every test here already includes it, but worth being deliberate about checking.
 
 ## Phase 3 — agent user, Docker, agents (once code lands)
 

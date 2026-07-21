@@ -136,22 +136,6 @@ in
       description = "Host's uplink interface to masquerade guest egress through.";
     };
 
-    containmentCheckTailnetAddress = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      default = null;
-      description = ''
-        This host's own tailnet IP, used only by the Phase 2 self-check to
-        prove containment (a known-listening address makes "blocked" an
-        unambiguous signal rather than "maybe nothing's there anyway"). Null
-        skips this specific check.
-      '';
-    };
-
-    containmentCheckLanAddress = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      default = null;
-      description = "This host's own LAN IP, same rationale as containmentCheckTailnetAddress.";
-    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -274,17 +258,29 @@ in
         };
 
         # ── Phase 2 gate self-check ─────────────────────────────────────────
-        # Same rationale as phase1-verify: no interactive console yet. Proves
-        # containment by testing reachability to addresses we *know* have
-        # something listening (this host's own tailnet/LAN sshd, confirmed
-        # live) — a blocked connection there is an unambiguous signal, unlike
-        # testing an arbitrary address that might just have nothing running.
+        # Same rationale as phase1-verify: no interactive console yet.
+        #
+        # CONFIRMED LIVE ON PEGASUS (2026-07-21) that testing this *host's
+        # own* addresses does NOT exercise these rules: a packet whose
+        # destination is local to the receiving host never enters the
+        # FORWARD chain at all — the kernel routes it straight to INPUT
+        # instead, regardless of any FORWARD-chain rule. The first version of
+        # this check tested Pegasus's own tailnet/LAN addresses and got a
+        # clean "blocked as expected" — but from the pre-existing INPUT-chain
+        # default-deny, not from these rules; `iptables -L FORWARD -n -v`
+        # showed all four DROP rules at 0 packets/0 bytes despite the test
+        # "passing". Fixed by testing synthetic representative addresses
+        # *within* each denylist range instead — genuinely non-local, so
+        # forwarding actually has to happen and these rules actually fire.
+        #
         # Uses bash's /dev/tcp for a raw connect test (no nc/curl needed for
         # non-HTTP ports); `timeout` bounds each attempt since a DROP rule
-        # causes silent packet loss, not an immediate refusal.
-        systemd.services.phase2-verify = lib.mkIf (
-          cfg.containmentCheckTailnetAddress != null || cfg.containmentCheckLanAddress != null
-        ) {
+        # causes silent packet loss, not an immediate refusal. A timeout here
+        # is suggestive but not fully definitive on its own (a synthetic
+        # address might also just have nothing listening, coincidentally) —
+        # the authoritative proof is still `iptables -L FORWARD -n -v` on the
+        # host showing nonzero counters on the four DROP rules after this runs.
+        systemd.services.phase2-verify = {
           description = "Phase 2 gate self-check: containment denylist";
           after = [ "network-online.target" "phase1-verify.service" ];
           wants = [ "network-online.target" ];
@@ -303,7 +299,7 @@ in
                 echo "PHASE2-VERIFY: LEAK - $desc ($host:$port) is reachable!"
                 fail=1
               else
-                echo "PHASE2-VERIFY: blocked as expected - $desc ($host:$port)"
+                echo "PHASE2-VERIFY: timed out (expected) - $desc ($host:$port) -- confirm with iptables counters, not this alone"
               fi
             }
 
@@ -315,18 +311,18 @@ in
               fail=1
             fi
 
-            ${lib.optionalString (cfg.containmentCheckTailnetAddress != null) ''
-              check_blocked "this host's tailnet address" "${cfg.containmentCheckTailnetAddress}" 22
-            ''}
-            ${lib.optionalString (cfg.containmentCheckLanAddress != null) ''
-              check_blocked "this host's LAN address" "${cfg.containmentCheckLanAddress}" 22
-            ''}
+            # Synthetic, non-local addresses within each denylist range —
+            # not Pegasus's own addresses (see comment above for why).
+            check_blocked "tailnet CGNAT range" "100.64.0.1" 22
+            check_blocked "RFC1918 10.0.0.0/8" "10.0.0.1" 22
+            check_blocked "RFC1918 172.16.0.0/12" "172.16.0.1" 22
+            check_blocked "RFC1918 192.168.0.0/16" "192.168.1.1" 22
 
             if [ "$fail" = "1" ]; then
               echo "PHASE2-VERIFY: FAIL - containment leak detected"
               exit 1
             fi
-            echo "PHASE2-VERIFY: PASS"
+            echo "PHASE2-VERIFY: PASS (timeouts alone aren't fully definitive -- confirm with iptables -L FORWARD -n -v on the host that the four DROP rules show nonzero counters)"
           '';
         };
 

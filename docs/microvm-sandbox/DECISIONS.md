@@ -398,3 +398,30 @@ listening there (confirmed live during Phase 1) — a blocked connection is an u
 signal, not "maybe nothing's there anyway." A raw TCP connect via bash's `/dev/tcp`
 (wrapped in `timeout`, since a DROP rule causes silent packet loss rather than an
 immediate refusal) avoids needing extra guest packages for a non-HTTP port check.
+
+## Phase 2 — operator verification on Pegasus (2026-07-21)
+
+**Rule positioning confirmed correct**: `iptables -L FORWARD -n -v` on Pegasus showed the
+four DROP rules for `agentvm0` at the very top of `FORWARD`, ahead of `DOCKER-USER`,
+`DOCKER-FORWARD`, `ts-forward` (Tailscale's own forward chain — didn't know it installed
+one until seeing this), and `nixos-filter-forward` (where nat's ACCEPT lives). Exactly
+the priority ordering the design needs, and — since Docker is an always-on fleet service,
+not something started just for this test — the first *confirmed*, not just hoped-for,
+evidence the denylist and Docker's own iptables management coexist without the conflict
+flagged as a known risk during design.
+
+**But the first version of the self-check had a real, load-bearing bug**, caught by the
+operator checking the counters rather than trusting the self-check's own "PASS": it
+tested this host's *own* tailnet/LAN addresses, which reported "blocked as expected" —
+except all four DROP rules showed **`0 0`** packets/bytes, meaning they'd never fired.
+Root cause: a packet destined for an address local to the receiving host never enters
+`FORWARD` at all — the kernel sends it straight to `INPUT`, regardless of any
+FORWARD-chain rule. So the test's "blocked" result came from the pre-existing INPUT-chain
+default-deny (nothing opens port 22 to `agentvm0`), not from these Phase 2 rules — it
+passed for the wrong reason and never actually exercised what it was supposed to prove.
+Fixed by testing synthetic, non-local addresses *within* each denylist range instead
+(`100.64.0.1`, `10.0.0.1`, `172.16.0.1`, `192.168.1.1` — see the updated
+`systemd.services.phase2-verify` and its comment for the full reasoning), and the
+self-check's own output now explicitly says a timeout there isn't fully definitive on its
+own — the counters are the real proof. Re-verification with the corrected check is the
+remaining step before this gate is genuinely closed.
