@@ -503,6 +503,8 @@ silently reopening.
 (Linux `IFNAMSIZ`) — a smaller finding from the same review, since a name over that limit
 would previously have evaluated fine and only failed opaquely at `ip link` time.
 
-Re-verification of this specific fix (confirming `10.100.0.1:22` is now blocked and that
-`iptables -L INPUT -n -v` shows a nonzero counter on the new rule after a real attempt)
-is the remaining step before this gate is fully closed a second time.
+**✅ VERIFIED LIVE ON PEGASUS (2026-07-21)**: after `nixos-rebuild switch` and restarting
+the guest, `phase2-verify`'s new fifth check (`10.100.0.1:22`) timed out at the full 3s —
+the same signature as a genuinely dropped packet, not the instant failure that indicated
+the earlier missing-`bash` bug — and `iptables -L INPUT -n -v` on Pegasus showed the new
+rule at **`18 packets / 1032 bytes`**, nonzero and real. Gate closed a second time.

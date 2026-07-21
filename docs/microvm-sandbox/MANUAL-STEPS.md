@@ -132,11 +132,11 @@ not FORWARD) (10.100.0.1:22)`. Then confirm with the counter directly (the actua
 sudo iptables -L INPUT -n -v | grep agentvm0
 ```
 Should show a nonzero packet/byte count on the DROP rule after `phase2-verify` has run.
-As a manual cross-check from a real shell on Pegasus (not required, but the most direct
-proof): `nc -w2 -z 10.100.0.1 22` from *inside* the guest (there's no interactive guest
-console yet — this would need to wait for Phase 3's SSH, or be done via a temporary
-self-check line the way `phase2-verify` already does it) should now time out rather than
-connecting.
+
+**✅ VERIFIED, gate closed a second time (2026-07-21)**: the new regression check timed
+out at the full 3s (not an instant tooling failure), and `iptables -L INPUT -n -v` showed
+`18 packets / 1032 bytes` on the rule for `agentvm0` — nonzero, genuine proof against real
+connection attempts.
 
 ## Phase 3 — agent user, Docker, agents (once code lands)
 
