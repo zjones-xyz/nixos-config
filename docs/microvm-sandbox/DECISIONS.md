@@ -508,3 +508,69 @@ the guest, `phase2-verify`'s new fifth check (`10.100.0.1:22`) timed out at the 
 the same signature as a genuinely dropped packet, not the instant failure that indicated
 the earlier missing-`bash` bug — and `iptables -L INPUT -n -v` on Pegasus showed the new
 rule at **`18 packets / 1032 bytes`**, nonzero and real. Gate closed a second time.
+
+## Phase 2 — cold-boot rule-ordering bug found by a genuine reboot test (2026-07-21)
+
+`MANUAL-STEPS.md` had flagged, since the first Phase 2 pass, that rule positioning was
+only ever confirmed via `nixos-rebuild switch` + a service restart — never a genuine cold
+`reboot` — with Docker already running throughout. A real reboot (also used to test the
+LUKS remote-unlock path) finally exercised that gap, and it was a real bug, not a
+formality:
+
+**Pre-reboot baseline** (warm switch+restart, matching every prior verification):
+`iptables -L FORWARD -n -v` showed the order `[4x DROP (agentvm0)] → DOCKER-USER →
+DOCKER-FORWARD → ts-forward → nixos-filter-forward` — DROP rules on top, as designed.
+
+**Post cold-boot**: the same command showed `ts-forward → DOCKER-USER → DOCKER-FORWARD →
+[4x DROP (agentvm0)] → nixos-filter-forward` — `ts-forward`, `DOCKER-USER`, and
+`DOCKER-FORWARD` had all moved **above** the DROP rules (the INPUT chain showed the same
+shift: `ts-input` moved ahead of the blanket DROP there too). This directly contradicts
+the ordering this design has relied on and re-verified since Phase 2 started.
+
+**Containment happened to still hold** — the DROP-rule counters were nonzero (`3
+packets/180 bytes` each, `9/516` on INPUT) and `phase2-verify` still passed — because
+Docker's and Tailscale's chains apparently don't match this interface/traffic and fall
+through (RETURN) rather than ACCEPT it, so the packet still reaches the DROP rules
+further down FORWARD before ever reaching `nixos-filter-forward`'s ACCEPT. **That's
+incidental, not structural**: it depends entirely on those chains never gaining a rule
+that happens to match this interface or its destinations (e.g. a future Docker container
+publishing a port to `0.0.0.0`, or a Tailscale subnet route covering one of the denylisted
+ranges) — at which point the packet could be ACCEPTed and terminated in one of those
+earlier chains, never reaching the DROP rules at all.
+
+**Root cause**: `networking.firewall.extraCommands` (where the `-I FORWARD 1`/`-I INPUT
+1` rules live) executes as part of `firewall.service`. On a cold boot, `firewall.service`
+runs early — before `docker.service`/`tailscaled.service` exist — so when those services
+later install their own top-of-chain hooks, they land above rules that were already
+there. On a `nixos-rebuild switch`, `firewall.service` only *restarts* because the config
+changed, and by then Docker/Tailscale are already running with their chains in place — so
+the reinsertion happens last and lands on top. **Every prior verification in this design
+used the switch path**, which is why this never surfaced until a genuine reboot. The
+original design note ("evaluated first regardless of whatever order firewall.service and
+nat.service happen to run in") accounted for `nat.service` specifically but didn't
+anticipate Docker's and Tailscale's own, independent FORWARD/INPUT-chain hooks.
+
+**Fix**: a new oneshot systemd service, `agent-sandbox-containment-reassert`, re-runs the
+exact same delete-then-insert script (`containmentApplyScript`, now shared with
+`extraCommands` via a `let` binding so the two can't drift), explicitly ordered `after =
+[ "docker.service" "tailscaled.service" "firewall.service" ]`. `after` (not
+`wants`/`requires`) is deliberate — it only orders relative to those units if they exist
+and are going to run anyway, so this is a no-op addition on any host without Docker or
+Tailscale (e.g. the memory-alpha stub). This guarantees the containment rules always end
+up on top of the chain regardless of whether this was a cold boot or a warm switch,
+instead of depending on incidental service-start ordering.
+
+**Known residual gap, not solved here**: if `docker.service` or `tailscaled.service`
+itself gets restarted by some *later*, unrelated `nixos-rebuild switch` after this
+reassert unit already ran earlier in that same switch, the race could reopen — this fix
+addresses boot-order variance, not "Docker restarts on a running system" as a separate
+event. Flagged rather than solved to avoid over-engineering a fix for a scenario that
+hasn't been observed; worth revisiting if it ever is.
+
+**Re-verification**: this fix is designed and `nix flake check`-verified but a second
+genuine reboot to confirm the rule order now holds cold has not yet been done (a
+one-reboot-per-round-trip cost isn't free, given the LUKS-unlock friction encountered
+during the first one — see the initrd-SSH-unlock investigation, currently ongoing,
+elsewhere in this session). Confirming this holds is a reasonable thing to fold into
+whatever the *next* reboot for any reason turns out to be, rather than necessarily
+forcing a dedicated one immediately.

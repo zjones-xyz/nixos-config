@@ -98,10 +98,39 @@ its own.
 Also worth doing, since it's cheap and this is the containment-critical phase: confirm
 this holds with Docker running on Pegasus (not just at idle) — Docker's own iptables
 management is a known risk flagged in DECISIONS.md, and Docker is always-on fleet-wide so
-every test here already includes it, but worth being deliberate about checking. **Not yet
-done as a genuine cold-boot test** — verified so far only via switch + service-restart
-with Docker already running, not a real `reboot`. Worth a deliberate follow-up reboot to
-be sure ordering holds from a cold start, not just a warm one.
+every test here already includes it, but worth being deliberate about checking.
+
+### Cold-boot rule-ordering bug, found by a genuine reboot test (2026-07-21)
+
+The "not yet done as a genuine cold-boot test" gap above was closed by an actual `reboot`
+(combined with testing the LUKS remote-unlock path) — and it found a real bug: on cold
+boot, `ts-forward`/`DOCKER-USER`/`DOCKER-FORWARD` land **above** the four FORWARD DROP
+rules (opposite of every prior switch-based verification), because `firewall.service`
+runs early on a cold boot, before `docker.service`/`tailscaled.service` exist to install
+their own top-of-chain hooks. Containment happened to still hold (nonzero DROP counters,
+self-check passed) because Docker/Tailscale's chains don't match this traffic and fall
+through — but that's incidental, not structural. Full account in `DECISIONS.md`'s
+"cold-boot rule-ordering bug" section.
+
+**Fixed** with a new `agent-sandbox-containment-reassert` oneshot service that re-runs the
+same rule-insertion script `after = docker.service, tailscaled.service, firewall.service`
+— guaranteeing final position on top regardless of cold-boot vs. switch ordering.
+
+**To verify this fix**, after pulling the latest branch and
+`nixos-rebuild switch --flake .#pegasus`, a genuine `reboot` is the only real test (a
+switch+restart cycle would pass regardless, by the same warm-ordering coincidence that
+hid the original bug). After reboot:
+```
+systemctl status agent-sandbox-containment-reassert --no-pager
+sudo iptables -L FORWARD -n -v | head -15
+sudo iptables -L INPUT -n -v | head -15
+```
+Expect the four FORWARD DROP rules and the INPUT DROP rule back on top, ahead of
+`DOCKER-USER`/`DOCKER-FORWARD`/`ts-forward`/`nixos-filter-forward` and
+`ts-input`/`nixos-fw` — matching the very first Phase 2 verification, not the inverted
+order the cold-boot test found. **Not yet re-verified live** as of this writing — fold it
+into whatever the next reboot for any reason turns out to be, rather than necessarily
+forcing a dedicated one immediately (see DECISIONS.md).
 
 ### Critical fix: INPUT-chain containment bypass (2026-07-21)
 

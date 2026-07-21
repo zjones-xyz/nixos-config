@@ -18,6 +18,26 @@ let
     "172.16.0.0/12" # RFC1918
     "192.168.0.0/16" # RFC1918
   ];
+
+  # Shared between networking.firewall.extraCommands/extraStopCommands AND
+  # the containment-reassert service below (see its comment for why a second
+  # application point is needed) — one script, applied from two places,
+  # rather than two copies that can drift.
+  mkForwardDelete = dest: ''
+    iptables -w -D FORWARD -i ${cfg.interfaceId} -d ${dest} -j DROP 2>/dev/null || true
+  '';
+  mkForwardInsert = dest: mkForwardDelete dest + ''
+    iptables -w -I FORWARD 1 -i ${cfg.interfaceId} -d ${dest} -j DROP
+  '';
+  inputDelete = ''
+    iptables -w -D INPUT -i ${cfg.interfaceId} -j DROP 2>/dev/null || true
+  '';
+  inputInsert = inputDelete + ''
+    iptables -w -I INPUT 1 -i ${cfg.interfaceId} -j DROP
+  '';
+
+  containmentApplyScript = lib.concatMapStrings mkForwardInsert n2Denylist + inputInsert;
+  containmentRemoveScript = lib.concatMapStrings mkForwardDelete n2Denylist + inputDelete;
 in
 {
   options.homelab.agentSandbox = {
@@ -482,29 +502,50 @@ in
     # for real.
     boot.kernel.sysctl."net.ipv6.conf.all.forwarding" = lib.mkForce false;
 
-    networking.firewall.extraCommands =
-      let
-        mkForwardRule = dest: ''
-          iptables -w -D FORWARD -i ${cfg.interfaceId} -d ${dest} -j DROP 2>/dev/null || true
-          iptables -w -I FORWARD 1 -i ${cfg.interfaceId} -d ${dest} -j DROP
-        '';
-      in
-      lib.concatMapStrings mkForwardRule n2Denylist
-      + ''
-        iptables -w -D INPUT -i ${cfg.interfaceId} -j DROP 2>/dev/null || true
-        iptables -w -I INPUT 1 -i ${cfg.interfaceId} -j DROP
-      '';
+    networking.firewall.extraCommands = containmentApplyScript;
+    networking.firewall.extraStopCommands = containmentRemoveScript;
 
-    networking.firewall.extraStopCommands =
-      let
-        mkForwardRule = dest: ''
-          iptables -w -D FORWARD -i ${cfg.interfaceId} -d ${dest} -j DROP 2>/dev/null || true
-        '';
-      in
-      lib.concatMapStrings mkForwardRule n2Denylist
-      + ''
-        iptables -w -D INPUT -i ${cfg.interfaceId} -j DROP 2>/dev/null || true
-      '';
+    # CONFIRMED LIVE ON PEGASUS (2026-07-21), genuine cold-reboot test: on a
+    # cold boot, firewall.service (which carries the rules above via
+    # extraCommands) runs early -- before docker.service/tailscaled.service
+    # exist -- so when those services later install their OWN top-of-chain
+    # hooks (DOCKER-USER/DOCKER-FORWARD, ts-forward/ts-input), those land
+    # ABOVE these DROP rules instead of below:
+    #   `iptables -L FORWARD -n -v` showed ts-forward, DOCKER-USER, and
+    #   DOCKER-FORWARD sitting ahead of all four DROP rules after a cold
+    #   reboot -- the opposite of the order confirmed during Phase 2's
+    #   switch-based verification.
+    # On a `nixos-rebuild switch`, by contrast, firewall.service only
+    # *restarts* (because the config changed) with docker/tailscaled already
+    # running, so the reinsertion happens last and lands on top -- which is
+    # exactly why the switch-based Phase 2 verification never caught this:
+    # it never tested a genuine cold start, only a warm one.
+    # Containment still held in the cold-boot test (iptables counters stayed
+    # nonzero, self-check passed) because Docker's and Tailscale's chains
+    # apparently RETURN rather than ACCEPT traffic on this interface -- but
+    # that's incidental, not structural: it depends on those chains never
+    # gaining a rule that happens to match this interface or its
+    # destinations. This service re-asserts the identical rules, ordered
+    # explicitly after docker.service/tailscaled.service/firewall.service,
+    # so they land on top deterministically regardless of cold-boot vs.
+    # switch ordering. `after` (not `wants`/`requires`) is deliberate: it
+    # only orders relative to those units if they exist and are going to
+    # run anyway, so this is harmless on a host without Docker/Tailscale.
+    # Known residual gap, not solved here: if docker.service or
+    # tailscaled.service itself gets restarted by a *later* unrelated switch
+    # (after this unit already ran earlier in the same switch), the race
+    # could reopen. Out of scope for this fix -- flagged in DECISIONS.md.
+    systemd.services."agent-sandbox-containment-reassert" = {
+      description = "Re-assert homelab.agentSandbox containment rules after Docker/Tailscale";
+      after = [ "docker.service" "tailscaled.service" "firewall.service" ];
+      wantedBy = [ "multi-user.target" ];
+      path = [ pkgs.iptables ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+      };
+      script = containmentApplyScript;
+    };
 
     # Confirmed live on Pegasus (2026-07-20): microvm@<name>.service runs as
     # User=microvm Group=kvm (fixed by microvm.nix, not configurable), but a
