@@ -358,6 +358,9 @@ in
             ip route get 10.0.0.1 || echo "  (failed)"
             echo "PHASE2-DIAGNOSE: ip route get 192.168.1.1 (RFC1918 test target)"
             ip route get 192.168.1.1 || echo "  (failed)"
+            echo "PHASE2-DIAGNOSE: positive control -- bash /dev/tcp to 1.1.1.1:443 (should SUCCEED; tests whether the /dev/tcp mechanism itself works, since phase2-verify's denylist checks use /dev/tcp on port 22 while the internet check uses curl on 443 -- two different mechanisms never cross-checked against each other until now)"
+            ( time timeout 3 bash -c "echo > /dev/tcp/1.1.1.1/443" ) 2>&1
+            echo "PHASE2-DIAGNOSE: positive control exit status: $?"
             echo "PHASE2-DIAGNOSE: done"
           '';
         };
