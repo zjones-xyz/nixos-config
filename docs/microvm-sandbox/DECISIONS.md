@@ -567,10 +567,17 @@ addresses boot-order variance, not "Docker restarts on a running system" as a se
 event. Flagged rather than solved to avoid over-engineering a fix for a scenario that
 hasn't been observed; worth revisiting if it ever is.
 
-**Re-verification**: this fix is designed and `nix flake check`-verified but a second
-genuine reboot to confirm the rule order now holds cold has not yet been done (a
-one-reboot-per-round-trip cost isn't free, given the LUKS-unlock friction encountered
-during the first one — see the initrd-SSH-unlock investigation, currently ongoing,
-elsewhere in this session). Confirming this holds is a reasonable thing to fold into
-whatever the *next* reboot for any reason turns out to be, rather than necessarily
-forcing a dedicated one immediately.
+**✅ VERIFIED LIVE ON PEGASUS (2026-07-21), second genuine reboot**: after pulling this
+fix and `nixos-rebuild switch`, then a real `reboot` (unlocked via KVM directly this
+time, `unlock-pegasus` still unfixed), `agent-sandbox-containment-reassert` ran
+successfully (`active (exited)`, 38s after boot) and both chains came back in the
+correct order:
+
+- `FORWARD`: all four DROP rules (`3 packets/180 bytes` each) on top, ahead of
+  `DOCKER-USER`, `ts-forward`, `DOCKER-FORWARD`, `nixos-filter-forward`.
+- `INPUT`: the blanket DROP rule (`4 packets/237 bytes`) on top, ahead of `ts-input`,
+  `nixos-fw`.
+
+Matches the original, correct ordering — not the inverted order the first cold boot
+produced. **Gate closed for real this time**, on a genuine cold start rather than a
+switch+restart.

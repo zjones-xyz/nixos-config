@@ -128,9 +128,14 @@ sudo iptables -L INPUT -n -v | head -15
 Expect the four FORWARD DROP rules and the INPUT DROP rule back on top, ahead of
 `DOCKER-USER`/`DOCKER-FORWARD`/`ts-forward`/`nixos-filter-forward` and
 `ts-input`/`nixos-fw` — matching the very first Phase 2 verification, not the inverted
-order the cold-boot test found. **Not yet re-verified live** as of this writing — fold it
-into whatever the next reboot for any reason turns out to be, rather than necessarily
-forcing a dedicated one immediately (see DECISIONS.md).
+order the cold-boot test found.
+
+**✅ VERIFIED, gate closed for real this time (2026-07-21)**: a second genuine reboot
+confirmed it — `agent-sandbox-containment-reassert` ran successfully (38s after boot),
+and both chains came back correctly ordered: FORWARD's four DROP rules on top of
+`DOCKER-USER`/`ts-forward`/`DOCKER-FORWARD`/`nixos-filter-forward`, and INPUT's blanket
+DROP on top of `ts-input`/`nixos-fw`. This is now confirmed to hold on a genuine cold
+start, not just a warm switch+restart.
 
 ### Critical fix: INPUT-chain containment bypass (2026-07-21)
 
