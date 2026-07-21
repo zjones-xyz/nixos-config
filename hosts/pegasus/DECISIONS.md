@@ -375,10 +375,12 @@ desync state Windows expects to resume into. Checked this specifically for the
 Samsung SSD (the one with an actual bootable Windows install) via `ntfsfix
 --no-action` (ntfs-3g's dry-run diagnostic — reports hibernation/dirty-`$LogFile`
 state, writes nothing) before including it at all: came back clean, no
-hibernation flag, no dirty log — confirmed safe to mount. `Spinner`/`Toshiba`
-haven't had the same check run against them specifically; they're plain data
-drives without an OS on them; less exposed to the same risk, but not
-individually verified either. `nofail` on all three so a disconnected/failed
+hibernation flag, no dirty log — confirmed safe to mount. **Ran the same check
+against `Spinner`/`Toshiba` too (2026-07-21, on request, purely to confirm
+neither was in a vulnerable state — no read-write plans for either yet)**: both
+came back identically clean — "processed successfully," no hibernation flag, no
+dirty log. All three drives confirmed safe as of this check; none flagged.
+`nofail` on all three so a disconnected/failed
 drive degrades to "not mounted" rather than blocking the whole host's boot — the
 exact lesson already learned once with the microVM sandbox's volumes.
 

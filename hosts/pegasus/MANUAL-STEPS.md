@@ -403,13 +403,15 @@ Designed and `nix flake check`-verified but not yet exercised on real hardware:
    check `systemctl status` for the corresponding `mnt-*.mount` unit and
    `journalctl -u mnt-*.mount` for why.
 4. **Before enabling read-write on any of these** (drop `ro` from that mount's
-   `options`): run the same clean-shutdown check already done for the Samsung
-   SSD —
+   `options`), re-run the clean-shutdown check — state can change any time the
+   drive is used elsewhere:
    ```
    sudo nix shell nixpkgs#ntfs3g -c ntfsfix --no-action /dev/disk/by-id/<drive>
    ```
    (note: `nix run nixpkgs#ntfs3g -- ntfsfix ...` runs the package's default
    binary, `ntfs-3g` itself, not `ntfsfix` — use `nix shell ... -c` instead.)
    A clean pass ("processed successfully," no hibernation/dirty-`$LogFile`
-   mention) is what the Samsung SSD showed before it was included here at all;
-   `Spinner`/`Toshiba` haven't had this run against them specifically yet.
+   mention) is what all three drives showed as of 2026-07-21 — the Samsung SSD
+   before being included at all, and `Spinner`/`Toshiba` on request afterward
+   (no vulnerable state on any of the three at that point) — but that's a
+   point-in-time result, not a standing guarantee.
