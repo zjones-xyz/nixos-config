@@ -282,7 +282,20 @@ in
   # otherwise. Steam runs as z and couldn't create a library there at all
   # until this is fixed. Declarative rather than a one-off `chown` so it
   # survives a reinstall without a manual step.
-  systemd.tmpfiles.rules = [ "d /games 0755 z users - -" ];
+  #
+  # /mnt/toshiba (hardware-configuration.nix) is the same class of bug: a
+  # freshly mkfs.btrfs'd filesystem's top-level directory is root:root 0755
+  # by default too.
+  systemd.tmpfiles.rules = [
+    "d /games 0755 z users - -"
+    "d /mnt/toshiba 0755 z users - -"
+  ];
+
+  # mkfs.exfat/fsck.exfat for the Toshiba drive's exFAT partition
+  # (hardware-configuration.nix) — mounting/reading/writing exFAT itself
+  # needs no package (in-kernel driver, mainlined since Linux 5.7), only the
+  # userspace tools for formatting/checking it.
+  environment.systemPackages = [ pkgs.exfatprogs ];
 
   # ── home-manager ──────────────────────────────────────────────────────────
   home-manager = {

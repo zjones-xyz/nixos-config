@@ -392,3 +392,53 @@ storage device, not a real drive on Pegasus at all).
 **Not yet verified on real hardware** — designed and `nix flake check`-verified,
 but the actual `nixos-rebuild switch` + mount + read-a-file confirmation hasn't
 happened yet. See `MANUAL-STEPS.md`.
+
+**Update (2026-07-21)**: confirmed clean via the same `ntfsfix --no-action` check on
+request for `Spinner` and the (now-former) Toshiba NTFS partition too — neither in a
+vulnerable state. All three NTFS drives confirmed safe as of that check.
+
+## Toshiba drive repurposed: btrfs + exFAT (2026-07-21)
+
+The Toshiba drive's original single NTFS partition turned out to be empty (confirmed
+via `df`'s `Use%` column and `ls`), so it was repartitioned on request into a btrfs
+partition (the remainder, ~2.34TiB) and a fixed 400GiB exFAT partition — done live on
+the real hardware, imperatively, not something `nixos-rebuild switch` drives:
+
+- **`wipefs -a`** first to clear the existing GPT/NTFS signatures cleanly.
+- **`parted` was abandoned mid-attempt.** Its own CLI argument parser choked on the
+  negative-offset syntax needed to express "400GiB from the end of the disk"
+  (`-400GiB`) — first misparsing it as a cluster of short options (`invalid option --
+  '4'` etc.), then, after adding `--` to mark end-of-options, producing a partition
+  with a real alignment warning (`not properly aligned for best performance`), and a
+  further attempt hit an unresolved shell/parser issue (`zsh: number expected`) that
+  left the command not actually executing at all. Switched to **`sgdisk`** instead —
+  its `--new=N:start:end` syntax joins the value into one token via `=`, sidestepping
+  the whole class of problem — and it worked cleanly on the first real attempt
+  (`--new=1:1M:-400G --new=2:0:0`, letting sgdisk's own default alignment apply
+  rather than computing exact byte offsets by hand).
+- **exFAT volume labels are capped at 11 characters** — `mkfs.exfat -n toshiba-exfat`
+  (13 chars) failed with "input string is too long"; `toshiba-fat` (11 chars, at the
+  limit) worked. Btrfs labels have no such constraint (`toshiba-btrfs` is fine).
+- **`partprobe` isn't installed** on Pegasus by default; turned out to be unnecessary
+  anyway — `sgdisk` re-reads the partition table into the kernel itself on a
+  successful write, confirmed via a plain `lsblk` showing both new partitions
+  immediately afterward with no intervening `partprobe` call.
+- **`-part1`/`-part2` now mean something different than before**: they refer to the
+  NEW partitions (btrfs, exFAT) from this repartition, not the old single NTFS
+  partition that used to be `-part2` alone.
+- **Read-write, not read-only** for the btrfs partition (unlike the NTFS mounts
+  above) — no Windows-hibernation-style corruption risk on a filesystem this repo
+  itself just created fresh. Its top-level directory needed the same
+  `systemd.tmpfiles.rules` fix as `@games` and the microvm volumes (fresh
+  `mkfs.btrfs` output is `root:root 0755` by default, same bug, same fix, third time
+  now in this repo's history). exFAT mount options (`uid=`/`gid=`/`umask=`) instead,
+  same reasoning as the NTFS mounts — FAT-family filesystems have no on-disk owner
+  metadata of their own.
+- `pkgs.exfatprogs` added to `environment.systemPackages` — mounting/reading/writing
+  exFAT needs no package at all (in-kernel driver, mainlined since Linux 5.7, same
+  story as `ntfs3`), but `mkfs.exfat`/`fsck.exfat` do.
+
+**Not yet verified on real hardware post-switch** — designed and `nix flake
+check`-verified, partitioning/formatting itself done live and confirmed working, but
+the actual `nixos-rebuild switch` + mount + read/write confirmation for these two new
+filesystems hasn't happened yet. See `MANUAL-STEPS.md`.

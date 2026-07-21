@@ -88,22 +88,19 @@
   # rather than blocking the whole host's boot (see the microvm volumes
   # above for the exact same lesson, learned the hard way).
   #
-  # All three start read-only: reading is the priority (per request), and
+  # All start read-only: reading is the priority (per request), and
   # read-write on NTFS carries a real corruption risk if the volume was ever
   # left mid-hibernation by Windows (Fast Startup) rather than cleanly shut
-  # down. Confirmed clean via `ntfsfix --no-action` (ntfs-3g's dry-run check,
-  # writes nothing) for the Samsung SSD specifically (2026-07-21) before
-  # including it here at all — Spinner/Toshiba haven't had the same check run
-  # against them yet. Flipping any of these to read-write later is just
-  # dropping "ro" from its options list — worth running the same check first.
+  # down. Checked clean via `ntfsfix --no-action` (ntfs-3g's dry-run check,
+  # writes nothing) for all three NTFS drives before mounting them
+  # (2026-07-21) — Samsung SSD first (before being included at all, since it's
+  # the one with an actual bootable Windows install), Spinner and the old
+  # Toshiba NTFS partition afterward on request, purely to confirm neither was
+  # in a vulnerable state. Flipping to read-write later is just dropping "ro"
+  # from a mount's options list — worth re-running the same check first, since
+  # it's a point-in-time result, not a standing guarantee.
   fileSystems."/mnt/spinner" = {
     device = "/dev/disk/by-id/ata-WDC_WD10EZEX-08WN4A0_WD-WCC6Y5LKP2NJ-part2";
-    fsType = "ntfs3";
-    options = [ "ro" "nofail" "uid=1000" "gid=100" "windows_names" ];
-  };
-
-  fileSystems."/mnt/toshiba" = {
-    device = "/dev/disk/by-id/ata-TOSHIBA_DT01ACA300_76HE4XDAS-part2";
     fsType = "ntfs3";
     options = [ "ro" "nofail" "uid=1000" "gid=100" "windows_names" ];
   };
@@ -119,6 +116,40 @@
     device = "/dev/disk/by-id/ata-Samsung_SSD_860_QVO_1TB_S59HNG0N417636E-part3";
     fsType = "ntfs3";
     options = [ "ro" "nofail" "uid=1000" "gid=100" "windows_names" ];
+  };
+
+  # The Toshiba drive's original single NTFS partition was confirmed empty
+  # (2026-07-21, on request) and repartitioned: a GPT with a btrfs partition
+  # (the remainder, ~2.34TiB) and a fixed 400GiB exFAT partition, both
+  # formatted via sgdisk/mkfs.btrfs/mkfs.exfat directly on the real hardware
+  # (an imperative, one-time, destructive step — not something
+  # `nixos-rebuild switch` does; see DECISIONS.md for the full account,
+  # including why `parted`'s CLI was abandoned mid-attempt in favor of
+  # `sgdisk`). `-part1`/`-part2` now refer to the NEW partitions in this
+  # layout, not the old single-NTFS-partition one.
+  #
+  # btrfs mountpoint read-write (not "ro" like the NTFS mounts above — no
+  # Windows-hibernation-style corruption risk on a filesystem this repo
+  # itself just created). Its top-level directory defaults to root:root 0755
+  # straight out of mkfs — same class of bug as @games and the microvm
+  # volumes — fixed below via systemd.tmpfiles.rules instead of relying on
+  # NTFS-style uid=/gid= mount options, which btrfs doesn't have (real Unix
+  # permissions instead).
+  fileSystems."/mnt/toshiba" = {
+    device = "/dev/disk/by-id/ata-TOSHIBA_DT01ACA300_76HE4XDAS-part1";
+    fsType = "btrfs";
+    options = [ "compress=zstd" "noatime" "nofail" ];
+  };
+
+  # exFAT: mainlined in-kernel driver (since Linux 5.7) handles mount/read/
+  # write directly, same story as ntfs3 — only mkfs/fsck need the userspace
+  # exfatprogs package (added to environment.systemPackages in
+  # configuration.nix). uid=/gid=/umask= needed here since, like NTFS, exFAT
+  # has no on-disk owner metadata of its own.
+  fileSystems."/mnt/toshiba-exfat" = {
+    device = "/dev/disk/by-id/ata-TOSHIBA_DT01ACA300_76HE4XDAS-part2";
+    fsType = "exfat";
+    options = [ "nofail" "uid=1000" "gid=100" "umask=022" ];
   };
 
   boot.initrd.luks.devices."cryptroot" = {
