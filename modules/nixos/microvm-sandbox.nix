@@ -326,6 +326,42 @@ in
           '';
         };
 
+        # ── Phase 2 diagnostic (temporary) ──────────────────────────────────
+        # Added 2026-07-21: the host's iptables counters stayed at 0/0 even
+        # against the corrected non-local test targets, and the connect
+        # attempts failed in ~2ms each (not anywhere near the 3s timeout) —
+        # inconsistent with a silently-dropped packet, consistent with an
+        # immediate local routing failure that never puts a packet on the
+        # wire at all. Dumps the guest's actual routing state directly rather
+        # than guessing further. Remove once the root cause is found.
+        systemd.services.phase2-diagnose = {
+          description = "Phase 2 diagnostic: dump guest routing state";
+          after = [ "network-online.target" ];
+          wants = [ "network-online.target" ];
+          wantedBy = [ "multi-user.target" ];
+          path = [ pkgs.iproute2 ];
+          serviceConfig = {
+            Type = "oneshot";
+            StandardOutput = "journal+console";
+            StandardError = "journal+console";
+          };
+          script = ''
+            echo "PHASE2-DIAGNOSE: ip addr show"
+            ip addr show
+            echo "PHASE2-DIAGNOSE: ip route show"
+            ip route show
+            echo "PHASE2-DIAGNOSE: ip route get 1.1.1.1 (known-good comparison -- internet works)"
+            ip route get 1.1.1.1 || echo "  (failed)"
+            echo "PHASE2-DIAGNOSE: ip route get 100.64.0.1 (tailnet CGNAT test target)"
+            ip route get 100.64.0.1 || echo "  (failed)"
+            echo "PHASE2-DIAGNOSE: ip route get 10.0.0.1 (RFC1918 test target)"
+            ip route get 10.0.0.1 || echo "  (failed)"
+            echo "PHASE2-DIAGNOSE: ip route get 192.168.1.1 (RFC1918 test target)"
+            ip route get 192.168.1.1 || echo "  (failed)"
+            echo "PHASE2-DIAGNOSE: done"
+          '';
+        };
+
         # ── zram ─────────────────────────────────────────────────────────
         # Adapted from modules/nixos/performance.nix, not blind-copied:
         # keep zstd + deflateOnOOM, drop the desktop-tuned swappiness=100
