@@ -379,3 +379,37 @@ session:
 No firewall changes needed — `tailscale0` is already a trusted interface
 (`openFirewall` is left `false`), so port 3389 is reachable over the
 tailnet the moment `xrdp.service` is up, and nowhere else.
+
+## 15. NTFS data drives — verify mount + read access
+
+Three `fileSystems.*` entries in `hardware-configuration.nix` for pre-existing
+internal SATA drives (`/mnt/spinner`, `/mnt/toshiba`, `/mnt/windows` — the last
+being the Samsung SSD's actual Windows C: partition). All start `ro`, `nofail`.
+Designed and `nix flake check`-verified but not yet exercised on real hardware:
+
+1. `nixos-rebuild switch --flake .#pegasus`, then confirm all three actually
+   mounted:
+   ```
+   mount | grep -E 'spinner|toshiba|windows'
+   ls /mnt/spinner /mnt/toshiba /mnt/windows
+   ```
+2. Confirm you (as `z`) can actually read files without `sudo` — the whole point
+   of the `uid=1000,gid=100` mount options:
+   ```
+   ls -la /mnt/spinner
+   cat /mnt/spinner/<some-known-file>
+   ```
+3. If any of them fails to mount, `nofail` means the host still boots fine —
+   check `systemctl status` for the corresponding `mnt-*.mount` unit and
+   `journalctl -u mnt-*.mount` for why.
+4. **Before enabling read-write on any of these** (drop `ro` from that mount's
+   `options`): run the same clean-shutdown check already done for the Samsung
+   SSD —
+   ```
+   sudo nix shell nixpkgs#ntfs3g -c ntfsfix --no-action /dev/disk/by-id/<drive>
+   ```
+   (note: `nix run nixpkgs#ntfs3g -- ntfsfix ...` runs the package's default
+   binary, `ntfs-3g` itself, not `ntfsfix` — use `nix shell ... -c` instead.)
+   A clean pass ("processed successfully," no hibernation/dirty-`$LogFile`
+   mention) is what the Samsung SSD showed before it was included here at all;
+   `Spinner`/`Toshiba` haven't had this run against them specifically yet.

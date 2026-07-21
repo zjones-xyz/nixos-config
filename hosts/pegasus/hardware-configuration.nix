@@ -73,6 +73,54 @@
     options = [ "subvol=@microvm-state" "compress=zstd" "noatime" "nofail" ];
   };
 
+  # ── NTFS data drives (internal SATA, leftover from the pre-NixOS setup) ───
+  # Referenced by /dev/disk/by-id (stable across SATA port/enumeration
+  # changes) rather than /dev/sdX, same convention as disko.nix's NVMe note.
+  # fsType "ntfs3" is the in-kernel driver (mainlined since Linux 5.15, built
+  # as a loadable module by this kernel package — no boot.kernelModules entry
+  # needed, it autoloads on mount) rather than "ntfs"/"ntfs-3g", which would
+  # dispatch to the userspace FUSE driver instead; confirmed via the pinned
+  # nixpkgs source that plain fsType = "ntfs" prefers ntfs-3g even with the
+  # kernel driver available. `uid`/`gid` are z's actual live values (`id z`
+  # on pegasus — not pinned anywhere in this repo's user config, so these are
+  # literal, not derived from config.users.users.z, which has no static uid
+  # here). `nofail` so a disconnected/failed drive degrades to "not mounted"
+  # rather than blocking the whole host's boot (see the microvm volumes
+  # above for the exact same lesson, learned the hard way).
+  #
+  # All three start read-only: reading is the priority (per request), and
+  # read-write on NTFS carries a real corruption risk if the volume was ever
+  # left mid-hibernation by Windows (Fast Startup) rather than cleanly shut
+  # down. Confirmed clean via `ntfsfix --no-action` (ntfs-3g's dry-run check,
+  # writes nothing) for the Samsung SSD specifically (2026-07-21) before
+  # including it here at all — Spinner/Toshiba haven't had the same check run
+  # against them yet. Flipping any of these to read-write later is just
+  # dropping "ro" from its options list — worth running the same check first.
+  fileSystems."/mnt/spinner" = {
+    device = "/dev/disk/by-id/ata-WDC_WD10EZEX-08WN4A0_WD-WCC6Y5LKP2NJ-part2";
+    fsType = "ntfs3";
+    options = [ "ro" "nofail" "uid=1000" "gid=100" "windows_names" ];
+  };
+
+  fileSystems."/mnt/toshiba" = {
+    device = "/dev/disk/by-id/ata-TOSHIBA_DT01ACA300_76HE4XDAS-part2";
+    fsType = "ntfs3";
+    options = [ "ro" "nofail" "uid=1000" "gid=100" "windows_names" ];
+  };
+
+  # Samsung SSD's actual Windows C: partition (sda3 — sda1/sda2 are the EFI
+  # System Partition and Microsoft Reserved Partition, sda4 is almost
+  # certainly the WinRE recovery partition and isn't mounted here; nothing
+  # about it was checked before excluding it, so revisit if it turns out to
+  # be wanted too). This is the one partition here that's part of an actual
+  # bootable Windows install rather than a plain data drive, hence the
+  # ntfsfix check specifically before adding it.
+  fileSystems."/mnt/windows" = {
+    device = "/dev/disk/by-id/ata-Samsung_SSD_860_QVO_1TB_S59HNG0N417636E-part3";
+    fsType = "ntfs3";
+    options = [ "ro" "nofail" "uid=1000" "gid=100" "windows_names" ];
+  };
+
   boot.initrd.luks.devices."cryptroot" = {
     device = "/dev/disk/by-uuid/be8611f1-dc26-4197-bc1c-4772af1a0880";
     # Matches disko.nix's settings.allowDiscards = true — lets fstrim.enable
