@@ -581,3 +581,116 @@ correct order:
 Matches the original, correct ordering — not the inverted order the first cold boot
 produced. **Gate closed for real this time**, on a genuine cold start rather than a
 switch+restart.
+
+## Phase 3 — agent user, Docker, SSH, persistent state (in progress)
+
+**New flake input: `impermanence`.** The guest boots an ephemeral root by default
+(microvm.nix's own behavior, not something this design chose) — per N3, the SSH host
+key (= sops age identity), the `agent` user's home, and Docker's data root all need to
+survive a guest restart on the persistent `/persist` volume instead. Hand-rolling this
+with raw `fileSystems.*` bind mounts is a real footgun: `mount --bind` requires the
+source directory to already exist, but NixOS's own directory-creation timing (activation
+scripts, `systemd-tmpfiles-setup.service`) and the *target* filesystem's own mount timing
+(ordinary `local-fs.target`-tier mount units, same tier as the bind mount itself) don't
+have an obvious, guaranteed-correct ordering relative to each other without careful,
+easy-to-get-subtly-wrong handling — and getting it wrong tends to fail *silently* (an
+empty directory gets created under a not-yet-mounted path and is invisibly shadowed once
+the real mount lands, rather than erroring loudly). `impermanence`
+(`github:nix-community/impermanence`) is the standard, battle-tested NixOS community
+module built specifically for this "ephemeral root + persist these specific paths"
+pattern, so it's used here instead of reinventing that correctness work. Verified via a
+research pass against its actual source (not assumed): `environment.persistence."/persist"`
+takes `directories`/`files` lists (bare strings or attrsets with per-entry `user`/`group`/
+`mode` overrides), asserts the target `fileSystems."/persist".neededForBoot` is `true`, and
+doesn't manage `/persist`'s own mount itself (that's still `microvm.volumes`, already in
+place since Phase 1). **Corrected after `nix flake check` actually failed on this exact
+assertion**: an earlier pass through `mounts.nix` mistakenly concluded every
+`microvm.volumes` entry gets `neededForBoot = true` automatically — a closer read shows
+that's only true for the *writableStoreOverlay* mountpoint (`/nix/.rw-store`) specifically;
+a plain secondary volume like `/persist` does not get it for free. Set explicitly instead:
+`fileSystems."/persist".neededForBoot = true;`.
+
+**SSH host key stays at its normal default path**
+(`/etc/ssh/ssh_host_ed25519_key`), persisted via a plain `environment.persistence."/persist"`
+`files` entry, rather than redirected to a custom `/persist/...` path via
+`services.openssh.hostKeys`. Confirmed no race: `sshd-keygen` (the unit that generates a
+host key if the target file doesn't exist) is ordered at `multi-user.target`, which comes
+after `local-fs.target` where impermanence's bind mount lands — so the persisted key is
+already in place before `sshd-keygen` would otherwise decide to generate a fresh one. The
+public key is persisted via `method = "symlink"` rather than a second bind mount, since
+it's cheaply re-derivable from the private key — matches impermanence's own upstream
+example for this exact file pair, used as a direct reference rather than guessed.
+
+**Docker data root**: `virtualisation.docker.daemon.settings.data-root = "/persist/var/lib/docker";`.
+Confirmed against the pinned nixpkgs source that the docker module has no dedicated
+`dataDir` option — `daemon.settings` is a freeform option serialized straight to
+`daemon.json`, and `data-root` is docker's own daemon.json key, not a NixOS-specific one.
+`/var/lib/docker`'s directory itself is a plain `environment.persistence` `directories`
+entry (root:root 0711, matching Docker's own default data-root permissions) rather than
+relying on dockerd to create it — belt-and-suspenders, though dockerd would create it
+fine on its own too since `docker.service` itself is ordered well after `local-fs.target`.
+
+**Agent's home directory**: also a top-level `environment.persistence` `directories`
+entry (`{ directory = "/home/agent"; user = "agent"; group = "users"; mode = "0755"; }`)
+rather than impermanence's `users.<name>.directories` convenience wrapper — that wrapper's
+paths are relative to the user's home, intended for persisting *specific subdirectories*
+within an otherwise-ephemeral home; persisting the whole home directory wholesale is more
+direct as a plain top-level entry with explicit ownership.
+
+**`operatorSshKeys` option added** (list of pubkey strings, empty default) rather than
+hardcoding Zoe's Serenity key inside this shared module — pegasus's own instantiation
+supplies the actual key (the same one already used fleet-wide for the `z` user in
+`modules/nixos/common.nix` and the LUKS-unlock `authorizedKeys`, confirmed current since
+it's the one actively used to reach every host today, not merely assumed).
+
+**`CLAUDE_CODE_OAUTH_TOKEN` wired per N4**: a sops secret (`secrets."CLAUDE_CODE_OAUTH_TOKEN"`,
+owned by `agent`, mode `0400`) decrypts to `/run/secrets/CLAUDE_CODE_OAUTH_TOKEN`, and
+`environment.interactiveShellInit` exports it into interactive shells by reading that file
+— not a systemd service `EnvironmentFile=` (agents run over SSH in an interactive shell,
+never reached by a service's environment) and not `environment.variables` (world-readable
+via `/proc/*/environ`). Gated the same way every real host's sops wiring is
+(`hosts/pegasus/configuration.nix`'s `hasSops` pattern): `lib.mkIf (builtins.pathExists
+(../../secrets + "/${cfg.guestName}.yaml"))`, since `secrets/agent-sandbox.yaml` can't exist
+until the guest's real age pubkey is known, which needs a first boot. `.sops.yaml` gained a
+placeholder `&agent-sandbox` anchor and its own creation rule, mirroring hopper/hamilton's
+exact "placeholder until first boot" pattern.
+
+**Codex CLI's token flow turned out NOT to be symmetric with Claude Code's — a brief
+assumption caught by research, not yet resolved.** N4 (and the original brief) assumed
+both agents' subscription auth could be handled identically: mint a token once, inject via
+env var. Researched against Codex's actual current docs/behavior rather than assumed:
+Codex's subscription-based auth is **file-based**, not env-var-based (`$CODEX_HOME/auth.json`,
+default `~/.codex/auth.json`, plaintext JSON containing access/refresh tokens), and — more
+importantly — Codex **refreshes this file in place** as tokens rotate. That's a genuine
+mismatch with sops-nix's model: sops-nix decrypts a secret to a target path at activation
+time and doesn't expect the app to write back to it; if a future `nixos-rebuild switch`
+ever redeploys that secret, it would silently clobber whatever Codex had refreshed the
+file to, back to the stale original value. (Whether this actually bites in practice
+depends on whether sops-nix only rewrites a target file when the underlying encrypted
+value changes, which would make it a low-probability-but-real footgun rather than a
+routine one — not independently verified.) Separately, OpenAI's own current guidance
+actually recommends `OPENAI_API_KEY` (pay-as-you-go, not subscription) for CI/automation
+use, explicitly calling the subscription-auth.json-copy approach the less-preferred
+"advanced" path for trusted private automation only — the opposite emphasis from Claude
+Code's `setup-token` being the first-recommended headless path. `pkgs.codex` is installed
+regardless (the CLI binary itself, independent of which auth method gets used), but no
+auth-token wiring has been implemented for it yet pending a decision on which of these
+tradeoffs to accept. See MANUAL-STEPS.md/SECRETS-TODO.md.
+
+**`agent`'s uid pinned after `nix flake check` itself surfaced a real gap**: impermanence
+emitted its own warning that dynamically-allocated uids/gids live in `/var/lib/nixos`,
+which isn't persisted here — on this ephemeral-root guest, `agent`'s uid could silently
+drift across a restart, orphaning everything already persisted under uid 1000 on
+`/persist` (files would stay owned by the numeric uid, but `agent` might no longer *be*
+that uid after a reboot). Fixed by pinning `users.users.agent.uid = 1000;` explicitly,
+removing the dependency on that allocation state for the one account this actually
+matters for, rather than the heavier alternative of also persisting `/var/lib/nixos`
+wholesale (which would stabilize every dynamically-allocated account, not just this one).
+The primary group ("users", gid 100) wasn't part of the problem — it's NixOS's own
+static, non-dynamically-allocated group, confirmed by its absence from the warning's own
+flagged-groups list (which named `nscd`/`sshd`/`systemd-coredump`/`systemd-oom` instead —
+NixOS's own dynamic service accounts, none of which own any path this design persists, so
+left as-is rather than over-fixing).
+
+**Not yet verified on real hardware** — `nix flake check --no-build --all-systems` passes
+clean across every host with this config, but no live guest boot with it yet.

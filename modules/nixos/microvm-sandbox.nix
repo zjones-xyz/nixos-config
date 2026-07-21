@@ -5,8 +5,15 @@
 # landed and are verified live on Pegasus (guest boots, writable store,
 # outbound internet, and the network containment denylist below — see
 # DECISIONS.md for the full verification history, including bugs found and
-# fixed along the way). No agent user, no Docker yet — that's Phase 3.
-{ config, lib, pkgs, ... }:
+# fixed along the way). Phase 3 (agent user, Docker, SSH, persistent state)
+# in progress — see that section below.
+#
+# sops-nix/impermanence are passed in as plain values (via specialArgs on the
+# *host's* nixosSystem call, e.g. hosts/pegasus's specialArgs in flake.nix) —
+# not imported the normal top-level way — because they need to be imported
+# into the *guest's* own nested module evaluation below, a separate NixOS
+# system from the host itself.
+{ config, lib, pkgs, sops-nix, impermanence, ... }:
 
 let
   cfg = config.homelab.agentSandbox;
@@ -161,6 +168,16 @@ in
       description = "Host's uplink interface to masquerade guest egress through.";
     };
 
+    operatorSshKeys = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = ''
+        Public keys authorized for the guest's `agent` user (Phase 3). Passed
+        explicitly per-instance rather than referencing a fleet user's keys
+        from inside this shared module, since which operator/key is
+        appropriate may differ per guest.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -248,7 +265,7 @@ in
           "${pkgs.util-linux}/sbin/agetty --autologin root --keep-baud 115200,57600,38400,9600 %I $TERM"
         ];
 
-        environment.systemPackages = [ pkgs.curl ];
+        environment.systemPackages = [ pkgs.curl pkgs.claude-code pkgs.codex ];
 
         # ── Phase 1 gate self-check ────────────────────────────────────────
         # There's no genuine interactive console into this guest yet (the
@@ -401,6 +418,126 @@ in
             }
           ];
         };
+
+        # ── Phase 3: agent user, Docker, SSH, persistent state ──────────────
+        # sops-nix/impermanence imported here (not at the top level of this
+        # file) — they need to apply to the *guest's* own module evaluation,
+        # not the host's. Both values reach this scope via this file's own
+        # { config, lib, pkgs, sops-nix, impermanence, ... }: signature,
+        # captured by ordinary Nix lexical closure (this whole block is still
+        # just a nested function value, not a separate file) — no need for
+        # microvm.nix's extraModules/specialArgs plumbing.
+        imports = [ sops-nix.nixosModules.sops impermanence.nixosModules.impermanence ];
+
+        # impermanence asserts every path it persists sits on a filesystem
+        # marked neededForBoot. CONFIRMED via direct source check
+        # (nixos-modules/microvm/mounts.nix) that microvm.nix's own
+        # volumes-to-fileSystems translation only sets this automatically for
+        # the *writableStoreOverlay* mountpoint (/nix/.rw-store) — a plain
+        # secondary volume like /persist does not get it for free, despite
+        # earlier (wrong) assumption otherwise. Set explicitly.
+        fileSystems."/persist".neededForBoot = true;
+
+        services.openssh.enable = true;
+
+        users.users.agent = {
+          isNormalUser = true;
+          # Pinned rather than left to NixOS's dynamic uid allocation:
+          # `nix flake check` surfaced impermanence's own warning that
+          # dynamically-allocated uids/gids live in /var/lib/nixos, which
+          # isn't itself persisted here — on this ephemeral-root guest,
+          # `agent`'s uid could silently drift across a restart, orphaning
+          # everything already persisted under uid 1000 on /persist. Pinning
+          # it removes the dependency on that allocation state entirely,
+          # cheaper than also persisting /var/lib/nixos wholesale for the one
+          # user this actually matters for. The primary group ("users",
+          # gid 100) is NixOS's own static, non-dynamically-allocated group —
+          # not part of this problem, confirmed by its absence from the same
+          # warning's flagged-groups list.
+          uid = 1000;
+          # docker: grants access to the rootful daemon socket — root-
+          # equivalent inside the guest, but the guest itself is the actual
+          # security boundary here (the whole point of this design), so
+          # that's an acceptable trade in a way it wouldn't be for a fleet
+          # host's own user.
+          extraGroups = [ "docker" ];
+          openssh.authorizedKeys.keys = cfg.operatorSshKeys;
+          shell = pkgs.bash;
+        };
+
+        virtualisation.docker = {
+          enable = true;
+          # Nested is fine — Docker uses namespaces/cgroups, not its own
+          # hypervisor, so there's no nested-KVM concern running it inside a
+          # cloud-hypervisor guest. Data root on /persist (N3) — see below.
+          daemon.settings.data-root = "/persist/var/lib/docker";
+        };
+
+        # N3: SSH host key (= sops age identity below), agent's home, and
+        # Docker's data root all need to survive a guest restart — this
+        # guest's root is ephemeral by default (microvm.nix), so anything not
+        # explicitly persisted here evaporates on every restart. See
+        # flake.nix's impermanence input comment for why this uses
+        # impermanence rather than hand-rolled bind mounts.
+        #
+        # SSH host key: left at its normal default path
+        # (/etc/ssh/ssh_host_ed25519_key) rather than redirected via
+        # services.openssh.hostKeys to a custom /persist/... path — sshd's own
+        # key-generation unit (sshd-keygen) is ordered at multi-user.target,
+        # after impermanence's bind-mount (local-fs.target), so the persisted
+        # key is already in place by the time sshd would otherwise generate a
+        # fresh one. Public key persisted via a symlink instead of a second
+        # bind mount, since it's cheaply re-derivable — matches impermanence's
+        # own upstream example for this exact file pair.
+        #
+        # /var/lib/docker and /home/agent: explicit per-entry ownership
+        # (not the users.<name>.directories convenience wrapper, whose paths
+        # are relative to that user's home — for persisting a directory
+        # wholesale rather than specific subpaths within an otherwise-
+        # ephemeral home, a plain top-level directories entry is more direct).
+        environment.persistence."/persist" = {
+          hideMounts = true;
+          files = [
+            "/etc/ssh/ssh_host_ed25519_key"
+            { file = "/etc/ssh/ssh_host_ed25519_key.pub"; method = "symlink"; }
+          ];
+          directories = [
+            { directory = "/var/lib/docker"; user = "root"; group = "root"; mode = "0711"; }
+            { directory = "/home/agent"; user = "agent"; group = "users"; mode = "0755"; }
+          ];
+        };
+
+        # ── Guest's own sops age identity (N3) — distinct from every fleet
+        # host's, per docs/microvm-sandbox/DECISIONS.md's Secrets section.
+        # Gated on the secrets file existing yet, same pattern as every real
+        # host in this repo (e.g. hosts/pegasus/configuration.nix's hasSops):
+        # the file can't exist until the guest's real age pubkey is known,
+        # which needs a first boot — see docs/microvm-sandbox/SECRETS-TODO.md
+        # for the exact ceremony. `../../secrets + "/${cfg.guestName}.yaml"`
+        # rather than `../../secrets/${cfg.guestName}.yaml` — bare Nix path
+        # literals don't support string interpolation, only path+string
+        # concatenation does.
+        sops = lib.mkIf (builtins.pathExists (../../secrets + "/${cfg.guestName}.yaml")) {
+          defaultSopsFile = ../../secrets + "/${cfg.guestName}.yaml";
+          age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
+          secrets."CLAUDE_CODE_OAUTH_TOKEN" = {
+            owner = "agent";
+            group = "users";
+            mode = "0400";
+          };
+        };
+
+        # N4: the token needs to reach an *interactive* shell (agents run
+        # over SSH), not a systemd service's EnvironmentFile= (never reached)
+        # or environment.variables (world-readable via /proc/*/environ).
+        # Safe to leave unconditional on whether the secret above is actually
+        # wired up yet — the `-r` check just fails gracefully (no file exists
+        # yet) until it is.
+        environment.interactiveShellInit = ''
+          if [ -r /run/secrets/CLAUDE_CODE_OAUTH_TOKEN ]; then
+            export CLAUDE_CODE_OAUTH_TOKEN="$(cat /run/secrets/CLAUDE_CODE_OAUTH_TOKEN)"
+          fi
+        '';
       };
     };
 

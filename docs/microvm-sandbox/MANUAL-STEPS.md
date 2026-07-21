@@ -172,18 +172,52 @@ out at the full 3s (not an instant tooling failure), and `iptables -L INPUT -n -
 `18 packets / 1032 bytes` on the rule for `agentvm0` — nonzero, genuine proof against real
 connection attempts.
 
-## Phase 3 — agent user, Docker, agents (once code lands)
+## Phase 3 — agent user, Docker, agents (code landed 2026-07-21, not yet verified live)
 
-- **Mint `CLAUDE_CODE_OAUTH_TOKEN`** — see SECRETS-TODO.md.
-- **Mint the Codex token** — see SECRETS-TODO.md.
-- **Generate the guest's own SSH host key ceremony** — see SECRETS-TODO.md (this is the
-  guest's sops age identity; must happen before its `secrets/<guest>.yaml` can be created).
-- Confirm from Pegasus: `ssh -J z@pegasus.<tailnet> agent@<guest-ip>` reaches the guest;
-  add the `sandbox` Host alias to `~/.ssh/config` on Serenity (see the plan's "Operator
-  access" section for the exact stanza).
+Code lands `agent` user, Docker, sshd, `impermanence`-backed persistence, and
+`CLAUDE_CODE_OAUTH_TOKEN` wiring — designed and `nix flake check`-verified but not yet
+booted on real hardware. Codex's token is NOT yet wired (see SECRETS-TODO.md — its auth
+flow turned out to be file-based and mismatched with sops-nix's model, needs a decision
+first). Verification steps once switched:
+
+1. `nixos-rebuild switch --flake .#pegasus`, then restart the guest to pick up the new
+   guest-internal config (a host switch alone doesn't restart an already-running guest —
+   `microvm@<name>.service` has `restartIfChanged = false`, confirmed back in Phase 1):
+   ```
+   sudo systemctl restart microvm@agent-sandbox
+   journalctl -u microvm@agent-sandbox -f
+   ```
+2. **Confirm the guest's SSH host key persists across a restart** — this is the whole
+   point of the `impermanence` wiring. Read it, restart the guest again, confirm it's
+   identical:
+   ```
+   # (however you reach a shell in the guest at this point in Phase 3 —
+   # journalctl-based visibility only, until SSH is confirmed working below)
+   cat /etc/ssh/ssh_host_ed25519_key.pub
+   sudo systemctl restart microvm@agent-sandbox
+   # ... re-check the same file matches ...
+   ```
+3. **Confirm SSH access**: `ssh -J z@pegasus.<tailnet> agent@10.100.0.2` (or from Pegasus
+   directly: `ssh agent@10.100.0.2`) using the Serenity key already wired into
+   `operatorSshKeys`. Add a `sandbox` Host alias to `~/.ssh/config` on Serenity once this
+   works (see the original plan's "Operator access" section for the exact stanza).
+4. **Confirm Docker works and persists**: `docker run hello-world` inside the guest, then
+   restart the guest and confirm `docker ps -a`/images survive (proves
+   `/persist/var/lib/docker` is actually being used, not the ephemeral root).
+5. **Confirm the agent's home directory persists**: create a file in `/home/agent`,
+   restart the guest, confirm it's still there.
+6. **Mint and wire `CLAUDE_CODE_OAUTH_TOKEN`** — see SECRETS-TODO.md §1-2 (guest's own
+   sops age identity ceremony, then the token itself). Confirm after switching again:
+   ```
+   ssh agent@<guest> 'echo $CLAUDE_CODE_OAUTH_TOKEN | head -c 20'  # should print, not be empty
+   claude --version   # then a real headless auth check
+   ```
+7. **Decide + implement Codex's token flow** — see SECRETS-TODO.md §3 for the three
+   options; not done yet.
 - Confirm a Docker Postgres container comes up inside the guest.
-- Confirm a sample web dev server is reachable on the forwarded port from Pegasus.
-- Confirm Claude Code authenticates headlessly using the subscription token (not an API key).
+- Confirm a sample web dev server is reachable on the forwarded port from Pegasus — **not
+  yet implemented**: the forwarded-dev-port mechanism itself (deferred from Phase 2) still
+  needs the hand-rolled loopback-DNAT rule mentioned in Phase 2's design notes.
 
 ## Phase 4 — build-verification (once code lands)
 

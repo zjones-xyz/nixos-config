@@ -64,9 +64,25 @@
       url = "git+https://github.com/microvm-nix/microvm.nix.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Phase 3 of the agent sandbox (modules/nixos/microvm-sandbox.nix): the
+    # guest boots an ephemeral root (microvm.nix's default), so the agent
+    # user's home, Docker's data, and the guest's own SSH host key (= its sops
+    # age identity, per N3 in docs/microvm-sandbox/DECISIONS.md) all need to
+    # survive a guest restart on the persistent /persist volume instead.
+    # Hand-rolling that with raw bind-mounts is a real footgun — get the
+    # directory-creation/mount ordering wrong and it fails silently (an empty
+    # dir created under a not-yet-mounted path, quietly shadowed forever)
+    # rather than erroring. impermanence is the standard, battle-tested
+    # community module for exactly this pattern. git+https rather than
+    # github: — same reason as claude-desktop-debian/microvm above.
+    impermanence = {
+      url = "git+https://github.com/nix-community/impermanence.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, microvm, ... }: {
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, microvm, impermanence, ... }: {
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
@@ -83,7 +99,13 @@
       # Single NVMe, installed via hosts/pegasus/disko.nix (2026-07-11).
       pegasus = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
-        specialArgs = { inherit self; };
+        # sops-nix/impermanence passed through here (not just imported as
+        # modules below) so modules/nixos/microvm-sandbox.nix can reference
+        # `sops-nix.nixosModules.sops`/`impermanence.nixosModules.impermanence`
+        # as plain values to import *into the guest's own nested module
+        # evaluation* (a separate NixOS system from pegasus itself) — see that
+        # file's Phase 3 section.
+        specialArgs = { inherit self sops-nix impermanence; };
         modules = [
           ./hosts/pegasus/configuration.nix
           home-manager.nixosModules.home-manager
