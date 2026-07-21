@@ -453,3 +453,56 @@ Lesson for next time, worth generalizing: a self-check "passing" is not proof on
 for anything security-relevant — always cross-check against an independent signal (here,
 the iptables counters, plus a positive control proving the test mechanism itself works)
 before trusting the result.
+
+## Phase 2 — critical containment bypass found by independent review (2026-07-21)
+
+An independent review agent (requested explicitly to double-check this work before
+proceeding further) flagged that this file's own earlier claim — "Pegasus's own listening
+services... are covered a second way, by the existing INPUT-chain default-deny (nothing
+opens a port to this interface)" — was an assumption, never actually checked against the
+fleet's real firewall config. It was **wrong, and a genuine containment bypass**:
+
+- `services.openssh.openFirewall` defaults to `true` and is never overridden anywhere in
+  this repo (confirmed via `nix eval`), which makes `networking.firewall` open port 22
+  globally — on every interface, not just the tailnet/LAN ones it was written for.
+- `networking.firewall.interfaces` — the option that would let a per-interface
+  allowlist override the global one — is `{}` (empty) for Pegasus (confirmed via `nix
+  eval`), so nothing scopes that port 22 exception away from the guest's tap interface.
+- `modules/nixos/gaming.nix`'s Steam Remote Play ports (27036/27037) are open the same
+  way, for the same reason.
+- Net effect: the guest, despite every FORWARD-chain rule in this design, could open a
+  TCP connection straight to `10.100.0.1:22` (or the gaming ports) and reach Pegasus's
+  *real* sshd directly — completely bypassing the N2 denylist, because that traffic
+  never enters FORWARD at all (see the routing note above) and nothing was denying it at
+  INPUT. I independently re-verified all three `nix eval` facts above before accepting
+  the finding, rather than taking the review's word for it.
+
+**Fix**: a blanket `iptables -I INPUT 1 -i ${cfg.interfaceId} -j DROP` (with matching
+delete-then-insert idempotency and `extraStopCommands` cleanup, same pattern as the
+FORWARD-chain rules). Deliberately a *blanket* deny rather than an itemized list of ports
+to block — an itemized list is exactly the kind of thing that already rotted once here
+(nobody updates a hand-maintained "ports to block on this interface" list the day some
+unrelated module opens a new global port). The guest has no legitimate reason to reach
+*any* service running on Pegasus itself — it only needs Pegasus as a routing hop to the
+internet, which is a FORWARD-chain matter, not INPUT — so a blanket deny costs nothing.
+
+**Bundled in the same fix, since it was cheap and addressed a related review finding**:
+`boot.kernel.sysctl."net.ipv6.conf.all.forwarding"` is now explicitly forced to `false`
+on the host. This was already true in practice (no fleet module currently sets IPv6
+forwarding for Pegasus specifically — `tailscale.nix`'s sysctl is only imported by
+hopper), so nothing observable changes today, but it turns an invariant that depended on
+nobody enabling IPv6 forwarding on Pegasus for an unrelated reason into an enforced one.
+
+**Regression coverage**: `phase2-verify` gained a fifth check,
+`check_blocked "this host's own gateway (INPUT-chain path, not FORWARD)"
+"${cfg.hostAddress}" 22`, specifically targeting `10.100.0.1:22` — the exact address:port
+the bypass exploited — so a future regression here fails the self-check rather than
+silently reopening.
+
+**Also added**: an `assertions` entry enforcing `interfaceId`'s 15-character limit
+(Linux `IFNAMSIZ`) — a smaller finding from the same review, since a name over that limit
+would previously have evaluated fine and only failed opaquely at `ip link` time.
+
+Re-verification of this specific fix (confirming `10.100.0.1:22` is now blocked and that
+`iptables -L INPUT -n -v` shows a nonzero counter on the new rule after a real attempt)
+is the remaining step before this gate is fully closed a second time.

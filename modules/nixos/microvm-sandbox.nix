@@ -1,18 +1,23 @@
 # ── Isolated agent dev-sandbox (microVM) ────────────────────────────────────
 # Shared, parameterized guest module for the isolated coding-agent sandbox.
 # See docs/microvm-sandbox/DECISIONS.md for the full design rationale (N1–N4,
-# the memory model, store/volume layout, network approach). This file is
-# Phase 1 scope only: skeleton module + boot. No agent user, no Docker, no
-# containment denylist yet — those land in Phases 2–3. Phase 1's minimal
-# networking (below) gets the guest online so its own gate ("outbound
-# internet" + "nix build a trivial derivation") is checkable; it is NOT yet
-# the brief's containment policy — nothing here blocks LAN/tailnet access.
-# Phase 2 replaces the wide-open NAT below with the N2 denylist. Do not treat
-# a Phase-1-only guest as safe from a network-isolation standpoint.
+# the memory model, store/volume layout, network approach). Phases 1-2 have
+# landed and are verified live on Pegasus (guest boots, writable store,
+# outbound internet, and the network containment denylist below — see
+# DECISIONS.md for the full verification history, including bugs found and
+# fixed along the way). No agent user, no Docker yet — that's Phase 3.
 { config, lib, pkgs, ... }:
 
 let
   cfg = config.homelab.agentSandbox;
+  # N2 containment denylist — shared between extraCommands/extraStopCommands
+  # so the two can't drift out of sync with each other.
+  n2Denylist = [
+    "100.64.0.0/10" # tailnet CGNAT
+    "10.0.0.0/8" # RFC1918
+    "172.16.0.0/12" # RFC1918
+    "192.168.0.0/16" # RFC1918
+  ];
 in
 {
   options.homelab.agentSandbox = {
@@ -280,18 +285,23 @@ in
         # address might also just have nothing listening, coincidentally) —
         # the authoritative proof is still `iptables -L FORWARD -n -v` on the
         # host showing nonzero counters on the four DROP rules after this runs.
+        #
+        # CONFIRMED LIVE ON PEGASUS (2026-07-21), second bug: even after
+        # switching to synthetic non-local targets above, every check still
+        # "passed" in ~2-8ms each -- nowhere near the 3s timeout, and the
+        # FORWARD counters stayed at 0/0. `path` here never included
+        # `pkgs.bash`, so the nested `timeout 3 bash -c "..."` failed
+        # instantly with "bash: No such file or directory" -- every prior
+        # "timed out (expected)" line was actually a shell-not-found error,
+        # never a real connection attempt. A positive control (identical
+        # /dev/tcp call against a known-open port) hit the same error,
+        # confirming the mechanism itself, not the network, was broken.
+        # `pkgs.bash` in `path` below is the fix.
         systemd.services.phase2-verify = {
           description = "Phase 2 gate self-check: containment denylist";
           after = [ "network-online.target" "phase1-verify.service" ];
           wants = [ "network-online.target" ];
           wantedBy = [ "multi-user.target" ];
-          # bash is required here, not just for running this script itself --
-          # `timeout 3 bash -c "..."` launches bash as a *nested* subprocess,
-          # which needs its own PATH entry to be found by `timeout`. Its
-          # absence here was the actual root cause of every "timed out"
-          # result throughout this investigation (confirmed live: `timeout:
-          # failed to run command 'bash': No such file or directory`) --
-          # none of these checks ever attempted a real connection at all.
           path = [ pkgs.curl pkgs.bash ];
           serviceConfig = {
             Type = "oneshot";
@@ -319,11 +329,20 @@ in
             fi
 
             # Synthetic, non-local addresses within each denylist range —
-            # not Pegasus's own addresses (see comment above for why).
+            # not Pegasus's own addresses (see comment above for why this
+            # doesn't exercise the FORWARD-chain rules).
             check_blocked "tailnet CGNAT range" "100.64.0.1" 22
             check_blocked "RFC1918 10.0.0.0/8" "10.0.0.1" 22
             check_blocked "RFC1918 172.16.0.0/12" "172.16.0.1" 22
             check_blocked "RFC1918 192.168.0.0/16" "192.168.1.1" 22
+
+            # Regression test for a real containment bypass found by
+            # independent review (2026-07-21) and confirmed live: this host's
+            # own gateway address IS local-to-host traffic, so it bypasses
+            # FORWARD and none of the four checks above exercise it at all.
+            # sshd was reachable here via the fleet-wide openssh.openFirewall
+            # default before the host-side INPUT-chain deny was added.
+            check_blocked "this host's own gateway (INPUT-chain path, not FORWARD)" "${cfg.hostAddress}" 22
 
             if [ "$fail" = "1" ]; then
               echo "PHASE2-VERIFY: FAIL - containment leak detected"
@@ -365,8 +384,19 @@ in
       };
     };
 
-    # ── Host-side networking (Phase 1: connectivity only, NOT containment —
-    # Phase 2 adds the N2 denylist on top of this) ──────────────────────────
+    assertions = [
+      {
+        assertion = builtins.stringLength cfg.interfaceId <= 15;
+        message = ''
+          homelab.agentSandbox.interfaceId ("${cfg.interfaceId}") is longer than 15
+          characters — Linux's IFNAMSIZ limit. Without this assertion, evaluation
+          would succeed and the failure would only surface later as an opaque
+          tap/ip-link error at activation or boot time.
+        '';
+      }
+    ];
+
+    # ── Host-side networking (containment denylist below) ───────────────────
     networking.networkmanager.unmanaged = [ "interface-name:${cfg.interfaceId}" ];
     systemd.network.enable = true;
     # Confirmed live on Pegasus (2026-07-20): enabling systemd-networkd here —
@@ -422,44 +452,59 @@ in
     # RFC1918-only rule would leak the whole tailnet, see DECISIONS.md) and the
     # three RFC1918 ranges (covers the LAN, every other fleet host, and
     # Pegasus's own LAN address as natural subsets of 192.168.0.0/16 — no
-    # separate per-host rule needed). Pegasus's own addresses (LAN, tailnet, or
-    # the tap gateway itself, 10.100.0.1) never actually reach these rules
-    # regardless of range: a destination that's local to the receiving host
-    # always goes through INPUT, never FORWARD. So Pegasus's own listening
-    # services (including Olla, if ever re-enabled) are covered a second way,
-    # by the existing INPUT-chain default-deny (nothing opens a port to this
-    # interface). IPv6 not handled here — the guest has no IPv6 address
-    # configured, so there's nothing to leak over v6 yet; revisit if that
-    # changes (Tailscale's own IPv6 range is fd7a:115c:a1e0::/48, confirmed
-    # from its own logs on Pegasus, not guessed).
+    # separate per-host rule needed).
+    #
+    # CORRECTED 2026-07-21 (independent review + live verification): traffic
+    # destined for Pegasus's own addresses (LAN, tailnet, or the tap gateway
+    # itself) never reaches these FORWARD rules — it goes through INPUT
+    # instead — and an earlier version of this comment assumed that meant it
+    # was automatically blocked. **That was wrong and was a real, confirmed
+    # containment bypass**: `services.openssh.openFirewall` defaults to true
+    # (never overridden anywhere in this repo) and `networking.firewall.
+    # interfaces` is empty, so port 22 (and gaming.nix's Steam Remote Play
+    # ports) are allowed on *every* interface, including this one — the guest
+    # could `ssh 10.100.0.1` and reach Pegasus's real sshd directly. Fixed
+    # below with an explicit INPUT-chain deny for this interface: the guest
+    # has no legitimate reason to reach any service on Pegasus itself (it
+    # only needs the host as a routing hop, a FORWARD-chain matter, not
+    # INPUT), so this is a blanket deny rather than an itemized port list —
+    # an itemized list is exactly what silently rotted here once already, the
+    # moment some unrelated module opened a new global port.
+    #
+    # IPv6: the guest has no IPv6 address configured and Pegasus never enables
+    # IPv6 forwarding (confirmed: no ipv6-forwarding sysctl set for pegasus;
+    # the fleet's tailscale.nix module that sets it is only imported by
+    # hopper). That's an invariant, not an enforced property, until the
+    # explicit sysctl override below — added so this containment can't
+    # silently break if IPv6 forwarding is ever turned on for an unrelated
+    # reason. Tailscale's own IPv6 range is fd7a:115c:a1e0::/48 (confirmed
+    # from its own logs on Pegasus, not guessed) if this ever needs revisiting
+    # for real.
+    boot.kernel.sysctl."net.ipv6.conf.all.forwarding" = lib.mkForce false;
+
     networking.firewall.extraCommands =
       let
-        denylist = [
-          "100.64.0.0/10"
-          "10.0.0.0/8"
-          "172.16.0.0/12"
-          "192.168.0.0/16"
-        ];
-        mkRule = dest: ''
+        mkForwardRule = dest: ''
           iptables -w -D FORWARD -i ${cfg.interfaceId} -d ${dest} -j DROP 2>/dev/null || true
           iptables -w -I FORWARD 1 -i ${cfg.interfaceId} -d ${dest} -j DROP
         '';
       in
-      lib.concatMapStrings mkRule denylist;
+      lib.concatMapStrings mkForwardRule n2Denylist
+      + ''
+        iptables -w -D INPUT -i ${cfg.interfaceId} -j DROP 2>/dev/null || true
+        iptables -w -I INPUT 1 -i ${cfg.interfaceId} -j DROP
+      '';
 
     networking.firewall.extraStopCommands =
       let
-        denylist = [
-          "100.64.0.0/10"
-          "10.0.0.0/8"
-          "172.16.0.0/12"
-          "192.168.0.0/16"
-        ];
-        mkRule = dest: ''
+        mkForwardRule = dest: ''
           iptables -w -D FORWARD -i ${cfg.interfaceId} -d ${dest} -j DROP 2>/dev/null || true
         '';
       in
-      lib.concatMapStrings mkRule denylist;
+      lib.concatMapStrings mkForwardRule n2Denylist
+      + ''
+        iptables -w -D INPUT -i ${cfg.interfaceId} -j DROP 2>/dev/null || true
+      '';
 
     # Confirmed live on Pegasus (2026-07-20): microvm@<name>.service runs as
     # User=microvm Group=kvm (fixed by microvm.nix, not configurable), but a

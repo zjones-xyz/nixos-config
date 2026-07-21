@@ -95,6 +95,49 @@ All four DROP rules for `agentvm0` should show nonzero packet/byte counts. Zero 
 mean the check didn't actually exercise the rules — don't treat a "PASS" as sufficient on
 its own.
 
+Also worth doing, since it's cheap and this is the containment-critical phase: confirm
+this holds with Docker running on Pegasus (not just at idle) — Docker's own iptables
+management is a known risk flagged in DECISIONS.md, and Docker is always-on fleet-wide so
+every test here already includes it, but worth being deliberate about checking. **Not yet
+done as a genuine cold-boot test** — verified so far only via switch + service-restart
+with Docker already running, not a real `reboot`. Worth a deliberate follow-up reboot to
+be sure ordering holds from a cold start, not just a warm one.
+
+### Critical fix: INPUT-chain containment bypass (2026-07-21)
+
+An independent code review (requested before continuing past this gate) found that this
+host's own listening services — sshd (port 22, `services.openssh.openFirewall` defaults
+to `true` fleet-wide) and Steam Remote Play (27036/27037, from `gaming.nix`) — were
+reachable **directly from the guest**, bypassing every FORWARD-chain rule above. Traffic
+to Pegasus's own tap address (`10.100.0.1`) never enters `FORWARD` at all (see the
+Phase 2 design note above) — it goes to `INPUT`, and nothing there was denying it. See
+DECISIONS.md's new "critical containment bypass" section for the full account, including
+the `nix eval` facts confirmed independently before accepting the finding.
+
+**Fixed** with a blanket `iptables -I INPUT 1 -i agentvm0 -j DROP` rule (same
+delete-then-insert idempotency pattern as the FORWARD rules), plus forcing
+`net.ipv6.conf.all.forwarding = false` on the host as a bundled hardening.
+`phase2-verify` gained a fifth regression check specifically targeting
+`10.100.0.1:22` — the exact address:port the bypass exploited.
+
+**To verify this fix on Pegasus**, after pulling the latest branch and
+`nixos-rebuild switch --flake .#pegasus`:
+```
+sudo systemctl restart microvm@agent-sandbox
+journalctl -u microvm@agent-sandbox -f          # watch for the 5th PHASE2-VERIFY line
+```
+Expect the new line: `timed out (expected) - this host's own gateway (INPUT-chain path,
+not FORWARD) (10.100.0.1:22)`. Then confirm with the counter directly (the actual proof):
+```
+sudo iptables -L INPUT -n -v | grep agentvm0
+```
+Should show a nonzero packet/byte count on the DROP rule after `phase2-verify` has run.
+As a manual cross-check from a real shell on Pegasus (not required, but the most direct
+proof): `nc -w2 -z 10.100.0.1 22` from *inside* the guest (there's no interactive guest
+console yet — this would need to wait for Phase 3's SSH, or be done via a temporary
+self-check line the way `phase2-verify` already does it) should now time out rather than
+connecting.
+
 ## Phase 3 — agent user, Docker, agents (once code lands)
 
 - **Mint `CLAUDE_CODE_OAUTH_TOKEN`** — see SECRETS-TODO.md.
