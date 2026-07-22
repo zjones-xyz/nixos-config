@@ -40,21 +40,43 @@ RC=0
 expect <<'EXPECT_EOF' || RC=$?
 log_user 0
 set timeout 20
+set sent_passphrase 0
 spawn ssh -tt -o StrictHostKeyChecking=accept-new -p $env(MA_UNLOCK_PORT) root@$env(MA_UNLOCK_HOST) "systemd-tty-ask-password-agent --query"
 expect {
   -re "Please enter passphrase.*:" {
+    set sent_passphrase 1
     send -- "$env(MA_UNLOCK_PASS)\r"
     exp_continue
   }
   timeout { exit 1 }
-  eof     { exit 0 }
+  eof {
+    # A connection that closes without ever matching the passphrase prompt
+    # (refused, wrong host, auth failure, network unreachable...) looks
+    # identical from here to a clean close *after* a successful submission --
+    # both just end the ssh process and fire eof. This used to `exit 0`
+    # unconditionally, so a connection that never even reached the prompt was
+    # reported as a successful unlock. Confirmed live (2026-07-21): the SSH
+    # session to a host's initrd sshd never authenticated at all -- zero log
+    # lines for it -- yet this script printed "Passphrase submitted"; the
+    # disk was actually unlocked via the console instead. sent_passphrase
+    # distinguishes the two cases so a real connection failure is reported
+    # as one, instead of a false success.
+    if {$sent_passphrase} { exit 0 } else { exit 2 }
+  }
 }
 EXPECT_EOF
 
 unset PASSPHRASE MA_UNLOCK_PASS
 
 if [ "$RC" -ne 0 ]; then
-  echo "Automated unlock failed (expect exit $RC). Falling back to a manual session —" >&2
+  if [ "$RC" -eq 2 ]; then
+    echo "Automated unlock failed: the connection closed before the passphrase" >&2
+    echo "prompt was ever seen -- it likely never reached $HOST's initrd sshd at" >&2
+    echo "all (DNS, routing, or the prompt text changed). Falling back to a" >&2
+    echo "manual session —" >&2
+  else
+    echo "Automated unlock failed (expect exit $RC). Falling back to a manual session —" >&2
+  fi
   echo "enter the passphrase yourself when prompted:" >&2
   exec ssh -o StrictHostKeyChecking=accept-new -p "$PORT" "root@$HOST"
 fi

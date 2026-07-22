@@ -336,3 +336,109 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   started. Package name reference if picked up later: `idriveforlinux`,
   main binary `/opt/IDriveForLinux/idriveforlinux %U`, icon
   `idriveforlinux`, `StartupWMClass=IDriveForLinux`.
+
+## NTFS data drives — read access to leftover SATA drives (2026-07-21)
+
+Three internal SATA drives, leftovers from before the CachyOS-drive removal (see
+disko.nix's install note), carry NTFS filesystems `lsblk -f` hadn't been mounted
+anywhere: a Samsung SSD with a full Windows install (EFI + MSR + C: + a likely
+recovery partition), and two plain data drives labeled `Spinner` (WD 1TB) and
+`Toshiba` (3TB).
+
+**Driver: in-kernel `ntfs3`, not `ntfs-3g`.** Verified against this repo's actual
+pinned nixpkgs revision (not assumed): `boot.supportedFilesystems.ntfs` only adds
+the `ntfs3g` package to `system.fsPackages`; it does nothing kernel-module-related.
+Plain `fsType = "ntfs"` dispatches to `/sbin/mount.ntfs`, which `ntfs3g`'s own
+package deliberately symlinks to `mount.ntfs-3g` ("prefer ntfs-3g over the ntfs
+driver in the kernel," per its own `postInstall` comment) — so using bare `"ntfs"`
+would silently pick the FUSE driver even with the in-kernel one available.
+`fsType = "ntfs3"` bypasses all of that and uses the in-kernel driver directly,
+mainlined since Linux 5.15 and built as a loadable module (`CONFIG_NTFS3_FS=m`) by
+this kernel package — no `boot.kernelModules` entry needed, it autoloads on mount.
+No `boot.supportedFilesystems` option needed at all for this path.
+
+**Referenced by `/dev/disk/by-id`**, matching disko.nix's existing convention for
+the NVMe, not `/dev/sdX` (which can shift across boots/port changes).
+
+**`uid`/`gid` are literal values from `id z` on the live system** (`1000`/`100`),
+not derived from `config.users.users.z` — that option has no static `uid` set
+anywhere in this repo (NixOS assigns it dynamically at activation for
+`isNormalUser` accounts without a pinned one), so it isn't available at eval time.
+Mount options need real numbers, not names — the kernel doesn't do an NSS lookup
+on mount option strings.
+
+**All three mounted read-only, `nofail`.** Reading was the stated priority, and
+NTFS write access carries a real, well-known corruption risk if the volume was
+ever left mid-hibernation by Windows (Fast Startup) instead of a clean shutdown —
+writing from Linux into a filesystem Windows still considers "in progress" can
+desync state Windows expects to resume into. Checked this specifically for the
+Samsung SSD (the one with an actual bootable Windows install) via `ntfsfix
+--no-action` (ntfs-3g's dry-run diagnostic — reports hibernation/dirty-`$LogFile`
+state, writes nothing) before including it at all: came back clean, no
+hibernation flag, no dirty log — confirmed safe to mount. **Ran the same check
+against `Spinner`/`Toshiba` too (2026-07-21, on request, purely to confirm
+neither was in a vulnerable state — no read-write plans for either yet)**: both
+came back identically clean — "processed successfully," no hibernation flag, no
+dirty log. All three drives confirmed safe as of this check; none flagged.
+`nofail` on all three so a disconnected/failed
+drive degrades to "not mounted" rather than blocking the whole host's boot — the
+exact lesson already learned once with the microVM sandbox's volumes.
+
+**Excluded**: the Samsung SSD's other NTFS partition (likely the WinRE recovery
+partition — small, not something normally browsed for files) and `sdd` (turned
+out, via `ls -l /dev/disk/by-id/`, to be the NanoKVM's own virtual USB mass
+storage device, not a real drive on Pegasus at all).
+
+**Not yet verified on real hardware** — designed and `nix flake check`-verified,
+but the actual `nixos-rebuild switch` + mount + read-a-file confirmation hasn't
+happened yet. See `MANUAL-STEPS.md`.
+
+**Update (2026-07-21)**: confirmed clean via the same `ntfsfix --no-action` check on
+request for `Spinner` and the (now-former) Toshiba NTFS partition too — neither in a
+vulnerable state. All three NTFS drives confirmed safe as of that check.
+
+## Toshiba drive repurposed: btrfs + exFAT (2026-07-21)
+
+The Toshiba drive's original single NTFS partition turned out to be empty (confirmed
+via `df`'s `Use%` column and `ls`), so it was repartitioned on request into a btrfs
+partition (the remainder, ~2.34TiB) and a fixed 400GiB exFAT partition — done live on
+the real hardware, imperatively, not something `nixos-rebuild switch` drives:
+
+- **`wipefs -a`** first to clear the existing GPT/NTFS signatures cleanly.
+- **`parted` was abandoned mid-attempt.** Its own CLI argument parser choked on the
+  negative-offset syntax needed to express "400GiB from the end of the disk"
+  (`-400GiB`) — first misparsing it as a cluster of short options (`invalid option --
+  '4'` etc.), then, after adding `--` to mark end-of-options, producing a partition
+  with a real alignment warning (`not properly aligned for best performance`), and a
+  further attempt hit an unresolved shell/parser issue (`zsh: number expected`) that
+  left the command not actually executing at all. Switched to **`sgdisk`** instead —
+  its `--new=N:start:end` syntax joins the value into one token via `=`, sidestepping
+  the whole class of problem — and it worked cleanly on the first real attempt
+  (`--new=1:1M:-400G --new=2:0:0`, letting sgdisk's own default alignment apply
+  rather than computing exact byte offsets by hand).
+- **exFAT volume labels are capped at 11 characters** — `mkfs.exfat -n toshiba-exfat`
+  (13 chars) failed with "input string is too long"; `toshiba-fat` (11 chars, at the
+  limit) worked. Btrfs labels have no such constraint (`toshiba-btrfs` is fine).
+- **`partprobe` isn't installed** on Pegasus by default; turned out to be unnecessary
+  anyway — `sgdisk` re-reads the partition table into the kernel itself on a
+  successful write, confirmed via a plain `lsblk` showing both new partitions
+  immediately afterward with no intervening `partprobe` call.
+- **`-part1`/`-part2` now mean something different than before**: they refer to the
+  NEW partitions (btrfs, exFAT) from this repartition, not the old single NTFS
+  partition that used to be `-part2` alone.
+- **Read-write, not read-only** for the btrfs partition (unlike the NTFS mounts
+  above) — no Windows-hibernation-style corruption risk on a filesystem this repo
+  itself just created fresh. Its top-level directory needed the same
+  `systemd.tmpfiles.rules` fix as `@games` and the microvm volumes (fresh
+  `mkfs.btrfs` output is `root:root 0755` by default, same bug, same fix, third time
+  now in this repo's history). exFAT mount options (`uid=`/`gid=`/`umask=`) instead,
+  same reasoning as the NTFS mounts — FAT-family filesystems have no on-disk owner
+  metadata of their own.
+- `pkgs.exfatprogs` added to `environment.systemPackages` — mounting/reading/writing
+  exFAT needs no package at all (in-kernel driver, mainlined since Linux 5.7, same
+  story as `ntfs3`), but `mkfs.exfat`/`fsck.exfat` do.
+
+**Not yet verified on real hardware post-switch** — designed and `nix flake
+check`-verified, partitioning/formatting itself done live and confirmed working, but
+the actual `nixos-rebuild switch` + mount + read/write confirmation for these two new
+filesystems hasn't happened yet. See `MANUAL-STEPS.md`.

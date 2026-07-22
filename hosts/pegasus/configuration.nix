@@ -22,6 +22,7 @@ in
     ../../modules/nixos/nzxt-kraken.nix
     ../../modules/nixos/keyboards.nix
     ../../modules/nixos/mouse-tools.nix
+    ../../modules/nixos/microvm-sandbox.nix
     # olla-router.nix is DISABLED for now (2026-07-11): its build runs olla's
     # own Go test suite, and pkg/eventbus's TestEventBus_HighVolumePublishing
     # is a wall-clock throughput assertion that fails under the Nix sandbox's
@@ -201,6 +202,42 @@ in
     '';
   };
 
+  # TEMPORARY diagnostic (2026-07-21) — remove once root-caused. unlock-pegasus's
+  # SSH connection to this initrd's sshd (port 2222) never lands: journalctl -b -1
+  # after a real reboot showed enp42s0 renamed (eth0 -> enp42s0) at initrd start but
+  # then NO further log activity for it at all — no "Gained carrier", no DHCP lease —
+  # for the entire ~2m15s the initrd ran, in contrast to a reliable ~3s carrier
+  # negotiation on the very same NIC/driver observed right after switch-root the same
+  # boot. DNS was independently confirmed correct (`dig +short pegasus.internal`
+  # matches the box's actual DHCP address), so this isn't a naming/resolution issue —
+  # it looks like the interface itself never comes up during the initrd stage on this
+  # hardware. That conclusion so far rests on the *absence* of a log line, not a
+  # direct capture — this polls the interface's actual state every 5s throughout the
+  # unlock window so the next real reboot gives a definitive answer instead of an
+  # inference. Deliberately NOT sent to the console (`journal` only, the default) —
+  # this shares /dev/console with the passphrase prompt and chimes above, and
+  # spamming it every 5s would make the prompt harder to find, the exact class of
+  # problem already hit once with the IP-KVM's scrolling during an earlier incident.
+  boot.initrd.systemd.services.diagnose-initrd-network = {
+    description = "TEMPORARY diagnostic: poll enp42s0 link/DHCP state during initrd unlock window";
+    wantedBy = [ "initrd.target" ];
+    before = [ "shutdown.target" ];
+    conflicts = [ "shutdown.target" ];
+    unitConfig.DefaultDependencies = false;
+    serviceConfig.Type = "simple";
+    path = [ pkgs.iproute2 ];
+    script = ''
+      echo "DIAGNOSE-NET: starting, polling enp42s0 every 5s for up to 5 minutes"
+      for i in $(seq 1 60); do
+        echo "DIAGNOSE-NET: poll $i (+$((i * 5))s) ---"
+        ip -d link show enp42s0 2>&1 || echo "DIAGNOSE-NET: enp42s0 not present yet"
+        ip addr show enp42s0 2>&1 || true
+        sleep 5
+      done
+      echo "DIAGNOSE-NET: done polling"
+    '';
+  };
+
   # ── sops-nix ────────────────────────────────────────────────────────────────
   # Uses the host's SSH ed25519 key as the age identity. After first boot:
   #   ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub
@@ -245,13 +282,53 @@ in
   # otherwise. Steam runs as z and couldn't create a library there at all
   # until this is fixed. Declarative rather than a one-off `chown` so it
   # survives a reinstall without a manual step.
-  systemd.tmpfiles.rules = [ "d /games 0755 z users - -" ];
+  #
+  # /mnt/toshiba (hardware-configuration.nix) is the same class of bug: a
+  # freshly mkfs.btrfs'd filesystem's top-level directory is root:root 0755
+  # by default too.
+  systemd.tmpfiles.rules = [
+    "d /games 0755 z users - -"
+    "d /mnt/toshiba 0755 z users - -"
+  ];
+
+  # mkfs.exfat/fsck.exfat for the Toshiba drive's exFAT partition
+  # (hardware-configuration.nix) — mounting/reading/writing exFAT itself
+  # needs no package (in-kernel driver, mainlined since Linux 5.7), only the
+  # userspace tools for formatting/checking it.
+  environment.systemPackages = [ pkgs.exfatprogs ];
 
   # ── home-manager ──────────────────────────────────────────────────────────
   home-manager = {
     useGlobalPkgs = true;
     useUserPackages = true;
     users.z = import ./home.nix;
+  };
+
+  # ── Isolated agent dev-sandbox (microVM) ────────────────────────────────────
+  # Phases 1-2 (skeleton module + boot, network containment) — see
+  # docs/microvm-sandbox/. No agent user, no Docker yet (Phase 3). 24 GB flat +
+  # balloon-only (not elastic virtio-mem — see DECISIONS.md's memory section).
+  # storeVolumeDir/stateVolumeDir are dedicated btrfs subvolumes, siblings of
+  # @snapshots/@games — see hardware-configuration.nix and MANUAL-STEPS.md for
+  # the one-time `btrfs subvolume create` step required before this builds.
+  homelab.agentSandbox = {
+    enable = true;
+    guestName = "agent-sandbox";
+    mem = 24576; # 24 GiB flat
+    vcpu = 6;
+    storeVolumeDir = "/var/lib/microvms/agent-sandbox-store";
+    stateVolumeDir = "/var/lib/microvms/agent-sandbox-state";
+    # Locally administered (02: prefix), stable per-guest.
+    mac = "02:00:00:10:00:01";
+    interfaceId = "agentvm0";
+    # Onboard NIC — see the Tailscale section above for how it was confirmed.
+    externalInterface = "enp42s0";
+    # Same Serenity key already used fleet-wide (modules/nixos/common.nix's
+    # z user, and the LUKS-unlock authorizedKeys above) — confirmed current,
+    # not assumed, since it's the one actively used to reach every host today.
+    operatorSshKeys = [
+      "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCfTHdojQvKOlTaaTYT2RmYMNKQ/6rBQwn6V+bPnrtASaI/G5E7RW67XGbZHi3K7EctyB9UP9Uw54sayEu4ebixI/dNFVVWeZ2byBQ49FoXh5o9Cfok0Qwf0QM7g9Td8O6Iu2ElnI8e+9cr8ThrfPpKmP68e6mpuYDvhQb4omcx8kRhxnsuNxkL2xCTNVxG/jw68o/1KHX++6tRqf0E3PBCjZ3Z8HMTdS8ouEBa8Y96GGeUvslwDJ9cUtLNCUhR5t3mGu3iSS9RYpFg/JujyTT9yhe2O/0og+OhBeSayGZMOXGWngGUEItExlbq2I4rMV5pFB1q+OyqksvlUfkJ/j3yJOii5uwonYvkWLZfR02yhn2b/bgOfYaimO5rfKj5jAC8bMRnWqLJAiG2qRDwtJT+ijyYlTKgLpz73sOGAQVvZygq11Vc35cZMFojlMeqAHdZMGi6XkUHnfZt8gyplw6VPV5EQnyDI4bRfY9sknuFvjHqdEzNyNrIEXtlmIB870s= z@Serenity.local"
+    ];
   };
 
   # Internet-facing? No — LAN/tailnet only. Traefik/LE machinery lives on
