@@ -692,5 +692,19 @@ flagged-groups list (which named `nscd`/`sshd`/`systemd-coredump`/`systemd-oom` 
 NixOS's own dynamic service accounts, none of which own any path this design persists, so
 left as-is rather than over-fixing).
 
+**Follow-up: `/var/lib/nixos` persisted too, after all** — the uid-pinning fix above
+silenced the *substantive* half of impermanence's warning (the `agent` uid, the one
+account whose files are actually persisted), but the check kept re-emitting the same
+warning text for NixOS's own dynamic service accounts (`nscd`/`sshd`/`systemd-oom` users,
+`nscd`/`sshd`/`systemd-coredump`/`systemd-oom` groups) — assessed at the time as inert
+since none of their state lives on `/persist`. On reflection this residual noise isn't
+worth carrying forward every future `nix flake check` run just to save one line, so
+`"/var/lib/nixos"` was added as its own `directories` entry (bare string, root-owned,
+matching its real on-disk ownership) — fully silencing the warning rather than leaving it
+as a documented-but-accepted one. Confirmed via `nix flake check --no-build --all-systems`:
+the warning is gone, no new errors, only the pre-existing benign `vsock.cid` notice
+remains. Purely cosmetic/hygiene, unlike the `agent` uid pin above, which fixed a real
+correctness gap.
+
 **Not yet verified on real hardware** — `nix flake check --no-build --all-systems` passes
 clean across every host with this config, but no live guest boot with it yet.

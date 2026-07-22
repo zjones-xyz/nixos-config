@@ -495,6 +495,14 @@ in
         # are relative to that user's home — for persisting a directory
         # wholesale rather than specific subpaths within an otherwise-
         # ephemeral home, a plain top-level directories entry is more direct).
+        #
+        # /var/lib/nixos: silences impermanence's own warning about every
+        # *other* dynamically-allocated system account (nscd, sshd,
+        # systemd-oom/-coredump) potentially getting a new uid/gid each
+        # restart. None of them actually own anything persisted here (their
+        # runtime state is ephemeral/tmpfs regardless), so this wasn't a
+        # correctness fix the way pinning agent's uid was — just avoiding a
+        # warning that would otherwise resurface on every future eval.
         environment.persistence."/persist" = {
           hideMounts = true;
           files = [
@@ -504,6 +512,7 @@ in
           directories = [
             { directory = "/var/lib/docker"; user = "root"; group = "root"; mode = "0711"; }
             { directory = "/home/agent"; user = "agent"; group = "users"; mode = "0755"; }
+            "/var/lib/nixos"
           ];
         };
 
