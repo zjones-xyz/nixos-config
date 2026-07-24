@@ -61,6 +61,7 @@
       "ticktick"
       "visual-studio-code"
       "warp"
+      "windows-app"
     ];
   };
 }
