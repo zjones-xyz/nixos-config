@@ -50,6 +50,7 @@
       "macos-fuse-t/cask/fuse-t-sshfs"
       "jetbrains-toolbox"
       "makemkv"
+      "meshmixer"
       "obsidian"
       "openscad"
       "opera"
