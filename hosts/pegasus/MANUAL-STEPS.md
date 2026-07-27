@@ -379,3 +379,69 @@ session:
 No firewall changes needed — `tailscale0` is already a trusted interface
 (`openFirewall` is left `false`), so port 3389 is reachable over the
 tailnet the moment `xrdp.service` is up, and nowhere else.
+
+## 15. NTFS data drives — verify mount + read access
+
+Three `fileSystems.*` entries in `hardware-configuration.nix` for pre-existing
+internal SATA drives (`/mnt/spinner`, `/mnt/toshiba`, `/mnt/windows` — the last
+being the Samsung SSD's actual Windows C: partition). All start `ro`, `nofail`.
+Designed and `nix flake check`-verified but not yet exercised on real hardware:
+
+1. `nixos-rebuild switch --flake .#pegasus`, then confirm both NTFS drives
+   actually mounted:
+   ```
+   mount | grep -E 'spinner|windows'
+   ls /mnt/spinner /mnt/windows
+   ```
+2. Confirm you (as `z`) can actually read files without `sudo` — the whole point
+   of the `uid=1000,gid=100` mount options:
+   ```
+   ls -la /mnt/spinner
+   cat /mnt/spinner/<some-known-file>
+   ```
+3. If either fails to mount, `nofail` means the host still boots fine —
+   check `systemctl status` for the corresponding `mnt-*.mount` unit and
+   `journalctl -u mnt-*.mount` for why.
+4. **Before enabling read-write on either of these** (drop `ro` from that mount's
+   `options`), re-run the clean-shutdown check — state can change any time the
+   drive is used elsewhere:
+   ```
+   sudo nix shell nixpkgs#ntfs3g -c ntfsfix --no-action /dev/disk/by-id/<drive>
+   ```
+   (note: `nix run nixpkgs#ntfs3g -- ntfsfix ...` runs the package's default
+   binary, `ntfs-3g` itself, not `ntfsfix` — use `nix shell ... -c` instead.)
+   A clean pass ("processed successfully," no hibernation/dirty-`$LogFile`
+   mention) is what all three NTFS drives showed as of 2026-07-21 — but that's
+   a point-in-time result, not a standing guarantee.
+
+## 16. Toshiba drive (now btrfs + exFAT) — verify mount + read/write
+
+The Toshiba drive is no longer NTFS — repartitioned (2026-07-21, on request, after
+confirming the original NTFS partition was empty) into a btrfs partition (`/mnt/toshiba`)
+and a 400GiB exFAT partition (`/mnt/toshiba-exfat`). The actual partitioning/formatting
+was done live and confirmed working during that session; what's left is the
+`nixos-rebuild switch` + mount confirmation:
+
+1. `nixos-rebuild switch --flake .#pegasus`, then:
+   ```
+   mount | grep toshiba
+   ls -la /mnt/toshiba /mnt/toshiba-exfat
+   ```
+2. Confirm `/mnt/toshiba` (btrfs) is actually writable as `z` without `sudo` —
+   unlike the NTFS mounts, this one starts read-write:
+   ```
+   touch /mnt/toshiba/test-write && rm /mnt/toshiba/test-write && echo OK
+   ```
+   If this fails with a permissions error, check the directory's ownership
+   (`ls -ld /mnt/toshiba`) — should be `z:users`, applied by the
+   `systemd.tmpfiles.rules` entry in `configuration.nix`. If it's still
+   `root:root`, that rule didn't apply; re-run `sudo systemd-tmpfiles --create`
+   or reboot.
+3. Confirm `/mnt/toshiba-exfat` is writable too (mount-option-based ownership,
+   should just work via `uid=1000,gid=100`):
+   ```
+   touch /mnt/toshiba-exfat/test-write && rm /mnt/toshiba-exfat/test-write && echo OK
+   ```
+4. If either fails to mount at all, `nofail` means the host still boots —
+   check `systemctl status mnt-toshiba.mount` / `mnt-toshiba\x2dexfat.mount`
+   and the corresponding `journalctl -u ...`.
