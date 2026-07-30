@@ -80,6 +80,19 @@
     ../home/interactive-zsh.nix
   ];
 
+  # ── zsh completions on $fpath ───────────────────────────────────────────────
+  # Home Manager enables zsh per-user and its .zshrc scans
+  # $profile/share/zsh/site-functions for every entry in $NIX_PROFILES. But the
+  # profiles themselves (/run/current-system/sw and, because useUserPackages is
+  # on, /etc/profiles/per-user/z) are buildEnv'd from environment.pathsToLink —
+  # and /share/zsh is only added there by NixOS' *system* zsh module, which we
+  # don't enable (login shell stays bash, see users.users.z.shell). Result
+  # without this line: compinit runs but no package-shipped completion function
+  # is reachable — not docker's, not gh's, not even the nix-zsh-completions
+  # that Home Manager installs for you. Only zsh's own bundled completions
+  # work, since those resolve through a direct store path.
+  environment.pathsToLink = [ "/share/zsh" ];
+
   environment.systemPackages = with pkgs; [
     git
     wget

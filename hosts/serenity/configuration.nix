@@ -47,6 +47,12 @@
   # Nix-specific shell hooks.
   programs.zsh.enable = true;
 
+  # …but leave compinit to Home Manager. Both /etc/zshrc (this module) and
+  # ~/.zshrc (programs.zsh.enableCompletion, on by default) run it otherwise,
+  # and the second call re-walks all of $fpath for nothing. modules/home/zsh.nix
+  # owns the surviving call and caches its dump.
+  programs.zsh.enableGlobalCompInit = false;
+
   # NFS shares to auto-mount via macOS autofs (modules/darwin/nfs-mounts.nix
   # provides the mechanism; this is host data). STUB — no shares wired up yet.
   # Uncomment/edit once you know the export + local mount point you want.

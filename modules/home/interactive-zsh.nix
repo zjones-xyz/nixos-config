@@ -10,6 +10,10 @@
 # invocation (e.g. `sudo -u z -i -- cmd`) can still source this file, so the
 # guard is load-bearing, not defensive filler.
 {
+  # Shared completion UX — also imported by hosts/serenity/home.nix, so the
+  # Mac and the Linux hosts behave identically once you're in zsh.
+  imports = [ ./zsh.nix ];
+
   programs.bash = {
     enable = true;
     initExtra = ''
