@@ -83,8 +83,10 @@ or display-manager state doesn't lock you out:
 - `nvidia-smi` shows the 4070; `nvidia-smi -q | grep -i "Driver Model"` etc.
 - A Wayland session logs in (check `echo $XDG_SESSION_TYPE` = `wayland`).
 - One Proton title launches (Steam → point the library at `/games`).
-- `systemctl status scx` is active and `cat /sys/kernel/sched_ext/state` shows a
-  scheduler enabled.
+- `systemctl status scx` is **inactive** and `cat /sys/kernel/sched_ext/state`
+  shows `disabled` — scx is off as of 2026-08-01 (game-launch crashes), so the
+  box runs the kernel's in-tree EEVDF scheduler. See
+  `modules/nixos/performance.nix`; re-check this step if scx is turned back on.
 - `systemctl status ollama` healthy; `ollama run <model>` uses the GPU.
 
 ## 4. Steam library on @games

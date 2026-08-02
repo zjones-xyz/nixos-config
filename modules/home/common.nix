@@ -55,6 +55,19 @@
     ll = "ls -la";
   };
 
+  # zsh leaves INTERACTIVE_COMMENTS off outside sh/ksh emulation, so a `#` at
+  # an interactive prompt is an ordinary character and the shell tries to run
+  # the "comment" as arguments. Turning it on makes pasted/annotated commands
+  # behave the way they do in bash. Set here rather than in a host home.nix so
+  # every zsh in the fleet matches; it is inert on hosts that never enable zsh.
+  #
+  # Trade-off, accepted: an unquoted `#` that *starts a word* now begins a
+  # comment, so `echo done #1` prints "done". Mid-word `#` is unaffected
+  # (URL fragments, `git show HEAD#…`, `${var#prefix}` all still work).
+  programs.zsh.initContent = ''
+    setopt interactive_comments
+  '';
+
   # Git identity (portable).
   programs.git = {
     enable = true;
