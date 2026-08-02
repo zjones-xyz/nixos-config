@@ -49,6 +49,11 @@
       "fuse-t"
       "macos-fuse-t/cask/fuse-t-sshfs"
       "jetbrains-toolbox"
+      # GPU-accelerated terminal emulator (pegasus gets it from nixpkgs). Cask
+      # rather than nixpkgs here because a nix-built .app lands in
+      # ~/Applications/Home Manager Apps, which Spotlight/Launchpad index
+      # unreliably — same reason every other GUI on this host is a cask.
+      "kitty"
       "makemkv"
       "obsidian"
       "openscad"
