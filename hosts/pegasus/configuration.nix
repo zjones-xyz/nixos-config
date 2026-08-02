@@ -17,6 +17,7 @@ in
     ../../modules/nixos/desktop-dragonized.nix
     ../../modules/nixos/gaming.nix
     ../../modules/nixos/performance.nix
+    ../../modules/nixos/btrfs-snapshots.nix
     ../../modules/nixos/ollama.nix
     ../../modules/nixos/yubikey.nix
     ../../modules/nixos/nzxt-kraken.nix
