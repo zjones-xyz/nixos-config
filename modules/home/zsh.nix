@@ -1,7 +1,8 @@
 { lib, ... }:
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Shared zsh completion behaviour — portable across platforms.
+# Shared zsh behaviour — completion UX plus prompt-level options. Portable
+# across platforms.
 # ─────────────────────────────────────────────────────────────────────────────
 # Imported by modules/home/interactive-zsh.nix (the NixOS hosts) and by
 # hosts/serenity/home.nix (the Mac), so both get the same completion UX.
@@ -19,10 +20,19 @@
     #                    fixing a typo mid-path doesn't mean retyping the tail.
     # ALWAYS_TO_END    — after accepting a completion, put the cursor at the
     #                    end of the word (not where it happened to be).
+    #
+    # INTERACTIVE_COMMENTS is not about completion: zsh leaves it off outside
+    # sh/ksh emulation, so a `#` at an interactive prompt is an ordinary
+    # character and the shell tries to run the "comment" as arguments. Turning
+    # it on makes pasted/annotated commands behave the way they do in bash.
+    # Trade-off, accepted: an unquoted `#` that *starts a word* now begins a
+    # comment, so `echo done #1` prints "done". Mid-word `#` is unaffected
+    # (URL fragments, `git show HEAD#…`, `${var#prefix}` all still work).
     setOptions = [
       "AUTO_MENU"
       "COMPLETE_IN_WORD"
       "ALWAYS_TO_END"
+      "INTERACTIVE_COMMENTS"
     ];
 
     # Rebuild the completion dump at most once a day. `compinit` walks all of
