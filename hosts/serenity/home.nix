@@ -3,6 +3,10 @@
 {
   imports = [
     ../../modules/home/common.nix
+    # Completion UX shared with the Linux hosts (which pick it up via
+    # modules/home/interactive-zsh.nix — not imported here, since zsh is
+    # already this host's login shell and needs no bash → zsh exec).
+    ../../modules/home/zsh.nix
   ];
 
   home.username = "z";
