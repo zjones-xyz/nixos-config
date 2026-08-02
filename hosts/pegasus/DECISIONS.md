@@ -49,6 +49,12 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
    latency-aware, good for an interactive/gaming desktop. The option enum is drawn
    from `pkgs.scx.full.schedulers`; verified `scx_lavd` is valid in the pinned
    nixpkgs. Trivially swappable via `services.scx.scheduler`.
+   **Reversed 2026-08-01 (temporarily):** `services.scx.enable = false` — pegasus
+   crashes when games launch under its actual workload. With no BPF scheduler
+   attached the kernel falls back to its in-tree default, EEVDF. The scheduler
+   choice is left recorded in `modules/nixos/performance.nix` so returning to scx
+   is a one-word change; whether `scx_lavd` specifically is the culprit, or scx
+   in general, is untested.
 3. **Router → Olla** — *alt:* LiteLLM (heavier; virtual keys/budgets). *Why:* the
    brief's choice; single Go binary, local-first, health-check failover. Packaged
    from source in `modules/nixos/olla-router.nix`. **Olla is not in nixpkgs.**
