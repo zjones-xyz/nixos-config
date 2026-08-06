@@ -210,9 +210,18 @@ That is the entire reason LUKS goes down at install time rather than after.
 ## 7. Verify passthrough before defining the guest
 
 ```sh
-# vfio-pci must own all three ASMedia controllers...
+# vfio-pci must own all three passed-through ASMedia devices — two SATA
+# controllers plus the USB3 card that shares an IOMMU group with one of them...
 lspci -nnk | grep -A3 -i '1b21:'
-#   → "Kernel driver in use: vfio-pci" on 1b21:1166, 1b21:1042, 1b21:1064
+#   → "Kernel driver in use: vfio-pci" on all three:
+#       1b21:1166  ASM1166  SATA, 6-port  — array + Cache + Fastservices
+#       1b21:1064  ASM1064  SATA, 4-port  — temporary, returns to the host later
+#       1b21:1042  ASM1042  USB3          — not storage. It is here only because
+#                  IOMMU group 1 holds both it and the ASM1166, and a group is
+#                  the indivisible unit of passthrough. Convenient rather than
+#                  merely tolerable: the Unraid licence flash drive plugs into
+#                  it and keeps its real USB GUID, which is what the licence is
+#                  tied to.
 
 # ...and ahci must still own the onboard controller with the root disk.
 lspci -nnk -s 00:1f.2
