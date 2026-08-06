@@ -9,6 +9,14 @@ in five minutes.** Power off, boot the Unraid flash drive, done. Nothing here
 modifies the flash drive or its boot entry, and the NixOS install touches only
 the Kingston 120GB SSD.
 
+### Companion documents
+
+| File | Answers |
+|---|---|
+| **`DEPLOY.md`** (this) | *What to do*, in order. Steps, commands, checklists. |
+| **`BACKGROUND.md`** | *Why it works.* IOMMU groups and why they cannot be split, ACS override and why not to use it, VFIO vs virtio, q35/OVMF, what Unraid's parity model does to I/O, why this CPU generation matters. Read before the first flash or install if any of the config reads as incantation. |
+| **`DECISIONS.md`** | *Why it is this way.* Decision → alternatives → rationale, plus what was considered and rejected. Read before changing something that looks arbitrary. |
+
 ---
 
 ## 0. Read this before touching the BIOS
