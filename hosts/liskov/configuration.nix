@@ -8,10 +8,19 @@ let
   # Same pattern as hosts/pegasus/configuration.nix.
   hasSops = builtins.pathExists ../../secrets/liskov.yaml;
 
-  # TODO(install): confirm with `ip -br link` on the machine. X9SCM-F carries
-  # two Intel NICs (82579LM + 82574L, both e1000e); predictable naming usually
-  # lands them as eno1/eno2 but the firmware's onboard index is not guaranteed.
-  # This is the ONLY place the name appears — fix it here.
+  # TODO(install): confirm with `ip -br link` on the machine. Survey 2026-08-06
+  # confirmed two Intel NICs, both isolated in their own IOMMU groups:
+  #   00:19.0  82579LM  (group 2)  — expected eno1, the host/br0 NIC
+  #   04:00.0  82574L   (group 10) — expected eno2/enp4s0
+  # Predictable naming usually lands them as eno1/eno2, but the firmware's
+  # onboard index is not guaranteed. This is the ONLY place the name appears.
+  #
+  # Because 04:00.0 is isolated, passing it whole to the guest instead of using
+  # br0 is a real option. Not taken: with a bridge the guest presents the
+  # bare-metal MAC verbatim, so the DHCP reservation and tower.internal resolve
+  # identically whether the machine is virtualized or booted bare metal. NIC
+  # passthrough would tie the guest to the 82574L's own MAC and make the two
+  # states differ — which is exactly what the fallback guarantee forbids.
   hostNic = "eno1";
 in
 {
@@ -158,34 +167,52 @@ in
   # Bound by vendor:device ID, not bus address — addresses have been observed to
   # shift across reboots on this board. See modules/nixos/vfio.nix.
   #
-  # Verified IOMMU grouping on this machine:
-  #   group 1: 1b21:1166 (ASM1166 SATA, 01:00.0) + 1b21:1042 (ASM1042 USB3, 02:00.0)
-  #            — both endpoints share the group, so they go together whether or
-  #            not we want the USB3 card. That is the ONLY reason the ASM1042 is
-  #            listed below; it is not about the licence key.
-  #   group 9: 1b21:1064 (ASM1064 SATA, 03:00.0) — isolated.
+  # Surveyed on the machine 2026-08-06 (scripts/iommu-survey.sh). IOMMU is on by
+  # default on this kernel — intel_iommu=on is NOT in Unraid's cmdline and the
+  # groups populate anyway.
   #
-  # Two things this grouping does NOT determine, kept separate deliberately:
-  #   - The ASM1042 can be moved to another slot, which may isolate it and let
-  #     the host keep it. The groups above are a property of the current slot
-  #     layout, not of the cards.
-  #   - Where the Unraid licence key is plugged in. A <hostdev type='usb'> entry
-  #     (QEMU's usb-host) forwards one physical device's real descriptors while
-  #     the host keeps the controller, so the licence GUID survives without any
-  #     IOMMU passthrough. Only an *emulated* usb-storage disk fails to license.
-  #     See hosts/liskov/unraid-guest.xml and DEPLOY.md § 13.
+  #   group 1 (4 devices): 00:01.0 + 00:01.1 CPU PCIe root ports,
+  #                        01:00.0 ASM1166 SATA, 02:00.0 ASM1042 USB3
+  #   group 9:             03:00.0 ASM1064 SATA — isolated
+  #   group 8 (3 devices): 00:1f.0 LPC + 00:1f.2 onboard SATA + 00:1f.3 SMBus
   #
-  # Run scripts/iommu-survey.sh on the machine to re-derive all of this after
-  # any slot change — do not trust these addresses across a reshuffle.
+  # The mechanism, which explains all of it: **the Ivy Bridge CPU root ports
+  # (00:01.x) do not advertise ACS, so everything behind them lands in one
+  # group. The PCH root ports (00:1c.x) do, so devices behind them are
+  # isolated.** ASM1166 and ASM1042 sit in CPU slots; ASM1064 sits in a PCH
+  # slot. That is the whole story.
+  #
+  # Consequences worth not re-deriving later:
+  #   - The two root-port bridges in group 1 do NOT block passthrough. VFIO's
+  #     viability check only requires the *endpoints* to be bound to vfio-pci;
+  #     bridges are tolerated.
+  #   - **Moving the ASM1042 to isolate it is not available.** All three PCIe
+  #     slots are populated and only one is PCH-attached, already holding the
+  #     ASM1064. Swapping them would put the ASM1064 in group 1 with the
+  #     ASM1166 — which would make it impossible to hand back to the host later
+  #     without also giving up the array controller. So the ASM1042 rides along
+  #     to the guest, which costs nothing.
+  #   - The licence key does NOT depend on the ASM1042. Both onboard EHCI
+  #     controllers are isolated (00:1a.0 → group 3, 00:1d.0 → group 6), and the
+  #     Unraid boot flash already lives on 00:1d.0. So it reaches the guest
+  #     either via <hostdev type='usb'> (host keeps the controller) or by passing
+  #     00:1d.0 whole. See hosts/liskov/unraid-guest.xml and DEPLOY.md § 13.
+  #
+  #     ⚠ Do NOT pass 00:1a.0 (group 3). It carries the BMC's virtual HID
+  #     (0557:2221 Winbond/Nuvoton Hermon, the WPCM450 that also provides the
+  #     Matrox G200eW in group 7). Handing it to the guest takes IPMI's virtual
+  #     keyboard and mouse away from the host — which is the remote-hands path
+  #     this whole deployment depends on.
   #
   # Onboard SATA (00:1f.2, group 8) is deliberately ABSENT: it shares a group
-  # with the LPC bridge, and it is where the host's own root disk lives.
+  # with the LPC bridge and SMBus, and it is where the host's own root disk lives.
   homelab.vfio = {
     enable = true;
     cpuVendor = "intel";
     pciIds = [
       "1b21:1166" # ASM1166 6-port SATA — array + cache + fastservices. Permanent.
-      "1b21:1042" # ASM1042 USB3 — same IOMMU group as the above; carries the Unraid licence key.
+      "1b21:1042" # ASM1042 USB3 — rides along: same IOMMU group as the ASM1166 (CPU
+                  #             root ports lack ACS). NOT needed for the licence key.
       # TEMPORARY. The ASM1064 comes back to the host once the Docker workloads
       # migrate off Unraid; at that point delete this one line and rebuild.
       # Nothing else in the config references it.

@@ -120,12 +120,16 @@ echo; hr; echo "ATTACHED USB DEVICES (auto-detected)"; hr
 echo
 
 # If this USB device node backs a block device, return its name (sdb, etc).
+# Matches on the block device's *nearest* USB ancestor rather than on a path
+# prefix — otherwise a hub inherits the block devices of everything behind it
+# and reports, misleadingly, that it "is" /dev/sda.
 block_for_usb() {
-  local want=$1 blk real
+  local want=$1 blk real owner
   for blk in /sys/block/*; do
     [ -e "$blk" ] || continue
     real=$(readlink -f "$blk")
-    case "$real" in "$want"/*) printf '%s' "$(basename "$blk")"; return 0;; esac
+    owner=$(usb_ancestor "$real") || continue
+    [ "$owner" = "$want" ] && { printf '%s' "$(basename "$blk")"; return 0; }
   done
   return 1
 }
