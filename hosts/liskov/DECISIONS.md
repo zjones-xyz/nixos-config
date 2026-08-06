@@ -164,14 +164,23 @@ mechanisms work).
   peer-to-peer DMA between "split" devices remains possible and invisible to the
   IOMMU. If a future change appears to need it, that is a signal to re-examine the
   slot layout. See `BACKGROUND.md`.
-- **Virtualizing the Unraid licence flash** — wanted eventually, but **verified
+- **Emulating the Unraid licence flash from an image file** — **verified
   impossible with stock components** (2026-08-06). QEMU 11.0.2's emulated
   mass-storage models (`usb-storage`, `usb-bot`, `usb-uas`) expose only `serial`;
-  none exposes `vendorid`/`productid`. `usb-host` has them, but as matchers for
-  selecting a physical device. Since the Unraid GUID is the vendor:product:serial
-  triple, it cannot be reproduced, and `<qemu:commandline>` does not help because
-  the limitation is the device model rather than libvirt's XML surface. Would
-  require a patched QEMU. Recorded in `DEPLOY.md §13`.
+  none exposes `vendorid`/`productid`. Since the Unraid GUID is the
+  vendor:product:serial triple, it cannot be reproduced, and
+  `<qemu:commandline>` does not help because the limitation is the device model
+  rather than libvirt's XML surface. Would require a patched QEMU. Recorded in
+  `DEPLOY.md §13`.
+
+  **Correction (2026-08-06):** this finding was initially over-generalised in
+  `unraid-guest.xml` into a claim that `<hostdev type='usb'>` would not preserve
+  the GUID either. That is wrong. `usb-host` proxies a *real* device and forwards
+  its actual descriptors — its `vendorid`/`productid`/`serial` properties are
+  **selectors** for which device to grab, not synthesised values — and it supports
+  `bootindex`, so firmware can boot from it. Emulated storage and device
+  passthrough are different mechanisms with different answers. Corrected in the
+  XML, `configuration.nix`, `BACKGROUND.md` and `DEPLOY.md §13`.
 - **Taking `tower.internal` for the hypervisor** — see decision 1.
 - **Relocating Docker workloads to the host in this phase** — out of scope; the
   ASM1064 returns to the host only after that migration, and the config is
@@ -239,3 +248,18 @@ Not part of the brief; surfaced while validating.
 - **Whether the ASM1064's PCIe x1 link is a bottleneck.** Four SATA ports on one
   lane is ~500 MB/s at Gen2, which a single SATA SSD nearly saturates. Confirm
   with `lspci -vv` (`LnkSta`) so it is not later mistaken for virtualization cost.
+- **Where the licence key should live, and which slot the ASM1042 occupies.**
+  These are **independent** variables that earlier drafts treated as one. The
+  ASM1042 is passed through solely because IOMMU group 1 is indivisible — not
+  because the licence key is on it. Two consequences worth testing at the
+  machine (`scripts/iommu-survey.sh`, `DEPLOY.md §4c`):
+  1. **The card can move slots.** Groups follow slot topology, so a different
+     root port may isolate it, letting the host keep a USB3 controller.
+  2. **The licence key can move to the unused onboard USB2 port** and reach the
+     guest via `<hostdev type='usb'>`, which needs no IOMMU passthrough at all.
+     That decouples licensing from any add-in card. Testable in one boot on
+     pegasus without liskov existing: attach the flash to a throwaway VM via
+     `usb-host` and compare `lsusb -v` inside against the host.
+  Neither is blocking, but both are cheapest to settle while the machine is
+  already open, and both invalidate the PCI addresses currently written into
+  `configuration.nix` and `unraid-guest.xml` if acted on.

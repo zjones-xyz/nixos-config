@@ -369,6 +369,38 @@ afternoon rather than an evening plus a confusing evaluation.
 torrent drive in §13. `badblocks -wsv` on a blank drive, or `f3` (already in
 serenity's package set), plus a SMART long test.
 
+### 4c. IOMMU and USB survey — do this while the machine is open
+
+Everything in §8 and in `unraid-guest.xml` depends on a topology map that cannot
+be derived from a config session. Capture it now:
+
+```sh
+./scripts/iommu-survey.sh              # groups + USB controller map
+./scripts/iommu-survey.sh /dev/sdX     # ...plus trace one device to its
+                                       #   controller, group, and USB identity
+```
+
+**Needs `intel_iommu=on`** or `/sys/kernel/iommu_groups` is empty — the script
+says so rather than silently reporting nothing. Check `cat /proc/cmdline` first;
+if it is missing, add it to Unraid's syslinux append line, reboot, survey, revert.
+That touches the boot flag only, not the array.
+
+Two questions to answer while you are in there:
+
+**Which controller is the unused onboard USB2 port behind, and what group is it
+in?** Plug a flash drive into that specific port and run the script with its
+device node. Note that **a USB device has no IOMMU group of its own** — groups are
+a property of PCI devices, so what you are really identifying is the *controller*
+behind that port.
+
+**Does moving the ASM1042 to another slot isolate it?** Groups follow slot
+topology, not the card, so a different root port may put it in a group of its own
+— at which point the host could keep the USB3 controller instead of surrendering
+it to group 1. Re-run the survey after any reshuffle; the addresses in
+`configuration.nix` and `unraid-guest.xml` are **not** stable across one.
+
+Both feed the licence-key placement decision in §13, which is genuinely open.
+
 ---
 
 ## 5. Bootloader: UEFI or legacy
@@ -631,6 +663,13 @@ Not in this deployment, each for a stated reason:
     stick in sync as the fallback reintroduces two sources of truth for the
     Unraid config, and they will drift.
 
+  ⚠ **Scope correction (2026-08-06).** This entry is about presenting the licence
+  key as an *emulated* USB disk backed by an image file. It is **not** about
+  `<hostdev type='usb'>` (QEMU's `usb-host`), which forwards a *real* physical
+  device and preserves its descriptors — that works, needs no IOMMU passthrough,
+  and is a live option for the licence key. See "Where the licence key lives"
+  below. Earlier revisions of `unraid-guest.xml` conflated the two.
+
   **Verified 2026-08-06: not possible with stock QEMU/libvirt.** Checked against
   QEMU 11.0.2's own device property lists (`-device <model>,help`):
 
@@ -656,8 +695,29 @@ Not in this deployment, each for a stated reason:
   scsi-disk/scsi-hd/scsi-cd), not USB descriptor fields. They never reach the
   GUID.
 
-  This confirms passing the ASM1042 through is not merely convenient — it is the
-  only route that works with stock components.
+  What this does *not* rule out is `usb-host` device passthrough — see below.
+
+- **Where the licence key lives — OPEN, and worth resolving early.** Two working
+  mechanisms; pick deliberately rather than by accident:
+
+  | | Mechanism | Needs a passable IOMMU group? | Licences? |
+  |---|---|---|---|
+  | today | `<hostdev type='pci'>` of the ASM1042 | yes — and it is only passed at all because group 1 is indivisible | yes |
+  | candidate | `<hostdev type='usb'>` (`usb-host`) on the onboard USB2 port | **no** — host keeps the controller | expected yes; forwards real descriptors, supports `bootindex` |
+  | ruled out | emulated `<disk bus='usb'>` | n/a | **no** — see above |
+
+  The onboard-USB2 option decouples the licence from any add-in card entirely: no
+  slot dependency, and it survives the ASM1042 being moved or removed. It also
+  makes the "can the host keep the USB3 controller?" question purely about slot
+  choice rather than about licensing.
+
+  **Cheap decisive test, and it does not need liskov to exist.** On pegasus, boot
+  any throwaway VM with the Unraid flash attached via `<hostdev type='usb'>` and
+  compare `lsusb -v` inside the guest against the host. Matching
+  idVendor/idProduct/serial means the GUID is intact and Unraid will licence. That
+  settles it in one boot, with nothing at stake.
+
+  Map the ports first with §4c.
 - **Beszel** — one less service to debug while proving passthrough.
 - **Initrd SSH LUKS unlock** — see §7.
 - **Moving the arr stack or download clients out of the guest.** They share one

@@ -161,10 +161,22 @@ in
   # Verified IOMMU grouping on this machine:
   #   group 1: 1b21:1166 (ASM1166 SATA, 01:00.0) + 1b21:1042 (ASM1042 USB3, 02:00.0)
   #            — both endpoints share the group, so they go together whether or
-  #            not we want the USB3 card. Convenient: the Unraid licensing flash
-  #            drive lives on it, and the license is tied to the USB GUID, so it
-  #            has to be a physical passthrough anyway.
+  #            not we want the USB3 card. That is the ONLY reason the ASM1042 is
+  #            listed below; it is not about the licence key.
   #   group 9: 1b21:1064 (ASM1064 SATA, 03:00.0) — isolated.
+  #
+  # Two things this grouping does NOT determine, kept separate deliberately:
+  #   - The ASM1042 can be moved to another slot, which may isolate it and let
+  #     the host keep it. The groups above are a property of the current slot
+  #     layout, not of the cards.
+  #   - Where the Unraid licence key is plugged in. A <hostdev type='usb'> entry
+  #     (QEMU's usb-host) forwards one physical device's real descriptors while
+  #     the host keeps the controller, so the licence GUID survives without any
+  #     IOMMU passthrough. Only an *emulated* usb-storage disk fails to license.
+  #     See hosts/liskov/unraid-guest.xml and DEPLOY.md § 13.
+  #
+  # Run scripts/iommu-survey.sh on the machine to re-derive all of this after
+  # any slot change — do not trust these addresses across a reshuffle.
   #
   # Onboard SATA (00:1f.2, group 8) is deliberately ABSENT: it shares a group
   # with the LPC bridge, and it is where the host's own root disk lives.

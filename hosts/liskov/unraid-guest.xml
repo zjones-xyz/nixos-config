@@ -145,11 +145,40 @@
         01:00.0  1b21:1166  ASM1166 6-port SATA
                             array (4x 12TB) + Cache (WD Blue 500GB) + Fastservices (240GB)
         02:00.0  1b21:1042  ASM1042 USB3
-                            carries the Unraid LICENCE FLASH DRIVE. Passing the whole
-                            controller rather than a <hostdev type='usb'> entry means the
-                            flash keeps its real USB GUID, which is what the licence is
-                            tied to. An emulated USB disk presents a synthetic GUID and
-                            will not license.
+                            Passed through because group 1 is INDIVISIBLE, not because we
+                            need a USB3 controller. It rides along with the ASM1166
+                            whatever is plugged into it.
+
+      ══ WHERE THE LICENCE KEY LIVES IS A SEPARATE QUESTION ══
+      Two independent variables, easy to conflate:
+
+        (a) which slot the ASM1042 occupies  → decides whether it is forced into
+            the guest by grouping. The card can be MOVED; a different slot may
+            put it in its own group, at which point the host could keep it.
+        (b) where the licence flash is plugged in → decides how it reaches the
+            guest. Independent of (a).
+
+      For (b) there are two working mechanisms, and only one of them was
+      described correctly in earlier revisions of this file:
+
+        - <hostdev type='pci'> of the whole controller (what we do today, as a
+          side effect of (a)). The guest owns the controller and everything on it.
+
+        - <hostdev type='usb'> — QEMU's `usb-host`, which proxies ONE physical
+          device while the host keeps the controller. It forwards the real
+          device's descriptors, so vendor:product:serial reach the guest intact
+          and the Unraid GUID is preserved. `usb-host` also supports bootindex,
+          so firmware can boot from it. This does NOT require the controller to
+          be in a passable IOMMU group at all.
+
+      What genuinely does NOT work is an emulated <disk bus='usb'> backed by an
+      image file: QEMU's usb-storage exposes only `serial`, with no way to set
+      idVendor/idProduct, so the GUID cannot be reproduced. See DEPLOY.md § 13.
+      That is the case earlier notes here conflated with usb-host.
+
+      OPEN: whether to move the licence key to the unused onboard USB2 port and
+      use <hostdev type='usb'>. Would decouple the licence from any add-in card.
+      Run scripts/iommu-survey.sh at the machine to map the ports first.
     -->
     <hostdev mode='subsystem' type='pci' managed='yes'>
       <source>

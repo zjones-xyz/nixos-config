@@ -62,6 +62,12 @@ because **group 1 is indivisible and the ASM1166 must go to the guest.** That th
 Unraid licence key happens to live on it is a convenience discovered afterwards,
 not the reason.
 
+**Groups follow slot topology, so they are not a fixed property of the cards.**
+Move the ASM1042 to a different slot — behind a different root port — and it may
+land in its own group, at which point the host could keep it. Any reshuffle
+invalidates the map above; re-derive it with `scripts/iommu-survey.sh` rather
+than assuming.
+
 Group 8 is the mirror image: onboard SATA shares a group with the LPC bridge, so
 passing the SATA controller would mean passing the LPC bridge — which carries the
 firmware interface. That is unworkable, and it is why the host's root disk lives
@@ -141,6 +147,44 @@ It is the wrong answer here, for reasons specific to Unraid:
 The trade is that passthrough is all-or-nothing at group granularity, and the
 host cannot touch those disks while the guest runs. For a storage appliance
 that is the correct trade.
+
+---
+
+## Three ways to get a USB device into a guest
+
+Worth separating, because two of them work for an Unraid licence key and one does
+not — and conflating them is easy.
+
+**1. Emulated storage — `<disk bus='usb'>`, QEMU's `usb-storage`.** A file or
+block device on the host, presented to the guest as a USB disk. The guest sees a
+device QEMU invented. `usb-storage` exposes a settable `serial` and *nothing
+else* — there is no property for `idVendor` or `idProduct`. Since the Unraid GUID
+is built from vendor:product:serial, two thirds of it are pinned to QEMU's own
+values and the GUID cannot be reproduced. **This is the one that cannot license**,
+and no amount of `<qemu:commandline>` fixes it, because the limitation is the
+device model rather than libvirt's XML surface.
+
+**2. Device passthrough — `<hostdev type='usb'>`, QEMU's `usb-host`.** A *real*
+physical device, claimed from the host and proxied to the guest. Its
+`vendorid`/`productid`/`serial` properties are **selectors** — they choose which
+device to grab — and the descriptors the guest sees are the device's own,
+forwarded. So the GUID survives. It also supports `bootindex`, so guest firmware
+can boot from it.
+
+Crucially, **this does not involve the IOMMU at all.** The host keeps the
+controller; QEMU forwards one device on it. So the controller's IOMMU group is
+irrelevant, which makes this the flexible option: any USB port on the machine
+becomes a candidate, including onboard ones sharing a group with half the
+chipset.
+
+**3. Controller passthrough — `<hostdev type='pci'>` of the USB controller.** The
+guest owns the whole controller and every port on it, via VFIO. Requires the
+controller to sit in a passable IOMMU group. Strongest isolation, least
+flexibility — and on this machine it is what happens to the ASM1042 as a *side
+effect* of group 1, not as a deliberate choice about the licence key.
+
+The practical consequence: where the licence key is plugged in and which slot the
+ASM1042 occupies are **independent decisions**. Option 2 decouples them entirely.
 
 ---
 
