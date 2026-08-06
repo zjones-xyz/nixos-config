@@ -42,6 +42,15 @@
     _1password-gui
     _1password-cli
     claude-code
+
+    # FreeIPMI — drives Tower's BMC (serial-over-LAN console + chassis power)
+    # from somewhere that isn't Tower. Same reason as serenity: it is how you
+    # reach tower-hv's LUKS passphrase prompt and how you power-cycle a wedged
+    # box. Having it on both machines means neither one being down blocks
+    # recovery of the other. NOT ipmitool — that BMC needs FreeIPMI's quirks
+    # handling. See hosts/tower-hv/DEPLOY.md.
+    freeipmi
+
     discord
     ferdium
     bambu-studio

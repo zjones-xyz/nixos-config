@@ -21,6 +21,16 @@
     codex
     curl
     f3
+    # FreeIPMI — drives Tower's BMC (serial-over-LAN console + chassis power)
+    # from somewhere that isn't Tower, which is the whole point: it is how you
+    # reach the LUKS passphrase prompt on tower-hv and how you power-cycle the
+    # box when it is wedged. NOT ipmitool — that BMC needs FreeIPMI's quirks
+    # handling. See hosts/tower-hv/DEPLOY.md for the exact invocations.
+    #   ipmiconsole -h 192.168.8.191 -u ADMIN -P
+    #   ipmipower   -h 192.168.8.191 -u ADMIN -P --stat
+    # Only the remote LAN interface matters here; freeipmi's local /dev/ipmi0
+    # path is Linux-only and irrelevant on a Mac.
+    freeipmi
     gh
     neovim
     nmap
