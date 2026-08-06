@@ -54,7 +54,11 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, ... }: {
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, ... }:
+  let
+    lib = nixpkgs.lib;
+  in
+  {
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
@@ -85,6 +89,86 @@
               claudeDesktop = claude-desktop-debian.packages.x86_64-linux.claude-desktop-fhs;
             };
           }
+        ];
+      };
+
+      # tower-hv — Supermicro X9SCM / Xeon E3-1230 v2. Minimal hypervisor whose
+      # only job (for now) is running the existing Unraid 7.3.2 install as a KVM
+      # guest with its SATA controllers passed through, so the approach can be
+      # evaluated before any workload moves.
+      #
+      # NOT named "tower": tower.internal stays pointed at the Unraid instance,
+      # which is what memory-alpha's NFS mounts and NUT client resolve, and what
+      # the machine *is* when booted bare metal. See hosts/tower-hv/DEPLOY.md.
+      #
+      # Installed via hosts/tower-hv/disko.nix (LUKS root on the Kingston 120GB,
+      # which must be on an ONBOARD SATA port — the add-in controllers are bound
+      # to vfio-pci and handed to the guest).
+      tower-hv = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = { inherit self; };
+        modules = [
+          ./hosts/tower-hv/configuration.nix
+          home-manager.nixosModules.home-manager
+          sops-nix.nixosModules.sops
+        ];
+      };
+
+      # tower-hv-vm — the same config with the real machine's hardware stripped
+      # out, so it can be booted under plain QEMU on the CachyOS desktop:
+      #   nix run .#nixosConfigurations.tower-hv-vm.config.system.build.vm
+      #
+      # Exists because everything in tower-hv that is cheap to get wrong
+      # (networkd bridge, libvirtd, users, sops gating, serial console) is
+      # expensive to debug on a machine whose disks are a live Unraid array.
+      # Proves the config boots and the services come up BEFORE Tower is touched.
+      #
+      # It cannot prove passthrough — there is no ASM1166 in a VM. What it
+      # catches is everything else.
+      tower-hv-vm = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = { inherit self; };
+        modules = [
+          ./hosts/tower-hv/configuration.nix
+          home-manager.nixosModules.home-manager
+          sops-nix.nixosModules.sops
+          ({ lib, modulesPath, ... }: {
+            # The real hardware-configuration.nix points root at a LUKS mapper
+            # device with a placeholder UUID; keeping it would hang the VM in
+            # the initrd waiting for a device that will never appear.
+            disabledModules = [ ./hosts/tower-hv/hardware-configuration.nix ];
+            imports = [ (modulesPath + "/virtualisation/qemu-vm.nix") ];
+
+            nixpkgs.hostPlatform = "x86_64-linux";
+            boot.initrd.luks.devices = lib.mkForce { };
+            boot.loader.systemd-boot.enable = lib.mkForce false;
+            boot.loader.efi.canTouchEfiVariables = lib.mkForce false;
+
+            # No ASM1166/ASM1042/ASM1064 to bind, and vfio-pci.ids= against a
+            # device that isn't present is a confusing no-op rather than an error.
+            homelab.vfio.enable = lib.mkForce false;
+
+            # eno1 does not exist in the VM, so the bridge would never get a
+            # carrier and network-online.target would block until timeout. Hand
+            # networking back to qemu-vm's own scripted DHCP.
+            #
+            # systemd.network.enable must go off too, not just the netdev and
+            # network definitions: leaving it on alongside useDHCP with networkd
+            # disabled lets networkd and dhcpcd both manage the same interface,
+            # which nixpkgs warns about and which loses networking outright.
+            systemd.network.enable = lib.mkForce false;
+            systemd.network.netdevs = lib.mkForce { };
+            systemd.network.networks = lib.mkForce { };
+            networking.useNetworkd = lib.mkForce false;
+            networking.useDHCP = lib.mkForce true;
+
+            virtualisation = {
+              memorySize = 2048;
+              cores = 2;
+              diskSize = 8192;
+              graphics = false;  # serial console, matching how the real host is driven
+            };
+          })
         ];
       };
 
@@ -155,5 +239,78 @@
         }
       ];
     };
+
+    # ── Checks ────────────────────────────────────────────────────────────────
+    # Asserts the tower-hv invariants that are cheap to break in a rebuild and
+    # expensive to discover in front of the machine — a wrong vfio binding means
+    # either the guest gets nothing or the HOST loses its own root disk.
+    #
+    # Written as eval-time assertions on purpose. CI runs `nix flake check
+    # --no-build`, which evaluates check derivations without building them, so a
+    # `throw` here fires in the existing workflow with no extra step and no need
+    # for KVM on the runner. The derivation itself is a formality.
+    checks.x86_64-linux =
+      let
+        pkgs = nixpkgs.legacyPackages.x86_64-linux;
+        cfg = self.nixosConfigurations.tower-hv.config;
+
+        params = cfg.boot.kernelParams;
+        initrdMods = cfg.boot.initrd.kernelModules;
+        vfioIds = cfg.homelab.vfio.pciIds;
+
+        hasParam = p: lib.elem p params;
+        # vfio-pci.ids= is built by joining the list, so match on the prefix and
+        # check membership rather than reconstructing the exact string here.
+        idsParam = lib.findFirst (lib.hasPrefix "vfio-pci.ids=") null params;
+
+        require = cond: msg: lib.optional (!cond) msg;
+
+        failures = lib.flatten [
+          (require (cfg.networking.hostName == "tower-hv")
+            "hostName is '${cfg.networking.hostName}', expected 'tower-hv'. tower.internal must keep resolving to the Unraid instance — memory-alpha's NFS mounts and NUT client depend on it, and it is what the machine is when booted bare metal.")
+
+          (require (hasParam "intel_iommu=on")
+            "boot.kernelParams is missing intel_iommu=on — IOMMU groups never form and vfio-pci binds nothing.")
+          (require (hasParam "iommu=pt")
+            "boot.kernelParams is missing iommu=pt.")
+          (require (idsParam != null)
+            "boot.kernelParams has no vfio-pci.ids= entry — the controllers would stay bound to ahci.")
+          (require (idsParam != null && lib.all (id: lib.hasInfix id idsParam) vfioIds)
+            "vfio-pci.ids= does not list every id in homelab.vfio.pciIds.")
+
+          (require (lib.elem "vfio_pci" initrdMods)
+            "vfio_pci is not in boot.initrd.kernelModules — ahci will claim the SATA controllers first and passthrough silently fails.")
+          (require (lib.elem "vfio_iommu_type1" initrdMods)
+            "vfio_iommu_type1 is not in boot.initrd.kernelModules.")
+          # Folded into vfio_pci in Linux 6.2. Every pre-6.2 guide still tells
+          # you to load it; on a 26.05 kernel that is a missing-module error.
+          (require (!lib.elem "vfio_virqfd" initrdMods)
+            "vfio_virqfd is listed in boot.initrd.kernelModules — it was merged into vfio_pci in Linux 6.2 and no longer exists.")
+
+          # The onboard SATA controller and NICs are Intel (8086:). Binding one
+          # to vfio-pci takes the host's own root disk or its only network path.
+          (require (!lib.any (lib.hasPrefix "8086:") vfioIds)
+            "homelab.vfio.pciIds contains an Intel (8086:) device. Onboard SATA shares an IOMMU group with the LPC bridge and holds the host root disk; the NICs carry br0. Never pass these through.")
+
+          (require cfg.virtualisation.libvirtd.enable
+            "libvirtd is not enabled — there is nothing to run the guest.")
+          (require (cfg.virtualisation.libvirtd.onShutdown == "shutdown")
+            "libvirtd.onShutdown is not \"shutdown\". Suspending a guest that owns physical SATA controllers mid-write is how the array ends up unclean.")
+          (require (cfg.systemd.network.netdevs ? "10-br0")
+            "no br0 bridge defined — the guest could not present the same LAN identity as bare-metal Tower.")
+
+          (require (lib.any (lib.hasPrefix "console=ttyS") params)
+            "no serial console in boot.kernelParams — the LUKS passphrase prompt would be unreachable over IPMI Serial-over-LAN, which is the only unlock path until initrd SSH is wired up.")
+        ];
+      in
+      {
+        tower-hv-invariants =
+          if failures == [ ]
+          then pkgs.runCommand "tower-hv-invariants-ok" { } "touch $out"
+          else throw ''
+            tower-hv configuration invariants failed:
+            ${lib.concatMapStringsSep "\n" (f: "  - ${f}") failures}
+          '';
+      };
   };
 }

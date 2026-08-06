@@ -1,0 +1,223 @@
+<!--
+  Unraid guest for tower-hv.
+
+  NOT applied declaratively. Install with:
+    sudo virsh --connect qemu:///system define hosts/tower-hv/unraid-guest.xml
+  and thereafter edit the live definition with `virsh edit unraid`. libvirt is
+  stateful, and the point of this phase is to hand-tune passthrough while
+  experimenting; a generated domain would fight that. This file is the
+  known-good starting point and the thing to diff against when the live
+  definition drifts.
+
+  Deliberately NOT set to autostart. A host that boots straight into launching a
+  storage guest is a host you cannot safely reboot to debug. Start it by hand:
+    sudo virsh start unraid
+  Matches virtualisation.libvirtd.onBoot = "ignore" in configuration.nix.
+
+  ══ THE THING THAT WILL BREAK FIRST ══
+  The three <hostdev> PCI entries below reference bus ADDRESSES (01:00.0 etc),
+  because libvirt has no by-ID form for PCI passthrough. Those addresses have
+  been observed to shift on this board, which is precisely why the host binds
+  vfio-pci by vendor:device ID instead (see modules/nixos/vfio.nix). So before
+  starting the guest after any hardware change, re-check:
+
+    lspci -nn | grep 1b21
+
+  and fix the addresses here if they moved. Symptom of a stale address is
+  libvirt refusing to start the domain, or (worse) passing through whatever
+  device now sits at that address.
+-->
+<domain type='kvm'>
+  <name>unraid</name>
+  <description>Unraid 7.3.2, migrated from bare metal. Owns the array and cache pools via passed-through SATA controllers.</description>
+
+  <!--
+    24GB of the host's 32GB. Sized for the arr stack, qBittorrent and SABnzbd
+    staying INSIDE the guest during evaluation, so this is not yet a pure
+    storage appliance. Comes down as Docker workloads migrate to the host.
+
+    currentMemory equals memory: no ballooning. A storage guest that can have
+    memory pulled out from under its page cache mid parity check is not a
+    configuration worth measuring.
+  -->
+  <memory unit='KiB'>25165824</memory>
+  <currentMemory unit='KiB'>25165824</currentMemory>
+
+  <!--
+    6 of the E3-1230 v2's 8 threads, arranged as 3 real cores x 2 threads so the
+    guest scheduler sees an honest topology. The remaining physical core (2
+    threads) stays with the host for qemu's own emulator threads and the
+    hypervisor itself.
+
+    TODO(install): verify the host CPU numbering with `lscpu -e` before trusting
+    the pinning below. The assumption is the usual Linux layout where cpu0-3 are
+    the first thread of each core and cpu4-7 the second, making (0,4) (1,5)
+    (2,6) (3,7) the sibling pairs. If this box enumerates differently the pins
+    below will split cores and cost noticeable throughput on parity math.
+  -->
+  <vcpu placement='static'>6</vcpu>
+  <cputune>
+    <vcpupin vcpu='0' cpuset='0'/>
+    <vcpupin vcpu='1' cpuset='4'/>
+    <vcpupin vcpu='2' cpuset='1'/>
+    <vcpupin vcpu='3' cpuset='5'/>
+    <vcpupin vcpu='4' cpuset='2'/>
+    <vcpupin vcpu='5' cpuset='6'/>
+    <emulatorpin cpuset='3,7'/>
+  </cputune>
+
+  <os firmware='efi'>
+    <!--
+      q35 + OVMF rather than i440fx + SeaBIOS: PCIe passthrough is materially
+      better behaved on q35, which matters when handing over three controllers.
+
+      `firmware='efi'` uses libvirt's firmware autoselection rather than a
+      hardcoded loader path. On NixOS this is important: an explicit
+      /nix/store/... OVMF path would be invalidated by the next nixpkgs bump,
+      leaving a domain that will not start for a reason with no obvious
+      connection to the rebuild that caused it. Backed by
+      virtualisation.libvirtd.qemu.ovmf in configuration.nix.
+
+      ══ UNRAID FLASH BOOT ══
+      Unraid's flash drive ships legacy/syslinux bootable. For UEFI it needs its
+      "EFI-" folder renamed to "EFI". That rename is SAFE for the bare-metal
+      fallback: it enables UEFI boot while leaving the syslinux legacy path
+      intact, so the flash still boots the machine bare metal exactly as before.
+      Verify that on the flash before first guest start.
+
+      If OVMF cannot enumerate the flash through the passed-through ASM1042 (a
+      known-finicky combination), the fallback is SeaBIOS: replace this whole
+      <os> element with
+          <os><type arch='x86_64' machine='pc-i440fx'>hvm</type><boot dev='hd'/></os>
+      and accept the weaker PCIe passthrough behaviour.
+    -->
+    <type arch='x86_64' machine='q35'>hvm</type>
+    <boot dev='hd'/>
+  </os>
+
+  <features>
+    <acpi/>
+    <apic/>
+  </features>
+
+  <!--
+    host-passthrough so the guest sees a real Ivy Bridge, including aes-ni,
+    which Unraid's encryption leans on. This machine is not part of any
+    migration pool, so there is no live-migration compatibility to preserve.
+  -->
+  <cpu mode='host-passthrough' check='none' migratable='off'>
+    <topology sockets='1' cores='3' threads='2'/>
+  </cpu>
+
+  <clock offset='utc'>
+    <timer name='rtc' tickpolicy='catchup'/>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='hpet' present='no'/>
+  </clock>
+
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <!--
+    Do not auto-restart on guest crash. During evaluation a crash is the signal
+    being measured; silently rebooting it destroys the evidence and risks
+    repeatedly slamming the array.
+  -->
+  <on_crash>preserve</on_crash>
+
+  <pm>
+    <suspend-to-mem enabled='no'/>
+    <suspend-to-disk enabled='no'/>
+  </pm>
+
+  <devices>
+    <emulator>/run/current-system/sw/bin/qemu-system-x86_64</emulator>
+
+    <!--
+      NO <disk> entries, deliberately. Every disk this guest touches arrives via
+      the passed-through controllers below, including the boot flash. Handing
+      Unraid an emulated virtio disk alongside real controllers is how you end
+      up with the array trying to adopt a phantom device.
+    -->
+
+    <!--
+      ══ PCI PASSTHROUGH ══
+      IOMMU group 1 (both endpoints, they cannot be separated):
+        01:00.0  1b21:1166  ASM1166 6-port SATA
+                            array (4x 12TB) + Cache (WD Blue 500GB) + Fastservices (240GB)
+        02:00.0  1b21:1042  ASM1042 USB3
+                            carries the Unraid LICENCE FLASH DRIVE. Passing the whole
+                            controller rather than a <hostdev type='usb'> entry means the
+                            flash keeps its real USB GUID, which is what the licence is
+                            tied to. An emulated USB disk presents a synthetic GUID and
+                            will not license.
+    -->
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x02' slot='0x00' function='0x0'/>
+      </source>
+    </hostdev>
+
+    <!--
+      IOMMU group 9, isolated:
+        03:00.0  1b21:1064  ASM1064 4-port SATA
+                            BX500 x2, MX100 (if healthy), 1 spare.
+
+      TEMPORARY. This controller returns to the host once the Docker workloads
+      migrate off Unraid. Removing it then is: delete this one <hostdev> block,
+      and delete the matching "1b21:1064" line from homelab.vfio.pciIds in
+      configuration.nix. Nothing else references it.
+    -->
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x03' slot='0x00' function='0x0'/>
+      </source>
+    </hostdev>
+
+    <!--
+      Bridged onto br0 so the guest is indistinguishable from bare-metal Tower
+      on the LAN: same DHCP reservation, same address, same NFS exports that
+      memory-alpha mounts as tower.internal.
+
+      TODO(install): set the MAC to the bare-metal Tower NIC's address, so the
+      existing DHCP reservation hands it the same IP and tower.internal keeps
+      resolving with no DNS change. This is the single most important line in
+      this file for preserving the five minute fallback guarantee.
+    -->
+    <interface type='bridge'>
+      <source bridge='br0'/>
+      <mac address='00:00:00:00:00:00'/>
+      <model type='virtio'/>
+    </interface>
+
+    <!--
+      Serial console, so the guest is reachable with
+        sudo virsh console unraid
+      without needing graphics. Unraid's own webGUI is the normal interface, but
+      when the array will not start you want a text console that does not depend
+      on the network being right.
+    -->
+    <serial type='pty'>
+      <target type='isa-serial' port='0'>
+        <model name='isa-serial'/>
+      </target>
+    </serial>
+    <console type='pty'>
+      <target type='serial' port='0'/>
+    </console>
+
+    <!-- VNC on loopback only. Reach it by SSH tunnel from serenity:
+           ssh -L 5900:127.0.0.1:5900 z@tower-hv.internal
+         Never exposed on the LAN: it is unauthenticated console access. -->
+    <graphics type='vnc' port='5900' autoport='no' listen='127.0.0.1'/>
+    <video>
+      <model type='qxl'/>
+    </video>
+
+    <memballoon model='none'/>
+  </devices>
+</domain>
