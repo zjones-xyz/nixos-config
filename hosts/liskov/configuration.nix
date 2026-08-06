@@ -28,6 +28,7 @@ in
     ./hardware-configuration.nix
     ../../modules/nixos/common.nix
     ../../modules/nixos/vfio.nix
+    ../../modules/nixos/serial-console.nix
   ];
 
   # ── Identity ────────────────────────────────────────────────────────────────
@@ -72,19 +73,16 @@ in
   # below) that somewhere is IPMI SoL:
   #   ipmiconsole -h 192.168.8.191 -u ADMIN -P
   #
-  # Order matters. The kernel sends /dev/console — and therefore the cryptsetup
-  # prompt — to the LAST console= argument, so the serial line is listed last
-  # on purpose. tty0 stays in the list so a physically attached monitor still
-  # shows the boot, it just isn't where the prompt lands.
+  # Set via modules/nixos/serial-console.nix rather than boot.kernelParams
+  # directly, so the VM variant can override it — boot.kernelParams is a list
+  # and a single entry cannot be removed by an overriding module. See that file
+  # for what went wrong when this was hardcoded.
   #
   # TODO(install): confirm the unit and baud in BIOS under Advanced → Serial
   # Port Console Redirection. Supermicro X9 boards conventionally expose SoL on
   # COM2 (= ttyS1) at 115200, but the BIOS setting is authoritative and a
   # mismatch here means a blank IPMI console that looks exactly like a hang.
-  boot.kernelParams = [
-    "console=tty0"
-    "console=ttyS1,115200n8"
-  ];
+  homelab.serialConsole.device = "ttyS1,115200n8";
   # NO systemd.services."serial-getty@ttyS1" block here, deliberately.
   #
   # Writing one looks harmless and is actively harmful: the name is an *instance*,

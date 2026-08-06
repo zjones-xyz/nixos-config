@@ -162,6 +162,14 @@
             networking.useNetworkd = lib.mkForce false;
             networking.useDHCP = lib.mkForce true;
 
+            # A QEMU guest has only ttyS0; liskov's BMC puts Serial-over-LAN on
+            # COM2 (ttyS1). Inheriting ttyS1 meant the VM registered a console
+            # on a UART that does not exist and systemd bound the login prompt
+            # to a device that never appeared — it booted correctly in ~5s and
+            # offered no way in. Scalar option, so mkForce works; a list entry
+            # could not have been removed.
+            homelab.serialConsole.device = lib.mkForce "ttyS0,115200n8";
+
             # Console logins for the throwaway VM only.
             #
             # Without this the smoke test proves nothing past "it booted": the
