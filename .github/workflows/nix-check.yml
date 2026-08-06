@@ -5,9 +5,28 @@ on:
     branches: [main]
   pull_request:
 
+# A full run takes ~15 minutes, dominated by the native memory-alpha build. On a
+# branch with frequent pushes that means runs pile up and supersede each other,
+# and superseded runs land as `cancelled` — which reads as a CI failure on the
+# PR even though nothing is wrong. (Observed on #37: runs 166, 167 and 170 all
+# cancelled, with 168 and 169 passing in between.)
+#
+# Grouping per-ref with cancel-in-progress makes that supersession explicit and
+# intentional: only the newest commit's run matters, older ones are dropped on
+# purpose, and CI minutes are not spent validating a tree nobody will merge.
+#
+# github.ref is the right key — it is per-PR (refs/pull/N/merge) and per-branch,
+# so concurrent work on main and on a PR never cancel each other.
+concurrency:
+  group: nix-check-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   flake-check:
     runs-on: ubuntu-latest
+    # A wedged runner should fail loudly and quickly rather than occupying a
+    # slot for the 360-minute default.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
