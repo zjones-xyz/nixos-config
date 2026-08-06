@@ -717,8 +717,33 @@ Not in this deployment, each for a stated reason:
 
   What this does *not* rule out is `usb-host` device passthrough — see below.
 
-- **Where the licence key lives — OPEN, and worth resolving early.** Two working
-  mechanisms; pick deliberately rather than by accident:
+- **Where the licence key lives — NARROWED by the 2026-08-06 survey.**
+
+  The topology is now known:
+
+  | Controller | Group | Physical | Notes |
+  |---|---|---|---|
+  | `00:1a.0` EHCI #2 | 3 (isolated) | **internal header** | also carries the BMC virtual HID |
+  | `00:1d.0` EHCI #1 | 6 (isolated) | rear/other | Unraid boot flash lives here today |
+  | `02:00.0` ASM1042 | 1 (with ASM1166) | add-in card | goes to the guest regardless |
+
+  **Recommended: licence key on the internal header, forwarded with
+  `<hostdev type='usb'>`.** Internal is the better physical home for a licence
+  dongle — inside the case, not bumpable, not pullable. And device passthrough
+  leaves `00:1a.0` with the host, so the BMC's virtual keyboard and mouse are
+  untouched.
+
+  ⚠ **Never PCI-pass `00:1a.0`.** It is isolated, so VFIO would happily let you —
+  and it would take IPMI's virtual HID away from the host. That is the remote-
+  hands path this deployment depends on, and the only way to type a LUKS
+  passphrase until initrd SSH unlock exists. Isolated does not mean safe to pass.
+
+  Fallback if `usb-host` boot proves troublesome under OVMF: leave the flash on
+  `00:1d.0` and PCI-pass that controller whole. It is isolated and carries no BMC
+  device, so it is a clean handover — at the cost of the host losing those ports
+  and the flash being pinned to that controller.
+
+  The mechanisms, for reference:
 
   | | Mechanism | Needs a passable IOMMU group? | Licences? |
   |---|---|---|---|

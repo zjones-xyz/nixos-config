@@ -193,16 +193,24 @@ in
   #     without also giving up the array controller. So the ASM1042 rides along
   #     to the guest, which costs nothing.
   #   - The licence key does NOT depend on the ASM1042. Both onboard EHCI
-  #     controllers are isolated (00:1a.0 → group 3, 00:1d.0 → group 6), and the
-  #     Unraid boot flash already lives on 00:1d.0. So it reaches the guest
-  #     either via <hostdev type='usb'> (host keeps the controller) or by passing
-  #     00:1d.0 whole. See hosts/liskov/unraid-guest.xml and DEPLOY.md § 13.
+  #     controllers are isolated, and the survey mapped them to physical ports:
   #
-  #     ⚠ Do NOT pass 00:1a.0 (group 3). It carries the BMC's virtual HID
-  #     (0557:2221 Winbond/Nuvoton Hermon, the WPCM450 that also provides the
-  #     Matrox G200eW in group 7). Handing it to the guest takes IPMI's virtual
-  #     keyboard and mouse away from the host — which is the remote-hands path
-  #     this whole deployment depends on.
+  #       00:1a.0  group 3  — the INTERNAL header. Also carries the BMC's
+  #                           virtual HID (0557:2221 Winbond/Nuvoton Hermon,
+  #                           the WPCM450 that also provides the Matrox G200eW
+  #                           in group 7).
+  #       00:1d.0  group 6  — carries the Unraid boot flash today. Clean.
+  #
+  #     ⚠ NEVER pass 00:1a.0 through as a PCI device. Handing that controller to
+  #     the guest takes IPMI's virtual keyboard and mouse away from the host —
+  #     the remote-hands path this whole deployment depends on, and the only way
+  #     to type a LUKS passphrase until initrd SSH unlock exists.
+  #
+  #     This does NOT rule the internal header out for the licence key. A
+  #     <hostdev type='usb'> entry forwards one device while the host keeps the
+  #     controller, so the BMC HID is unaffected. Internal is in fact the better
+  #     home for a licence dongle — inside the case, not bumpable.
+  #     See hosts/liskov/unraid-guest.xml and DEPLOY.md § 13.
   #
   # Onboard SATA (00:1f.2, group 8) is deliberately ABSENT: it shares a group
   # with the LPC bridge and SMBus, and it is where the host's own root disk lives.
