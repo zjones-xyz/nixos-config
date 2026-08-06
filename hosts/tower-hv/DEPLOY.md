@@ -101,6 +101,12 @@ variable — rather than tangled up with passthrough debugging later.
 
 Watch for ATA/UDMA CRC errors in the syslog. Those mean a cable, not a disk.
 
+**This run is the baseline. Write the numbers down** — wall-clock, average MB/s,
+peak read — in the table under *§ Performance expectations*. Without them, a
+slow virtualized parity check later is ambiguous between "passthrough is costly"
+and "the controller was always the limit", and there is no way back to this
+measurement once the machine is virtualized.
+
 **Expected bandwidth:** the ASM1166 negotiates Gen2 x2 (~1 GB/s shared) and four
 HDDs peak near 800 MB/s. Gigabit networking caps inbound writes around
 110 MB/s, so contention is unlikely to show in normal use. The case to watch is
@@ -287,7 +293,9 @@ sudo virsh console unraid       # or the webGUI once it has an address
       around it.
 - [ ] Run a parity check *under virtualization* and compare throughput to the
       bare-metal baseline from §3. That comparison is the actual result of this
-      experiment.
+      experiment. Fill in the table under *§ Performance expectations*, which
+      also records what each number was predicted to do and — importantly —
+      which shortfalls are expected cost versus a specific, findable fault.
 
 ---
 
@@ -402,6 +410,67 @@ Not in this deployment, each for a stated reason:
 - **Auto-unlock for the Unraid array.** Array encryption is unlocked inside the
   guest by Unraid's own machinery and stays manual. A keyfile-on-host-encrypted-
   volume scheme would only *move* the manual step, not remove it.
+
+---
+
+## Performance expectations
+
+Predictions made **before** measuring (2026-08-06), recorded so the result can
+falsify them rather than be rationalised after the fact. These are reasoning,
+not data — §3's bare-metal run is the data.
+
+### Record measurements here
+
+| Metric | Bare metal (§3) | Virtualized (§9) | Δ |
+|---|---|---|---|
+| Parity check, wall-clock | | | |
+| Parity check, avg MB/s | | | |
+| Peak array read MB/s | | | |
+| SABnzbd par2 verify, a fixed test set | | | |
+| SABnzbd unrar, same set | | | |
+| Cache pool (SSD) random read latency | | | |
+| Large file write over SMB/NFS, MB/s | | | |
+
+Use the *same* test set and the same drives for both runs, and run them at
+comparable idle. A parity check racing a heavy download is not a comparison.
+
+### What each number should do, and why
+
+| Dimension | Expectation | Reasoning |
+|---|---|---|
+| Sequential array throughput | **Within ~0–5%** of bare metal | VFIO gives the guest the controller directly. DMA goes controller → guest memory through the IOMMU: no QEMU block layer, no virtio, no host filesystem in the path. This staying flat *is* the experiment succeeding. |
+| Parity check wall-clock | **Roughly unchanged** | Disk-bound, not CPU-bound. XOR across 4 drives at ~800 MB/s is light work for this Xeon. |
+| SABnzbd par2 / unrar | **~25% slower** | Genuinely CPU-bound, and the guest has 6 vCPU on 3 physical cores where bare metal had 4. This is arithmetic — cores given away — not virtualization overhead. The change most likely to actually be *felt*. |
+| SSD pool latency / jitter | **Modestly worse** | Guest vCPUs are host threads, and this E3 generation predates APICv, so interrupt-heavy paths pay more per interrupt than a modern chip. Shows up on Cache/Fastservices (Docker appdata), not on spinning disks. |
+| Network at 1GbE | **Negligible** | virtio-net on a bridge handles ~110 MB/s with minimal CPU. Revisit only at 10GbE. |
+| Boot + shutdown | **Longer** | Two OSes plus a LUKS unlock. Operational cost, not throughput. |
+| Memory pressure | **Barely different** | 24GB of 32GB, ballooning off. Unraid loses some page cache but the working set dwarfs RAM either way. |
+
+### The ceiling that is not virtualization's fault
+
+The ASM1166 negotiates **Gen2 x2 (~1 GB/s shared across six ports)** and four
+12TB drives peak near 800 MB/s combined — so the card is already close to
+saturation *on bare metal*. Virtualization does not move that ceiling. The case
+to watch is a parity check concurrent with heavy cache writes.
+
+This is exactly why §3 runs first: without that baseline, a slow virtualized
+parity check is ambiguous between "passthrough is costly" and "the controller
+was always the limit".
+
+### Expected cost vs. something is wrong
+
+A few percent off bare metal is the expected cost. **A 30% shortfall is not** —
+that is a specific, findable fault, and worth diagnosing rather than accepting:
+
+- IOMMU not actually in passthrough mode — check `iommu=pt` reached the kernel
+  (`cat /proc/cmdline`).
+- CPU pins splitting hyperthread siblings. `unraid-guest.xml` assumes the
+  conventional layout where cpu0-3 are first threads and cpu4-7 are seconds.
+  **Verify with `lscpu -e` before trusting the pinning** — if this box enumerates
+  differently, the pins split cores and cost real throughput.
+- Interrupt storm or MSI-X not negotiated on a passed-through controller
+  (`grep 1b21 -A2 /proc/interrupts`, watch for one CPU pegged in `si`).
+- The guest not actually getting the controller — re-run §7.
 
 ---
 
