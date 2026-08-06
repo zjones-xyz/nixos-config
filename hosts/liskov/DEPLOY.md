@@ -378,11 +378,16 @@ be derived from a config session. Capture it now:
 ./scripts/iommu-survey.sh              # everything — no arguments needed
 ```
 
-**Plug a flash drive into each port you want to identify, then run it once.**
-Every USB storage device is auto-detected and reported with its controller,
-IOMMU group and USB vendor:product:serial, so there is no need to work out device
-nodes. Several drives at a time is the intended use — they are distinguished by
-model and serial, so use two visibly different sticks.
+**Plug something into each port you want to identify, then run it once.** Every
+attached USB device is auto-detected and reported with its controller, IOMMU
+group and vendor:product:serial — no need to work out device nodes. Several at a
+time is the intended use.
+
+It does not have to be storage. **A Logitech receiver (`046d:…`) or any other
+recognisable dongle identifies a port just as well as a flash drive**, and is
+easier to pick out of a list than two similar-looking sticks. You are identifying
+the *port and its controller*, not testing the device — so use whatever is most
+distinct. (Only the later licence-GUID test in §13 needs the actual Unraid flash.)
 
 Worth doing **two ports in one pass**: the unused onboard header port *and* a
 rear-panel port. The C204 exposes two EHCI controllers and splits ports between

@@ -110,39 +110,63 @@ echo
 echo "  Device tree — which physical port hangs off which controller:"
 if have lsusb; then lsusb -t 2>/dev/null | sed 's/^/    /'; else echo "    lsusb not found (install usbutils)"; fi
 
-# ── 3. USB storage, auto-detected ────────────────────────────────────────────
-# The port-mapping workhorse: plug drives into the ports you want to identify,
-# run with no arguments, read off the controller and group for each.
-echo; hr; echo "USB STORAGE DEVICES (auto-detected)"; hr
+# ── 3. Attached USB devices, auto-detected ───────────────────────────────────
+# The port-mapping workhorse: plug ANYTHING into the ports you want to identify
+# — flash drive, keyboard dongle, mouse receiver — run with no arguments, and
+# read off the controller and group for each. Deliberately not storage-only: a
+# HID dongle is often the most recognisable thing to hand, and identifies a port
+# just as well as a flash drive does.
+echo; hr; echo "ATTACHED USB DEVICES (auto-detected)"; hr
 echo
+
+# If this USB device node backs a block device, return its name (sdb, etc).
+block_for_usb() {
+  local want=$1 blk real
+  for blk in /sys/block/*; do
+    [ -e "$blk" ] || continue
+    real=$(readlink -f "$blk")
+    case "$real" in "$want"/*) printf '%s' "$(basename "$blk")"; return 0;; esac
+  done
+  return 1
+}
+
 any=0
-for blk in /sys/block/*; do
-  [ -e "$blk" ] || continue
-  real=$(readlink -f "$blk")
-  # Non-USB block devices have no USB ancestor and are skipped here.
-  usbnode=$(usb_ancestor "$real") || continue
+for d in /sys/bus/usb/devices/*; do
+  [ -e "$d" ] || continue
+  b=$(basename "$d")
+  case "$b" in
+    usb[0-9]*) continue ;;   # root hub — already listed above as a controller
+    *:*)       continue ;;   # interface, not a device
+  esac
+  [ -e "$d/idVendor" ] || continue
   any=1
-  name=$(basename "$blk")
-  pci=$(pci_ancestor "$real") || pci=""
-  g="-"; n=0
-  if [ -n "$pci" ]; then g=$(group_of "$pci"); n=$(group_size "$g"); fi
 
-  size=$(cat "$blk/size" 2>/dev/null || echo 0)
-  human=$(awk -v s="$size" 'BEGIN{printf "%.1fG", s*512/1024/1024/1024}')
+  real=$(readlink -f "$d")
+  vid=$(cat "$d/idVendor" 2>/dev/null)
+  pid=$(cat "$d/idProduct" 2>/dev/null)
+  mfr=$(cat "$d/manufacturer" 2>/dev/null || echo '?')
+  prd=$(cat "$d/product" 2>/dev/null || echo '?')
+  ser=$(cat "$d/serial" 2>/dev/null || echo '(none)')
 
-  echo "  /dev/$name  ($human)"
-  printf '    model     : %s %s\n' \
-    "$(cat "$usbnode/manufacturer" 2>/dev/null || echo '?')" \
-    "$(cat "$usbnode/product" 2>/dev/null || echo '?')"
-  printf '    usb id    : %s:%s  serial %s\n' \
-    "$(cat "$usbnode/idVendor" 2>/dev/null)" \
-    "$(cat "$usbnode/idProduct" 2>/dev/null)" \
-    "$(cat "$usbnode/serial" 2>/dev/null || echo '(none)')"
-  printf '    usb path  : %s   ← note which PHYSICAL port this is\n' "$(basename "$usbnode")"
-  if [ -n "$pci" ]; then
+  # A hub is a port multiplier, not a leaf device — worth flagging, since a
+  # device behind one is not directly on a motherboard port.
+  cls=$(cat "$d/bDeviceClass" 2>/dev/null || echo "")
+  kind=""; [ "$cls" = "09" ] && kind="  [HUB]"
+
+  blk=$(block_for_usb "$real") || blk=""
+
+  printf '  %-10s %s:%s  %s %s%s\n' "$b" "$vid" "$pid" "$mfr" "$prd" "$kind"
+  printf '    serial    : %s\n' "$ser"
+  [ -n "$blk" ] && printf '    block dev : /dev/%s\n' "$blk"
+  printf '    usb path  : %s   ← note which PHYSICAL port this is\n' "$b"
+
+  if pci=$(pci_ancestor "$real"); then
+    g=$(group_of "$pci"); n=$(group_size "$g")
     printf '    controller: %s  %s\n' "$pci" "$(desc_of "$pci")"
     if [ "$n" -eq 1 ]; then
       printf '    group     : %s (isolated — this controller CAN be passed through whole)\n' "$g"
+    elif [ "$g" = "-" ]; then
+      printf '    group     : (none — IOMMU not enabled)\n'
     else
       printf '    group     : %s (%s devices — passing this controller passes all of them)\n' "$g" "$n"
       for m in /sys/kernel/iommu_groups/"$g"/devices/*; do
@@ -153,18 +177,24 @@ for blk in /sys/block/*; do
   echo
 done
 if [ "$any" -eq 0 ]; then
-  echo "  None found. Plug a flash drive into the port you want to identify and re-run."
+  echo "  None found. Plug something into the port you want to identify and re-run."
   echo
 fi
 cat <<'NOTE'
   Reading this for licence-key placement:
 
+    - Any USB device identifies a port. A Logitech receiver (046d:...) or similar
+      is often easier to pick out of a list than two similar flash drives, and
+      works exactly as well — you are identifying the PORT and its controller,
+      not testing the device.
     - The group only matters if you intend <hostdev type='pci'> of the whole
       controller. For <hostdev type='usb'> (QEMU usb-host, which forwards one
       physical device and preserves its vendor:product:serial) the host keeps
       the controller and the group is irrelevant.
     - "usb path" is the topology address, not a physical label. Write down which
       port you actually used — the script cannot know "rear panel, top left".
+    - A device marked [HUB] means everything behind it shares that hub. Ports on
+      a front-panel header or an internal hub are not independent.
 NOTE
 
 # ── 4. Explicit traces ───────────────────────────────────────────────────────
