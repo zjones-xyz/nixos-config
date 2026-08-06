@@ -1,12 +1,12 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # ⚠ HAND-AUTHORED PLACEHOLDER — REGENERATE ON THE REAL MACHINE BEFORE INSTALL.
 # ─────────────────────────────────────────────────────────────────────────────
-# tower-hv does not exist yet, so this was written from the known hardware
+# liskov does not exist yet, so this was written from the known hardware
 # (Supermicro X9SCM, Intel C204 chipset, Xeon E3-1230 v2) to let the flake
-# evaluate and to let `nixosConfigurations.tower-hv` be checked in CI. Every
+# evaluate and to let `nixosConfigurations.liskov` be checked in CI. Every
 # UUID below is a placeholder.
 #
-# At install time, after running hosts/tower-hv/disko.nix:
+# At install time, after running hosts/liskov/disko.nix:
 #   nixos-generate-config --no-filesystems --root /mnt
 # then reconcile: take the generated `boot.initrd.availableKernelModules` and
 # the real UUIDs, keep the comments here. Do not simply overwrite this file —
@@ -40,7 +40,7 @@
   boot.kernelModules = [ "kvm-intel" ];
   boot.extraModulePackages = [ ];
 
-  # ── Root: LUKS → btrfs subvolumes (see hosts/tower-hv/disko.nix) ────────────
+  # ── Root: LUKS → btrfs subvolumes (see hosts/liskov/disko.nix) ────────────
   # TODO(install): replace this UUID with the real one (see header).
   boot.initrd.luks.devices.cryptroot = {
     device = "/dev/disk/by-uuid/00000000-0000-0000-0000-000000000000";

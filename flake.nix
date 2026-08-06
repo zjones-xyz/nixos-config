@@ -92,51 +92,51 @@
         ];
       };
 
-      # tower-hv — Supermicro X9SCM / Xeon E3-1230 v2. Minimal hypervisor whose
+      # liskov — Supermicro X9SCM / Xeon E3-1230 v2. Minimal hypervisor whose
       # only job (for now) is running the existing Unraid 7.3.2 install as a KVM
       # guest with its SATA controllers passed through, so the approach can be
       # evaluated before any workload moves.
       #
       # NOT named "tower": tower.internal stays pointed at the Unraid instance,
       # which is what memory-alpha's NFS mounts and NUT client resolve, and what
-      # the machine *is* when booted bare metal. See hosts/tower-hv/DEPLOY.md.
+      # the machine *is* when booted bare metal. See hosts/liskov/DEPLOY.md.
       #
-      # Installed via hosts/tower-hv/disko.nix (LUKS root on the Kingston 120GB,
+      # Installed via hosts/liskov/disko.nix (LUKS root on the Kingston 120GB,
       # which must be on an ONBOARD SATA port — the add-in controllers are bound
       # to vfio-pci and handed to the guest).
-      tower-hv = nixpkgs.lib.nixosSystem {
+      liskov = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         specialArgs = { inherit self; };
         modules = [
-          ./hosts/tower-hv/configuration.nix
+          ./hosts/liskov/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
         ];
       };
 
-      # tower-hv-vm — the same config with the real machine's hardware stripped
+      # liskov-vm — the same config with the real machine's hardware stripped
       # out, so it can be booted under plain QEMU on the CachyOS desktop:
-      #   nix run .#nixosConfigurations.tower-hv-vm.config.system.build.vm
+      #   nix run .#nixosConfigurations.liskov-vm.config.system.build.vm
       #
-      # Exists because everything in tower-hv that is cheap to get wrong
+      # Exists because everything in liskov that is cheap to get wrong
       # (networkd bridge, libvirtd, users, sops gating, serial console) is
       # expensive to debug on a machine whose disks are a live Unraid array.
       # Proves the config boots and the services come up BEFORE Tower is touched.
       #
       # It cannot prove passthrough — there is no ASM1166 in a VM. What it
       # catches is everything else.
-      tower-hv-vm = nixpkgs.lib.nixosSystem {
+      liskov-vm = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         specialArgs = { inherit self; };
         modules = [
-          ./hosts/tower-hv/configuration.nix
+          ./hosts/liskov/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
           ({ lib, modulesPath, ... }: {
             # The real hardware-configuration.nix points root at a LUKS mapper
             # device with a placeholder UUID; keeping it would hang the VM in
             # the initrd waiting for a device that will never appear.
-            disabledModules = [ ./hosts/tower-hv/hardware-configuration.nix ];
+            disabledModules = [ ./hosts/liskov/hardware-configuration.nix ];
             imports = [ (modulesPath + "/virtualisation/qemu-vm.nix") ];
 
             nixpkgs.hostPlatform = "x86_64-linux";
@@ -241,7 +241,7 @@
     };
 
     # ── Checks ────────────────────────────────────────────────────────────────
-    # Asserts the tower-hv invariants that are cheap to break in a rebuild and
+    # Asserts the liskov invariants that are cheap to break in a rebuild and
     # expensive to discover in front of the machine — a wrong vfio binding means
     # either the guest gets nothing or the HOST loses its own root disk.
     #
@@ -252,7 +252,7 @@
     checks.x86_64-linux =
       let
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
-        cfg = self.nixosConfigurations.tower-hv.config;
+        cfg = self.nixosConfigurations.liskov.config;
 
         params = cfg.boot.kernelParams;
         initrdMods = cfg.boot.initrd.kernelModules;
@@ -266,8 +266,8 @@
         require = cond: msg: lib.optional (!cond) msg;
 
         failures = lib.flatten [
-          (require (cfg.networking.hostName == "tower-hv")
-            "hostName is '${cfg.networking.hostName}', expected 'tower-hv'. tower.internal must keep resolving to the Unraid instance — memory-alpha's NFS mounts and NUT client depend on it, and it is what the machine is when booted bare metal.")
+          (require (cfg.networking.hostName == "liskov")
+            "hostName is '${cfg.networking.hostName}', expected 'liskov'. tower.internal must keep resolving to the Unraid instance — memory-alpha's NFS mounts and NUT client depend on it, and it is what the machine is when booted bare metal.")
 
           (require (hasParam "intel_iommu=on")
             "boot.kernelParams is missing intel_iommu=on — IOMMU groups never form and vfio-pci binds nothing.")
@@ -304,11 +304,11 @@
         ];
       in
       {
-        tower-hv-invariants =
+        liskov-invariants =
           if failures == [ ]
-          then pkgs.runCommand "tower-hv-invariants-ok" { } "touch $out"
+          then pkgs.runCommand "liskov-invariants-ok" { } "touch $out"
           else throw ''
-            tower-hv configuration invariants failed:
+            liskov configuration invariants failed:
             ${lib.concatMapStringsSep "\n" (f: "  - ${f}") failures}
           '';
       };

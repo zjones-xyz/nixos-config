@@ -1,12 +1,12 @@
 { config, pkgs, lib, ... }:
 
 let
-  # secrets/tower-hv.yaml does not exist in the repo yet — it must be created by
+  # secrets/liskov.yaml does not exist in the repo yet — it must be created by
   # Zoe once the host has booted and its age key is known (see DEPLOY.md
   # § sops). Gated on the file's presence so the closure evaluates cleanly until
   # then, and activates automatically once the encrypted file is committed.
   # Same pattern as hosts/pegasus/configuration.nix.
-  hasSops = builtins.pathExists ../../secrets/tower-hv.yaml;
+  hasSops = builtins.pathExists ../../secrets/liskov.yaml;
 
   # TODO(install): confirm with `ip -br link` on the machine. X9SCM-F carries
   # two Intel NICs (82579LM + 82574L, both e1000e); predictable naming usually
@@ -29,13 +29,21 @@ in
   # guarantee: booted bare-metal, that machine *is* tower.internal, so if this
   # host took the name, falling back would require DNS/DHCP surgery every time.
   # The hypervisor is a separate fleet identity with its own DHCP reservation.
-  networking.hostName = "tower-hv";
+  #
+  # "liskov" after Barbara Liskov, joining hopper and hamilton. The substitution
+  # principle is this host's actual contract: a subtype must be usable anywhere
+  # the base type is expected — which is precisely what a hypervisor promises the
+  # guest. Unraid must not be able to tell it is not on bare metal. Every design
+  # decision below that looks fussy (controllers passed whole rather than as
+  # virtual disks, a real bridge rather than NAT, the licence key on a physical
+  # USB controller) is in service of holding up that substitution.
+  networking.hostName = "liskov";
   networking.domain = "internal";
 
   # ── Boot ────────────────────────────────────────────────────────────────────
   # systemd-boot, matching memory-alpha/pegasus. Requires the board to be in
   # UEFI (or Dual) boot mode — see DEPLOY.md § Bootloader for the legacy/GRUB
-  # alternative and why you might deliberately choose it. hosts/tower-hv/disko.nix
+  # alternative and why you might deliberately choose it. hosts/liskov/disko.nix
   # provisions a BIOS boot partition either way so switching does not mean
   # repartitioning.
   boot.loader.systemd-boot.enable = true;
@@ -72,7 +80,7 @@ in
   };
 
   # ── LUKS ────────────────────────────────────────────────────────────────────
-  # The root disk is encrypted from install time (see hosts/tower-hv/disko.nix
+  # The root disk is encrypted from install time (see hosts/liskov/disko.nix
   # and hardware-configuration.nix). Unlock is MANUAL, over the serial console
   # above, by design for now.
   #
@@ -88,7 +96,7 @@ in
   # adjust: set boot.initrd.systemd.enable = true, add "e1000e" to
   # boot.initrd.availableKernelModules, generate the dedicated initrd host key
   # (`ssh-keygen -t ed25519 -N "" -f /etc/secrets/initrd/ssh_host_ed25519_key`),
-  # and add an `unlock-tower-hv` alias to hosts/serenity/home.nix. The
+  # and add an `unlock-liskov` alias to hosts/serenity/home.nix. The
   # flush-network-before-switch-root workaround that both other hosts need is
   # NOT required here — that bug is specific to NetworkManager adopting the
   # initrd's lease, and this host runs systemd-networkd (see below).
@@ -174,7 +182,7 @@ in
   };
 
   # ── libvirt / KVM ───────────────────────────────────────────────────────────
-  # The Unraid guest is defined by hosts/tower-hv/unraid-guest.xml, which is
+  # The Unraid guest is defined by hosts/liskov/unraid-guest.xml, which is
   # `virsh define`d by hand rather than generated. libvirt is stateful and the
   # whole point of this phase is to hand-edit passthrough while experimenting —
   # a declaratively-managed domain would fight that.
@@ -217,7 +225,7 @@ in
   users.users.z.extraGroups = [ "libvirtd" "kvm" ];
 
   environment.systemPackages = with pkgs; [
-    virt-manager   # `virt-manager -c qemu+ssh://z@tower-hv.internal/system` from serenity
+    virt-manager   # `virt-manager -c qemu+ssh://z@liskov.internal/system` from serenity
     virt-viewer
     pciutils       # lspci -nnk — the primary "did vfio actually bind?" check
     usbutils       # lsusb -t — confirm the licence key landed on the ASM1042
@@ -251,10 +259,10 @@ in
   # ── sops-nix ────────────────────────────────────────────────────────────────
   # Uses the host's SSH ed25519 key as the age identity. After first boot:
   #   ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub
-  # then replace the tower-hv placeholder in .sops.yaml, add *tower-hv to its
-  # creation rule, and run: sops updatekeys secrets/tower-hv.yaml
+  # then replace the liskov placeholder in .sops.yaml, add *liskov to its
+  # creation rule, and run: sops updatekeys secrets/liskov.yaml
   sops = lib.mkIf hasSops {
-    defaultSopsFile = ../../secrets/tower-hv.yaml;
+    defaultSopsFile = ../../secrets/liskov.yaml;
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
     secrets."z/hashedPassword".neededForUsers = true;
   };
@@ -270,6 +278,6 @@ in
   };
 
   # Internet-facing? No — LAN only. Traefik/LE machinery lives on memory-alpha;
-  # tower-hv does not import it.
+  # liskov does not import it.
   system.stateVersion = "26.05";
 }

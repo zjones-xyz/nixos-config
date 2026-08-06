@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Reference disko spec for tower-hv — NOT imported into the system closure.
+# Reference disko spec for liskov — NOT imported into the system closure.
 # ─────────────────────────────────────────────────────────────────────────────
 # Documents the INTENDED on-disk layout and can drive a declarative install.
 # Deliberately kept out of flake.nix / configuration.nix so it does not
@@ -7,16 +7,16 @@
 # provides those for eval). Same arrangement as hosts/pegasus/disko.nix.
 #
 # To use it at install time on the real machine:
-#   nix run github:nix-community/disko -- --mode disko ./hosts/tower-hv/disko.nix
+#   nix run github:nix-community/disko -- --mode disko ./hosts/liskov/disko.nix
 # then `nixos-generate-config --no-filesystems --root /mnt` and reconcile the
 # generated hardware-configuration.nix against the checked-in one.
 #
 # ⚠ THE ONE THING TO GET RIGHT HERE
-# tower-hv installs onto the Kingston 120GB SSD, which must be on an ONBOARD
+# liskov installs onto the Kingston 120GB SSD, which must be on an ONBOARD
 # SATA port before you run this. It ships cabled to the ASM1064 (port 4), and
 # the ASM1064 is bound to vfio-pci and handed to the Unraid guest — so if the
 # Kingston is still on it, the host cannot see its own root filesystem. See
-# hosts/tower-hv/DEPLOY.md § Recabling.
+# hosts/liskov/DEPLOY.md § Recabling.
 #
 # disko WIPES whatever `device` points at. Every other drive in this machine is
 # a live Unraid array/pool member. Confirm the by-id path resolves to the

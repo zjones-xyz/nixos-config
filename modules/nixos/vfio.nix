@@ -8,7 +8,7 @@ let
   # vvvv:dddd — four lowercase hex digits, a colon, four more. Bad IDs are the
   # single nastiest failure here: vfio-pci silently binds nothing, `lspci -nnk`
   # still shows ahci on the controllers, and the symptom is indistinguishable
-  # from "the card isn't seated" or the X9SCM BIOS quirk (see hosts/tower-hv/DEPLOY.md).
+  # from "the card isn't seated" or the X9SCM BIOS quirk (see hosts/liskov/DEPLOY.md).
   # Catch typos at eval time instead of at 2am in front of the machine.
   idPattern = "[0-9a-f]{4}:[0-9a-f]{4}";
   badIds = lib.filter (id: builtins.match idPattern id == null) cfg.pciIds;

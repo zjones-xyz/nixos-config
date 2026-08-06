@@ -1,6 +1,6 @@
-# Deploying tower-hv (Supermicro X9SCM / Xeon E3-1230 v2)
+# Deploying liskov (Supermicro X9SCM / Xeon E3-1230 v2)
 
-tower-hv is a minimal NixOS hypervisor whose only job, for now, is running the
+liskov is a minimal NixOS hypervisor whose only job, for now, is running the
 existing Unraid 7.3.2 install as a KVM guest with its SATA controllers passed
 through — so the approach can be evaluated before any workload moves.
 
@@ -154,9 +154,9 @@ attached console.
 ls -l /dev/disk/by-id/ | grep -i kingston
 lsblk -o NAME,SIZE,MODEL,SERIAL
 
-# 2. Put that by-id path into hosts/tower-hv/disko.nix (replace the
+# 2. Put that by-id path into hosts/liskov/disko.nix (replace the
 #    ata-KINGSTON_REPLACE_WITH_REAL_SERIAL placeholder), then:
-nix run github:nix-community/disko -- --mode disko ./hosts/tower-hv/disko.nix
+nix run github:nix-community/disko -- --mode disko ./hosts/liskov/disko.nix
 ```
 
 > ⚠ disko **wipes** whatever `device` points at. Every other drive in this
@@ -169,7 +169,7 @@ nixos-generate-config --no-filesystems --root /mnt
 ```
 
 Take the generated `boot.initrd.availableKernelModules` and the **real UUIDs**
-into `hosts/tower-hv/hardware-configuration.nix`. Do not just overwrite that
+into `hosts/liskov/hardware-configuration.nix`. Do not just overwrite that
 file — it carries comments explaining why each module is listed, which the
 generated one will not.
 
@@ -191,7 +191,7 @@ Also fix, before installing:
 
 ```sh
 # 4. Install.
-nixos-install --flake /mnt/etc/nixos#tower-hv
+nixos-install --flake /mnt/etc/nixos#liskov
 ```
 
 ---
@@ -248,7 +248,7 @@ presents identically to the BIOS quirk in §0.
 ## 8. Define and start the guest
 
 ```sh
-sudo virsh --connect qemu:///system define hosts/tower-hv/unraid-guest.xml
+sudo virsh --connect qemu:///system define hosts/liskov/unraid-guest.xml
 ```
 
 Before the first start, edit two things in the live definition
@@ -299,9 +299,9 @@ sudo virsh console unraid       # or the webGUI once it has an address
 
 ---
 
-## 10. Enrol tower-hv's sops key
+## 10. Enrol liskov's sops key
 
-`secrets/tower-hv.yaml` does not exist yet, and everything in `configuration.nix`
+`secrets/liskov.yaml` does not exist yet, and everything in `configuration.nix`
 that touches sops is gated on `builtins.pathExists`, so the flake evaluates
 cleanly until it does. After first boot:
 
@@ -309,12 +309,12 @@ cleanly until it does. After first boot:
 ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub
 ```
 
-Put that pubkey in `.sops.yaml` replacing the `&tower-hv` placeholder, add
-`*tower-hv` to the `secrets/tower-hv\.yaml` creation rule, then:
+Put that pubkey in `.sops.yaml` replacing the `&liskov` placeholder, add
+`*liskov` to the `secrets/liskov\.yaml` creation rule, then:
 
 ```sh
-sops secrets/tower-hv.yaml          # create it; add z/hashedPassword
-sops updatekeys secrets/tower-hv.yaml
+sops secrets/liskov.yaml          # create it; add z/hashedPassword
+sops updatekeys secrets/liskov.yaml
 ```
 
 ---
@@ -347,14 +347,14 @@ Not in this deployment, each for a stated reason:
   and could get hard-cut mid-parity-check.
 
   The agreed fix is to **move the UPS to memory-alpha** and make it the NUT
-  server, with Tower a client. That is better than making tower-hv the server,
+  server, with Tower a client. That is better than making liskov the server,
   because Tower is then a client whether it is running bare-metal Unraid or this
   hypervisor — the arrangement becomes identical in both states and stops being
   something the fallback can break.
 
   That is a separate `[memory-alpha]` change plus a physical cable move. Until it
   lands, bare-metal Unraid keeps serving its UPS exactly as today, so nothing is
-  broken by its absence — but **tower-hv is unprotected, so treat evaluation as
+  broken by its absence — but **liskov is unprotected, so treat evaluation as
   attended work.**
 - **Virtualizing the licence flash drive** (presenting it as an emulated USB disk
   with a spoofed GUID instead of passing the physical stick through). Wanted
@@ -477,7 +477,7 @@ that is a specific, findable fault, and worth diagnosing rather than accepting:
 ## Routine use
 
 ```sh
-nrs                                    # nixos-rebuild switch --flake ~/nixos-config#tower-hv
+nrs                                    # nixos-rebuild switch --flake ~/nixos-config#liskov
 vfio-check                             # lspci -nnk | grep -A3 -i '1b21:'
 unraid list                            # sudo virsh --connect qemu:///system list
 unraid-console                         # serial console into the guest
@@ -487,7 +487,7 @@ Smoke-test config changes without touching Tower — boots the same config under
 plain QEMU with the real hardware and VFIO stripped out:
 
 ```sh
-nix run .#nixosConfigurations.tower-hv-vm.config.system.build.vm
+nix run .#nixosConfigurations.liskov-vm.config.system.build.vm
 ```
 
 It cannot prove passthrough (there is no ASM1166 in a VM). It proves everything

@@ -33,11 +33,11 @@ jobs:
       - name: Build memory-alpha (x86_64-linux, native)
         run: nix build .#nixosConfigurations.memory-alpha.config.system.build.toplevel --no-link
 
-      # The tower-hv invariants are written as eval-time assertions, so the
+      # The liskov invariants are written as eval-time assertions, so the
       # `nix flake check --no-build` step above already fires them. This builds
       # the check derivations outright so that any check added later which
       # actually needs to *run* (e.g. a nixosTest) is not silently skipped —
       # --no-build evaluates those without ever executing them, which reads as
       # a pass.
       - name: Build checks
-        run: nix build .#checks.x86_64-linux.tower-hv-invariants --no-link
+        run: nix build .#checks.x86_64-linux.liskov-invariants --no-link

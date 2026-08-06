@@ -1,8 +1,8 @@
 <!--
-  Unraid guest for tower-hv.
+  Unraid guest for liskov.
 
   NOT applied declaratively. Install with:
-    sudo virsh --connect qemu:///system define hosts/tower-hv/unraid-guest.xml
+    sudo virsh --connect qemu:///system define hosts/liskov/unraid-guest.xml
   and thereafter edit the live definition with `virsh edit unraid`. libvirt is
   stateful, and the point of this phase is to hand-tune passthrough while
   experimenting; a generated domain would fight that. This file is the
@@ -211,7 +211,7 @@
     </console>
 
     <!-- VNC on loopback only. Reach it by SSH tunnel from serenity:
-           ssh -L 5900:127.0.0.1:5900 z@tower-hv.internal
+           ssh -L 5900:127.0.0.1:5900 z@liskov.internal
          Never exposed on the LAN: it is unauthenticated console access. -->
     <graphics type='vnc' port='5900' autoport='no' listen='127.0.0.1'/>
     <video>

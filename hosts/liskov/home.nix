@@ -9,8 +9,8 @@
   home.homeDirectory = "/home/z";
 
   home.shellAliases = {
-    nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#tower-hv";
-    nrt = "sudo nixos-rebuild test --flake ~/nixos-config#tower-hv";
+    nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#liskov";
+    nrt = "sudo nixos-rebuild test --flake ~/nixos-config#liskov";
     npull = "git -C ~/nixos-config pull";
 
     # The three checks worth having one keystroke away while proving passthrough.
