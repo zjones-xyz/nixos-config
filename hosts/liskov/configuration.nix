@@ -59,10 +59,12 @@ in
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # Keep the boot menu short. /boot is on a 120GB SSD shared with
-  # nothing else, but Unraid's flash drive is the fallback path and a cluttered
-  # boot menu is one more thing to get wrong at 3am.
-  boot.loader.systemd-boot.configurationLimit = 10;
+  # Keep the boot menu short, and keep the ESP from filling. disko.nix gives /boot
+  # 1 GiB, and a systemd initrd generation runs ~70-95 MB, so ten would sit
+  # uncomfortably close to full. Five is ample for a host whose rollback story is
+  # "boot the Unraid flash instead" — and a cluttered boot menu is one more thing
+  # to get wrong at 3am.
+  boot.loader.systemd-boot.configurationLimit = 5;
 
   # ── Serial console (IPMI Serial-over-LAN) ───────────────────────────────────
   # This is load-bearing, not a convenience: the LUKS passphrase prompt has to
@@ -83,11 +85,23 @@ in
     "console=tty0"
     "console=ttyS1,115200n8"
   ];
-  systemd.services."serial-getty@ttyS1" = {
-    enable = true;
-    wantedBy = [ "getty.target" ];
-    serviceConfig.Restart = "always";
-  };
+  # NO systemd.services."serial-getty@ttyS1" block here, deliberately.
+  #
+  # Writing one looks harmless and is actively harmful: the name is an *instance*,
+  # not an upstream unit, so NixOS emits a standalone
+  # /etc/systemd/system/serial-getty@ttyS1.service. systemd resolves an instance
+  # to an exact-name file first and only falls back to serial-getty@.service if
+  # none exists — so the upstream template is never loaded and everything in it is
+  # silently lost: Type=idle, BindsTo=dev-%i.device, After=systemd-user-sessions
+  # .service, TTYPath/TTYReset/TTYVHangup, UtmpIdentifier. On the one console that
+  # has to work to type a LUKS passphrase, that means the prompt can appear before
+  # logins are permitted (pam_nologin), interleaves with boot output, and — with an
+  # explicit Restart=always and no BindsTo — restart-loops into `failed` if
+  # /dev/ttyS1 does not exist, which is exactly what happens if the BIOS puts SoL
+  # on COM1 instead.
+  #
+  # None of it is needed: systemd-getty-generator already instantiates
+  # serial-getty@ttyS1 from the console=ttyS1,115200n8 kernel parameter above.
 
   # ── LUKS ────────────────────────────────────────────────────────────────────
   # The root disk is encrypted from install time (see hosts/liskov/disko.nix
@@ -103,7 +117,8 @@ in
   # down at install time rather than after.
   #
   # When you do want it, copy the block from hosts/pegasus/configuration.nix and
-  # adjust: set boot.initrd.systemd.enable = true, add "e1000e" to
+  # adjust. Note boot.initrd.systemd.enable is ALREADY true here — it is the
+  # 26.05 default — so unlike pegasus there is nothing to turn on; add "e1000e" to
   # boot.initrd.availableKernelModules, generate the dedicated initrd host key
   # (`ssh-keygen -t ed25519 -N "" -f /etc/secrets/initrd/ssh_host_ed25519_key`),
   # and add an `unlock-liskov` alias to hosts/serenity/home.nix. The
@@ -145,6 +160,13 @@ in
     };
 
     # The bridge carries the host's own address.
+    #
+    # NOTE for the DHCP reservation: br0 does NOT inherit eno1's MAC. systemd's
+    # 99-default.link applies MACAddressPolicy=persistent, giving the bridge its
+    # own generated stable address, and the kernel then leaves it alone. That is
+    # what we want — the *guest* uses bare-metal Tower's MAC, so an inherited one
+    # would be a duplicate on the LAN — but it means liskov's own reservation must
+    # be keyed on br0's MAC, read off the machine after first boot, not on eno1's.
     networks."20-br0" = {
       matchConfig.Name = "br0";
       networkConfig = {

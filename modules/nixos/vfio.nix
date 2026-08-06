@@ -48,6 +48,22 @@ in
       '';
     };
 
+    softdepDrivers = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ "ahci" "xhci_pci" "xhci_hcd" "nvme" ];
+      description = ''
+        Drivers that must not claim a passed-through device before vfio-pci does.
+        Each gets a `softdep <drv> pre: vfio-pci` line.
+
+        This is the mechanism that actually closes the race — see the comment on
+        boot.extraModprobeConfig below. It therefore has to name the competing
+        driver for *every* class of device in pciIds, not just storage: a USB3
+        controller is claimed by xhci_pci, an NVMe controller by nvme, and a
+        SATA HBA by ahci. Missing one means that device silently stays bound to
+        its normal driver and its IOMMU group becomes unusable.
+      '';
+    };
+
     passthroughIsolatedOnly = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -85,11 +101,8 @@ in
       "vfio-pci.ids=${idList}"
     ];
 
-    # The load-bearing part. vfio-pci must claim these devices before any
-    # regular driver probes them — for SATA HBAs the competitor is `ahci`, which
-    # the initrd pulls in to find the root filesystem. Listing them in
-    # initrd.kernelModules force-loads vfio-pci first, so by the time ahci
-    # probes, the controllers are already spoken for.
+    # Load vfio-pci early. Necessary, but NOT by itself sufficient — see the
+    # softdep note below, which is what actually closes the race.
     #
     # `vfio-pci.ids=` on the kernel command line rather than an options line in
     # modprobe.d: the cmdline is parsed by the module itself at load time and so
@@ -102,11 +115,27 @@ in
     # missing-module error at initrd build.
     boot.initrd.kernelModules = [ "vfio_pci" "vfio_iommu_type1" "vfio" ];
 
-    # Belt and braces for the booted system, where module load order is not
-    # under initrd's control (e.g. a controller hot-added later, or ahci being
-    # loaded on demand). Redundant with the initrd ordering on a normal boot.
-    boot.extraModprobeConfig = ''
-      softdep ahci pre: vfio-pci
-    '';
+    # ── The part that actually works ────────────────────────────────────────
+    # A common claim, which this module used to repeat, is that listing vfio_pci
+    # in boot.initrd.kernelModules force-loads it before the storage drivers and
+    # therefore wins the race. **That is only true of the scripted initrd.**
+    # boot.initrd.systemd.enable defaults to true on 26.05, and in the systemd
+    # initrd boot.initrd.kernelModules becomes /etc/modules-load.d/nixos.conf,
+    # loaded by systemd-modules-load.service — which has no ordering relationship
+    # to systemd-udevd or systemd-udev-trigger. Both are DefaultDependencies=no,
+    # Before=sysinit.target, and nothing sequences them against each other. So
+    # udev coldplug can bind the normal driver first.
+    #
+    # The softdep is what genuinely closes it: NixOS copies /etc/modprobe.d into
+    # the systemd initrd, and libkmod honours softdep for udev-driven autoloads.
+    #
+    # It must name the competing driver for every device class in pciIds. Note
+    # boot.initrd.includeDefaultModules (default true) unconditionally adds
+    # xhci_pci, xhci_hcd, ahci and nvme to the initrd regardless of what
+    # hardware-configuration.nix lists, so those drivers ARE present and WILL be
+    # autoloaded — omitting one from this list is a silent passthrough failure
+    # that looks exactly like a bad device ID.
+    boot.extraModprobeConfig = lib.concatMapStrings
+      (drv: "softdep ${drv} pre: vfio-pci\n") cfg.softdepDrivers;
   };
 }

@@ -259,9 +259,22 @@
         vfioIds = cfg.homelab.vfio.pciIds;
 
         hasParam = p: lib.elem p params;
-        # vfio-pci.ids= is built by joining the list, so match on the prefix and
-        # check membership rather than reconstructing the exact string here.
-        idsParam = lib.findFirst (lib.hasPrefix "vfio-pci.ids=") null params;
+
+        # Parse the ids actually on the kernel command line, rather than reading
+        # homelab.vfio.pciIds back. Checking the option against a parameter built
+        # from that same option is true by construction and catches nothing; the
+        # scenario worth guarding — a hand-written boot.kernelParams entry, or an
+        # mkForce that drops one — only shows up in the effective value.
+        #
+        # ALL matching parameters, not just the first: boot.kernelParams is a
+        # list and nothing stops a second `vfio-pci.ids=` being appended
+        # elsewhere in the config. Taking only the first would let exactly the
+        # dangerous case — someone adding an Intel id by hand — slip past.
+        idsParams = lib.filter (lib.hasPrefix "vfio-pci.ids=") params;
+        effectiveIds = lib.filter (s: s != "")
+          (lib.concatMap
+            (p: lib.splitString "," (lib.removePrefix "vfio-pci.ids=" p))
+            idsParams);
 
         require = cond: msg: lib.optional (!cond) msg;
 
@@ -273,10 +286,12 @@
             "boot.kernelParams is missing intel_iommu=on — IOMMU groups never form and vfio-pci binds nothing.")
           (require (hasParam "iommu=pt")
             "boot.kernelParams is missing iommu=pt.")
-          (require (idsParam != null)
-            "boot.kernelParams has no vfio-pci.ids= entry — the controllers would stay bound to ahci.")
-          (require (idsParam != null && lib.all (id: lib.hasInfix id idsParam) vfioIds)
-            "vfio-pci.ids= does not list every id in homelab.vfio.pciIds.")
+          (require (idsParams != [ ])
+            "boot.kernelParams has no vfio-pci.ids= entry — the controllers would stay bound to their normal drivers.")
+          (require (lib.length idsParams <= 1)
+            "boot.kernelParams has more than one vfio-pci.ids= entry (${toString (lib.length idsParams)}). Which one the kernel honours is not something to leave to chance — merge them into homelab.vfio.pciIds.")
+          (require (lib.all (id: lib.elem id effectiveIds) vfioIds)
+            "vfio-pci.ids= on the kernel command line does not carry every id in homelab.vfio.pciIds — something overrode boot.kernelParams.")
 
           (require (lib.elem "vfio_pci" initrdMods)
             "vfio_pci is not in boot.initrd.kernelModules — ahci will claim the SATA controllers first and passthrough silently fails.")
@@ -287,10 +302,20 @@
           (require (!lib.elem "vfio_virqfd" initrdMods)
             "vfio_virqfd is listed in boot.initrd.kernelModules — it was merged into vfio_pci in Linux 6.2 and no longer exists.")
 
-          # The onboard SATA controller and NICs are Intel (8086:). Binding one
-          # to vfio-pci takes the host's own root disk or its only network path.
-          (require (!lib.any (lib.hasPrefix "8086:") vfioIds)
-            "homelab.vfio.pciIds contains an Intel (8086:) device. Onboard SATA shares an IOMMU group with the LPC bridge and holds the host root disk; the NICs carry br0. Never pass these through.")
+          # The onboard SATA controller and both NICs are Intel (8086:). Binding
+          # one to vfio-pci takes the host's own root disk or its only network
+          # path. Checked against the EFFECTIVE kernel parameter, not the option,
+          # so a hand-written boot.kernelParams cannot slip past it.
+          (require (!lib.any (lib.hasPrefix "8086:") effectiveIds)
+            "vfio-pci.ids= contains an Intel (8086:) device. Onboard SATA shares an IOMMU group with the LPC bridge and holds the host root disk; the NICs carry br0. Never pass these through.")
+
+          # Every device class in pciIds needs its competing driver named in
+          # softdepDrivers, or udev coldplug can bind it first. The ASM1042 USB3
+          # controller is the live example: its competitor is xhci_pci, not ahci.
+          (require (lib.elem "ahci" cfg.homelab.vfio.softdepDrivers)
+            "homelab.vfio.softdepDrivers is missing \"ahci\" — SATA controllers could be claimed before vfio-pci.")
+          (require (lib.elem "xhci_pci" cfg.homelab.vfio.softdepDrivers)
+            "homelab.vfio.softdepDrivers is missing \"xhci_pci\" — the ASM1042 USB3 controller could be claimed before vfio-pci, silently breaking IOMMU group 1.")
 
           (require cfg.virtualisation.libvirtd.enable
             "libvirtd is not enabled — there is nothing to run the guest.")
