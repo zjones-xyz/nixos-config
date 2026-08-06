@@ -304,6 +304,22 @@
         ];
       in
       {
+        # The guest domain is hand-maintained XML that nothing else validates —
+        # a malformed file surfaces only at `virsh define` time, on the machine,
+        # which is the worst place to find out. This caught a real instance:
+        # XML comments may not contain "--", and `virsh --connect` in the header
+        # comment made the whole file unparseable from the day it was written.
+        #
+        # Not an eval-time assertion, since nix cannot parse XML — so this only
+        # runs under `nix build`, which .github/workflows/nix-check.yml does
+        # explicitly. `nix flake check --no-build` will NOT catch a regression.
+        liskov-guest-xml = pkgs.runCommand "liskov-guest-xml-wellformed"
+          { nativeBuildInputs = [ pkgs.libxml2 ]; }
+          ''
+            xmllint --noout ${./hosts/liskov/unraid-guest.xml}
+            touch $out
+          '';
+
         liskov-invariants =
           if failures == [ ]
           then pkgs.runCommand "liskov-invariants-ok" { } "touch $out"

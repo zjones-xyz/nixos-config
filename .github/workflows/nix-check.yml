@@ -40,4 +40,7 @@ jobs:
       # --no-build evaluates those without ever executing them, which reads as
       # a pass.
       - name: Build checks
-        run: nix build .#checks.x86_64-linux.liskov-invariants --no-link
+        run: |
+          nix build --no-link \
+            .#checks.x86_64-linux.liskov-invariants \
+            .#checks.x86_64-linux.liskov-guest-xml

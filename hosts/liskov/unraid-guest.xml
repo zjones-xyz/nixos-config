@@ -2,7 +2,7 @@
   Unraid guest for liskov.
 
   NOT applied declaratively. Install with:
-    sudo virsh --connect qemu:///system define hosts/liskov/unraid-guest.xml
+    sudo virsh -c qemu:///system define hosts/liskov/unraid-guest.xml
   and thereafter edit the live definition with `virsh edit unraid`. libvirt is
   stateful, and the point of this phase is to hand-tune passthrough while
   experimenting; a generated domain would fight that. This file is the
