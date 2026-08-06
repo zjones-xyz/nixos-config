@@ -24,10 +24,18 @@
 {
   imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
 
-  # C204 is a USB2-only chipset — no xhci onboard. The machine's only USB3 is
-  # the ASM1042 add-in card, which is bound to vfio-pci and handed to the guest
-  # (see modules/nixos/vfio.nix), so deliberately no xhci_pci here: the host is
-  # not meant to drive it.
+  # C204 is a USB2-only chipset — no xhci onboard. The machine's only USB3 is the
+  # ASM1042 add-in card, bound to vfio-pci and handed to the guest.
+  #
+  # ⚠ Omitting xhci_pci from this list does NOT keep it out of the initrd, and an
+  # earlier version of this comment wrongly claimed it did.
+  # `boot.initrd.includeDefaultModules` defaults to true and unconditionally
+  # appends xhci_hcd, xhci_pci, ahci and nvme to
+  # boot.initrd.availableKernelModules regardless of what is written here — so
+  # xhci_pci IS present and WILL be autoloaded by udev coldplug. What actually
+  # stops it claiming the ASM1042 before vfio-pci is the softdep in
+  # modules/nixos/vfio.nix (homelab.vfio.softdepDrivers), which is why xhci_pci
+  # is named there and why an invariant check asserts it stays named.
   boot.initrd.availableKernelModules = [
     "ahci"        # onboard Intel C204 SATA — the Kingston root lives here
     "ehci_pci"    # onboard USB2
