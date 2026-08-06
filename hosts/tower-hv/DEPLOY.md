@@ -366,14 +366,33 @@ Not in this deployment, each for a stated reason:
     stick in sync as the fallback reintroduces two sources of truth for the
     Unraid config, and they will drift.
 
-  So: **revisit once the bare-metal fallback guarantee is retired**, not before.
+  **Verified 2026-08-06: not possible with stock QEMU/libvirt.** Checked against
+  QEMU 11.0.2's own device property lists (`-device <model>,help`):
 
-  Mechanism, if/when: QEMU can present an arbitrary USB serial, but Unraid's
-  GUID check reads vendor:product:serial. Whether all three are settable through
-  plain libvirt XML or need `<qemu:commandline>` overrides is **unverified** —
-  test before planning around it. Also worth deciding deliberately that you are
-  comfortable with the licensing position, since the physical stick is the
-  dongle by design.
+  | model | `serial` | `vendorid`/`productid` |
+  |---|---|---|
+  | `usb-storage` (emulated) | yes | **none** |
+  | `usb-bot` (emulated) | yes | **none** |
+  | `usb-uas` (emulated) | yes | **none** |
+  | `usb-host` (physical passthrough) | yes | yes |
+
+  Unraid's flash GUID is the vendor:product:serial triple. Every *emulated*
+  mass-storage model exposes only `serial` — the VID/PID are fixed to QEMU's
+  own values and there is no property to override them. `usb-host` does have
+  `vendorid`/`productid`, but those select *which physical device to pass
+  through*; they are matchers, not spoofing knobs.
+
+  `<qemu:commandline>` does not rescue this: the limit is the device model, not
+  libvirt's XML surface, so dropping to raw QEMU args gains nothing. It would
+  take a patched QEMU.
+
+  Also note `<disk>`'s `<vendor>`/`<product>` elements are a red herring — they
+  are SCSI INQUIRY strings (max 8 and 16 printable chars, documented for
+  scsi-disk/scsi-hd/scsi-cd), not USB descriptor fields. They never reach the
+  GUID.
+
+  This confirms passing the ASM1042 through is not merely convenient — it is the
+  only route that works with stock components.
 - **Beszel** — one less service to debug while proving passthrough.
 - **Initrd SSH LUKS unlock** — see §6.
 - **Moving the arr stack or download clients out of the guest.** They share one
