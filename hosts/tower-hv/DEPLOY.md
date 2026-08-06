@@ -348,6 +348,32 @@ Not in this deployment, each for a stated reason:
   lands, bare-metal Unraid keeps serving its UPS exactly as today, so nothing is
   broken by its absence — but **tower-hv is unprotected, so treat evaluation as
   attended work.**
+- **Virtualizing the licence flash drive** (presenting it as an emulated USB disk
+  with a spoofed GUID instead of passing the physical stick through). Wanted
+  eventually; deliberately not now, and it buys less than it appears to:
+
+  - It would **not** free the ASM1042 for the host. That card shares IOMMU group
+    1 with the ASM1166, which the guest keeps permanently, so the whole group
+    goes to the guest whether or not anything is plugged into the USB3 card.
+  - It **would** remove the flakiest dependency in the guest boot path — OVMF
+    currently has to enumerate the passed-through ASM1042 and find the flash on
+    it, which is the most likely reason to end up on the SeaBIOS fallback (§4).
+    That is the genuine argument for doing it.
+  - It **breaks the five-minute fallback**, which is why it waits. Today falling
+    back is "power off, boot the physical flash". If the boot flash is an image
+    file on this host's LUKS-encrypted root, falling back means unlocking the
+    host, extracting the image, and writing it to a stick. Keeping a physical
+    stick in sync as the fallback reintroduces two sources of truth for the
+    Unraid config, and they will drift.
+
+  So: **revisit once the bare-metal fallback guarantee is retired**, not before.
+
+  Mechanism, if/when: QEMU can present an arbitrary USB serial, but Unraid's
+  GUID check reads vendor:product:serial. Whether all three are settable through
+  plain libvirt XML or need `<qemu:commandline>` overrides is **unverified** —
+  test before planning around it. Also worth deciding deliberately that you are
+  comfortable with the licensing position, since the physical stick is the
+  dongle by design.
 - **Beszel** — one less service to debug while proving passthrough.
 - **Initrd SSH LUKS unlock** — see §6.
 - **Moving the arr stack or download clients out of the guest.** They share one
