@@ -42,10 +42,32 @@ rather than of evaluation:
 - **`liskov-vm` builds a runnable VM**, and all seven fleet configurations
   evaluate.
 
-**Not verified, and not verifiable without hardware:** that vfio-pci actually
-wins the driver race at boot (§2b-bis tests this on pegasus), that passthrough
-works, that the guest boots, and every throughput number in
-*§ Performance expectations*.
+**Booted on pegasus 2026-08-06** (`liskov-vm`, KVM), confirming at runtime:
+
+- Reaches `Multi-User System` in a few seconds. initrd assembles, mounts, and
+  switch-roots cleanly.
+- **`systemctl --failed` is empty.**
+- **Exactly one serial getty exists — `serial-getty@ttyS0`, active/running.**
+  No `ttyS1` unit is generated. This is the direct check on the shadowed-unit
+  defect: the old hand-written instance would have restart-looped into `failed`
+  here, since the VM has no ttyS1.
+- **`who` reports the login on ttyS0**, so utmp tracking works — one of the
+  settings the shadowed unit was discarding.
+- A logout/login cycle completes cleanly, exercising `Type=idle`, `TTYReset`
+  and `TTYVHangup` from the real template.
+- `libvirtd` and `docker` both active.
+
+**Not verified, and not verifiable without hardware:**
+
+- That vfio-pci wins the driver race at boot — §2b-bis tests this on pegasus
+  with the cards installed.
+- Passthrough, the guest booting, and every number in
+  *§ Performance expectations*.
+- The real serial console on COM2, and LUKS unlock over IPMI SoL.
+- **The `br0` bridge.** The VM variant forces `systemd.network.enable = false`
+  and hands networking to qemu-vm's scripted DHCP, because `eno1` does not
+  exist there — so the bridge configuration is *evaluated and its units
+  generated*, but never actually brought up. First real exercise is on liskov.
 
 ---
 

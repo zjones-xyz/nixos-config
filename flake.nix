@@ -119,12 +119,16 @@
       #   nix run .#nixosConfigurations.liskov-vm.config.system.build.vm
       #
       # Exists because everything in liskov that is cheap to get wrong
-      # (networkd bridge, libvirtd, users, sops gating, serial console) is
+      # (libvirtd, users, sops gating, the serial console, the login path) is
       # expensive to debug on a machine whose disks are a live Unraid array.
       # Proves the config boots and the services come up BEFORE Tower is touched.
       #
-      # It cannot prove passthrough — there is no ASM1166 in a VM. What it
-      # catches is everything else.
+      # What it does NOT prove, and an earlier version of this comment wrongly
+      # claimed it did:
+      #   - passthrough — there is no ASM1166 in a VM;
+      #   - the br0 bridge — this variant forces systemd.network.enable = false
+      #     and uses qemu-vm's scripted DHCP, since eno1 does not exist here, so
+      #     networkd is not exercised at all.
       liskov-vm = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         specialArgs = { inherit self; };
