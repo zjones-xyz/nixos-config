@@ -162,6 +162,21 @@
             networking.useNetworkd = lib.mkForce false;
             networking.useDHCP = lib.mkForce true;
 
+            # Console logins for the throwaway VM only.
+            #
+            # Without this the smoke test proves nothing past "it booted": the
+            # real host sets no password at all (z's comes from sops, and
+            # secrets/liskov.yaml does not exist yet; root never gets one), so
+            # both accounts land in /etc/shadow locked and the VM boots to a
+            # login prompt nobody can get past. There is no way to run `passwd`
+            # either, because that would require logging in first.
+            #
+            # Scoped to this module list, so it cannot reach the real liskov.
+            # Not a secret: it grants a shell on a qcow2 you just built locally,
+            # behind qemu user-mode networking with no inbound path.
+            users.users.root.initialPassword = "liskov";
+            users.users.z.initialPassword = "liskov";
+
             virtualisation = {
               memorySize = 2048;
               cores = 2;
