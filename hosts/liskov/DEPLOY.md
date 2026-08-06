@@ -17,6 +17,36 @@ the Kingston 120GB SSD.
 | **`BACKGROUND.md`** | *Why it works.* The IOMMU and `iommu=pt`; IOMMU groups and why they cannot be split; ACS override and why not to use it; VFIO and the driver-ordering problem; **the three ways to get a USB device into a guest** (the licence-key question); passthrough vs virtio; q35/OVMF; what Unraid's parity model does to I/O; why this CPU generation matters. Read before the first flash or install if any of the config reads as incantation. |
 | **`DECISIONS.md`** | *Why it is this way.* Decision → alternatives → rationale, what was considered and rejected, and **`## Still open`** — the unresolved questions this deployment depends on. Read before changing something that looks arbitrary. |
 
+### Verified before any hardware was touched
+
+Built and inspected 2026-08-06, so these are properties of the actual artifacts
+rather than of evaluation:
+
+- **The system closure builds** (`system.build.toplevel`), including the initrd.
+  Nothing had ever built liskov before this; CI only builds memory-alpha.
+- **The initrd contains** `vfio.ko`, `vfio_iommu_type1.ko`, `vfio-pci.ko`,
+  `vfio-pci-core.ko`, and **does not contain `vfio_virqfd`** — confirming the
+  Linux 6.2 merge and that excluding it is correct.
+- **All four softdeps reach the initrd** (`ahci`, `xhci_pci`, `xhci_hcd`,
+  `nvme` → `pre: vfio-pci`). This matters because the initrd *also* contains
+  `ahci.ko`, `xhci-pci.ko`, `xhci-hcd.ko` and `nvme.ko`, which will be autoloaded
+  by udev — the softdep is what stops them claiming a passthrough device first.
+- **Kernel params are correct and correctly ordered**: `intel_iommu=on`,
+  `iommu=pt`, `vfio-pci.ids=1b21:1166,1b21:1042,1b21:1064`, and `console=ttyS1`
+  **last**, so the cryptsetup prompt lands on serial rather than tty0.
+- **No shadowing `serial-getty@ttyS1.service`** is emitted — the upstream
+  template will be used.
+- **networkd units generate correctly**: `10-br0.netdev`, `10-eno1.network`
+  (`RequiredForOnline=enslaved`, `Bridge=br0`), `20-br0.network`
+  (`RequiredForOnline=routable`, `ConfigureWithoutCarrier=true`, `DHCP=ipv4`).
+- **`liskov-vm` builds a runnable VM**, and all seven fleet configurations
+  evaluate.
+
+**Not verified, and not verifiable without hardware:** that vfio-pci actually
+wins the driver race at boot (§2b-bis tests this on pegasus), that passthrough
+works, that the guest boots, and every throughput number in
+*§ Performance expectations*.
+
 ---
 
 ## 0. Read this before touching the BIOS
@@ -188,6 +218,72 @@ updated firmware is reported to improve link training on older boards. So once
 flashed, **set the BIOS back to Auto and see whether the card still enumerates.**
 If it does, the §0 landmine is gone for good. Do not count on it; it costs one
 reboot to find out.
+
+### 2b-bis. While the cards are in pegasus: test VFIO on real hardware
+
+Optional, and the highest-value thing available in this whole plan short of the
+machine itself. `modules/nixos/vfio.nix` has **never been exercised on real
+hardware.** Worse, the mechanism it relies on was wrong until recently: listing
+`vfio_pci` in `boot.initrd.kernelModules` does *not* order it ahead of udev in a
+systemd initrd (which 26.05 uses by default), so the `softdep` lines are what
+actually close the race — and that has only been reasoned about, never observed.
+
+Finding out on liskov means finding out on a host whose array controller is the
+thing being bound. Finding out on pegasus costs one reboot cycle.
+
+**Safe here because** pegasus boots from NVMe, and `1b21:` matches only the
+ASMedia cards — never its onboard SATA (AMD, `1022:`) or its NVMe. Do not add
+`1022:` or `10de:` ids; that is pegasus's equivalent of the `8086:` guard on
+liskov.
+
+Add temporarily to `hosts/pegasus/configuration.nix`:
+
+```nix
+  imports = [ ../../modules/nixos/vfio.nix ];   # add to the existing list
+
+  # TEMPORARY — bring-up test for liskov. Remove after.
+  homelab.vfio = {
+    enable = true;
+    cpuVendor = "amd";        # NOT the "intel" default — pegasus is AM4
+    pciIds = [
+      "1b21:1166"             # ASM1166, competitor driver: ahci
+      "1b21:1042"             # ASM1042, competitor driver: xhci_pci — the case
+                              #   the softdep list was extended for, and the one
+                              #   most likely to still be wrong
+    ];
+  };
+```
+
+Kernel params and the initrd both change, so this needs a real reboot — a
+`nixos-rebuild test` will not apply it:
+
+```sh
+sudo nixos-rebuild boot --flake ~/nixos-config#pegasus && sudo reboot
+```
+
+After it comes back:
+
+```sh
+lspci -nnk -d 1b21:1166        # want: "Kernel driver in use: vfio-pci"
+lspci -nnk -d 1b21:1042        # want the same — this is the real test
+cat /proc/cmdline | tr ' ' '\n' | grep -E 'iommu|vfio'
+```
+
+**What each outcome means:**
+
+| Result | Conclusion |
+|---|---|
+| both `vfio-pci` | The mechanism works. Proceed to liskov with confidence. |
+| ASM1166 `vfio-pci`, ASM1042 `xhci_hcd` | The `xhci_pci` softdep is insufficient. Would have silently broken IOMMU group 1 on liskov and looked like a bad device ID. |
+| either shows `ahci`/`xhci_hcd` | The race is lost at boot. Fix before liskov, not after. |
+
+Then revert the block and `sudo nixos-rebuild boot --flake ~/nixos-config#pegasus && sudo reboot`.
+
+⚠ Do this **after** the firmware flash, not before — vfio-pci binding hides the
+card from the flashing tool, which expects to talk to it through its normal
+driver.
+
+---
 
 ### 2c. The ASM1064 — recommended NOT to flash
 
