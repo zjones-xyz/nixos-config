@@ -261,10 +261,12 @@ you which drive to pull when one fails at 3am.
 
 ---
 
-## 4. Bare-metal parity check first
+## 4. Bare-metal shakedown
 
-After recabling, **boot bare-metal Unraid and run a full parity check before any
-NixOS work.**
+**Both controllers get loaded on bare metal before any NixOS work.** Cheap
+ASMedia cards behave differently under sustained load than at idle, and you want
+any cabling or controller problem to surface while there is exactly one variable
+— not tangled up with passthrough debugging later.
 
 ⚠ **§2 must be done first — CMOS battery and firmware both.** Firmware changes
 ASPM, link behaviour and stability, so a baseline taken on old firmware describes
@@ -272,10 +274,9 @@ a machine that will no longer exist by the time you compare against it. Flashing
 after this point invalidates the number and there is no way to retake it once the
 machine is virtualized.
 
-This validates the new cabling independently of virtualization. Cheap ASMedia
-controllers behave differently under sustained load than at idle, and you want
-any cabling or controller problem to surface now — while there is only one
-variable — rather than tangled up with passthrough debugging later.
+### 4a. ASM1166 — full parity check
+
+Boot bare-metal Unraid and run a full parity check.
 
 Watch for ATA/UDMA CRC errors in the syslog. Those mean a cable, not a disk.
 
@@ -289,6 +290,84 @@ measurement once the machine is virtualized.
 HDDs peak near 800 MB/s. Gigabit networking caps inbound writes around
 110 MB/s, so contention is unlikely to show in normal use. The case to watch is
 a parity check running concurrently with heavy cache writes.
+
+### 4b. ASM1064 — sustained load test
+
+**A parity check does not touch this card.** It exercises the array, which lives
+entirely on the ASM1166. The ASM1064 holds the SSD pools and gets no coverage
+from 4a at all — so it needs its own shakedown, and it is arguably the card that
+needs it more:
+
+- It is **not getting a firmware update** (§2c), so whatever quirks its shipped
+  firmware has, it keeps.
+- It backs **Docker appdata**, the latency-sensitive pools — the place where
+  problems are most disruptive and least obvious.
+- Its **link width is an open question**: a PCIe x1 controller feeding four SATA
+  ports is roughly 500 MB/s shared at Gen2, which a single SATA SSD nearly
+  saturates. That needs measuring, not assuming, or it will be misread later as
+  virtualization overhead.
+
+First, record what the link actually negotiated:
+
+```sh
+sudo lspci -vv -d 1b21:1064 | grep -E "LnkCap|LnkSta"
+```
+
+Baseline SMART on every drive attached to it. **Attribute 199,
+`UDMA_CRC_Error_Count`, is the one that matters** — it counts link and cable
+errors specifically, so its delta across the test is the cleanest possible signal
+about the controller and cabling rather than the drives:
+
+```sh
+for d in /dev/sdX /dev/sdY /dev/sdZ; do
+  echo "== $d"
+  sudo smartctl -A "$d" | grep -E "UDMA_CRC_Error_Count|Reallocated_Sector"
+done
+```
+
+Then saturate **all attached drives at once** — the point is to load the shared
+x1 link, not each drive in isolation:
+
+```sh
+# One per drive, backgrounded, then wait. Run for hours, not minutes: the
+# failure mode here is thermal and sustained, not instantaneous.
+sudo fio --name=asm1064 --filename=/dev/sdX --rw=read --bs=1M --iodepth=32 \
+  --ioengine=libaio --direct=1 --runtime=4h --time_based --group_reporting &
+```
+
+> ⚠ **`--rw=read` deliberately.** The BX500s and the MX100 hold live pool data
+> and a write test would destroy it. Read-only is sufficient: SATA link CRC
+> errors surface on reads exactly as they do on writes, so a read-saturation test
+> exercises the controller, the cable and the link — which is what is being
+> tested. Only run write tests against the spare port or a drive whose contents
+> are genuinely expendable.
+
+Watch the kernel log throughout, in another session:
+
+```sh
+dmesg -w | grep -iE "ata[0-9]|link|reset|failed command"
+```
+
+**Pass criteria:**
+
+- [ ] `UDMA_CRC_Error_Count` unchanged on every drive — *any* increase means a
+      cable or link problem, and it is worth reseating and re-running before
+      going further
+- [ ] No ATA link resets, "hard resetting link", or failed commands in `dmesg`
+- [ ] Aggregate throughput lands near the negotiated link ceiling rather than
+      well under it
+- [ ] Record the aggregate figure in *§ Performance expectations* — if the x1
+      link is the bottleneck, that is a topology fact no firmware or hypervisor
+      change will fix, and it needs to be on the record *before* virtualization
+      can be blamed for it
+
+If this card misbehaves, that is genuinely useful news: it is temporary hardware
+(§13) holding pools that could be relocated, and finding out now costs an
+afternoon rather than an evening plus a confusing evaluation.
+
+**New drives get burned in before they are trusted** — the same applies to the
+torrent drive in §13. `badblocks -wsv` on a blank drive, or `f3` (already in
+serenity's package set), plus a SMART long test.
 
 ---
 
@@ -584,7 +663,40 @@ Not in this deployment, each for a stated reason:
 - **Moving the arr stack or download clients out of the guest.** They share one
   `/data` root on one filesystem, so imports are hardlinks and atomic moves.
   Hardlinks do not survive an NFS boundary; relocating them turns every import
-  into a full copy.
+  into a full copy. (See `BACKGROUND.md` for why — inodes are filesystem-local.)
+
+  **Planned, deliberately, later: a dedicated torrent drive that accepts the copy.**
+  Adding a 2–3TB HDD outside the array for torrent data, with the arr stack
+  importing from it into the library, means every import becomes a real copy
+  rather than a hardlink. That is a worthwhile trade on Unraid specifically, and
+  it is worth being precise about why rather than filing it as a penalty
+  reluctantly accepted:
+
+  - **It removes parity write amplification from download churn.** Every write to
+    a parity-protected array disk costs read-old-data, read-old-parity, compute,
+    write-data, write-parity — four operations per logical write, across two
+    spindles. Torrent downloads are exactly the write pattern you least want
+    paying that tax.
+  - **It stops spending parity on re-downloadable data.** Torrent content is, by
+    definition, the most replaceable data on the machine. Protecting it with
+    parity is protection bought at the array's expense.
+  - **It isolates seeding I/O.** Seeding is constant random reads. Off the array,
+    those never contend with parity checks, mover runs, or media playback.
+
+  The copy is paid **once per import**; the parity tax would be paid **on every
+  write, forever**. That is the actual shape of the trade.
+
+  Two things to plan around:
+
+  - **Size against seeding retention, not library size.** While seeding, the data
+    exists twice — once on the torrent drive, once in the library. The drive's
+    capacity sets how long you can seed, which is the number that matters.
+  - **Port budget and placement.** The drive must hang off a controller the arr
+    stack can reach. While the stack is still inside the guest that means a
+    passed-through controller — the ASM1064's spare port is the obvious
+    candidate, which is a further reason to be confident in that card (§4b).
+    Once Docker migrates to the host and the ASM1064 goes back, it moves to
+    onboard SATA instead. Burn the drive in before trusting it (§4b).
 - **Auto-unlock for the Unraid array.** Array encryption is unlocked inside the
   guest by Unraid's own machinery and stays manual. A keyfile-on-host-encrypted-
   volume scheme would only *move* the manual step, not remove it.
@@ -608,9 +720,19 @@ not data — §4's bare-metal run is the data.
 | SABnzbd unrar, same set | | | |
 | Cache pool (SSD) random read latency | | | |
 | Large file write over SMB/NFS, MB/s | | | |
+| **ASM1064 aggregate read MB/s** (§4b, all drives at once) | | | |
+| **ASM1064 `LnkSta`** (width × speed) | | *n/a* | |
+| **`UDMA_CRC_Error_Count` delta**, worst drive | | | |
 
 Use the *same* test set and the same drives for both runs, and run them at
 comparable idle. A parity check racing a heavy download is not a comparison.
+
+The three ASM1064 rows serve a different purpose from the rest. They are not a
+before/after comparison — they are there to establish, on the record and before
+virtualization exists as a suspect, whether that card's PCIe x1 link is a
+bottleneck and whether it is electrically clean under load. `LnkSta` has no
+virtualized counterpart; the guest sees the controller directly, so the link is
+whatever the host negotiated at boot.
 
 ### What each number should do, and why
 

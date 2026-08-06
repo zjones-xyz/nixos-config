@@ -178,6 +178,33 @@ mechanisms work).
   structured so handing it back is deleting one list entry plus one `<hostdev>`
   block.
 
+## Planned, not yet scheduled
+
+- **A dedicated torrent drive outside the array, accepting the copy-on-import.**
+  *Alt:* keep everything on one `/data` root so imports stay hardlinks. *Why the
+  copy is worth it, on Unraid specifically:* a write to a parity-protected array
+  disk costs four operations across two spindles (read old data, read old parity,
+  compute, write data, write parity), and torrent downloads are precisely the
+  write pattern you least want paying that. Parity also protects, by definition,
+  the most re-downloadable data on the machine. And seeding is constant random
+  reads that then never contend with parity checks, mover runs or playback. **The
+  copy is paid once per import; the parity tax would be paid on every write,
+  forever.** Size the drive against *seeding retention* rather than library size,
+  since seeded content exists twice. Placement follows the migration: the
+  ASM1064's spare port while the arr stack is still in the guest, onboard SATA
+  once Docker moves to the host. Recorded in `DEPLOY.md §13`.
+- **ASM1064 sustained-load test added to the bare-metal shakedown** (`DEPLOY.md
+  §4b`). *Alt:* rely on the parity check. *Why:* a parity check exercises the
+  array, which is entirely on the ASM1166 — the ASM1064 gets no coverage from it
+  whatsoever. That card is also the one *not* receiving a firmware update, it
+  backs the latency-sensitive Docker appdata pools, and its PCIe x1 link width is
+  an open question. Read-only `fio` saturation across all attached drives at
+  once, with `UDMA_CRC_Error_Count` (SMART attribute 199) delta as the pass
+  criterion, since that attribute counts link and cable errors specifically.
+  Read-only because those drives hold live pool data and CRC errors surface on
+  reads just as well as writes. Doubles as the measurement that answers the link
+  width question before virtualization can be blamed for it.
+
 ## Incidental findings
 
 Not part of the brief; surfaced while validating.
