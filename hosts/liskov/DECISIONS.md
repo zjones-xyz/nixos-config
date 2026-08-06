@@ -253,8 +253,17 @@ Not part of the brief; surfaced while validating.
   ASM1042 is passed through solely because IOMMU group 1 is indivisible — not
   because the licence key is on it. Two consequences worth testing at the
   machine (`scripts/iommu-survey.sh`, `DEPLOY.md §4c`):
-  1. **The card can move slots.** Groups follow slot topology, so a different
-     root port may isolate it, letting the host keep a USB3 controller.
+  1. **The card can move slots, and there is a free PCH slot to move it to.**
+     Survey 2026-08-06 established the mechanism: Ivy Bridge CPU root ports
+     (00:01.x) do not advertise ACS so both CPU slots share group 1, while PCH
+     root ports (00:1c.x) isolate. The board has four slots — two CPU, two PCH —
+     with ASM1166 and ASM1042 in the CPU pair and ASM1064 in one PCH slot, so
+     the second PCH slot is free. (Only two PCH root ports appear in the survey
+     because Supermicro hides ones with nothing behind them.) Moving the ASM1042
+     there should isolate it and let the host keep a USB3 controller, reducing
+     group 1 to a single endpoint. **Do not instead swap it with the ASM1064** —
+     that traps the ASM1064 in group 1 and makes the planned hand-back
+     impossible. Unverified until re-surveyed.
   2. **The licence key can move to the unused onboard USB2 port** and reach the
      guest via `<hostdev type='usb'>`, which needs no IOMMU passthrough at all.
      That decouples licensing from any add-in card. Testable in one boot on

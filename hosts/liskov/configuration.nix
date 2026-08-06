@@ -186,12 +186,26 @@ in
   #   - The two root-port bridges in group 1 do NOT block passthrough. VFIO's
   #     viability check only requires the *endpoints* to be bound to vfio-pci;
   #     bridges are tolerated.
-  #   - **Moving the ASM1042 to isolate it is not available.** All three PCIe
-  #     slots are populated and only one is PCH-attached, already holding the
-  #     ASM1064. Swapping them would put the ASM1064 in group 1 with the
-  #     ASM1166 — which would make it impossible to hand back to the host later
-  #     without also giving up the array controller. So the ASM1042 rides along
-  #     to the guest, which costs nothing.
+  #   - **Moving the ASM1042 to a PCH slot should isolate it — worth doing.**
+  #     The board has FOUR slots: two CPU, two PCH. Currently ASM1166 and
+  #     ASM1042 occupy the two CPU slots and the ASM1064 occupies one PCH slot,
+  #     so **the second PCH slot is free.** The survey shows only two PCH root
+  #     ports (00:1c.0, 00:1c.4) because Supermicro hides root ports with
+  #     nothing behind them — the C204 has eight.
+  #
+  #     Move the ASM1042 to the free PCH slot and it lands behind its own root
+  #     port, in its own group, and the HOST can keep it. Group 1 then reduces
+  #     to the CPU root ports plus the ASM1166 alone: a single endpoint, cleanly
+  #     passable, no rider.
+  #
+  #     Do NOT instead swap the ASM1042 and ASM1064. That would drop the
+  #     ASM1064 into group 1 with the ASM1166 and make it impossible to hand
+  #     back to the host later without also surrendering the array controller.
+  #
+  #     UNVERIFIED until re-surveyed: this predicts an empty root port appears
+  #     once the slot is populated. Re-run scripts/iommu-survey.sh after the
+  #     move. If it isolates, delete "1b21:1042" from pciIds below and drop the
+  #     matching <hostdev> from unraid-guest.xml.
   #   - The licence key does NOT depend on the ASM1042. Both onboard EHCI
   #     controllers are isolated, and the survey mapped them to physical ports:
   #

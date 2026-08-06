@@ -413,11 +413,27 @@ device node. Note that **a USB device has no IOMMU group of its own** — groups
 a property of PCI devices, so what you are really identifying is the *controller*
 behind that port.
 
-**Does moving the ASM1042 to another slot isolate it?** Groups follow slot
-topology, not the card, so a different root port may put it in a group of its own
-— at which point the host could keep the USB3 controller instead of surrendering
-it to group 1. Re-run the survey after any reshuffle; the addresses in
-`configuration.nix` and `unraid-guest.xml` are **not** stable across one.
+**Does moving the ASM1042 to the free PCH slot isolate it?** The 2026-08-06
+survey established the mechanism: the Ivy Bridge **CPU** root ports (`00:01.x`)
+do not advertise ACS, so both CPU slots share group 1; the **PCH** root ports
+(`00:1c.x`) do isolate, which is why the ASM1064 sits alone in group 9.
+
+The board has **four slots — two CPU, two PCH.** ASM1166 and ASM1042 are in the
+two CPU slots, ASM1064 in one PCH slot, so **the second PCH slot is free.** The
+survey lists only two PCH root ports because Supermicro hides ones with nothing
+behind them; the C204 has eight.
+
+**So move the ASM1042 into the free PCH slot and re-survey.** If it lands in its
+own group, the host keeps a USB3 controller and group 1 reduces to the CPU root
+ports plus the ASM1166 alone — one endpoint, no rider. Then delete `"1b21:1042"`
+from `homelab.vfio.pciIds` and its `<hostdev>` from `unraid-guest.xml`.
+
+⚠ Do **not** instead swap the ASM1042 and ASM1064. That drops the ASM1064 into
+group 1 with the ASM1166 and makes the planned hand-back (§13) impossible without
+also surrendering the array controller.
+
+All bus addresses shift after a slot change — the values in `configuration.nix`
+and `unraid-guest.xml` are **not** stable across one. Re-derive, do not assume.
 
 Both feed the licence-key placement decision in §13, which is genuinely open.
 
