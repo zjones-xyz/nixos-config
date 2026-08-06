@@ -30,6 +30,10 @@ The ASM1166 SATA card is **completely invisible** — no POST banner, absent fro
 looks exactly like hardware failure. If the array's disks are suddenly missing,
 check this before suspecting the card, the cables, or the drives.
 
+This board is from 2011, so that coin cell is a live risk rather than a
+hypothetical — it is why §2a replaces it up front, before this becomes a 3am
+diagnosis.
+
 ### Driving the box remotely
 
 FreeIPMI, not ipmitool. Run these from a machine that is *not* Tower:
@@ -55,16 +59,176 @@ Do not start the install until all of these are true.
       MX100 512GB's actual health established. Nothing in this plan depends on
       that drive, but you do not want it failing mid-evaluation and muddying the
       signal.
-- [ ] **Recabled** per §2.
-- [ ] **Bare-metal parity check passed** after recabling, per §3.
+- [ ] **CMOS battery replaced and ASM1166 firmware updated**, per §2 — both
+      before the baseline in §4, for the reason given there.
+- [ ] **Recabled** per §3.
+- [ ] **Bare-metal parity check passed** after recabling, per §4.
 - [ ] **Power-restore behaviour reconciled** — BIOS says `Restore on AC Power
       Loss = Power On`, the BMC reports "Always off", and the machine did not
       autoboot after a full drain. Settle which is authoritative before relying
-      on unattended recovery.
+      on unattended recovery. **Try the CMOS battery first** (§2) — settings not
+      surviving a full power drain is the textbook weak-battery symptom, and
+      this board is old enough that it is the leading hypothesis.
 
 ---
 
-## 2. Recabling
+## 2. Before recabling: CMOS battery and ASM1166 firmware
+
+Both belong in the same service window, and both must happen **before the §4
+baseline parity check** — not after.
+
+The sequencing is not cosmetic. Firmware affects ASPM, PCIe link behaviour and
+stability, all of which move throughput. Baseline on old firmware, then flash,
+and the number in §4 describes a machine that no longer exists — which silently
+corrupts the virtualized comparison that is the entire point of the exercise.
+
+### 2a. CMOS battery
+
+This board is from 2011. The battery is very likely original.
+
+Read §0 again with that in mind: **a dead coin cell makes the ASM1166 vanish**,
+because it wipes the two settings the card needs to be visible at all. That is
+the single most confusing failure mode in this document — the array disappears
+and it looks like a dead controller — and right now it is sitting under the
+whole project as a latent fault waiting for the worst possible moment.
+
+A CR2032 costs about a pound. Replace it.
+
+It may also close out a currently-open question. Prerequisite §1 records that the
+BIOS claims `Restore on AC Power Loss = Power On` while the BMC reports "Always
+off", and the machine did not autoboot after a full drain. **Settings not
+persisting across a full power drain is exactly what a weak CMOS battery looks
+like.** Worth resolving that way before hunting for a firmware or BMC
+explanation.
+
+⚠ **Replacing the battery clears CMOS.** So it must come *before* re-entering
+BIOS settings, and everything in §0 has to be set again afterwards:
+
+- [ ] `PCI Express Port - Gen X` = **Gen2** (explicitly, not Auto)
+- [ ] `Detect Non-Compliance Device` = **Enabled**
+- [ ] Boot order — Unraid flash ahead of, or trivially selectable against, the
+      Kingston (§12)
+- [ ] Serial Port Console Redirection — note the unit and baud, they feed
+      `boot.kernelParams` in `configuration.nix` (§6)
+- [ ] `Restore on AC Power Loss` — and re-test with a full drain
+
+Verify the ASM1166 reappears in `lspci` before going any further.
+
+### 2b. ASM1166 firmware
+
+⚠ **Sources for this section could not be read directly.** Every primary guide
+was blocked by egress policy from the session that wrote this, so what follows is
+assembled from search summaries. **The commands are unverified — read the linked
+guides before running anything.** Links at the end of this section.
+
+**What it buys.** These cards routinely ship with firmware 4–5 years old. The
+community-standard fix is to flash the firmware from Silverstone's ECS06 card,
+which uses the same chip. Reported gains:
+
+- **ASPM support**, absent on many stock builds, which otherwise blocks the host
+  from reaching deep C-states — real idle power on a 24/7 box.
+- **Hot-swap**, broken on some stock builds (`221118-0048-00` is specifically
+  called out).
+- **Stability**, including "link down" flapping traceable to firmware.
+
+**Flash it on pegasus, not this machine.** Three reasons, in order of weight:
+
+1. If it bricks, that happens on a machine which is not holding the array.
+2. This board barely enumerates the card at all (§0). Flashing where the card is
+   marginal adds a variable to an operation that should be boring.
+3. The one documented "card will not appear in the flash tool" platform issue is
+   with Intel 600-series and newer. pegasus is AM4/AMD, so it is clear of it.
+
+Check pegasus has a free PCIe slot alongside the 4070 first.
+
+**Tooling.** The mainstream path is `RomUpdWin.exe`, which is Windows-only — and
+there is no Windows machine in this fleet. The Linux path is `116xfwdl`,
+distributed by Radxa for their hexa-SATA adapter:
+
+```sh
+# UNVERIFIED — confirm against the Radxa/Steak guides before running.
+sudo ./116xfwdl -S                  # reported to print version info
+sudo ./116xfwdl -U 11080000.ROM     # flash
+```
+
+`11080000.ROM` is the ECS06 firmware file; the Silverstone package ships it
+alongside the Windows tool.
+
+**Two gotchas that come up repeatedly:**
+
+- **Unplug every SATA cable from the card before flashing.** Cards reportedly
+  fail to appear in the flash tool with drives attached.
+- **CSM may need enabling** in the flashing machine's BIOS for the card to be
+  seen.
+
+**Risks.**
+
+- **Some cards have a flash chip the tool cannot write.** This is the
+  most-reported failure. It generally fails safe — "will not flash" rather than
+  "bricked" — but the update may simply not be available to you.
+- **Bricking is possible and no recovery method was found.** The card is cheap;
+  the array is not. See "flash it on pegasus" above.
+- **ASPM on a 2011 platform can itself cause instability.** Ivy Bridge plus a
+  budget controller with newly-enabled power management is exactly the
+  combination that produces intermittent dropouts. Watch for it during the §4
+  parity check rather than assuming ASPM is free — and note that if you have to
+  disable ASPM again afterwards, most of the benefit evaporates.
+
+**A free test worth running afterwards.** The card currently needs Gen2 forced
+*and* non-compliance detect (§0), which is a PCIe link-training problem — and
+updated firmware is reported to improve link training on older boards. So once
+flashed, **set the BIOS back to Auto and see whether the card still enumerates.**
+If it does, the §0 landmine is gone for good. Do not count on it; it costs one
+reboot to find out.
+
+### 2c. The ASM1064 — recommended NOT to flash
+
+Researched separately rather than assumed to mirror the ASM1166. The conclusion
+came out the other way:
+
+- **The headline ASM1064 fix does not apply here.** It is Intel 600-series
+  compatibility. This board is Intel C204, from 2011 — not remotely in scope.
+- **The other documented ASM1064 firmware finding is a *regression*, not a fix:**
+  `221118-0048-00` throws PCIe bus errors when ASPM L1 substates are enabled. L1
+  substates are a much later PCIe feature this board almost certainly does not
+  implement, so the finding is moot here — but it points the risk in the wrong
+  direction.
+- **Cross-flashing is community practice, not vendor-sanctioned.** ASM1166
+  firmware is *reported* compatible with the ASM1064, which is a bigger leap than
+  putting ECS06 firmware on a generic ASM1166 (identical chip). More brick risk
+  for less benefit.
+- **This controller is temporary anyway** — it returns to the host once the
+  Docker workloads migrate (§13).
+- **It holds the SSD pools**, which back Docker appdata and are the
+  latency-sensitive ones. Destabilising them adds noise to an evaluation that has
+  enough variables already.
+
+**Flash it only if it is actually symptomatic** — ATA/UDMA CRC errors, dropouts,
+or hot-plug problems traced to it during §4. Otherwise leave it alone.
+
+Unrelated but worth checking while you are in there: the ASM1064 is a PCIe **x1**
+controller feeding four SATA ports. On this board's Gen2 slots that is roughly
+500 MB/s shared across all four — which a *single* SATA SSD can nearly saturate.
+Confirm what it actually negotiates (`lspci -vv` and look for `LnkSta`), because
+if those four ports are all SSDs it is a topology bottleneck no firmware will
+fix, and it belongs in the §4 baseline notes rather than being mistaken later for
+virtualization overhead.
+
+### Sources
+
+Read at least the first two before flashing:
+[Phil Barker — Upgrading ASM1166 Firmware for Unraid](https://docs.phil-barker.com/posts/upgrading-ASM1166-firmware-for-unraid/) ·
+[Steak's Docs — Updating firmware on ASMedia 106x cards](https://thunderysteak.github.io/upgrading-asmedia-106x-cards) ·
+[Win-Raid — Latest Firmware for ASM1064/1166](https://winraid.level1techs.com/t/latest-firmware-for-asm1064-1166-sata-controllers/98543) ·
+[Unraid forums — ASM1166/ASM1064 flashen mit der ECS06-Firmware](https://forums.unraid.net/topic/141770-asm1166asm1064-flashen-mit-der-firmware-der-silverstone-ecs06-karte-sata-kontroller/) ·
+[Unraid forums — ASM1064: Test der Firmwares](https://forums.unraid.net/topic/185255-asm1064-test-der-firmwares/) ·
+[Bennett Piater — Fixing SATA hot plug on an ASM1166 HBA](https://bennett.piater.name/blog/linux/2025/06/13/fixing-asm1166-hba-hot-plug/) ·
+[Silverstone ECS06](https://www.silverstonetek.com/en/product/info/expansion-cards/ECS06/) ·
+[Internet Archive — ECS06 firmware mirror](https://archive.org/details/ecs-06-firmware-for-intel-600series-chipset)
+
+---
+
+## 3. Recabling
 
 | Controller | Assigned to | Drives |
 |---|---|---|
@@ -89,10 +253,16 @@ you which drive to pull when one fails at 3am.
 
 ---
 
-## 3. Bare-metal parity check first
+## 4. Bare-metal parity check first
 
 After recabling, **boot bare-metal Unraid and run a full parity check before any
 NixOS work.**
+
+⚠ **§2 must be done first — CMOS battery and firmware both.** Firmware changes
+ASPM, link behaviour and stability, so a baseline taken on old firmware describes
+a machine that will no longer exist by the time you compare against it. Flashing
+after this point invalidates the number and there is no way to retake it once the
+machine is virtualized.
 
 This validates the new cabling independently of virtualization. Cheap ASMedia
 controllers behave differently under sustained load than at idle, and you want
@@ -114,7 +284,7 @@ a parity check running concurrently with heavy cache writes.
 
 ---
 
-## 4. Bootloader: UEFI or legacy
+## 5. Bootloader: UEFI or legacy
 
 `configuration.nix` uses **systemd-boot**, which needs the board in UEFI (or
 Dual) boot mode. `disko.nix` also provisions a 1MB BIOS boot partition, so
@@ -143,7 +313,7 @@ before first guest start.
 
 ---
 
-## 5. Install
+## 6. Install
 
 Boot a NixOS installer ISO. Everything below is over IPMI SoL or a directly
 attached console.
@@ -196,7 +366,7 @@ nixos-install --flake /mnt/etc/nixos#liskov
 
 ---
 
-## 6. First boot
+## 7. First boot
 
 Root is LUKS-encrypted from install time, and unlock is **manual over IPMI
 serial-over-LAN** for now:
@@ -213,7 +383,7 @@ That is the entire reason LUKS goes down at install time rather than after.
 
 ---
 
-## 7. Verify passthrough before defining the guest
+## 8. Verify passthrough before defining the guest
 
 ```sh
 # vfio-pci must own all three passed-through ASMedia devices — two SATA
@@ -245,7 +415,7 @@ presents identically to the BIOS quirk in §0.
 
 ---
 
-## 8. Define and start the guest
+## 9. Define and start the guest
 
 ```sh
 sudo virsh --connect qemu:///system define hosts/liskov/unraid-guest.xml
@@ -274,7 +444,7 @@ sudo virsh console unraid       # or the webGUI once it has an address
 
 ---
 
-## 9. Post-start checklist
+## 10. Post-start checklist
 
 - [ ] Unraid boots and **licence is valid** (the flash passed through on the
       ASM1042 keeps its real USB GUID; an emulated USB disk would not).
@@ -292,14 +462,14 @@ sudo virsh console unraid       # or the webGUI once it has an address
       **Jellyfin's library to go empty during every evaluation window.** Schedule
       around it.
 - [ ] Run a parity check *under virtualization* and compare throughput to the
-      bare-metal baseline from §3. That comparison is the actual result of this
+      bare-metal baseline from §4. That comparison is the actual result of this
       experiment. Fill in the table under *§ Performance expectations*, which
       also records what each number was predicted to do and — importantly —
       which shortfalls are expected cost versus a specific, findable fault.
 
 ---
 
-## 10. Enrol liskov's sops key
+## 11. Enrol liskov's sops key
 
 `secrets/liskov.yaml` does not exist yet, and everything in `configuration.nix`
 that touches sops is gated on `builtins.pathExists`, so the flake evaluates
@@ -319,7 +489,7 @@ sops updatekeys secrets/liskov.yaml
 
 ---
 
-## 11. Fallback
+## 12. Fallback
 
 At any point: **power off, boot the Unraid flash drive.**
 
@@ -329,13 +499,13 @@ order, and **confirm that selection works over IPMI SoL**, since that is how you
 will do it when you are not in the room.
 
 The one thing that would compromise this: renaming the flash's `EFI-` folder to
-`EFI` for OVMF (§4). That is safe — it adds a UEFI path without removing the
+`EFI` for OVMF (§5). That is safe — it adds a UEFI path without removing the
 legacy one — but verify the flash still boots bare metal after doing it, before
 you need it to.
 
 ---
 
-## 12. Deliberately deferred
+## 13. Deliberately deferred
 
 Not in this deployment, each for a stated reason:
 
@@ -365,7 +535,7 @@ Not in this deployment, each for a stated reason:
     goes to the guest whether or not anything is plugged into the USB3 card.
   - It **would** remove the flakiest dependency in the guest boot path — OVMF
     currently has to enumerate the passed-through ASM1042 and find the flash on
-    it, which is the most likely reason to end up on the SeaBIOS fallback (§4).
+    it, which is the most likely reason to end up on the SeaBIOS fallback (§5).
     That is the genuine argument for doing it.
   - It **breaks the five-minute fallback**, which is why it waits. Today falling
     back is "power off, boot the physical flash". If the boot flash is an image
@@ -402,7 +572,7 @@ Not in this deployment, each for a stated reason:
   This confirms passing the ASM1042 through is not merely convenient — it is the
   only route that works with stock components.
 - **Beszel** — one less service to debug while proving passthrough.
-- **Initrd SSH LUKS unlock** — see §6.
+- **Initrd SSH LUKS unlock** — see §7.
 - **Moving the arr stack or download clients out of the guest.** They share one
   `/data` root on one filesystem, so imports are hardlinks and atomic moves.
   Hardlinks do not survive an NFS boundary; relocating them turns every import
@@ -417,11 +587,11 @@ Not in this deployment, each for a stated reason:
 
 Predictions made **before** measuring (2026-08-06), recorded so the result can
 falsify them rather than be rationalised after the fact. These are reasoning,
-not data — §3's bare-metal run is the data.
+not data — §4's bare-metal run is the data.
 
 ### Record measurements here
 
-| Metric | Bare metal (§3) | Virtualized (§9) | Δ |
+| Metric | Bare metal (§4) | Virtualized (§10) | Δ |
 |---|---|---|---|
 | Parity check, wall-clock | | | |
 | Parity check, avg MB/s | | | |
@@ -453,7 +623,7 @@ The ASM1166 negotiates **Gen2 x2 (~1 GB/s shared across six ports)** and four
 saturation *on bare metal*. Virtualization does not move that ceiling. The case
 to watch is a parity check concurrent with heavy cache writes.
 
-This is exactly why §3 runs first: without that baseline, a slow virtualized
+This is exactly why §4 runs first: without that baseline, a slow virtualized
 parity check is ambiguous between "passthrough is costly" and "the controller
 was always the limit".
 
@@ -470,7 +640,7 @@ that is a specific, findable fault, and worth diagnosing rather than accepting:
   differently, the pins split cores and cost real throughput.
 - Interrupt storm or MSI-X not negotiated on a passed-through controller
   (`grep 1b21 -A2 /proc/interrupts`, watch for one CPU pegged in `si`).
-- The guest not actually getting the controller — re-run §7.
+- The guest not actually getting the controller — re-run §8.
 
 ---
 
