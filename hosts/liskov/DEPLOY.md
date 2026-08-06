@@ -241,7 +241,7 @@ flashed, **set the BIOS back to Auto and see whether the card still enumerates.*
 If it does, the §0 landmine is gone for good. Do not count on it; it costs one
 reboot to find out.
 
-### 2b-bis. While the cards are in pegasus: test VFIO on real hardware
+### 2b-bis. While the ASM1166 is in pegasus: test VFIO on real hardware
 
 Optional, and the highest-value thing available in this whole plan short of the
 machine itself. `modules/nixos/vfio.nix` has **never been exercised on real
@@ -258,6 +258,25 @@ ASMedia cards — never its onboard SATA (AMD, `1022:`) or its NVMe. Do not add
 `1022:` or `10de:` ids; that is pegasus's equivalent of the `8086:` guard on
 liskov.
 
+**Which cards to bring.** Only the **ASM1166** has a reason to be in pegasus at
+all — it is the one being flashed (§2b). The ASM1064 stays in liskov (§2c says
+not to flash it), and the ASM1042 is a USB3 controller that the ECS06 SATA
+firmware does not cover, so neither has a flashing reason to travel.
+
+The ASM1166 alone tests the **`ahci`** path, which is the one that matters:
+it is the array controller, and it must bind to vfio-pci for any of this to work.
+
+Bringing the **ASM1042 as well is optional**, and only tests the **`xhci_pci`**
+path — the softdep added after review found the list named only `ahci`. Whether
+that path matters at all depends on an outcome you will not know until §4c: if
+the ASM1042 moves to the free PCH slot and the *host* keeps it, it is never
+passed through and `xhci_pci` is defensive only. If it stays in group 1 and goes
+to the guest, the path is live.
+
+So: take it if the card is out of liskov anyway (it will be, if you are trying
+the slot move), and skip it otherwise. The `ahci` result is the one that gates
+the deployment.
+
 Add temporarily to `hosts/pegasus/configuration.nix`:
 
 ```nix
@@ -268,10 +287,9 @@ Add temporarily to `hosts/pegasus/configuration.nix`:
     enable = true;
     cpuVendor = "amd";        # NOT the "intel" default — pegasus is AM4
     pciIds = [
-      "1b21:1166"             # ASM1166, competitor driver: ahci
-      "1b21:1042"             # ASM1042, competitor driver: xhci_pci — the case
-                              #   the softdep list was extended for, and the one
-                              #   most likely to still be wrong
+      "1b21:1166"             # ASM1166, competitor driver: ahci — the one that matters
+      # Only if you brought the ASM1042 too; competitor driver is xhci_pci.
+      # "1b21:1042"
     ];
   };
 ```
@@ -295,9 +313,9 @@ cat /proc/cmdline | tr ' ' '\n' | grep -E 'iommu|vfio'
 
 | Result | Conclusion |
 |---|---|
-| both `vfio-pci` | The mechanism works. Proceed to liskov with confidence. |
-| ASM1166 `vfio-pci`, ASM1042 `xhci_hcd` | The `xhci_pci` softdep is insufficient. Would have silently broken IOMMU group 1 on liskov and looked like a bad device ID. |
-| either shows `ahci`/`xhci_hcd` | The race is lost at boot. Fix before liskov, not after. |
+| ASM1166 shows `vfio-pci` | The mechanism works for the array controller. This is the result that gates the deployment. |
+| ASM1166 shows `ahci` | The race is lost at boot. Fix before liskov, not after — on liskov this would present as the array controller staying bound to the host. |
+| ASM1042 (if brought) shows `xhci_hcd` | The `xhci_pci` softdep is insufficient. Only matters if the ASM1042 ends up passed through (§4c), but silent if wrong — it would break IOMMU group 1 and look like a bad device ID. |
 
 Then revert the block and `sudo nixos-rebuild boot --flake ~/nixos-config#pegasus && sudo reboot`.
 
