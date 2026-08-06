@@ -375,10 +375,25 @@ Everything in §8 and in `unraid-guest.xml` depends on a topology map that canno
 be derived from a config session. Capture it now:
 
 ```sh
-./scripts/iommu-survey.sh              # groups + USB controller map
-./scripts/iommu-survey.sh /dev/sdX     # ...plus trace one device to its
-                                       #   controller, group, and USB identity
+./scripts/iommu-survey.sh              # everything — no arguments needed
 ```
+
+**Plug a flash drive into each port you want to identify, then run it once.**
+Every USB storage device is auto-detected and reported with its controller,
+IOMMU group and USB vendor:product:serial, so there is no need to work out device
+nodes. Several drives at a time is the intended use — they are distinguished by
+model and serial, so use two visibly different sticks.
+
+Worth doing **two ports in one pass**: the unused onboard header port *and* a
+rear-panel port. The C204 exposes two EHCI controllers and splits ports between
+them, so rear panel and internal headers are frequently on **different**
+controllers with different IOMMU groups. If they turn out to share a controller
+the ports are interchangeable for grouping purposes; if not, you have a real
+choice to make.
+
+⚠ The script reports the USB *topology* path (`2-1.4`), which is not a physical
+label. **Write down which port each drive is actually in** — nothing in sysfs
+knows "rear panel, top left".
 
 **Needs `intel_iommu=on`** or `/sys/kernel/iommu_groups` is empty — the script
 says so rather than silently reporting nothing. Check `cat /proc/cmdline` first;
