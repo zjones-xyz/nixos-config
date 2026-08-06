@@ -420,19 +420,19 @@ survey established the mechanism: the Ivy Bridge **CPU** root ports (`00:01.x`)
 do not advertise ACS, so both CPU slots share group 1; the **PCH** root ports
 (`00:1c.x`) do isolate, which is why the ASM1064 sits alone in group 9.
 
-The board has **four slots.** Two are CPU-attached and hold the ASM1166 and
-ASM1042; one is PCH-attached and holds the ASM1064. The fourth is free.
+The board has **four PCIe slots, visually confirmed identical.** Two are
+CPU-attached and hold the ASM1166 and ASM1042; one is PCH-attached and holds the
+ASM1064; the fourth is free.
 
-⚠ **Confirm what the fourth slot actually is before planning around it.** If it
-is a second PCH *PCIe* slot, the ASM1042 can move there. If it is a legacy 32-bit
-**PCI** slot — which is what several published X9SCM/X9SCM-F layouts show, and
-which is consistent with this machine's own survey (group 7 holds the `00:1e.0`
-82801 PCI bridge with the onboard Matrox at `05:03.0` behind it) — then a PCIe
-card cannot go in it and the ASM1042 has nowhere to move.
+> A dead end worth recording so nobody re-walks it: the survey shows an `00:1e.0`
+> 82801 PCI bridge with the Matrox G200eW at `05:03.0` behind it (group 7), which
+> looks like evidence of a legacy PCI slot. It is not. That is the WPCM450 BMC's
+> onboard video on an internal PCI bus — server boards routinely carry one with
+> no physical PCI connector. Reasoning from that device back to a slot was wrong.
 
-Only two PCH root ports appear in the survey, which is *consistent with* an empty
-third one being hidden, but is equally consistent with there being no third PCIe
-slot at all. The survey cannot distinguish these; the board manual can.
+Only two PCH root ports appear in the survey because Supermicro hides ports with
+nothing behind them; the C204 has eight. So the free slot's root port is expected
+to appear once populated.
 
 **So move the ASM1042 into the free PCH slot and re-survey.** If it lands in its
 own group, the host keeps a USB3 controller and group 1 reduces to the CPU root

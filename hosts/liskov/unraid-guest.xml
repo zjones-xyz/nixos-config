@@ -166,12 +166,12 @@
       advertise ACS, so anything in the two CPU slots shares group 1, while the
       PCH root ports (00:1c.x) do isolate.
 
-      The board has four slots: two CPU-attached (ASM1166, ASM1042), one
-      PCH-attached (ASM1064), and one free. UNCONFIRMED whether that free slot is
-      PCIe or legacy 32-bit PCI — if PCI, a PCIe card cannot go in it and the
-      ASM1042 cannot move at all. Check the board manual. See DEPLOY.md 4c.
+      Four PCIe slots, visually confirmed identical: two CPU-attached (ASM1166,
+      ASM1042), one PCH-attached (ASM1064), one free. Only two PCH root ports
+      appear in the survey because Supermicro hides ports with nothing behind
+      them, so the free slot's port should appear once populated.
 
-      IF it is PCIe, moving the ASM1042 there should give it its own group
+      Moving the ASM1042 there should give it its own group
       and let the HOST keep it, reducing group 1 to the CPU root ports plus the
       ASM1166 alone — a single endpoint, no rider. Worth doing while the machine
       is open. UNVERIFIED until re-surveyed.

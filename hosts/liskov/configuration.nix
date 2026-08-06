@@ -188,16 +188,15 @@ in
   #     viability check only requires the *endpoints* to be bound to vfio-pci;
   #     bridges are tolerated.
   #   - **Moving the ASM1042 to a PCH slot should isolate it — worth doing.**
-  #     The board has four slots: two CPU-attached (ASM1166, ASM1042), one
-  #     PCH-attached (ASM1064), and one free.
+  #     Four PCIe slots, visually confirmed identical: two CPU-attached
+  #     (ASM1166, ASM1042), one PCH-attached (ASM1064), one free. Only two PCH
+  #     root ports appear because Supermicro hides ports with nothing behind
+  #     them (the C204 has eight), so the free slot's port should appear once
+  #     populated.
   #
-  #     ⚠ UNCONFIRMED whether the free slot is PCIe or legacy 32-bit PCI. If
-  #     PCIe, the ASM1042 can move there and be isolated. If PCI — which several
-  #     published X9SCM layouts show, and which fits this machine's own survey
-  #     (group 7 holds the 00:1e.0 82801 PCI bridge with the onboard Matrox at
-  #     05:03.0 behind it) — a PCIe card cannot go in it at all. Only two PCH
-  #     root ports appear, which is consistent with either reading. Check the
-  #     board manual before planning the move.
+  #     (The 00:1e.0 82801 PCI bridge in group 7 is NOT evidence of a legacy PCI
+  #     slot — it carries the WPCM450 BMC's onboard Matrox video on an internal
+  #     bus. Noted because it misled one review pass.)
   #
   #     Move the ASM1042 to the free PCH slot and it lands behind its own root
   #     port, in its own group, and the HOST can keep it. Group 1 then reduces

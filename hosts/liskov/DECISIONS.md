@@ -256,14 +256,16 @@ Not part of the brief; surfaced while validating.
   1. **The card can move slots, and there is a free PCH slot to move it to.**
      Survey 2026-08-06 established the mechanism: Ivy Bridge CPU root ports
      (00:01.x) do not advertise ACS so both CPU slots share group 1, while PCH
-     root ports (00:1c.x) isolate. The board has four slots: two CPU-attached
-     (ASM1166, ASM1042), one PCH-attached (ASM1064), one free. **Whether that
-     free slot is PCIe or legacy 32-bit PCI is UNCONFIRMED** — several published
-     X9SCM layouts show the fourth as PCI, which fits this machine's survey
-     (group 7 holds the 00:1e.0 82801 PCI bridge with the onboard Matrox behind
-     it). If PCIe, moving the ASM1042 there should isolate it and let the host
-     keep a USB3 controller, reducing group 1 to a single endpoint. If PCI, the
-     card cannot move and the current arrangement stands. **Do not instead swap it with the ASM1064** —
+     root ports (00:1c.x) isolate. The board has four PCIe slots, visually
+     confirmed identical: two CPU-attached (ASM1166, ASM1042), one PCH-attached
+     (ASM1064), one free. Moving the ASM1042 to the free slot should isolate it
+     and let the host keep a USB3 controller, reducing group 1 to a single
+     endpoint. Still to be confirmed empirically by re-surveying after the move —
+     the prediction is that a third PCH root port appears with the ASM1042
+     isolated behind it. (A review pass suspected the fourth slot was legacy PCI,
+     citing the 00:1e.0 PCI bridge in group 7; that bridge carries the BMC's
+     onboard Matrox video and implies no physical slot. Recorded so the dead end
+     is not re-walked.) **Do not instead swap it with the ASM1064** —
      that traps the ASM1064 in group 1 and makes the planned hand-back
      impossible. Unverified until re-surveyed.
   2. **The licence key can move to the internal USB2 header** and reach the guest
