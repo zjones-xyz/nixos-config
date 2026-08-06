@@ -3,7 +3,7 @@
 let
   # secrets/liskov.yaml does not exist in the repo yet — it must be created by
   # Zoe once the host has booted and its age key is known (see DEPLOY.md
-  # § sops). Gated on the file's presence so the closure evaluates cleanly until
+  # §11). Gated on the file's presence so the closure evaluates cleanly until
   # then, and activates automatically once the encrypted file is committed.
   # Same pattern as hosts/pegasus/configuration.nix.
   hasSops = builtins.pathExists ../../secrets/liskov.yaml;
@@ -44,8 +44,9 @@ in
   # the base type is expected — which is precisely what a hypervisor promises the
   # guest. Unraid must not be able to tell it is not on bare metal. Every design
   # decision below that looks fussy (controllers passed whole rather than as
-  # virtual disks, a real bridge rather than NAT, the licence key on a physical
-  # USB controller) is in service of holding up that substitution.
+  # virtual disks, a real bridge rather than NAT, the licence key as a real
+  # physical USB device rather than an emulated image) is in service of holding
+  # up that substitution.
   networking.hostName = "liskov";
   networking.domain = "internal";
 
@@ -58,7 +59,7 @@ in
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # Keep a couple of generations only. /boot is on a 120GB SSD shared with
+  # Keep the boot menu short. /boot is on a 120GB SSD shared with
   # nothing else, but Unraid's flash drive is the fallback path and a cluttered
   # boot menu is one more thing to get wrong at 3am.
   boot.loader.systemd-boot.configurationLimit = 10;
@@ -187,11 +188,16 @@ in
   #     viability check only requires the *endpoints* to be bound to vfio-pci;
   #     bridges are tolerated.
   #   - **Moving the ASM1042 to a PCH slot should isolate it — worth doing.**
-  #     The board has FOUR slots: two CPU, two PCH. Currently ASM1166 and
-  #     ASM1042 occupy the two CPU slots and the ASM1064 occupies one PCH slot,
-  #     so **the second PCH slot is free.** The survey shows only two PCH root
-  #     ports (00:1c.0, 00:1c.4) because Supermicro hides root ports with
-  #     nothing behind them — the C204 has eight.
+  #     The board has four slots: two CPU-attached (ASM1166, ASM1042), one
+  #     PCH-attached (ASM1064), and one free.
+  #
+  #     ⚠ UNCONFIRMED whether the free slot is PCIe or legacy 32-bit PCI. If
+  #     PCIe, the ASM1042 can move there and be isolated. If PCI — which several
+  #     published X9SCM layouts show, and which fits this machine's own survey
+  #     (group 7 holds the 00:1e.0 82801 PCI bridge with the onboard Matrox at
+  #     05:03.0 behind it) — a PCIe card cannot go in it at all. Only two PCH
+  #     root ports appear, which is consistent with either reading. Check the
+  #     board manual before planning the move.
   #
   #     Move the ASM1042 to the free PCH slot and it lands behind its own root
   #     port, in its own group, and the HOST can keep it. Group 1 then reduces
@@ -289,7 +295,7 @@ in
     virt-manager   # `virt-manager -c qemu+ssh://z@liskov.internal/system` from serenity
     virt-viewer
     pciutils       # lspci -nnk — the primary "did vfio actually bind?" check
-    usbutils       # lsusb -t — confirm the licence key landed on the ASM1042
+    usbutils       # lsusb -t — confirm the licence key reached the guest
     smartmontools  # SMART through passthrough is a thing to verify explicitly
     freeipmi       # ipmiconsole/ipmipower, for driving this box's own BMC
     tmux

@@ -51,26 +51,34 @@ so it cannot claim the two devices are isolated, and it groups them together.
 This is precisely the situation on this machine:
 
 ```
-group 1:  1b21:1166  ASM1166 SATA   (01:00.0)
-          1b21:1042  ASM1042 USB3   (02:00.0)
-group 9:  1b21:1064  ASM1064 SATA   (03:00.0)
-group 8:  8086:....  onboard SATA + LPC bridge
+group 1:  00:01.0    CPU PCIe root port      ┐ bridges — do not block
+          00:01.1    CPU PCIe root port      ┘ passthrough
+          01:00.0    1b21:1166  ASM1166 SATA   ┐ the two endpoints
+          02:00.0    1b21:1042  ASM1042 USB3   ┘
+group 9:  03:00.0    1b21:1064  ASM1064 SATA — isolated
+group 8:  00:1f.0    LPC bridge  +  00:1f.2 onboard SATA  +  00:1f.3 SMBus
+group 3:  00:1a.0    onboard EHCI #2 — isolated (also the BMC virtual HID)
+group 6:  00:1d.0    onboard EHCI #1 — isolated (holds the Unraid flash today)
 ```
 
-The ASM1042 is not passed through because we want it. It is passed through
-because **group 1 is indivisible and the ASM1166 must go to the guest.** That the
-Unraid licence key happens to live on it is a convenience discovered afterwards,
-not the reason.
+Surveyed on the machine 2026-08-06. Note group 1 has **four** members, not two:
+the two ASMedia endpoints plus both CPU root ports. The bridges are not an
+obstacle — VFIO's viability check only requires the *endpoints* to be bound to
+vfio-pci, and tolerates bridges in the group.
+
+The ASM1042 is not passed through because we want it, and **not** because the
+licence key is on it — it is not. It is passed through because **group 1 is
+indivisible and the ASM1166 must go to the guest.**
 
 **Groups follow slot topology, so they are not a fixed property of the cards.**
-Move the ASM1042 to a different slot — behind a different root port — and it may
-land in its own group, at which point the host could keep it. Any reshuffle
-invalidates the map above; re-derive it with `scripts/iommu-survey.sh` rather
-than assuming.
+Move the ASM1042 behind a different root port and it may land in its own group,
+at which point the host could keep it. Whether a suitable slot exists on this
+board is an open question — see `DEPLOY.md §4c`. Any reshuffle invalidates the
+map above; re-derive it with `scripts/iommu-survey.sh` rather than assuming.
 
-Group 8 is the mirror image: onboard SATA shares a group with the LPC bridge, so
-passing the SATA controller would mean passing the LPC bridge — which carries the
-firmware interface. That is unworkable, and it is why the host's root disk lives
+Group 8 is the mirror image: onboard SATA shares a group with the LPC bridge and
+SMBus, so passing the SATA controller would mean passing the LPC bridge — which
+carries the firmware interface. That is unworkable, and it is why the host's root disk lives
 on onboard SATA where nothing can take it.
 
 ### ACS override — why not to use it
@@ -174,8 +182,13 @@ can boot from it.
 Crucially, **this does not involve the IOMMU at all.** The host keeps the
 controller; QEMU forwards one device on it. So the controller's IOMMU group is
 irrelevant, which makes this the flexible option: any USB port on the machine
-becomes a candidate, including onboard ones sharing a group with half the
-chipset.
+becomes a candidate, including — on boards where it matters — onboard
+controllers that share a group with half the chipset.
+
+On *this* machine both onboard EHCI controllers happen to be isolated anyway
+(00:1a.0 group 3, 00:1d.0 group 6), so the flexibility buys something different:
+it lets the licence key sit on 00:1a.0, which must never be PCI-passed because
+it also carries the BMC's virtual keyboard and mouse.
 
 **3. Controller passthrough — `<hostdev type='pci'>` of the USB controller.** The
 guest owns the whole controller and every port on it, via VFIO. Requires the

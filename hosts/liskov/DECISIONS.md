@@ -30,7 +30,7 @@ mechanisms work).
 ## Locked constraints from the brief (implemented as-specified)
 
 - **Onboard SATA is never passed through** — it shares IOMMU group 8 with the LPC
-  bridge, and it carries the host's root disk.
+  bridge and SMBus, and it carries the host's root disk.
 - **Bind by PCI vendor:device ID, not bus address** — addresses have been
   observed to shift across reboots on this board.
 - **Licence flash presented as a physical device** — the Unraid licence is tied
@@ -256,19 +256,24 @@ Not part of the brief; surfaced while validating.
   1. **The card can move slots, and there is a free PCH slot to move it to.**
      Survey 2026-08-06 established the mechanism: Ivy Bridge CPU root ports
      (00:01.x) do not advertise ACS so both CPU slots share group 1, while PCH
-     root ports (00:1c.x) isolate. The board has four slots — two CPU, two PCH —
-     with ASM1166 and ASM1042 in the CPU pair and ASM1064 in one PCH slot, so
-     the second PCH slot is free. (Only two PCH root ports appear in the survey
-     because Supermicro hides ones with nothing behind them.) Moving the ASM1042
-     there should isolate it and let the host keep a USB3 controller, reducing
-     group 1 to a single endpoint. **Do not instead swap it with the ASM1064** —
+     root ports (00:1c.x) isolate. The board has four slots: two CPU-attached
+     (ASM1166, ASM1042), one PCH-attached (ASM1064), one free. **Whether that
+     free slot is PCIe or legacy 32-bit PCI is UNCONFIRMED** — several published
+     X9SCM layouts show the fourth as PCI, which fits this machine's survey
+     (group 7 holds the 00:1e.0 82801 PCI bridge with the onboard Matrox behind
+     it). If PCIe, moving the ASM1042 there should isolate it and let the host
+     keep a USB3 controller, reducing group 1 to a single endpoint. If PCI, the
+     card cannot move and the current arrangement stands. **Do not instead swap it with the ASM1064** —
      that traps the ASM1064 in group 1 and makes the planned hand-back
      impossible. Unverified until re-surveyed.
-  2. **The licence key can move to the unused onboard USB2 port** and reach the
-     guest via `<hostdev type='usb'>`, which needs no IOMMU passthrough at all.
-     That decouples licensing from any add-in card. Testable in one boot on
-     pegasus without liskov existing: attach the flash to a throwaway VM via
-     `usb-host` and compare `lsusb -v` inside against the host.
+  2. **The licence key can move to the internal USB2 header** and reach the guest
+     via `<hostdev type='usb'>`, which needs no IOMMU passthrough at all. That
+     decouples licensing from any add-in card. ⚠ The internal header is
+     `00:1a.0` (group 3), which **also carries the BMC's virtual keyboard and
+     mouse** — so it must never be PCI-passed, only device-forwarded. Isolated
+     does not mean safe to pass. Testable in one boot on pegasus without liskov
+     existing: attach the flash to a throwaway VM via `usb-host` and compare
+     `lsusb -v` inside against the host.
   Neither is blocking, but both are cheapest to settle while the machine is
   already open, and both invalidate the PCI addresses currently written into
   `configuration.nix` and `unraid-guest.xml` if acted on.

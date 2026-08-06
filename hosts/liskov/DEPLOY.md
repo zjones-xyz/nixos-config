@@ -14,8 +14,8 @@ the Kingston 120GB SSD.
 | File | Answers |
 |---|---|
 | **`DEPLOY.md`** (this) | *What to do*, in order. Steps, commands, checklists. |
-| **`BACKGROUND.md`** | *Why it works.* IOMMU groups and why they cannot be split, ACS override and why not to use it, VFIO vs virtio, q35/OVMF, what Unraid's parity model does to I/O, why this CPU generation matters. Read before the first flash or install if any of the config reads as incantation. |
-| **`DECISIONS.md`** | *Why it is this way.* Decision → alternatives → rationale, plus what was considered and rejected. Read before changing something that looks arbitrary. |
+| **`BACKGROUND.md`** | *Why it works.* The IOMMU and `iommu=pt`; IOMMU groups and why they cannot be split; ACS override and why not to use it; VFIO and the driver-ordering problem; **the three ways to get a USB device into a guest** (the licence-key question); passthrough vs virtio; q35/OVMF; what Unraid's parity model does to I/O; why this CPU generation matters. Read before the first flash or install if any of the config reads as incantation. |
+| **`DECISIONS.md`** | *Why it is this way.* Decision → alternatives → rationale, what was considered and rejected, and **`## Still open`** — the unresolved questions this deployment depends on. Read before changing something that looks arbitrary. |
 
 ---
 
@@ -400,28 +400,39 @@ choice to make.
 label. **Write down which port each drive is actually in** — nothing in sysfs
 knows "rear panel, top left".
 
-**Needs `intel_iommu=on`** or `/sys/kernel/iommu_groups` is empty — the script
-says so rather than silently reporting nothing. Check `cat /proc/cmdline` first;
-if it is missing, add it to Unraid's syslinux append line, reboot, survey, revert.
-That touches the boot flag only, not the array.
+**Already satisfied on this machine** (survey 2026-08-06): `intel_iommu=on` is
+*not* in Unraid's cmdline, but the kernel enables Intel IOMMU by default and the
+groups populate regardless. No syslinux edit is needed. The script still checks
+and will say so if a future kernel changes that.
 
 Two questions to answer while you are in there:
 
-**Which controller is the unused onboard USB2 port behind, and what group is it
-in?** Plug a flash drive into that specific port and run the script with its
-device node. Note that **a USB device has no IOMMU group of its own** — groups are
-a property of PCI devices, so what you are really identifying is the *controller*
-behind that port.
+**ANSWERED 2026-08-06.** The internal header is `00:1a.0` (EHCI #2, group 3) and
+it also carries the BMC's virtual HID; the rear/other ports are `00:1d.0`
+(EHCI #1, group 6), which holds the Unraid flash today. Both are isolated.
+
+Re-run only if ports are recabled. Note that **a USB device has no IOMMU group of
+its own** — groups are a property of PCI devices, so what the script identifies
+is the *controller* behind a port.
 
 **Does moving the ASM1042 to the free PCH slot isolate it?** The 2026-08-06
 survey established the mechanism: the Ivy Bridge **CPU** root ports (`00:01.x`)
 do not advertise ACS, so both CPU slots share group 1; the **PCH** root ports
 (`00:1c.x`) do isolate, which is why the ASM1064 sits alone in group 9.
 
-The board has **four slots — two CPU, two PCH.** ASM1166 and ASM1042 are in the
-two CPU slots, ASM1064 in one PCH slot, so **the second PCH slot is free.** The
-survey lists only two PCH root ports because Supermicro hides ones with nothing
-behind them; the C204 has eight.
+The board has **four slots.** Two are CPU-attached and hold the ASM1166 and
+ASM1042; one is PCH-attached and holds the ASM1064. The fourth is free.
+
+⚠ **Confirm what the fourth slot actually is before planning around it.** If it
+is a second PCH *PCIe* slot, the ASM1042 can move there. If it is a legacy 32-bit
+**PCI** slot — which is what several published X9SCM/X9SCM-F layouts show, and
+which is consistent with this machine's own survey (group 7 holds the `00:1e.0`
+82801 PCI bridge with the onboard Matrox at `05:03.0` behind it) — then a PCIe
+card cannot go in it and the ASM1042 has nowhere to move.
+
+Only two PCH root ports appear in the survey, which is *consistent with* an empty
+third one being hidden, but is equally consistent with there being no third PCIe
+slot at all. The survey cannot distinguish these; the board manual can.
 
 **So move the ASM1042 into the free PCH slot and re-survey.** If it lands in its
 own group, the host keeps a USB3 controller and group 1 reduces to the CPU root
@@ -435,7 +446,8 @@ also surrendering the array controller.
 All bus addresses shift after a slot change — the values in `configuration.nix`
 and `unraid-guest.xml` are **not** stable across one. Re-derive, do not assume.
 
-Both feed the licence-key placement decision in §13, which is genuinely open.
+Both fed the licence-key placement decision in §13, now narrowed to a
+recommendation pending the pegasus `usb-host` test described there.
 
 ---
 
@@ -547,12 +559,7 @@ lspci -nnk | grep -A3 -i '1b21:'
 #   → "Kernel driver in use: vfio-pci" on all three:
 #       1b21:1166  ASM1166  SATA, 6-port  — array + Cache + Fastservices
 #       1b21:1064  ASM1064  SATA, 4-port  — temporary, returns to the host later
-#       1b21:1042  ASM1042  USB3          — not storage. It is here only because
-#                  IOMMU group 1 holds both it and the ASM1166, and a group is
-#                  the indivisible unit of passthrough. Convenient rather than
-#                  merely tolerable: the Unraid licence flash drive plugs into
-#                  it and keeps its real USB GUID, which is what the licence is
-#                  tied to.
+# PLACEHOLDER-NOMATCH
 
 # ...and ahci must still own the onboard controller with the root disk.
 lspci -nnk -s 00:1f.2
@@ -601,8 +608,13 @@ sudo virsh console unraid       # or the webGUI once it has an address
 
 ## 10. Post-start checklist
 
-- [ ] Unraid boots and **licence is valid** (the flash passed through on the
-      ASM1042 keeps its real USB GUID; an emulated USB disk would not).
+- [ ] Unraid boots and **licence is valid.** The flash must reach the guest as a
+      *real* device — forwarded with `<hostdev type='usb'>` from the internal
+      header — so it keeps its true vendor:product:serial. An emulated USB disk
+      presents a synthetic GUID and will not license.
+      ⚠ **The checked-in `unraid-guest.xml` has no `<hostdev type='usb'>` entry
+      yet** — it cannot, until the flash's real vendor:product is read off the
+      machine (§4c). Add it before first start or the guest has no boot device.
 - [ ] All four pools import: array (4× 12TB), Cache, Fastservices, and the
       ASM1064 pool.
 - [ ] Array members are recognised **by serial** — no "new device" prompts.
@@ -685,12 +697,15 @@ Not in this deployment, each for a stated reason:
   with a spoofed GUID instead of passing the physical stick through). Wanted
   eventually; deliberately not now, and it buys less than it appears to:
 
-  - It would **not** free the ASM1042 for the host. That card shares IOMMU group
-    1 with the ASM1166, which the guest keeps permanently, so the whole group
-    goes to the guest whether or not anything is plugged into the USB3 card.
+  - It would **not** free the ASM1042 for the host. In its current CPU slot that
+    card shares IOMMU group 1 with the ASM1166, which the guest keeps
+    permanently, so the whole group goes to the guest whether or not anything is
+    plugged into the USB3 card. (Relocating the card is a separate question —
+    §4c — and is the only thing that could free it.)
   - It **would** remove the flakiest dependency in the guest boot path — OVMF
     currently has to enumerate the passed-through ASM1042 and find the flash on
-    it, which is the most likely reason to end up on the SeaBIOS fallback (§5).
+    it, which is the most likely reason to end up on the SeaBIOS fallback (documented
+    in `unraid-guest.xml`, not in a DEPLOY section).
     That is the genuine argument for doing it.
   - It **breaks the five-minute fallback**, which is why it waits. Today falling
     back is "power off, boot the physical flash". If the boot flash is an image
@@ -741,7 +756,7 @@ Not in this deployment, each for a stated reason:
   |---|---|---|---|
   | `00:1a.0` EHCI #2 | 3 (isolated) | **internal header** | also carries the BMC virtual HID |
   | `00:1d.0` EHCI #1 | 6 (isolated) | rear/other | Unraid boot flash lives here today |
-  | `02:00.0` ASM1042 | 1 (with ASM1166) | add-in card | goes to the guest regardless |
+  | `02:00.0` ASM1042 | 1 (with ASM1166 + both CPU root ports) | add-in card | goes to the guest **in its current slot** — see §4c |
 
   **Recommended: licence key on the internal header, forwarded with
   `<hostdev type='usb'>`.** Internal is the better physical home for a licence
