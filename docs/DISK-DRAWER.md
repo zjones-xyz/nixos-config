@@ -137,7 +137,7 @@ pointing it at a mergerfs pool of them — and it is untested.
 
 Their better use is as Tower's **photo tier**: two of them in btrfs raid1 gives
 4 TB of checksummed, real-time-redundant storage for irreplaceable data, on disks
-already owned. See `hosts/liskov/ALTERNATIVE-SNAPRAID.md` §5.
+already owned. See `hosts/galactica/DESIGN.md` §5.
 
 ---
 
@@ -146,7 +146,7 @@ already owned. See `hosts/liskov/ALTERNATIVE-SNAPRAID.md` §5.
 **No budget for a fifth 12 TB disk at present**, and the drive market makes rapid
 replacement of a failed one unlikely. Any Tower layout must therefore work with
 four, and the question of whether to hold one back as a cold spare is analysed in
-`ALTERNATIVE-SNAPRAID.md` §5.5 — the short version being that shelving a 12 TB
+`hosts/galactica/DESIGN.md` §5.5 — the short version being that shelving a 12 TB
 costs 12 TB of usable capacity to buy protection that dual parity provides more
 cheaply.
 

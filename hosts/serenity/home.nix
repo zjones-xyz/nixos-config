@@ -27,12 +27,12 @@
     # BMCs over IPMI 2.0. nixpkgs builds it for aarch64-darwin (cached
     # upstream), so no Homebrew fallback needed.
     #
-    # Its first consumer is liskov: this is how you reach the LUKS passphrase
-    # prompt over serial-over-LAN and power-cycle the box when it is wedged,
-    # from somewhere that is not Tower itself. FreeIPMI rather than ipmitool
-    # is not a preference — that BMC needs FreeIPMI's quirks handling. Exact
-    # invocations and the argument-parsing gotchas are in
-    # hosts/liskov/DEPLOY.md §0.
+    # Its first consumer is Tower's X9SCM-F: this is how you reach the LUKS
+    # passphrase prompt over serial-over-LAN and power-cycle the box when it is
+    # wedged, from somewhere that is not Tower itself. FreeIPMI rather than
+    # ipmitool is not a preference — that BMC needs FreeIPMI's quirks handling.
+    # Exact invocations and the argument-parsing gotchas are in
+    # hosts/galactica/PLATFORM.md §2.
     freeipmi
     gh
     neovim

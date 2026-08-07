@@ -1,281 +1,241 @@
-# liskov — decision log
+# galactica — decision log
 
-Review surface for the session that scaffolded `liskov` (Supermicro X9SCM / Xeon
-E3-1230 v2) into the fleet flake as a hypervisor for the existing Unraid 7.3.2
-install. Each entry: **decision → alternatives → rationale.** Nothing here was
-activated on hardware; every step is config plus a runbook.
+Tower's NixOS identity. Each entry: **decision → alternatives → rationale.**
 
-Companion documents: `DEPLOY.md` (what to do), `BACKGROUND.md` (why the
-mechanisms work).
+Nothing here has been activated on hardware. There is no `configuration.nix` yet,
+deliberately — see *Why there is no config here yet* below.
 
-## Process / workflow
+Companion documents: `DESIGN.md` (what is being built and why), `PLATFORM.md`
+(what the machine does), `HARDWARE-MAP.md` (what is plugged into what).
 
-- **One feature branch, one PR, `[liskov]`-bracketed title** — *alt:* separate
-  PRs per concern (module, host, docs). *Why:* repo convention (root
-  `CLAUDE.md`), and the pieces are interdependent — `flake.nix`,
-  `configuration.nix` and the new module all move together. Commits are scoped
-  per concern so the history is still reviewable in slices.
-- **Validation = `nix flake check` + per-attr `nix eval` + eval-time invariant
-  assertions** — *alt:* a `nixosTest`. *Why:* a nixosTest cannot assert real
-  passthrough (there is no ASM1166 in a test VM), so it would only ever check
-  configuration — which eval-time assertions do more cheaply and, crucially,
-  under the existing `nix flake check --no-build` CI step with no KVM on the
-  runner. Both guards were confirmed to **fail closed**, not merely pass.
-- **Docs-heavy output** — *alt:* leaner comments. *Why:* every genuinely
-  expensive failure mode here is a knowledge failure, not a config failure: the
-  BIOS quirk that hides the card, the stale `vfio_virqfd` guidance, binding an
-  Intel device by mistake. Those cost hours in front of a machine holding a live
-  array. Writing them down is the cheapest mitigation available.
+> **This log has a predecessor.** Tower's first NixOS identity was `liskov`, a
+> minimal hypervisor that would have run the existing Unraid install as a KVM
+> guest with the SATA controllers passed through. It was built, validated,
+> and — on the strength of `DESIGN.md`, which was commissioned to attack it —
+> retired on 2026-08-07 without ever being installed. Its decision log is in git
+> history at `hosts/liskov/DECISIONS.md`. The entries below are the ones that
+> outlived it, plus the ones the retirement itself forced.
+>
+> Dates are UTC.
 
-## Locked constraints from the brief (implemented as-specified)
+---
 
-- **Onboard SATA is never passed through** — it shares IOMMU group 8 with the LPC
-  bridge and SMBus, and it carries the host's root disk.
-- **Bind by PCI vendor:device ID, not bus address** — addresses have been
-  observed to shift across reboots on this board.
-- **Licence flash presented as a physical device** — the Unraid licence is tied
-  to the USB GUID.
-- **The arr stack and download clients stay inside the guest** — they share one
-  `/data` root so imports are hardlinks and moves are atomic; hardlinks cannot
-  cross a filesystem boundary, so relocating them across NFS turns every import
-  into a full copy.
-- **No auto-unlock for the Unraid array** — it is unlocked inside the guest by
-  Unraid's own machinery. A keyfile-on-host-encrypted-volume scheme would move
-  the manual step, not remove it.
-- **No Ceph, no Incus clustering, no LSI HBA** — all previously considered and
-  ruled out; not revisited.
+## 1. The name
 
-## Make-and-log decisions
+**`galactica`, replacing `liskov`** — *alt:* keep `liskov`; `perlman`; `tower`;
+`tower-hv`; `atlas`; `creasy`.
 
-1. **Host named `liskov`, NOT `tower`** — *alt:* `tower`, `tower-hv`, `galactica`,
-   `atlas`, `creasy`. *Why:* `tower.internal` must keep resolving to the Unraid
-   instance — memory-alpha NFS-mounts two exports from it and monitors
-   `ups@tower.internal`. The decisive argument is not convenience but the
-   fallback guarantee: booted bare metal, that machine *is* `tower.internal`, so
-   a hypervisor holding the name would make every fallback a DNS/DHCP operation.
-   `liskov` joins hopper and hamilton, and the substitution principle is the
-   host's literal contract. An invariant check asserts the hostname so this
-   cannot silently regress.
-2. **LUKS at install, unlocked over IPMI serial-over-LAN; initrd SSH unlock
-   deferred** — *alt (a):* install unencrypted and reinstall with LUKS later;
-   *alt (b):* LUKS + initrd SSH unlock in one pass. *Why:* (a) costs a genuine
-   reinstall plus a new host key plus `sops updatekeys`, since converting root
-   in place is impractical. (b) front-loads the fiddliest work on the fleet — the
-   initrd NIC driver and the DHCP-flush interaction each took real debugging on
-   memory-alpha and pegasus — onto first boot, and none of it is needed to prove
-   passthrough. Encryption present from day one, remote unlock as a later plain
-   `nixos-rebuild switch`.
-3. **systemd-networkd, not NetworkManager** — *alt:* NetworkManager, matching
-   memory-alpha and pegasus. *Why:* declarative bridges are markedly less fussy,
-   and it sidesteps the NetworkManager-adopts-the-initrd-DHCP-lease bug that both
-   other hosts needed a `flush-network-before-switch-root` workaround for. That
-   is precisely the bug that would otherwise surface when initrd SSH unlock is
-   added (decision 2). A knowing departure from fleet convention, documented in
-   the host config.
-4. **`br0` bridge for the guest** — *alt:* NAT, macvtap. *Why:* the guest serves
-   NFS to memory-alpha and must present the same LAN identity as bare metal —
-   same DHCP reservation, same address, same `tower.internal`. NAT and macvtap
-   both change how it is reached, which would mean the evaluation measures the
-   workaround instead of the storage stack.
-5. **Guest sized 24GB / 6 vCPU as 3 cores × 2 threads** — *alt:* 8GB / 4 vCPU as
-   originally scoped. *Why:* raised on request; the arr stack, SABnzbd and
-   qBittorrent all stay inside the guest during evaluation, so it is not yet a
-   pure storage appliance. Pinned to sibling pairs so the guest sees an honest
-   topology, leaving one full physical core plus 8GB for the host. Comes down as
-   Docker workloads migrate.
-6. **Guest defined by hand-maintained XML, `virsh define`d** — *alt:* declarative
-   management via a NixOS module. *Why:* libvirt is stateful, and this phase is
-   explicitly about hand-tuning passthrough while experimenting. A generated
-   domain would fight that. The checked-in XML is the known-good starting point
-   and the thing to diff against when the live definition drifts.
-7. **q35 + OVMF, not i440fx + SeaBIOS** — *alt:* the legacy pair. *Why:* PCIe
-   passthrough is materially better behaved on a machine type with a real PCIe
-   hierarchy, which matters with three controllers handed over. Retreat path
-   documented in the XML if OVMF cannot enumerate the flash through the
-   passed-through USB3 controller.
-8. **`firmware='efi'` autoselection, not a hardcoded OVMF path** — *alt:* explicit
-   `<loader>`. *Why:* a `/nix/store` path baked into stateful libvirt XML would be
-   invalidated by the next nixpkgs bump, producing a domain that will not start
-   for a reason with no obvious connection to the rebuild that caused it.
-9. **NUT server duty goes to memory-alpha, not liskov** — *alt:* liskov as NUT
-   server; *alt:* leave it on the guest. *Why:* virtualizing Tower moves the UPS
-   USB to the host, so the guest can no longer serve it, and the host — which
-   physically holds every disk — would have no UPS awareness and could be hard-cut
-   mid-parity-check. Making memory-alpha the server is better than making liskov
-   the server because Tower is then a *client* in both the virtualized and
-   bare-metal states: the arrangement becomes identical either way and stops being
-   something the fallback can break. Deferred to a separate `[memory-alpha]`
-   change plus a physical cable move.
-10. **No Tailscale, no Beszel, no NUT on this host for now** — *alt:* wire the
-    fleet-standard set. *Why:* every additional service is another thing to debug
-    while proving passthrough, and none of them is on the critical path to the
-    experiment's result.
-11. **`disko.nix` is a reference spec, NOT imported** — *alt:* import it. *Why:*
-    matches `hosts/pegasus/disko.nix`; importing double-defines `fileSystems.*`
-    against `hardware-configuration.nix`. disko is not a flake input; it is run
-    out-of-band at install time.
-12. **A BIOS boot partition is provisioned even though systemd-boot is used** —
-    *alt:* ESP only. *Why:* 1MB of insurance. The X9SCM's UEFI support depends on
-    its BIOS revision, unverifiable from here, and staying in legacy mode is a
-    legitimate choice for leaving Unraid's flash boot path untouched. Discovering
-    the need after install would mean repartitioning the root disk.
-13. **`liskov-vm` flake variant** — *alt:* nothing, or a nixosTest. *Why:* lets the
-    whole config (networkd, libvirtd, users, sops gating, serial console) be
-    smoke-tested under plain QEMU on the desktop before the real machine is
-    touched. It cannot prove passthrough; it catches everything else.
-14. **`libvirtd.onShutdown = "shutdown"`, `onBoot = "ignore"`** — *alt:* the
-    defaults (`suspend` / `start`). *Why:* suspending a guest that owns physical
-    SATA controllers mid-write is how an array ends up unclean — Unraid needs a
-    real ACPI shutdown so it can stop the array. And a host that boots straight
-    into launching a storage guest is a host you cannot safely reboot to debug;
-    autostart is a post-evaluation change. An invariant check asserts the former.
-15. **`memballoon model='none'`, memory not overcommitted** — *alt:* ballooning.
-    *Why:* a storage guest that can have memory pulled out from under its page
-    cache mid-parity-check is not a configuration worth measuring.
-16. **CMOS battery replacement promoted to a blocking pre-step** — *alt:* leave it
-    as ambient maintenance. *Why:* raised in review, and it turned out to matter:
-    `DEPLOY.md §0` already documented that a dead coin cell wipes the two settings
-    the ASM1166 needs to be visible, presenting as a dead controller and a missing
-    array. On a 2011 board that is a live latent fault. It is also the leading
-    explanation for the previously-unexplained power-restore mismatch, since
-    settings not surviving a full drain is the textbook weak-battery symptom.
-17. **ASM1166 firmware update added as a pre-step; ASM1064 explicitly NOT
-    flashed** — *alt:* flash both, or neither. *Why:* the 1166 gains ASPM,
-    hot-swap and stability fixes, and — testably — may resolve the PCIe
-    link-training quirk that currently forces Gen2 plus non-compliance detect.
-    The 1064's headline fix is Intel 600-series compatibility, irrelevant on a
-    2011 C204 board; its other documented firmware finding is a regression rather
-    than a fix; cross-flashing 1166 firmware onto it is community practice rather
-    than vendor-sanctioned; and it is temporary hardware holding the
-    latency-sensitive SSD pools. Flash only if symptomatic. **Sequenced before the
-    baseline parity check**, because firmware moves ASPM and link behaviour and
-    the baseline cannot be retaken once the machine is virtualized.
-18. **Flash the card on pegasus, not on this machine** — *alt:* flash in situ.
-    *Why:* a brick then happens on a machine that is not holding the array, and it
-    avoids flashing where the card is already marginal. pegasus is AM4/AMD so it
-    is clear of the one documented "card will not appear in the flash tool"
-    platform issue, which is Intel 600-series and newer.
+*Why a new name at all:* the machine's job changed. `liskov` was chosen for the
+substitution principle, which was the hypervisor's literal contract — the guest
+had to be indistinguishable from bare-metal Tower, down to the MAC address, or
+memory-alpha's NFS mounts and the DHCP reservation would break. Under bare metal
+there is no guest and no substitution; the name would be a fossil pointing at an
+argument that no longer applies.
 
-## Considered and rejected
+*Why `galactica`:* an old ship, not fast or flashy, built to be resilient and
+take punishment before returning the favour. That is the design in `DESIGN.md` —
+a 2011 Xeon carrying dual parity over disks that cannot be quickly replaced,
+chosen for the ability to degrade rather than to be quick. `perlman` was the
+other candidate and a good one; the tiebreaker was thematic fit rather than
+merit.
 
-- **ACS override (`pcie_acs_override=`)** — not needed and not used. The groups on
-  this board are already clean for the intended split. The patch does not add
-  isolation, it suppresses the kernel's report that isolation is absent;
-  peer-to-peer DMA between "split" devices remains possible and invisible to the
-  IOMMU. If a future change appears to need it, that is a signal to re-examine the
-  slot layout. See `BACKGROUND.md`.
-- **Emulating the Unraid licence flash from an image file** — **verified
-  impossible with stock components** (2026-08-06). QEMU 10.2.2's emulated
-  mass-storage models (`usb-storage`, `usb-bot`, `usb-uas`) expose only `serial`;
-  none exposes `vendorid`/`productid`. Since the Unraid GUID is the
-  vendor:product:serial triple, it cannot be reproduced, and
-  `<qemu:commandline>` does not help because the limitation is the device model
-  rather than libvirt's XML surface. Would require a patched QEMU. Recorded in
-  `DEPLOY.md §13`.
+⚠ **The name has been used before in this fleet.** A previous machine called
+galactica predated pegasus and has been gone for roughly five years. The
+practical consequence is `known_hosts`: any client that still holds an entry for
+the old host will refuse to connect and print a host-key-mismatch warning that
+reads as a man-in-the-middle attack. It is not one. Clear the stale entry rather
+than disabling the check:
 
-  **Correction (2026-08-06):** this finding was initially over-generalised in
-  `unraid-guest.xml` into a claim that `<hostdev type='usb'>` would not preserve
-  the GUID either. That is wrong. `usb-host` proxies a *real* device and forwards
-  its actual descriptors — its `vendorid`/`productid`/`serial` properties are
-  **selectors** for which device to grab, not synthesised values — and it supports
-  `bootindex`, so firmware can boot from it. Emulated storage and device
-  passthrough are different mechanisms with different answers. Corrected in the
-  XML, `configuration.nix`, `BACKGROUND.md` and `DEPLOY.md §13`.
-- **Taking `tower.internal` for the hypervisor** — see decision 1.
-- **Relocating Docker workloads to the host in this phase** — out of scope; the
-  ASM1064 returns to the host only after that migration, and the config is
-  structured so handing it back is deleting one list entry plus one `<hostdev>`
-  block.
+```sh
+ssh-keygen -R galactica.internal
+ssh-keygen -R <ip>
+```
 
-## Planned, not yet scheduled
+*Note:* `galactica` was among the alternatives when `liskov` was originally named
+and lost. It won on the second pass because the job description changed.
 
-- **A dedicated torrent drive outside the array, accepting the copy-on-import.**
-  *Alt:* keep everything on one `/data` root so imports stay hardlinks. *Why the
-  copy is worth it, on Unraid specifically:* a write to a parity-protected array
-  disk costs four operations across two spindles (read old data, read old parity,
-  compute, write data, write parity), and torrent downloads are precisely the
-  write pattern you least want paying that. Parity also protects, by definition,
-  the most re-downloadable data on the machine. And seeding is constant random
-  reads that then never contend with parity checks, mover runs or playback. **The
-  copy is paid once per import; the parity tax would be paid on every write,
-  forever.** Size the drive against *seeding retention* rather than library size,
-  since seeded content exists twice. Placement follows the migration: the
-  ASM1064's spare port while the arr stack is still in the guest, onboard SATA
-  once Docker moves to the host. Recorded in `DEPLOY.md §13`.
-- **ASM1064 sustained-load test added to the bare-metal shakedown** (`DEPLOY.md
-  §4b`). *Alt:* rely on the parity check. *Why:* a parity check exercises the
-  array, which is entirely on the ASM1166 — the ASM1064 gets no coverage from it
-  whatsoever. That card is also the one *not* receiving a firmware update, it
-  backs the latency-sensitive Docker appdata pools, and its PCIe x1 link width is
-  an open question. Read-only `fio` saturation across all attached drives at
-  once, with `UDMA_CRC_Error_Count` (SMART attribute 199) delta as the pass
-  criterion, since that attribute counts link and cable errors specifically.
-  Read-only because those drives hold live pool data and CRC errors surface on
-  reads just as well as writes. Doubles as the measurement that answers the link
-  width question before virtualization can be blamed for it.
+## 2. `tower.internal` continuity is now a DNS problem, not a naming constraint
 
-## Incidental findings
+**The host takes the name `galactica`; `tower.internal` follows it via an AdGuard
+rewrite** — *alt:* name the host `tower`; rely on the router deriving DNS from
+the DHCP hostname option.
 
-Not part of the brief; surfaced while validating.
+*Why:* under the VFIO plan `tower.internal` had to keep resolving to the *guest*,
+because the guest was Unraid and the fallback was booting bare metal. That
+constraint is gone — bare metal, the machine simply *is* `tower.internal`, and
+the fleet's dependents (memory-alpha's two NFS mounts, its NUT client,
+serenity's mounts) care about the name and the address, not the hostname the DHCP
+lease advertises.
 
-- **`virtualisation.libvirtd.qemu.ovmf` is removed in nixpkgs 26.05.** Setting any
-  attribute trips an assertion, because every OVMF image QEMU ships is now
-  available by default. Found by evaluating rather than by reading. This is what
-  makes decision 8 possible.
-- **`.claude/hooks/flake-check-sandboxed.sh` had two bugs** that made full
-  validation impossible in a web session: `git`-type inputs lost their `git+`
-  prefix and rev and so fell back to the 403ing GitHub tarball API, and transitive
-  inputs were never overridden at all (`claude-desktop-debian` brings its own
-  `flake-parts`). Both fixed; `nix flake check` now passes in-session, including
-  pegasus, which could not be validated there before.
-- **FreeIPMI added to serenity and pegasus.** Not liskov-specific, but the BMC is
-  how liskov's LUKS prompt is reached and how a wedged box is power-cycled. On
-  both desktops so neither one being down blocks recovery of the other.
+hopper already runs AdGuard Home (`modules/nixos/dns.nix`), so a rewrite
+`tower.internal → <IP>` is one line and **decouples the fleet name from the
+service name permanently.** Do that. Do not name the host `tower` — that would
+put the fleet identity and the service identity back in the same string, which is
+exactly the coupling that made the previous plan awkward.
+
+## 3. Why there is no config here yet
+
+**Documentation-only until the storage layout is settled** — *alt:* scaffold a
+`configuration.nix` now and fill in the disks later.
+
+*Why:* almost everything in a `configuration.nix` for this host is downstream of
+decisions that have not been made — which disks are data, which are parity,
+whether a 12 TB is held back as a cold spare, how the photo tier is built, and
+what `DESIGN.md` §5's data classification concludes. Scaffolding now would mean
+writing a file whose every interesting line is a placeholder, and placeholders in
+a `.nix` file are worse than absence: they evaluate, they look like decisions,
+and they get copied.
+
+The fleet boilerplate (users, SSH, nix settings, timezone, home-manager wiring)
+is a twenty-minute derivation from `hosts/memory-alpha/configuration.nix` when
+the time comes. It is not worth pre-writing.
+
+**What this costs:** the flake has no `nixosConfigurations.galactica`, so CI
+cannot evaluate anything here, and the `.sops.yaml` staging stanza is absent too
+(see 4).
+
+## 4. sops staging is deferred with the config
+
+**No `&galactica` key and no `secrets/galactica.yaml` creation rule until there
+is a host config to gate on it** — *alt:* add the placeholder stanza now, as
+hopper and hamilton have.
+
+*Why:* the placeholder pattern exists so a host's closure evaluates before the
+machine has booted and produced a real age key. With no closure, there is nothing
+to evaluate and nothing to gate — the stanza would be inert.
+
+**When it lands it should look like hopper's and hamilton's, with one difference
+worth recording now:** those two are encrypted to `*admin` plus `*memory-alpha`,
+because memory-alpha is their aarch64 build host and validates secrets at
+image-build time. galactica is x86_64 and builds its own closure, so **it needs
+`*admin` only** until first boot, then `*galactica` is added and
+`sops updatekeys` re-run.
+
+## 5. Serial console stays a module option
+
+**`modules/nixos/serial-console.nix` is kept despite having no importer** —
+*alt:* delete it with the rest of the liskov config and hardcode
+`boot.kernelParams` when galactica's config lands.
+
+*Why:* the option exists because the console device is a property of the
+*machine*, not of the config, and the machine has not changed — the same BMC
+still puts Serial-over-LAN on COM2 (`ttyS1`) while anything QEMU-hosted has only
+`ttyS0`. The hardcoded form cost a real debugging session: `boot.kernelParams` is
+a list, a single entry cannot be removed by an overriding module, and the VM
+variant inherited `ttyS1`, registered a console on a UART that did not exist, and
+bound the login prompt to a device that never appeared. It booted correctly in
+five seconds and offered no way in.
+
+An orphaned module is cheap. Re-learning that is not.
+
+## 6. Documentation split three ways
+
+**`PLATFORM.md` / `HARDWARE-MAP.md` / `DESIGN.md`, rather than one runbook** —
+*alt:* keep the single `DEPLOY.md` and edit it in place.
+
+*Why:* the old `DEPLOY.md` mixed three things with completely different
+lifetimes — a procedure that is rewritten whenever the plan changes, hardware
+facts that are true regardless of the plan, and the reasoning behind the plan
+itself. Retiring the hypervisor would have meant deleting or rewriting a document
+that also happened to hold the only record of the ASM1166 flash-tool segfault,
+the BMC's argument-parsing traps, and the measured port speeds. That is the
+failure mode the split prevents.
+
+`hosts/pegasus/home.nix` and `hosts/serenity/home.nix` both cite the IPMI
+invocations from their `freeipmi` package comments; they now point at
+`PLATFORM.md §2`, which is a reference section rather than a step in a procedure.
+
+**No `DEPLOY.md` exists right now.** It gets written when there is something to
+deploy, and it should be short — the durable material has already been extracted.
+
+---
+
+## Carried forward from the VFIO plan
+
+Constraints and findings that were established under the previous design and
+remain true under this one.
+
+- **The arr stack and download clients share one `/data` root.** Imports are
+  hardlinks and moves are atomic; hardlinks cannot cross a filesystem boundary,
+  so splitting them turns every import into a full copy. Under mergerfs this
+  becomes a *policy* constraint rather than a topology one — see `DESIGN.md`
+  §4.6 on `EXDEV` and non-path-preserving create policies — but the discipline is
+  the same.
+- **A dedicated torrent drive outside the parity set, accepting the copy.** A
+  write to a parity-protected disk costs four operations across two spindles
+  (read old data, read old parity, compute, write both), and torrent downloads
+  are precisely the write pattern you least want paying that. Parity would also
+  be protecting, by definition, the most re-downloadable data on the machine, and
+  seeding is constant random reads that then never contend with a sync or a
+  scrub. **The copy is paid once per import; the parity tax would be paid on
+  every write, forever.** Size it against *seeding retention* rather than library
+  size, since seeded content exists twice.
+- **No Ceph, no Incus clustering, no LSI HBA.** Considered and ruled out before
+  either design; not revisited.
+- **Bind PCI devices by vendor:device ID, not bus address** — addresses have been
+  observed to shift across reboots on this board. Now only relevant if libvirt
+  ever comes back, but the observation stands.
+- **FreeIPMI on both serenity and pegasus**, so neither one being down blocks
+  recovering the other. The BMC is how a LUKS prompt is reached and how a wedged
+  box is power-cycled.
+
+## Reversed by the move to bare metal
+
+Decisions that were correct under the VFIO plan and are not correct now. Recorded
+because each was reasoned about at length and a future session should not have to
+re-derive why it stopped applying.
+
+- **NUT server duty moving to memory-alpha.** The whole argument was that
+  virtualizing Tower puts the UPS USB on the host, leaving the host — which
+  physically holds every disk — unable to see the UPS. Bare metal dissolves it:
+  the UPS plugs into the NixOS host, `modules/nixos/nut.nix` makes it the server,
+  and memory-alpha stays a client. **No cable move is needed.** See `DESIGN.md`
+  §4.7.
+- **The array belongs on the ASM1166.** Under passthrough it had to be — onboard
+  SATA was never passed through, so an array left there would have been invisible
+  to the guest. Under bare metal the reasoning inverts: the onboard SATA 2.0
+  ports give each spinner a *dedicated* ~275 MB/s, which exceeds the 12 TB
+  drives' ~250 MB/s peak, where the ASM1166 at Gen2 gives all six ports a
+  *shared* ~1.0 GB/s. **The array belongs on onboard.** `PLATFORM.md §8`.
+- **No auto-unlock for the encrypted disks.** Under Unraid the array was unlocked
+  inside the guest by Unraid's own machinery, so nothing host-side could remove
+  the manual step. Under bare metal, sops-nix keyfiles decrypt at boot under the
+  host SSH key and `/etc/crypttab` opens the pools. ⚠ That is a **posture
+  change**, not a free win: encryption then protects a powered-off stolen
+  chassis, not a running one. It is the same trade the rest of the fleet has
+  already made.
+- **`q35` + OVMF, guest sizing, vCPU pinning, `libvirtd.onShutdown`,
+  `memballoon`, the `br0` bridge.** All properties of a guest that no longer
+  exists.
 
 ## Still open
 
-- **The name is settled; the physical work is not.** Every step in `DEPLOY.md §1`
-  is blocking and none of it is doable from a config session.
-- **Placeholders that must be filled on the machine:** the Kingston's `by-id`
-  path, the LUKS and ESP UUIDs, `hostNic`, the serial console unit and baud, and
-  the guest's MAC — which must match bare-metal Tower's so the DHCP reservation
-  keeps `tower.internal` resolving.
-- **CPU enumeration is assumed, not verified.** `unraid-guest.xml` pins vCPUs
-  assuming the conventional layout where cpu0-3 are first threads and cpu4-7 are
-  siblings. If this board enumerates differently the pins split physical cores and
-  cost real throughput — which would look like virtualization overhead and is not.
-  `lscpu -e` before trusting it.
-- **Whether the ASM1064's PCIe x1 link is a bottleneck.** Four SATA ports on one
-  lane is ~500 MB/s at Gen2, which a single SATA SSD nearly saturates. Confirm
-  with `lspci -vv` (`LnkSta`) so it is not later mistaken for virtualization cost.
-- **Where the licence key should live, and which slot the ASM1042 occupies.**
-  These are **independent** variables that earlier drafts treated as one. The
-  ASM1042 is passed through solely because IOMMU group 1 is indivisible — not
-  because the licence key is on it. Two consequences worth testing at the
-  machine (`scripts/iommu-survey.sh`, `DEPLOY.md §4c`):
-  1. **The card can move slots, and there is a free PCH slot to move it to.**
-     Survey 2026-08-06 established the mechanism: Ivy Bridge CPU root ports
-     (00:01.x) do not advertise ACS so both CPU slots share group 1, while PCH
-     root ports (00:1c.x) isolate. The board has four PCIe slots, visually
-     confirmed identical: two CPU-attached (ASM1166, ASM1042), one PCH-attached
-     (ASM1064), one free. Moving the ASM1042 to the free slot should isolate it
-     and let the host keep a USB3 controller, reducing group 1 to a single
-     endpoint. Still to be confirmed empirically by re-surveying after the move —
-     the prediction is that a third PCH root port appears with the ASM1042
-     isolated behind it. (A review pass suspected the fourth slot was legacy PCI,
-     citing the 00:1e.0 PCI bridge in group 7; that bridge carries the BMC's
-     onboard Matrox video and implies no physical slot. Recorded so the dead end
-     is not re-walked.) **Do not instead swap it with the ASM1064** —
-     that traps the ASM1064 in group 1 and makes the planned hand-back
-     impossible. Unverified until re-surveyed.
-  2. **The licence key can move to the internal USB2 header** and reach the guest
-     via `<hostdev type='usb'>`, which needs no IOMMU passthrough at all. That
-     decouples licensing from any add-in card. ⚠ The internal header is
-     `00:1a.0` (group 3), which **also carries the BMC's virtual keyboard and
-     mouse** — so it must never be PCI-passed, only device-forwarded. Isolated
-     does not mean safe to pass. Testable in one boot on pegasus without liskov
-     existing: attach the flash to a throwaway VM via `usb-host` and compare
-     `lsusb -v` inside against the host.
-  Neither is blocking, but both are cheapest to settle while the machine is
-  already open, and both invalidate the PCI addresses currently written into
-  `configuration.nix` and `unraid-guest.xml` if acted on.
+- **The data classification.** `DESIGN.md` §5 assumes a split between
+  irreplaceable data (photos — real-time redundancy, checksummed) and
+  re-acquirable data (media — snapshot parity, 24 h lag acceptable). The owner
+  has flagged that more categories exist and that classifying them properly will
+  materially change the layout. **This is the blocking item.** Nothing else
+  should be decided ahead of it.
+- **Which 12 TB is which.** The four array serials are `8DKUHJDH`, `8CJZX4WE`,
+  `8CG7T97E`, `8DJPNS3Y`; which two are parity and which two are data is still to
+  be read off Unraid's Main tab. It is the difference between a label that
+  identifies a drive and one that tells you whether the array is degraded or
+  lost.
+- **Whether to hold a 12 TB back as a cold spare.** There is no budget for a
+  fifth and the drive market makes rapid replacement unlikely. Analysed in
+  `DESIGN.md` §5.5; the short version is that shelving one costs 12 TB of usable
+  capacity to buy protection dual parity provides more cheaply.
+- **The Gen3 retest** (`PLATFORM.md §6e`). One reboot, benign failure mode,
+  and it decides the NVMe root's ceiling. Should happen before any disk placement
+  is finalised.
+- **The ASM1064's PCIe x1 link.** Four SATA ports on one lane is ~500 MB/s
+  shared at Gen2, which a single SATA SSD nearly saturates. Measure it
+  (`PLATFORM.md §8`) before it gets mistaken for something else.
+- **Tower's other cages**, beyond the built-in four-slot hotswap one, and the
+  port-to-bay mapping for it. `HARDWARE-MAP.md` §3 and §5 carry placeholders.
+- **The five drawer spinners' serials.** `docs/DISK-DRAWER.md` cannot assign
+  identifiers until they are read, and two of the 4 TB disks are candidates for
+  the photo tier.
+- **Staging capacity.** Three 4 TB disks are available for the migration, which
+  is not enough for everything at once; the plan assumes *arr* media is winnowed
+  to fit. `DESIGN.md` §6.

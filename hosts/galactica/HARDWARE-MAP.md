@@ -6,10 +6,13 @@ Naming and labelling rules are fleet-wide and live in `docs/DISK-LABELLING.md`.
 Unassigned spare disks live in `docs/DISK-DRAWER.md`.
 
 **Scope: platform-independent.** This describes hardware, not configuration, and
-holds whether the box stays on Unraid, becomes the `liskov` hypervisor of
-`DEPLOY.md`, or becomes bare-metal NixOS per `ALTERNATIVE-SNAPRAID.md`. It is
-filed here because that is where Tower's hardware documentation accumulated;
-move it if the platform decision changes the host's identity.
+holds whether the box stays on Unraid or becomes bare-metal NixOS per
+`DESIGN.md`. It is filed under `hosts/galactica/` because that is the fleet
+identity Tower's NixOS host will carry; the disks and cages do not care.
+
+BIOS quirks, BMC access, controller firmware and bus speeds are in
+`PLATFORM.md` — this file says *what is plugged into what*, that one says *what
+the machine does with it*.
 
 Dates are UTC.
 

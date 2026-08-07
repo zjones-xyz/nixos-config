@@ -7,13 +7,17 @@ in
   # Serial console selection, in one place so it can be overridden per-variant.
   #
   # Exists because the device name is a property of the *machine*, not of the
-  # config: liskov's BMC exposes Serial-over-LAN on COM2 (ttyS1), while a QEMU
-  # guest has only ttyS0. Hardcoding ttyS1 in boot.kernelParams meant the VM
+  # config: Tower's BMC exposes Serial-over-LAN on COM2 (ttyS1), while a QEMU
+  # guest has only ttyS0. Hardcoding ttyS1 in boot.kernelParams meant a VM
   # variant inherited it, registered a console on a UART that does not exist,
   # and systemd-getty-generator then bound the login prompt to a device that
   # would never appear — so the VM booted correctly in about five seconds and
   # presented no way to log in. Observed 2026-08-06; the only visible output was
   # via earlyprintk, which is write-only.
+  #
+  # No host imports this today — Tower's NixOS config has not been written yet
+  # (hosts/galactica/DECISIONS.md, decision 3). Kept rather than deleted because
+  # the BMC is unchanged and the lesson above is expensive to re-learn.
   #
   # boot.kernelParams is a list, so a single entry cannot be removed by an
   # overriding module — hence a scalar option, which mkForce handles cleanly.

@@ -1,0 +1,628 @@
+# Tower — platform notes (Supermicro X9SCM-F, Xeon E3-1230 v2)
+
+What this machine *is*, as opposed to what is being installed on it. Everything
+here is true whether the box runs Unraid, NixOS, or a live USB — BIOS behaviour,
+BMC access, controller firmware, and the bus speeds that bound what any of it
+can move.
+
+It is split out from the deployment runbook deliberately. The runbook gets
+rewritten every time the plan changes; these facts were expensive to learn and
+should not be rewritten with it. Several of them cost hours.
+
+> **Dates in this document are UTC**, matching the git commit timestamps. The
+> fleet operates in US Pacific, so an entry stamped with a given date may refer
+> to work done the previous evening locally.
+
+### Companion documents
+
+| File | Answers |
+|---|---|
+| **`PLATFORM.md`** (this) | *What the machine does.* BIOS quirks, BMC access, controller firmware, bus speeds, and how to tell which of them is the limit. |
+| **`HARDWARE-MAP.md`** | *What is plugged into what.* Disks, cages, controllers, ports, and the label strings for each. |
+| **`DESIGN.md`** | *What is being built and why.* SnapRAID + mergerfs on bare metal, the case against staying on Unraid, and the storage layout. |
+| **`DECISIONS.md`** | *Why it is this way.* Decision → alternatives → rationale, plus what is still open. |
+
+Fleet-wide disk naming and labelling conventions live in `docs/DISK-LABELLING.md`;
+unassigned disks in `docs/DISK-DRAWER.md`.
+
+---
+
+## 1. The ASM1166 disappearing act — read this before touching the BIOS
+
+The ASM1166 SATA card is **completely invisible** — no POST banner, absent from
+`lspci` entirely — unless **both** of these are set under
+*Advanced → Integrated IO Configuration*:
+
+| Setting | Value |
+|---|---|
+| `PCI Express Port - Gen X` | **Gen2** — explicitly, not `Auto` |
+| `Detect Non-Compliance Device` | **Enabled** |
+
+`Auto` fails because the slot is Gen3-capable and the card, on its **original**
+firmware, could not train at Gen3. Whether that is still true after the ECS06
+flash is untested — see §6e, which is the single cheapest experiment left on
+this machine.
+
+**A CMOS clear or a dead coin-cell resets both and makes the card vanish.** It
+looks exactly like hardware failure — check this before suspecting the card, the
+cables, or the drives. This board is from 2011, so the coin cell is a live risk
+rather than a hypothetical; §5 covers replacing it.
+
+**How bad that is depends on what the card is carrying at the time.** As of
+2026-08-07 the array is on onboard SATA and the ASM1166 holds nothing, so the
+fault would present merely as a card missing from `lspci`. Once disks move onto
+it, the same fault presents as *the array disappeared and the controller looks
+dead* — which is a much worse thing to be diagnosing at 3am. Do not treat "the
+array is fine" as evidence the BIOS settings survived.
+
+---
+
+## 2. Driving the box remotely
+
+**FreeIPMI, not ipmitool** — this BMC needs FreeIPMI's quirks handling. Run
+these from a machine that is *not* Tower; both serenity and pegasus carry the
+package, deliberately, so neither one being down blocks recovering the other.
+
+```sh
+ipmiconsole -h 192.168.8.191 -u ADMIN -P              # serial-over-LAN console
+ipmipower   -h 192.168.8.191 -u ADMIN -P --stat       # --off / --reset also
+```
+
+Three argument-parsing traps, each of which reads as a broken BMC:
+
+- **`-p` and `-P` collide** in FreeIPMI's parser. Use `-P` alone and let it
+  prompt.
+- **`ipmi-config` whole-file commits fail** on this BMC. Use minimal
+  section-only files.
+- **`--section` does not scope `--commit`.** Naming a section does not restrict
+  what a commit writes.
+
+The BMC lives at `192.168.8.191`. Serial-over-LAN is on **COM2 (`ttyS1`) at
+115200** by convention on Supermicro X9 boards — but the BIOS setting under
+*Advanced → Serial Port Console Redirection* is authoritative, and a mismatch
+gives you a blank IPMI console indistinguishable from a hung machine. Read it
+out of BIOS rather than assuming.
+
+`modules/nixos/serial-console.nix` exists to make that value a single overridable
+option rather than a hardcoded `boot.kernelParams` entry, for exactly this
+reason.
+
+## 3. The BMC's clock has never been set
+
+Every SEL entry is timestamped `Feb-07-2106 02:29:xx` — the 32-bit `time_t`
+rollover, i.e. uninitialised. `Last Power Event` reads `unknown`.
+
+**So the SEL carries no usable timeline.** For any before/after comparison, use
+event *IDs*, which are sequential, and ignore the timestamps entirely. This is
+also the reason not to treat any BMC power-bookkeeping field as evidence of
+anything — see §4.
+
+## 4. Power-restore: closed, and it was never a real problem
+
+`ipmi-chassis --get-chassis-status` reports `Power restore policy : Always off`,
+which contradicts the BIOS setting `Restore on AC Power Loss = Power On`.
+
+**The contradiction is a reporting artifact.** AC-loss behaviour on this board is
+implemented by BIOS via the PCH, and BIOS never writes the IPMI field — it sits
+at its power-on default forever. Observed behaviour follows BIOS, and the machine
+does autoboot.
+
+⚠ **Do not "fix" it with `--set-power-restore-policy`.** Writing that field has
+no upside and can only perturb something that currently works.
+
+This was carried as a blocking prerequisite for a while on the strength of a
+second claim — that the machine had once failed to autoboot after a full drain.
+Asked directly on 2026-08-07, the only person who could have witnessed that does
+not recall it ever happening; the sentence had been carried as fact since the
+first commit of the original host directory without ever having been observed.
+Most likely the cosmetic "Always off" readout was read as evidence of a behaviour
+nobody had seen. **Closed.** If the machine ever does fail to come back after an
+outage, reopen it — and record whether the outage was an ordinary cut or a full
+drain, because only the latter implicates the cell.
+
+---
+
+## 5. CMOS battery
+
+The board is from 2011. The battery is very likely original. A CR2032 costs
+almost nothing. Replace it.
+
+**This is preventive, not diagnostic.** Nothing is currently misbehaving in a way
+it would fix (§4). What justifies it is §1: a dead cell wipes the two settings
+the ASM1166 needs to be visible at all, and that latent fault gets worse as more
+disks move onto that card.
+
+So it does not need a service window of its own — do it in one where the case is
+already open, and prefer a window where the §1 settings have to be re-entered and
+verified anyway.
+
+⚠ `VBAT = 3.04 V` from `ipmi-sensors` **is not evidence the cell is healthy.**
+The reading is taken on standby, when the cell carries nothing, and 3.04 V is
+exactly what a 3.3 V standby rail reads through a Schottky drop (`VSB` reads
+3.33 V on the same list). The cheap check, once the case is open: pull the cell
+with standby still applied and re-read VBAT. If it still reads ~3.04 V with an
+empty holder, the sensor was reading standby all along. A multimeter across the
+removed cell settles it either way.
+
+⚠ **Replacing the battery clears CMOS**, so everything below has to be set again
+afterwards:
+
+- [ ] `PCI Express Port - Gen X` = **Gen2** (explicitly, not Auto) — or run §6e's
+      test and find out you no longer need it
+- [ ] `Detect Non-Compliance Device` = **Enabled**
+- [ ] Boot order — the Unraid flash ahead of, or trivially selectable against,
+      the NixOS root disk
+- [ ] Serial Port Console Redirection — note the unit and baud (§2)
+- [ ] `Restore on AC Power Loss` = **Power On**
+- [ ] `Legacy USB Support` / `Port 60/64 Emulation` — note the values. They
+      govern whether a USB keyboard works in BIOS setup at all, which is a bad
+      thing to discover after a CMOS clear.
+
+**Verify the ASM1166 reappears in `lspci` before going any further.** That is the
+check that proves the re-entry took.
+
+---
+
+## 6. ASM1166 firmware — done, and the part nobody documents
+
+**Flashed 2026-08-07** on pegasus: `20 11 05 00 00 00` → `21 11 08 00 00 00`.
+The six bytes are a date, `YY MM DD HH MM SS`, so that is 2020-11-05 → 2021-11-08
+— the Silverstone ECS06 image, which is community-standard for these cards.
+
+What it buys: **ASPM support** (absent on many stock builds, and its absence
+blocks deep C-states on a 24/7 box), **hot-swap** (broken on some stock builds,
+`221118-0048-00` specifically), **stability** including "link down" flapping
+traceable to firmware, and — the reason it is interesting here — **improved PCIe
+link training on older boards**, which is what §6e tests.
+
+**Flashed on pegasus rather than in situ**, for three reasons in order of weight:
+a brick then happens on a machine that is not holding the array; this board
+barely enumerates the card at all (§1) and flashing where it is marginal adds a
+variable to an operation that should be boring; and the one documented "card will
+not appear in the flash tool" platform issue is Intel 600-series and newer, which
+AM4 pegasus is clear of.
+
+### 6a. Tooling
+
+The mainstream path is `RomUpdWin.exe`, which is Windows-only, and there is no
+Windows machine in this fleet. The Linux path is `116xfwdl`, distributed by Radxa
+for their hexa-SATA adapter:
+
+```sh
+wget https://dl.radxa.com/accessories/m2-to-hexa-sata-adapter/tools/116xfwdl_bin_v1110_x86_64.zip
+unzip 116xfwdl_bin_v1110_x86_64.zip
+```
+
+That directory holds exactly three files: `116xfwdl_bin_v1000_ARM.zip`,
+`116xfwdl_bin_v1110_x86_64.zip`, and `ASM1166_10250005.ROM`. Take the **x86_64**
+build — it is also the newer tool (v1.1.1.0 against ARM's v1.0.0.0).
+
+`dl.radxa.com` is **not reachable from an agent session** (the egress proxy
+blocks it); the listing above was confirmed from pegasus on 2026-08-07.
+
+⚠ **Radxa's ROM is not the one to use.** `ASM1166_10250005.ROM` sits in the same
+directory as the tool and is a *different image* from `11080000.ROM`, the ECS06
+firmware. Do not substitute one for the other because they downloaded together.
+The ECS06 file ships in the [Silverstone package](https://www.silverstonetek.com/en/product/info/expansion-cards/ECS06/),
+with an Internet Archive mirror in Sources below.
+
+**The zip ships the vendor manual** — `ASM116xfwdl_UserManual.pdf`, ASMedia Rev
+1.0, 2021-07-13 — and it is the authoritative source for the flags, disagreeing
+with every third-party guide. Extract with `pdftotext -layout`; the document
+carries a vertical "ASMedia Confidential" watermark that interleaves into the
+text stream and makes the output look like garbage. It is not. There is one
+operational section, documenting exactly two commands:
+
+```sh
+# 1. Show firmware version. Run this FIRST, before flashing anything.
+sudo ./116xfwdl -s
+
+# 2. Update firmware. The ROM must be in the same directory as the binary.
+sudo ./116xfwdl -u 11080000.ROM
+# then REBOOT — the vendor requires it, "to reload binary".
+```
+
+⚠ **The flags are lowercase.** Third-party guides say `-S` and `-U`; ASMedia's
+own manual says `-s` and `-u`. Both cases were run with no card attached on
+2026-08-07 and produced identical output — banner, then `Cannot found device` —
+so that test cannot distinguish a parsed flag from an ignored one, and the
+uppercase forms have never been confirmed to do anything at all. On a tool whose
+only other operation overwrites firmware with no rollback, this is not a coin
+worth flipping.
+
+(The manual writes item 2 as `116flash -s`. That is a copy-paste slip in
+ASMedia's document; the shipped binary is `116xfwdl`.)
+
+**There is no read-back, backup or verify command.** The manual documents update
+and show-version and nothing else — so `-s` after the mandatory reboot is the
+*only* verification available, and there is no image to roll back to.
+
+Two findings from exercising the tool on pegasus before the card was installed:
+
+- **It is statically linked** (`ldd` → "not a dynamic executable"), so it runs on
+  NixOS as-is — no `steam-run` or FHS wrapper. Worth knowing because a
+  vendor-shipped prebuilt binary usually *does* need one, and the failure mode is
+  misleading: a dynamic ELF fails with `No such file or directory` naming a file
+  that is plainly present, which means the missing loader.
+- **With no card attached it prints `Cannot found device`** (sic). That is the
+  negative-control baseline. The same line *with* the card installed means
+  detection — seating, slot, cables — not the tool.
+
+Two gotchas that come up repeatedly:
+
+- **Unplug every SATA cable from the card before flashing.** Cards reportedly
+  fail to appear in the flash tool with drives attached.
+- **CSM — try without it, and think before enabling it.** The guides recommending
+  CSM are concerned with the card's *legacy option ROM* executing. `116xfwdl`
+  talks to the PCI device directly and the card enumerates whether or not its ROM
+  runs. ⚠ On many boards — MSI included — the setting is a **toggle between UEFI
+  and CSM**, not an additive checkbox, so flipping it makes the flashing machine
+  unbootable; every host in this fleet boots UEFI from an ESP. *Confirmed
+  unnecessary 2026-08-07:* the flash succeeded on pegasus with CSM untouched and
+  the card's option ROM present but disabled.
+
+### 6b. ⚠ Unbind the storage driver before `-u`, or the tool segfaults
+
+**This is not optional and nothing upstream mentions it.** Diagnosed on pegasus
+2026-08-07.
+
+`116xfwdl -u` maps the card's BAR0 through `/dev/mem`. While `ahci` is bound it
+has claimed that region via `pci_request_regions`, and `CONFIG_IO_STRICT_DEVMEM`
+refuses the mapping with `EPERM`. **The tool does not check `mmap`'s return
+value**, stores `MAP_FAILED` (`-1`) in a global, dereferences it, and dies:
+
+```
+116xfwdl[4364]: segfault at 1b03 ip 0000000000402941 error 4 in 116xfwdl
+```
+
+There is no error message. The symptom is a firmware tool crashing on a card
+mid-flash, which reads exactly like a brick and is nothing of the sort. **`-s`
+keeps working throughout**, because config-space reads take a different,
+unrestricted path — so "the card still reports a version but `-u` crashes" is the
+signature of this rather than of hardware trouble.
+
+```sh
+# Release the BAR. Safe: no drives attached, and a reboot restores it.
+echo 0000:04:00.0 | sudo tee /sys/bus/pci/drivers/ahci/unbind
+
+# Unbind also runs pci_disable_device, which clears bus master. Memory Space
+# Enable survives, but restore the pre-unbind state so a DMA write cannot fail
+# silently — a partial write is the one outcome with no rollback.
+sudo setpci -s 04:00.0 COMMAND=0x07          # I/O + Memory + BusMaster
+sudo lspci -s 04:00.0 -vv | grep Control:    # want I/O+ Mem+ BusMaster+
+
+sudo ./116xfwdl -u 11080000.ROM
+```
+
+Substitute the card's real address; it was `04:00.0` on pegasus. `ahci` rebinds
+by itself on the reboot that `-u` requires anyway.
+
+To confirm the diagnosis rather than guess at it, `strace` names the failing call
+directly:
+
+```sh
+sudo strace -e trace=openat,mmap,ioctl ./116xfwdl -u 11080000.ROM 2>&1 | tail -20
+```
+
+If the `EPERM` survives an unbind, the remaining lever is booting with
+`iomem=relaxed`, which disables the enforcement globally. That is a rebuild and a
+reboot, and it was not needed here.
+
+### 6c. Risks, one of which is worse than it is usually described
+
+⚠ **An unrecognised flash chip does NOT stop the tool.** It is commonly claimed
+this "fails safe — will not flash rather than brick". **That is wrong, and was
+disproved on 2026-08-07.** This card's chip is not in the tool's table; it
+announced so and then erased it anyway:
+
+```
+Find a SPI flash ROM ID : A1h, 31h, 11h is not in Supported List!!!
+Try to program...
+ASM116UpdateSpiFlashRom: Chip Erase status = 0
+ASM116UpdateSpiFlashRom: Blank Check status = 0
+ASM116UpdateSpiFlashRom: Write Data status = 0
+Update SPI flash ROM......PASS!!!
+```
+
+It worked — generic SPI commands were compatible, blank check confirmed the erase
+reached real silicon, and the card came back on the newer firmware. But **treat
+that message as "about to erase an unknown chip", not as a warning that anything
+will stop.** There is no prompt and no abort. `A1h` is Fudan Microelectronics,
+the sort of budget flash a generic card carries — the common case, not an exotic
+one.
+
+**ASPM on a 2011 platform can itself cause instability.** Ivy Bridge plus a
+budget controller with newly-enabled power management is exactly the combination
+that produces intermittent dropouts.
+
+*Partly de-risked 2026-08-07:* `LnkCtl` read `ASPM Disabled` both before and
+after the flash on pegasus, so **ECS06 does not turn ASPM on by itself.** Not
+conclusive for this machine — ASPM is negotiated with the root port under host
+policy, and both differ here — so re-read `LnkCtl` once the card is back in
+Tower. But the flash is not silently arming it.
+
+### 6d. What the flash did and did not change
+
+Measured on pegasus 2026-08-07 in a modern B550 slot — i.e. the card's
+*capability*, unconstrained — both before and after:
+
+| | Pre-flash (2020-11-05 fw) | Post-flash (2021-11-08 fw) |
+|---|---|---|
+| `LnkCap` / `LnkSta` | **8GT/s, Width x2** — full capability | **unchanged** |
+| `LnkCap2` supported speeds | 2.5–8GT/s (Gen1/2/3) | unchanged |
+| `LnkSta2` | `EqualizationComplete+`, phases 1/2/3 `+` | unchanged |
+| `LaneErrStat` | 0 | 0 |
+| AER `UESta` / `CESta` | all clear | all clear |
+| `LnkCtl` ASPM | **Disabled** | **Disabled** |
+| Expansion ROM | present, 512K, disabled (UEFI, no CSM) | unchanged |
+
+**Nothing changed electrically** — same link, no errors, clean equalization — so
+the card is healthy on both firmwares and nothing regressed.
+
+But note what this could *not* test: **pegasus's slot was never the constraint**,
+so there was no headroom in which improved link training could show itself. The
+question that matters for Tower is untouched by these numbers.
+
+### 6e. ⚠ The Gen3 retest — still owed, and cheap
+
+**The single highest-value experiment left on this machine.** §1 forces
+`PCI Express Port - Gen X = Gen2` because the card could not train at Gen3 on its
+original firmware. Improved link training on older boards is one of ECS06's
+reported benefits. **So set the BIOS back to `Auto` and see whether the card still
+enumerates.**
+
+Three things ride on that one reboot, not one, because **`PCI Express Port -
+Gen X` almost certainly governs the slots globally rather than per-port**:
+
+| | Gen2 forced (today) | Gen3, if it trains |
+|---|---|---|
+| ASM1166 link | ~1.0 GB/s shared across 6 ports | ~1.97 GB/s |
+| Four spinners streaming at once | ≈1.0 GB/s — the link is a live constraint | comfortable headroom |
+| A PCIe NVMe root on an x4 adapter | ~2 GB/s | ~4 GB/s |
+
+**The failure mode is benign and immediately visible:** if the card does not
+appear at `Auto`, set it back to Gen2 and nothing is lost. A Gen3 result removes
+the §1 landmine for good and removes the link as a design constraint.
+
+**Run this before finalising any disk placement.**
+
+### Sources
+
+Read at least the first two before flashing anything else:
+[Phil Barker — Upgrading ASM1166 Firmware for Unraid](https://docs.phil-barker.com/posts/upgrading-ASM1166-firmware-for-unraid/) ·
+[Steak's Docs — Updating firmware on ASMedia 106x cards](https://thunderysteak.github.io/upgrading-asmedia-106x-cards) ·
+[Win-Raid — Latest Firmware for ASM1064/1166](https://winraid.level1techs.com/t/latest-firmware-for-asm1064-1166-sata-controllers/98543) ·
+[Unraid forums — ASM1166/ASM1064 flashen mit der ECS06-Firmware](https://forums.unraid.net/topic/141770-asm1166asm1064-flashen-mit-der-firmware-der-silverstone-ecs06-karte-sata-kontroller/) ·
+[Unraid forums — ASM1064: Test der Firmwares](https://forums.unraid.net/topic/185255-asm1064-test-der-firmwares/) ·
+[Bennett Piater — Fixing SATA hot plug on an ASM1166 HBA](https://bennett.piater.name/blog/linux/2025/06/13/fixing-asm1166-hba-hot-plug/) ·
+[Silverstone ECS06](https://www.silverstonetek.com/en/product/info/expansion-cards/ECS06/) ·
+[Internet Archive — ECS06 firmware mirror](https://archive.org/details/ecs-06-firmware-for-intel-600series-chipset)
+
+---
+
+## 7. The ASM1064 — recommended NOT to flash
+
+Researched separately rather than assumed to mirror the ASM1166. The conclusion
+came out the other way:
+
+- **The headline ASM1064 fix does not apply here.** It is Intel 600-series
+  compatibility. This board is Intel C204, from 2011 — not remotely in scope.
+- **The other documented ASM1064 firmware finding is a *regression*, not a fix:**
+  `221118-0048-00` throws PCIe bus errors when ASPM L1 substates are enabled. L1
+  substates are a much later PCIe feature this board almost certainly does not
+  implement, so the finding is moot here — but it points the risk in the wrong
+  direction.
+- **Cross-flashing is community practice, not vendor-sanctioned.** ASM1166
+  firmware is *reported* compatible with the ASM1064, which is a bigger leap than
+  putting ECS06 firmware on a generic ASM1166 (identical chip). More brick risk
+  for less benefit.
+- **It holds the SSD pools**, which are the latency-sensitive ones.
+  Destabilising them buys nothing.
+
+**Flash it only if it is actually symptomatic** — ATA/UDMA CRC errors, dropouts,
+or hot-plug problems traced to it under load.
+
+---
+
+## 8. Bus speeds: what this machine can actually move
+
+The numbers that bound every storage layout. Three separate limits, and they are
+easy to confuse with each other and with software overhead.
+
+### Onboard SATA is split — 2× 6Gb/s and 4× 3Gb/s
+
+The C204 PCH gives **two SATA 3.0 (6 Gb/s) ports and four SATA 2.0 (3 Gb/s)
+ports**. That asymmetry decides which disks belong where.
+
+| Link | Raw | After 8b/10b + protocol overhead |
+|---|---|---|
+| SATA 3.0, 6 Gb/s | 600 MB/s | ~550 MB/s |
+| SATA 2.0, 3 Gb/s | 300 MB/s | **~275 MB/s** |
+
+**The 12TB HUH721212ALE601s stream about 250 MB/s at their fastest**, on the
+outer tracks, falling to roughly half that on the inner ones. So **a SATA 2.0
+port does not bottleneck a 12TB spinner** — ~275 MB/s against a ~250 MB/s peak,
+with the drive below that ceiling for most of its surface.
+
+This inverts the intuition that the add-in card is the "fast" home for the array.
+It is not. Onboard SATA2 gives each drive a **dedicated** ~275 MB/s link, where
+the ASM1166 gives all six ports a **shared** ~1.0 GB/s at Gen2. Put the SSDs on
+the two 6 Gb/s ports, where the difference is real — a SATA SSD does saturate
+SATA 2.0 — and the spinners wherever is convenient.
+
+The shared limit upstream of all six onboard ports is **DMI 2.0**, 4 lanes at
+5 GT/s ≈ **2 GB/s** each direction. Four spinners at 250 MB/s is 1.0 GB/s, half
+of it. Onboard is not the constraint.
+
+### The ASM1166 link
+
+The card is capable of **Gen3 x2**; §1 currently forces the slot to Gen2.
+
+- Gen3 x2, 128b/130b encoding → **~1.97 GB/s**
+- Gen2 x2, 8b/10b encoding → **~1.0 GB/s**
+
+Roughly half, and the difference is encoding as much as clock. Four 12TB drives
+reading at once is ≈1.0 GB/s — **essentially the entire Gen2 x2 budget** — so a
+parity check or a SnapRAID sync with the array on this card at Gen2 may be
+*link*-limited rather than disk-limited.
+
+§6e is the test that could remove this constraint entirely.
+
+### The ASM1064 link
+
+A PCIe **x1** controller feeding four SATA ports — roughly **500 MB/s shared
+across all four** at Gen2, which a *single* SATA SSD nearly saturates.
+
+**Confirm what it actually negotiates before relying on it:**
+
+```sh
+sudo lspci -vv -d 1b21:1064 | grep -E "LnkCap|LnkSta"
+```
+
+If those four ports are all SSDs, that is a topology bottleneck no firmware
+change will fix, and it needs to be on the record before anything else gets
+blamed for it.
+
+---
+
+## 9. Reading a slow parity or scrub run: three candidate bottlenecks
+
+**The array is 2 parity + 2 data**, not 1 + 3 — so it tolerates two simultaneous
+failures, and the second-parity computation is a candidate bottleneck in its own
+right. Both Unraid's Q parity and SnapRAID's second parity are Galois-field
+arithmetic rather than the plain XOR used for the first, and both are markedly
+more expensive.
+
+The E3-1230 v2 is a 2012 Ivy Bridge part: four cores, SSE/SSSE3 and AVX, but
+**no AVX2**. Both Unraid and SnapRAID ship AVX2 paths that this CPU cannot take,
+so it falls back to SSSE3. **On this hardware the CPU is a genuine candidate for
+the limiting factor, not a theoretical one.**
+
+So a slow run has three plausible causes, and they are distinguishable if you
+look while it runs:
+
+| Limit | Signature |
+|---|---|
+| **PCIe link** (ASM1166 at Gen2 x2, ~1.0 GB/s) | throughput plateaus near 1.0 GB/s; CPU well below saturation; individual drives below their solo speed |
+| **CPU** (second-parity Galois-field arithmetic) | cores pegged; aggregate throughput *below* both the link ceiling and the drives' combined capability |
+| **Disks** | throughput ≈ sum of solo drive speeds; neither link nor CPU saturated |
+
+**Capture CPU utilisation alongside throughput, or the number is
+uninterpretable.** This is the single most common way to misdiagnose this
+machine: all three limits are properties of the hardware, present regardless of
+what software is computing the parity, and any of them will happily be blamed on
+whatever changed most recently.
+
+**Historical parity-check times are not comparable** to anything measured after
+the disks move. Any figure remembered from before this project belongs to a
+different topology.
+
+---
+
+## 10. USB: the C204 is EHCI-only
+
+This board is a 2011 design. **The chipset has no USB3 at all** — USB3 exists on
+this machine solely because of the ASM1042 add-in card.
+
+That matters for anything hung off USB. An external enclosure on an onboard port
+gets USB2, roughly **35 MB/s**; a BD-ROM reads about 54 MB/s at 12x, so ripping
+is mildly slower and playback is unaffected. Also check whether an enclosure is
+bus-powered: a slimline drive usually is, a full-height 5.25" unit will want a
+brick.
+
+The C204 exposes **two EHCI controllers** and splits ports between them:
+
+| Controller | Physical | Note |
+|---|---|---|
+| `00:1a.0` EHCI #2 | **internal header** | also carries the BMC's virtual keyboard and mouse |
+| `00:1d.0` EHCI #1 | rear panel / other | no BMC device |
+
+The Unraid licence flash currently lives on the **internal header** (moved there
+2026-08-07) — inside the case, not bumpable, not pullable. `lsusb` shows it
+(`0781:5581`, SanDisk Ultra) sharing that bus with `0557:2221`, the ATEN Winbond
+Hermon virtual HID.
+
+Supermicro hides root ports with nothing behind them, so a slot's root port only
+appears in `lspci` once it is populated. The board has **four PCIe slots,
+visually confirmed identical**: two CPU-attached, one PCH-attached, one free.
+
+> A dead end worth recording so nobody re-walks it: `lspci` shows an `00:1e.0`
+> 82801 PCI bridge with a Matrox G200eW at `05:03.0` behind it, which looks like
+> evidence of a legacy PCI slot. It is not — that is the WPCM450 BMC's onboard
+> video on an internal PCI bus, which server boards routinely carry with no
+> physical connector.
+
+---
+
+## 11. Bootloader: UEFI or legacy
+
+The X9SCM's UEFI support depends on its BIOS revision, which has not been checked
+on this board.
+
+- **If it supports Dual, use it.** NixOS boots UEFI from its own root disk while
+  the Unraid flash keeps booting legacy exactly as it does today — the least
+  disruptive option, and the one that keeps the fallback trivial.
+- **If it must stay legacy-only**, the host needs GRUB rather than systemd-boot.
+  Provision a 1MB BIOS boot partition at install time regardless — it is 1MB of
+  insurance against discovering this after partitioning, and it costs nothing.
+
+**The fallback that matters: the Unraid flash still boots this machine bare
+metal.** Nothing in any NixOS install touches the flash or its boot entry. Keep
+it ahead of, or trivially selectable against, the NixOS root disk in the boot
+order — and **confirm that selection works over IPMI SoL**, since that is how you
+will do it when you are not in the room.
+
+---
+
+## 12. Shakedown tests worth running before trusting the hardware
+
+Cheap ASMedia cards behave differently under sustained load than at idle, and any
+cabling or controller problem should surface while there is exactly one variable.
+Run these **after** any recabling and **after** the firmware work, since firmware
+moves ASPM and link behaviour.
+
+**Watch for ATA/UDMA CRC errors throughout.** Those mean a cable, not a disk.
+
+```sh
+dmesg -w | grep -iE "ata[0-9]|link|reset|failed command"
+```
+
+**Baseline SMART attribute 199, `UDMA_CRC_Error_Count`, before and after.** It
+counts link and cable errors specifically, so its delta is the cleanest available
+signal about the controller and cabling rather than the drives:
+
+```sh
+for d in /dev/sdX /dev/sdY /dev/sdZ; do
+  echo "== $d"
+  sudo smartctl -A "$d" | grep -E "UDMA_CRC_Error_Count|Reallocated_Sector"
+done
+```
+
+Then saturate **all drives on a controller at once** — the point is to load the
+shared link, not each drive in isolation:
+
+```sh
+# One per drive, backgrounded, then wait. Run for hours, not minutes: the
+# failure mode here is thermal and sustained, not instantaneous.
+sudo fio --name=load --filename=/dev/sdX --rw=read --bs=1M --iodepth=32 \
+  --ioengine=libaio --direct=1 --runtime=4h --time_based --group_reporting &
+```
+
+> ⚠ **`--rw=read` deliberately.** Live pool data is on several of these drives
+> and a write test would destroy it. Read-only is sufficient: SATA link CRC
+> errors surface on reads exactly as they do on writes, so a read-saturation test
+> exercises the controller, the cable and the link — which is what is being
+> tested. Only run write tests against a drive whose contents are genuinely
+> expendable.
+
+**Pass criteria:**
+
+- [ ] `UDMA_CRC_Error_Count` unchanged on every drive — *any* increase means a
+      cable or link problem, worth reseating and re-running before going further
+- [ ] No ATA link resets, "hard resetting link", or failed commands in `dmesg`
+- [ ] Aggregate throughput lands near the negotiated link ceiling rather than
+      well under it, and the reason it does not is identified against §9
+
+**New and drawer drives get burned in before they are trusted.** `badblocks -wsv`
+on a blank drive, or `f3` (already in serenity's package set), plus a SMART long
+test. `docs/DISK-DRAWER.md` covers why an untested spare is a guess.

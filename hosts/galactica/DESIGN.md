@@ -1,7 +1,20 @@
 # Abandoning Unraid for SnapRAID + mergerfs on bare-metal NixOS
 
-An evaluation for `liskov` / `tower.internal` (Supermicro X9SCM-F, Xeon E3-1230 v2), against
-the in-flight PR #37 plan to run Unraid as a KVM guest with VFIO passthrough.
+**This is galactica's design of record.** It was commissioned as an *alternative* — a
+challenge to the then-in-flight plan of running Unraid as a KVM guest with VFIO
+passthrough — and it won the argument. The hypervisor host (`liskov`) has since been
+retired and this document became the plan rather than the objection to one. The
+adversarial framing is kept as written, because the case against the alternative is the
+justification for the choice.
+
+An evaluation for `tower.internal` (Supermicro X9SCM-F, Xeon E3-1230 v2).
+
+> **Reading this cold: `liskov` was the hypervisor host, now deleted.** Where the text
+> below argues against "the VFIO plan", "the brief", or PR #37, that is the design this
+> one replaced. References to `hosts/liskov/…` files have been retargeted where the
+> content survived; where it did not, the citation is marked as retired. Nothing in the
+> argument depends on those files still existing — they are cited as evidence of what the
+> rejected plan committed to, and git history holds them.
 
 Date of research: 2026-08-07. All version numbers checked against upstream and against the
 flake's pinned nixpkgs (`3497aa5c9457a9d88d71fa93a4a8368816fbeeba`, 26.05) on this machine.
@@ -232,7 +245,7 @@ one-concern-per-module convention, write `modules/nixos/mergerfs.nix` that takes
 options and renders the string, with assertions for the non-negotiables
 (`branches-mount-timeout-fail`, `minfreespace`, the NFS trio). That is a hundred lines and
 it converts a class of silent misconfiguration into an eval-time failure — which is the
-same argument PR #37 already makes for its VFIO invariant assertions.
+same argument the VFIO plan already made for its eval-time invariant assertions.
 
 ### 1.6 Behaviour across nixpkgs upgrades
 
@@ -320,7 +333,7 @@ One correction to the brief's framing: the BIOS Gen2 quirk does **not** stop mat
 bare metal. The ASM1166 is still invisible at Gen3 and the setting is still required. What
 stops mattering is its *criticality* — you are no longer depending on that one link to carry
 the whole array's bandwidth, and a dead CMOS battery that resets it (already flagged as a
-blocking pre-step in `hosts/liskov/DEPLOY.md §0`) degrades you instead of destroying you.
+blocking pre-step in `PLATFORM.md §1` and §5) degrades you instead of destroying you.
 
 ### 2.3 Sync duration
 
@@ -443,9 +456,9 @@ coverage, and see §4.3 for why btrfs on the data disks makes this much less imp
 
 ### 3.2 What NixOS does better
 
-- **The whole machine becomes reviewable.** `hosts/liskov/configuration.nix` +
+- **The whole machine becomes reviewable.** `hosts/galactica/configuration.nix` +
   `modules/nixos/{snapraid,mergerfs}.nix`, under the same PR convention, same
-  `nix flake check` CI, same `[liskov]`-prefixed titles as the other five hosts. Today,
+  `nix flake check` CI, same `[galactica]`-prefixed titles as the other five hosts. Today,
   `tower` is the one machine in the fleet whose configuration lives in a webGUI and a USB
   stick.
 - **Rollback is `nixos-rebuild --rollback`,** not a flash-drive restore. Compare Unraid,
@@ -453,8 +466,9 @@ coverage, and see §4.3 for why btrfs on the data disks makes this much less imp
 - **No licence, no vendor.** No USB GUID to protect, no support ticket to move a licence,
   no "Unraid 7.4 changed the Docker tab".
 - **LUKS unlock stops being manual.** Today the Unraid array unlock is a hands-on step
-  (explicitly called out in `hosts/liskov/DECISIONS.md`: *"No auto-unlock for the Unraid
-  array"*). With sops-nix, keyfiles decrypt at boot under the host SSH key and
+  (a locked constraint of the rejected VFIO plan: *"No auto-unlock for the Unraid
+  array"* — it was unlocked inside the guest by Unraid's own machinery, so no host-side
+  scheme could remove the manual step, only move it). With sops-nix, keyfiles decrypt at boot under the host SSH key and
   `/etc/crypttab` opens the pools. That is a real ergonomic win — and a deliberate posture
   change: encryption now protects a powered-off stolen chassis, not a running one. Same
   trade the rest of the fleet already made.
@@ -654,8 +668,9 @@ related to the setup of the user's system."* Two traps:
   *separate* volumes into a container makes them different devices to the kernel → `EXDEV`
   → Sonarr/Radarr fall back to copy-then-delete. **Mount the common parent once** (e.g.
   `/mnt/user:/data`) and use paths beneath it. This is the exact same constraint that
-  `hosts/liskov/DECISIONS.md` already encodes for the VM plan ("they share one `/data` root
-  so imports are hardlinks and moves are atomic"), so the discipline already exists.
+  the VFIO plan already encoded ("they share one `/data` root so imports are hardlinks and
+  moves are atomic"), so the discipline already exists — see `DECISIONS.md`, *Carried
+  forward*.
 - **Create policy.** *Path-preserving* policies (`epmfs`, `epff`, `eplfs`, `eplus`) return
   `EXDEV` when source and target directories live on different branches — by design, since
   honouring the link would violate the policy. **Non-path-preserving policies (`pfrd` — the
@@ -712,8 +727,7 @@ changes.**
   SnapRAID's equivalent is "run sync again", which is cheaper. **SnapRAID wins here.**
 
 **The UPS story is where bare metal shines, and the brief undersells it.**
-`hosts/liskov/DECISIONS.md` decision 9 moves NUT server duty to memory-alpha *specifically
-because* virtualizing Tower moves the UPS USB to the host, leaving the host — which
+The VFIO plan moved NUT server duty to memory-alpha *specifically because* virtualizing Tower moves the UPS USB to the host, leaving the host — which
 physically holds every disk — with no UPS awareness and able to be hard-cut mid-parity-check.
 **Bare metal makes that decision unnecessary.** The UPS plugs into the NixOS host,
 `modules/nixos/nut.nix` makes it the NUT server, `modules/nixos/nut-client.nix` keeps
@@ -723,9 +737,10 @@ the brief did not list.
 
 ### 4.8 Root disk dies vs array disk dies
 
-**Root disk (Kingston SH103S3 120 GB — a 2012-era SandForce SSD).** Recovery: `nixos-install`
+**Root disk** — the Kingston SH103S3 120 GB when this was written, now slated to be the
+1 TB NVMe on a PCIe adapter (§5.5). Recovery: `nixos-install`
 from the flake onto a replacement, restore `/etc/ssh/ssh_host_ed25519_key` (or generate a new
-one, `ssh-to-age` it, update `.sops.yaml`, `sops updatekeys secrets/liskov.yaml` — a
+one, `ssh-to-age` it, update `.sops.yaml`, `sops updatekeys secrets/galactica.yaml` — a
 documented fleet procedure), restore container config/databases from backup, remount the data
 disks, remount mergerfs. **The array and parity are untouched.** SnapRAID's content files
 already live on the data disks (module assertion), so nothing array-critical is on root.
@@ -928,9 +943,11 @@ Consequence worth noting: **the Gen3 test no longer gates the array design.** It
 decides the NVMe root's ceiling (~2 vs ~4 GB/s at x4), so it remains worth one reboot, but
 the parity check is unaffected either way. One less coupled unknown.
 
-Note this is the exact inverse of DEPLOY.md §3's recabling table, which moves the array
-*onto* the ASM1166. That table is correct for the VFIO plan and wrong for this one — a good
-illustration of how much of the existing runbook is load-bearing only under virtualization.
+Note this is the exact inverse of the VFIO plan's recabling table, which moved the array
+*onto* the ASM1166 — necessarily, since onboard SATA was never passed through and an array
+left there would have been invisible to the guest. That table was correct for that plan and
+is wrong for this one: a good illustration of how much of the old runbook was load-bearing
+only under virtualization. Measured port speeds are in `PLATFORM.md §8`.
 
 #### ⚠ Under SnapRAID the parity disk must be encrypted too — Unraid's property does not carry over
 
@@ -956,10 +973,11 @@ and looked fine that way.
 The same reasoning applies to the btrfs raid1 photo tier: it holds plaintext files
 and must be encrypted if the current protection level is to be preserved.
 
-#### The Gen3 test is now worth more than §2b of DEPLOY.md credits it
+#### The Gen3 test is worth more than it was first credited with
 
-DEPLOY.md §2b records "set `Gen X` back to Auto and see whether the card still enumerates"
-as a *free test* — worth one reboot to find out whether §0's landmine is gone. With the
+`PLATFORM.md §6e` records "set `Gen X` back to Auto and see whether the card still
+enumerates" as a *free test* — worth one reboot to find out whether §1's landmine is gone.
+With the
 NVMe in the picture, the stakes roughly double, because **that BIOS setting almost certainly
 governs the slots globally rather than per-port.** One test, three outcomes:
 
@@ -968,7 +986,7 @@ governs the slots globally rather than per-port.** One test, three outcomes:
 | ASM1166 link | ~1.0 GB/s across 6 ports | ~1.97 GB/s |
 | Parity check | ≈ the aggregate of 4 spinners — link is a live constraint | comfortable headroom |
 | NVMe (x4 adapter) | ~2 GB/s | ~4 GB/s |
-| §0 landmine | live; a CMOS clear hides the array controller | **gone permanently** |
+| `PLATFORM.md §1` landmine | live; a CMOS clear hides the array controller | **gone permanently** |
 
 The card was flashed 2020-11-05 → 2021-11-08 on 2026-08-07, and improved link training on
 older boards is one of the reported reasons for that firmware. **This test should happen
@@ -1030,7 +1048,7 @@ Two things to verify on the machine before committing `[unverified]`:
 
 **Phase 2 — install NixOS alongside, non-destructively.**
 
-6. Install NixOS on the Kingston 120 GB (or, better, a mirrored pair). **The Unraid flash
+6. Install NixOS on the root disk (§5.5 — the 1 TB NVMe; the Kingston is retired). **The Unraid flash
    stays plugged in and bootable.** You can boot either. Note: once you write to the Unraid
    data disks from NixOS, Unraid's parity is stale — falling back then means a parity rebuild
    (~20 h), not data loss. That is an acceptable fallback and worth writing down.
@@ -1095,14 +1113,14 @@ makes even this fallback tractable** — without step 4 you genuinely do not hav
   memory-alpha, serenity and `modules/darwin/nfs-mounts.nix` need **zero changes**.
 - **`tower.internal` continuity** — the DHCP reservation is MAC-keyed and the bond presents
   its first slave's MAC, so the address should follow. The name is the question: if the
-  router derives DNS from the DHCP hostname option, setting `networking.hostName = "liskov"`
-  would move the name. **hopper runs AdGuard Home** (`modules/nixos/dns.nix`), so a DNS
+  router derives DNS from the DHCP hostname option, setting
+  `networking.hostName = "galactica"` would move the name. **hopper runs AdGuard Home** (`modules/nixos/dns.nix`), so a DNS
   rewrite `tower.internal → <IP>` is a one-line fix and decouples the fleet name from the
   service name permanently. Do that; do not name the host `tower`.
-  Also note: `flake.nix:310` currently *asserts* `hostName == "liskov"` with a rationale
-  ("tower.internal must keep resolving to the Unraid instance") that becomes obsolete under
-  bare metal — the machine now *is* tower.internal. Update the assertion's comment or it will
-  mislead a future session.
+  Also note: the flake used to *assert* `hostName == "liskov"` on the rationale that
+  "tower.internal must keep resolving to the Unraid instance". That is obsolete under bare
+  metal — the machine now *is* tower.internal — and the assertion has been removed along
+  with the rest of the VFIO checks.
 - **The bond** — the current PR uses a single NIC on `br0` because the guest needs a bridge.
   Bare metal has no guest, so you can restore the **mode 6 (balance-alb) bond** directly.
   Worth noting balance-alb rewrites per-slave MACs and interacts badly with bridging — so
@@ -1110,8 +1128,9 @@ makes even this fallback tractable** — without step 4 you genuinely do not hav
 - **LUKS pools** — `/etc/crypttab` entries with keyfiles provisioned by sops-nix
   (`sops.secrets.<name>.path`), ordered before the mergerfs mount. Replaces Unraid's manual
   array-start passphrase. Note the posture change (§3.2).
-- **NUT** — becomes trivially simple (§4.7). Reverse `hosts/liskov/DECISIONS.md` decision 9;
-  the host serves the UPS and memory-alpha stays a client.
+- **NUT** — becomes trivially simple (§4.7). The VFIO plan's move of NUT server duty to
+  memory-alpha is unnecessary here; the host serves the UPS and memory-alpha stays a
+  client.
 - **The Unraid licence flash** — keep it. It is your rollback for six months, and it costs a
   USB header.
 
@@ -1121,11 +1140,16 @@ makes even this fallback tractable** — without step 4 you genuinely do not hav
 
 ### The verdict
 
-**Adopt bare-metal NixOS with SnapRAID + mergerfs. Close PR #37 without merging.**
+**Adopt bare-metal NixOS with SnapRAID + mergerfs. Abandon the VFIO plan.**
 
-The VFIO plan is well-engineered — the IOMMU group analysis in `hosts/liskov/BACKGROUND.md`
-is correct, the ACS-override refusal is right, and passthrough was validated on real
-hardware. None of that is the problem. The problem is that it spends real complexity to
+*Outcome, 2026-08-07: accepted. The `liskov` hypervisor host was deleted and this branch
+continues as galactica's; PR #37 was retitled rather than closed, so this document and the
+hardware notes it depends on stay in one reviewable history.*
+
+The VFIO plan is well-engineered — its IOMMU group analysis is correct, the ACS-override
+refusal is right, and passthrough was validated on real hardware (ASM1166 bound to
+`vfio-pci` on pegasus, 2026-08-07, with `ahci` present and losing the race). None of that
+is the problem. The problem is that it spends real complexity to
 *preserve* Unraid, and the things it must work around are all consequences of that choice:
 
 - an indivisible IOMMU group forcing an unwanted USB3 controller into the guest;
@@ -1159,7 +1183,7 @@ Unraid's per-disk independent filesystems are exactly what the target wants.
   24 TB → 36 TB, better photo protection, one afternoon, near-zero risk. **If you only do
   one thing from this report, do that one.**
 
-**The PR #37 virtualization plan wins if:**
+**The virtualization plan wins if:**
 - You want the whole fleet declarative *and* you are unwilling to accept stale parity.
   It is the only option that gives you both.
 - You want a staged path with an instant rollback (shut down the guest, boot the flash).
@@ -1190,8 +1214,9 @@ Unraid's per-disk independent filesystems are exactly what the target wants.
    done them you can evaluate the platform question calmly rather than as part of a
    photo-protection emergency.
 3. **If proceeding:** build the four missing modules against a scratch setup (three loopback
-   files will do) and prove the `diff` guard fails closed — the same discipline
-   `hosts/liskov/DECISIONS.md` already applies to its VFIO invariants.
+   files will do) and prove the `diff` guard fails closed — the same discipline the VFIO
+   plan's eval-time invariants applied, where both guards were confirmed to fail closed
+   rather than merely to pass.
 4. **Then** the Phase 2–3 conversion, keeping the Unraid flash and the 12 TB staging
    parachute until the first `snapraid sync` completes clean.
 
@@ -1266,6 +1291,7 @@ Hardware / Unraid: [ServeTheHome X9SCM-F review](https://www.servethehome.com/su
 [Unraid forums: array write performance](https://forums.unraid.net/topic/196614-slow-write-performance-to-array-is-this-typical-or-is-there-a-problem)
 
 Repo context (read, not modified): `CLAUDE.md`, `flake.nix`, `flake.lock`,
-`hosts/liskov/{configuration.nix,DECISIONS.md,BACKGROUND.md}`,
+`hosts/liskov/{configuration.nix,DECISIONS.md,BACKGROUND.md}` (since retired — see git
+history),
 `hosts/memory-alpha/configuration.nix`, `modules/nixos/{dns,dockge,ntfy,nut-client}.nix`,
 `modules/darwin/nfs-mounts.nix`.
