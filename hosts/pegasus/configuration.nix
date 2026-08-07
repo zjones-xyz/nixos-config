@@ -23,9 +23,6 @@ in
     ../../modules/nixos/nzxt-kraken.nix
     ../../modules/nixos/keyboards.nix
     ../../modules/nixos/mouse-tools.nix
-    # TEMPORARY — liskov VFIO bring-up test, see the homelab.vfio block below
-    # and hosts/liskov/DEPLOY.md §2b-bis. Remove with that block.
-    ../../modules/nixos/vfio.nix
     # olla-router.nix is DISABLED for now (2026-07-11): its build runs olla's
     # own Go test suite, and pkg/eventbus's TestEventBus_HighVolumePublishing
     # is a wall-clock throughput assertion that fails under the Nix sandbox's
@@ -43,44 +40,13 @@ in
   networking.hostName = "pegasus";
   networking.networkmanager.enable = true;
 
-  # ── VFIO bring-up test (TEMPORARY) ──────────────────────────────────────────
-  # Not a pegasus feature. modules/nixos/vfio.nix has never run on real
-  # hardware, and the mechanism it depends on was documented wrongly until
-  # recently: listing vfio_pci in boot.initrd.kernelModules does NOT order it
-  # ahead of udev under the systemd initrd that 26.05 uses by default, so the
-  # softdep lines are what actually win the race against ahci. That has been
-  # reasoned about and never observed.
+  # Added during the liskov VFIO bring-up test (DEPLOY.md §2b-bis, since
+  # completed and the temporary homelab.vfio block removed): pegasus had no
+  # lspci at all, which made the test unrunnable on the machine it was written
+  # for. Kept because a box with an add-in card and a discrete GPU has no
+  # business being unable to enumerate its own PCI bus.
   #
-  # Observing it here costs one reboot. Observing it on liskov means finding out
-  # on the host whose array controller is the device being bound.
-  #
-  # Safe on this machine because pegasus boots from NVMe and `1b21:` matches
-  # only the ASMedia add-in cards — never its onboard SATA (AMD, `1022:`) nor
-  # the 4070 (`10de:`). Adding either of those here is pegasus's equivalent of
-  # the `8086:` guard that liskov's invariant check enforces. Do not.
-  #
-  # ⚠ Remove this block and the vfio.nix import once the ASM1166 goes back to
-  # liskov. Leaving it binds a card pegasus may later want to actually use.
-  homelab.vfio = {
-    enable = true;
-    # NOT the "intel" default — pegasus is AM4. The wrong value is silently
-    # ignored and presents exactly like AMD-Vi being disabled in firmware.
-    cpuVendor = "amd";
-    pciIds = [
-      "1b21:1166" # ASM1166 SATA — competitor driver is ahci. The result that matters.
-      # Only if the ASM1042 travelled too (it tests the xhci_pci softdep, which
-      # may turn out to be defensive-only — see DEPLOY.md §4c):
-      # "1b21:1042"
-    ];
-  };
-
-  # NOT temporary — keep this when the homelab.vfio block above comes out.
-  #
-  # Added because the bring-up test's only verification step is
-  # `lspci -nnk -d 1b21:1166`, and pegasus had no lspci at all, which made the
-  # test unrunnable on the machine it was written for. liskov already carries
-  # pciutils for the same reason (hosts/liskov/configuration.nix). It belongs in
-  # environment.systemPackages rather than home.packages so that `sudo lspci`
+  # environment.systemPackages rather than home.packages so `sudo lspci`
   # resolves — sudo does not inherit the user profile's PATH.
   environment.systemPackages = with pkgs; [
     pciutils
