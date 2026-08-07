@@ -31,9 +31,12 @@ rather than of evaluation:
   `nvme` → `pre: vfio-pci`). This matters because the initrd *also* contains
   `ahci.ko`, `xhci-pci.ko`, `xhci-hcd.ko` and `nvme.ko`, which will be autoloaded
   by udev — the softdep is what stops them claiming a passthrough device first.
-- **Kernel params are correct and correctly ordered**: `intel_iommu=on`,
-  `iommu=pt`, `vfio-pci.ids=1b21:1166,1b21:1042,1b21:1064`, and `console=ttyS1`
-  **last**, so the cryptsetup prompt lands on serial rather than tty0.
+- **Kernel params are correct**: `intel_iommu=on`, `iommu=pt`,
+  `vfio-pci.ids=1b21:1166,1b21:1042,1b21:1064`, and `console=ttyS1` *after*
+  `console=tty0` — so it is the **last `console=`**, which is the one that owns
+  `/dev/console`, and the cryptsetup prompt lands on serial rather than tty0.
+  (It is second in the list overall; last-`console=` is the property that
+  matters, not last overall.)
 - **No shadowing `serial-getty@ttyS1.service`** is emitted — the upstream
   template will be used.
 - **networkd units generate correctly**: `10-br0.netdev`, `10-eno1.network`
@@ -622,13 +625,17 @@ Boot a NixOS installer ISO. Everything below is over IPMI SoL or a directly
 attached console.
 
 ```sh
-# 1. Positively identify the Kingston. Do NOT trust /dev/sdX — this machine has
-#    three SATA controllers and a dozen drives, and enumeration order varies.
+# 1. Confirm the Kingston is still the drive disko.nix names. Do NOT trust
+#    /dev/sdX — three SATA controllers, a dozen drives, enumeration varies.
 ls -l /dev/disk/by-id/ | grep -i kingston
 lsblk -o NAME,SIZE,MODEL,SERIAL
 
-# 2. Put that by-id path into hosts/liskov/disko.nix (replace the
-#    ata-KINGSTON_REPLACE_WITH_REAL_SERIAL placeholder), then:
+#    Surveyed on Tower 2026-08-07 and already filled into disko.nix:
+#      ata-KINGSTON_SH103S3120G_50026B7239015509   (HyperX 3K 120GB)
+#    by-id tracks the drive, not the port, so the §3 move onto onboard SATA
+#    does not change it. Re-check only if the drive itself is swapped.
+
+# 2. Then:
 nix run github:nix-community/disko -- --mode disko ./hosts/liskov/disko.nix
 ```
 
@@ -695,7 +702,7 @@ lspci -nnk | grep -A3 -i '1b21:'
 #   → "Kernel driver in use: vfio-pci" on all three:
 #       1b21:1166  ASM1166  SATA, 6-port  — array + Cache + Fastservices
 #       1b21:1064  ASM1064  SATA, 4-port  — temporary, returns to the host later
-# PLACEHOLDER-NOMATCH
+#       1b21:1042  ASM1042  USB3          — rides along, group 1 is indivisible
 
 # ...and ahci must still own the onboard controller with the root disk.
 lspci -nnk -s 00:1f.2
@@ -719,7 +726,7 @@ presents identically to the BIOS quirk in §0.
 sudo virsh --connect qemu:///system define hosts/liskov/unraid-guest.xml
 ```
 
-Before the first start, edit two things in the live definition
+Before the first start, edit three things in the live definition
 (`sudo virsh edit unraid`):
 
 1. **The MAC address.** Set it to the bare-metal Tower NIC's address so the
@@ -731,6 +738,13 @@ Before the first start, edit two things in the live definition
    Addresses have been observed to shift on this board — which is exactly why
    the *host* binds by vendor:device ID instead. Re-check with
    `lspci -nn | grep 1b21` and fix if they moved.
+3. ⚠ **Add the `<hostdev type='usb'>` for the licence flash.** The checked-in
+   XML has no such entry and cannot — it needs the flash's real vendor:product,
+   read off the machine in §4c. The domain has **no `<disk>` entries at all**,
+   so until this is added the guest has *no boot device* and drops into the
+   OVMF shell. The template and the reasoning are in the `<devices>` comment in
+   `unraid-guest.xml`; note it carries `<boot order='1'/>`, and `<os>` must
+   therefore stay free of `<boot dev='hd'/>` or libvirt rejects the definition.
 
 Then, deliberately by hand (the domain is not set to autostart, and libvirtd is
 configured with `onBoot = "ignore"`):
@@ -748,9 +762,8 @@ sudo virsh console unraid       # or the webGUI once it has an address
       *real* device — forwarded with `<hostdev type='usb'>` from the internal
       header — so it keeps its true vendor:product:serial. An emulated USB disk
       presents a synthetic GUID and will not license.
-      ⚠ **The checked-in `unraid-guest.xml` has no `<hostdev type='usb'>` entry
-      yet** — it cannot, until the flash's real vendor:product is read off the
-      machine (§4c). Add it before first start or the guest has no boot device.
+      (The entry itself is added as **§9 pre-start edit 3** — if you reached
+      this checklist without it, the guest has no boot device at all.)
 - [ ] All four pools import: array (4× 12TB), Cache, Fastservices, and the
       ASM1064 pool.
 - [ ] Array members are recognised **by serial** — no "new device" prompts.
@@ -858,7 +871,8 @@ Not in this deployment, each for a stated reason:
   below. Earlier revisions of `unraid-guest.xml` conflated the two.
 
   **Verified 2026-08-06: not possible with stock QEMU/libvirt.** Checked against
-  QEMU 11.0.2's own device property lists (`-device <model>,help`):
+  the device property lists (`-device <model>,help`) of the QEMU this host
+  actually runs — `pkgs.qemu_kvm`, which is **10.2.2** on the pinned nixpkgs:
 
   | model | `serial` | `vendorid`/`productid` |
   |---|---|---|

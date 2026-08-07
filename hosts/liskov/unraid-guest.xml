@@ -93,11 +93,22 @@
       If OVMF cannot enumerate the flash through the passed-through ASM1042 (a
       known-finicky combination), the fallback is SeaBIOS: replace this whole
       <os> element with
-          <os><type arch='x86_64' machine='pc-i440fx'>hvm</type><boot dev='hd'/></os>
-      and accept the weaker PCIe passthrough behaviour.
+          <os><type arch='x86_64' machine='pc'>hvm</type></os>
+      and accept the weaker PCIe passthrough behaviour. `pc` is the alias for
+      the current i440fx machine — there is no machine literally named
+      `pc-i440fx`, and QEMU rejects it with "unsupported machine type".
+
+      ══ NO <boot dev='hd'/> HERE, DELIBERATELY ══
+      Boot order is expressed per-device, by the <boot order='1'/> on the USB
+      hostdev that forwards the licence flash (see <devices> below). libvirt
+      forbids mixing the two forms: an <os> <boot dev=…/> together with any
+      per-device <boot order=…/> is rejected at define time with "per-device
+      boot elements cannot be used together with os/boot elements". This domain
+      has no <disk> entries at all, so that hostdev is the only boot source —
+      the per-device form is the one that has to win. The SeaBIOS fallback above
+      carries no <boot dev=…/> for the same reason.
     -->
     <type arch='x86_64' machine='q35'>hvm</type>
-    <boot dev='hd'/>
   </os>
 
   <features>
@@ -230,6 +241,10 @@
       what makes the firmware boot from it. Verify OVMF actually does; if not,
       the documented fallback is to leave the flash on 00:1d.0 (group 6, isolated,
       no BMC device) and PCI-pass that controller whole instead.
+
+      Do NOT also add <boot dev='hd'/> back to <os> — libvirt rejects a domain
+      that mixes per-device <boot order=…/> with os/boot, so reintroducing it
+      makes this entry undefinable. See the note in <os> above.
     -->
     <hostdev mode='subsystem' type='pci' managed='yes'>
       <source>
