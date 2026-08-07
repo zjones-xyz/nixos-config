@@ -4,9 +4,11 @@
 is the raw starting point for the data classification that `DESIGN.md` §5's
 storage layout depends on.
 
-⚠ **Nothing here is classified yet.** The `Tier` column is a *proposal* to argue
-with, not a decision — see *Classification* below. Sizes are ⟨TBD⟩ pending a
-`du -sh /mnt/user/*` pass.
+**Classification is in progress** — §5 carries the running verdicts. Three shares
+are confirmed dead; the rest of the tiering is still a proposal to argue with.
+Sizes are ⟨TBD⟩ pending a `du -sh /mnt/user/*` pass.
+
+**Triage status: 3 of 34 decided.**
 
 Dates are UTC.
 
@@ -41,10 +43,10 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 |---|---|---|---|---|---|---|
 | `appdata` | services | export | — | private | `z` | Docker application data |
 | `arr_config` | services | export | — | public | | *arr stack configuration |
-| `appdata_old` | cache *(prefer)* | — | — | private | | "application data" — ⚠ leftover, see §3 |
-| `ai_models` | fastservices | — | — | public | | |
+| `appdata_old` | cache *(prefer)* | — | — | private | | "application data" — ⚠ **suspected** leftover, see §3 |
+| ~~`ai_models`~~ | fastservices | — | — | public | | 🗑 **DROP** — owner-confirmed dead |
 | `arm` | fastservices | export | — | public | | "automatic ripping machine" |
-| `jellyfin_cache` | fastservices | — | — | public | | Transcode/metadata cache |
+| ~~`jellyfin_cache`~~ | fastservices | — | — | public | | 🗑 **DROP** — owner-confirmed dead. See §3 |
 | `swap` | fastservices | — | — | public | | |
 | `inbox` | cache | export | — | public | | |
 
@@ -59,7 +61,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `immich_photos` | cache | export | — | public | | **Photos** |
 | `immich_photos_archived` | cache | export | — | private | `z` | **Photos** |
 | `books` | cache | export | — | public | | |
-| `books_old` | cache | export | — | public | | "top level store for BookLore" — ⚠ leftover |
+| `books_old` | cache | export | — | public | | "top level store for BookLore" — ⚠ **suspected** leftover |
 | `calibre_books` | cache | — | — | private | | |
 | `copyparty` | cache | export | — | public | | File-sharing service |
 | `manyfold_library` | cache | — | — | public | | 3D model library |
@@ -82,7 +84,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `domains` | — | — | public | | "saved VM instances", split level 1 |
 | `public` | export | — | public | | |
 | `minishare` | export | — | public | | |
-| `SHARE` | — | — | public | | ⚠ see §3 |
+| ~~`SHARE`~~ | — | — | public | | 🗑 **DROP** — owner-confirmed dead |
 
 ---
 
@@ -108,6 +110,18 @@ Worth resolving, because it is the only share whose floor exceeds its pool and
 because it silently changes where a large media share writes. Every other floor
 checks out against its pool's free space.
 
+**A correlation worth noting:** `jellyfin_cache` — the other fastservices share
+in Jellyfin's orbit — is **owner-confirmed dead** (below). Two Jellyfin-related
+caching artifacts on the same pool, one abandoned and one configured so it can
+never engage, is consistent with the caching arrangement having been reworked and
+both remnants left in place. That does not settle intentional-versus-typo, but it
+makes "leftover from a change" the more likely story than either.
+
+⚠ **Cleaning up dead shares will not fix this.** The floor exceeds fastservices'
+*total capacity* (477 GiB against 223.6 GiB), not merely its free space, so no
+amount of reclaimed space brings it within reach. It needs the value changed, or
+`shareUseCache` set to `no` to say plainly what is already happening.
+
 ### ⚠ Stale shares — confirmed by the owner, and the cheapest win available
 
 **Owner's assessment, 2026-08-07: "some of them are well out of date and should
@@ -116,14 +130,20 @@ offer — data you neither copy, nor stage, nor compute parity over, nor carry
 forever afterwards. It shortens the initial sync and shrinks the exposure window
 at zero risk to anything live.
 
-Three are visible from configuration alone:
+**Confirmed dead by the owner** — drop these, do not migrate them:
+
+| Share | Lives on | Note |
+|---|---|---|
+| `jellyfin_cache` | fastservices | See the floor correlation below |
+| `ai_models` | fastservices | |
+| `SHARE` | array | Also the one that read as an Unraid template |
+
+**Suspected from configuration, not yet confirmed:**
 
 - **`appdata_old`** (`prefer`/cache, "application data") against **`appdata`**
   (`only`/services). The live one is almost certainly `appdata` on the Services
   mirror; `appdata_old` looks like a leftover from the move onto that pool.
 - **`books_old`** ("top level store for BookLore") against **`books`**.
-- **`SHARE`** — all-caps, `shareFloor="0"`, no exports, no comment. Reads like
-  Unraid's default template rather than a real share.
 
 **The rest cannot be found in configuration**, because a share that nothing has
 written to in three years looks identical to one written yesterday. Two cheap
@@ -199,8 +219,8 @@ are shares whose contents I cannot infer from configuration alone.
 | **Irreplaceable** — real-time redundancy + offsite | `immich_photos`, `immich_photos_archived`, `documents`, `archived_disks` ⟨?⟩ | Cannot be re-acquired at any price |
 | **Painful to rebuild, small** — redundancy, cheap because tiny | `appdata`, `arr_config`, `system`, `ha_backup` | Service state. Hours of reconfiguration, but gigabytes not terabytes |
 | **Re-acquirable** — snapshot parity, 24 h lag fine | `arr_media`, `arr_managed_data`, `jellyfin`, `isos` | The brief's explicit case |
-| **Regenerable** — parity optional | `jellyfin_cache`, `swap`, `ai_models`, `domains` ⟨?⟩, `serenity_time_machine` | Reproducible from a source that still exists |
-| **Drop** — do not migrate at all | `appdata_old`, `books_old`, `SHARE`, ⟨+ whatever the staleness pass in §3 surfaces⟩ | Confirmed stale. Cheapest possible win |
+| **Regenerable** — parity optional | `swap`, `domains` ⟨?⟩, `serenity_time_machine` | Reproducible from a source that still exists |
+| **Drop** — do not migrate at all | **Confirmed:** `jellyfin_cache`, `ai_models`, `SHARE`. **Suspected:** `appdata_old`, `books_old`. ⟨+ whatever the staleness pass in §3 surfaces⟩ | Dead. Cheapest possible win |
 | **⟨?⟩ Needs a decision** | `music`, `books`, `calibre_books`, `podcasts_audiobookshelf`, `manyfold_library`, `bambuddy_library`, `partdb`, `syncthing`, `copyparty`, `webdav`, `public`, `minishare`, `inbox`, `arm` | Could be either — depends on provenance |
 
 **Do the Drop row first.** It is the only tier that makes every other decision
