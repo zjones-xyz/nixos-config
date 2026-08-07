@@ -481,17 +481,47 @@ flashed, **set the BIOS back to Auto and see whether the card still enumerates.*
 If it does, the §0 landmine is gone for good. Do not count on it; it costs one
 reboot to find out.
 
-### 2b-bis. While the ASM1166 is in pegasus: test VFIO on real hardware
+### 2b-bis. VFIO tested on real hardware — ✅ PASSED 2026-08-07
 
-Optional, and the highest-value thing available in this whole plan short of the
-machine itself. `modules/nixos/vfio.nix` has **never been exercised on real
-hardware.** Worse, the mechanism it relies on was wrong until recently: listing
-`vfio_pci` in `boot.initrd.kernelModules` does *not* order it ahead of udev in a
-systemd initrd (which 26.05 uses by default), so the `softdep` lines are what
-actually close the race — and that has only been reasoned about, never observed.
+**Done, and it works.** With the ASM1166 in pegasus and PR #42's temporary
+`homelab.vfio` block applied:
 
-Finding out on liskov means finding out on a host whose array controller is the
-thing being bound. Finding out on pegasus costs one reboot cycle.
+```
+04:00.0 SATA controller [0106]: ASMedia ASM1166 [1b21:1166] (rev 02)
+	Kernel driver in use: vfio-pci
+	Kernel modules: ahci
+```
+
+with `amd_iommu=on`, `iommu=pt`, `vfio-pci.ids=1b21:1166` on the cmdline.
+
+**`Kernel modules: ahci` is the load-bearing half of that result.** It says
+`ahci` was present and eligible to claim the device and did not get it. Had
+`ahci` merely been absent, the test would have proved nothing.
+
+That matters because the mechanism was documented wrongly until recently:
+listing `vfio_pci` in `boot.initrd.kernelModules` does *not* order it ahead of
+udev under the systemd initrd 26.05 uses by default, so the `softdep` lines are
+what actually close the race. **That had been reasoned about and never
+observed. It has now been observed.** `modules/nixos/vfio.nix` is no longer
+theoretical, and BACKGROUND.md's account of why it works is confirmed rather
+than argued.
+
+Finding out on liskov would have meant finding out on a host whose array
+controller is the thing being bound. It cost one reboot on pegasus.
+
+**Still untested, and honest about it:**
+
+- The **`xhci_pci` path**. The ASM1042 did not travel, so only the `ahci`
+  softdep was exercised. Whether that path matters at all depends on §4c — if
+  the ASM1042 moves to the free PCH slot and the host keeps it, `xhci_pci` is
+  defensive only.
+- **Under load, with drives attached.** The card was bare. The race is decided
+  at boot before any disk is touched, so this is the right test for the
+  question asked, but it is not a claim about behaviour under I/O.
+- **liskov's own topology.** pegasus put the card in IOMMU group 15, alone.
+  liskov's grouping is entirely different and nothing here transfers to it.
+
+Original rationale, kept because it is why this was worth doing:
 
 **Safe here because** pegasus boots from NVMe, and `1b21:` matches only the
 ASMedia cards — never its onboard SATA (AMD, `1022:`) or its NVMe. Do not add
