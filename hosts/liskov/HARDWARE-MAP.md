@@ -96,8 +96,12 @@ label reads `I-SATA2→A1`.
 
 | Cage | Description | Arrangement | Type | Bays |
 |---|---|---|---|---|
-| **A** | Built-in hotswap cage | **single column of 4** | **opposed** | `A1`–`A4` |
+| **A** | Built-in hotswap cage — **primary** | **single column of 4** | **opposed** | `A1`–`A4` |
 | ⟨TBD⟩ | ⟨other cages / brackets — enumerate⟩ | ⟨TBD⟩ | ⟨TBD⟩ | |
+
+**Cage A is the primary.** Informal reference resolves to it — "bay 1" said
+aloud, or written on a note during a swap, means `A1`. Printed labels stay
+qualified regardless.
 
 ⚠ **The other cages are unenumerated.** Six of the ten installed disks currently
 sit somewhere recorded only as "internal" in §1. Identify them, assign letters,

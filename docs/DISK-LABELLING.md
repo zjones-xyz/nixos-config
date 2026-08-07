@@ -114,11 +114,20 @@ A single-column cage is therefore simply 1 at the top descending. If the cage
 carries its own printed numbers, adopt those instead and note the divergence in
 the host's map.
 
-**Where a host has more than one cage, bay numbers are namespaced per cage.**
-Assign each cage a single uppercase letter in the host's `HARDWARE-MAP.md` and
-write bays as `<letter><n>` — `A1`, `A2`, `B1`. Compact enough for a narrow label,
-and unambiguous. A cable label then reads `I-SATA2→A1`. A host with exactly one
-cage may drop the letter.
+**Bay numbers are namespaced per cage.** Assign each cage a single uppercase
+letter in the host's `HARDWARE-MAP.md` and write bays as `<letter><n>` — `A1`,
+`A2`, `B1`. A cable label then reads `I-SATA2→A1`.
+
+**Always qualify, even on a host with one cage.** `A1` is *shorter* than `BAY1` —
+two characters against four — so the qualified form costs nothing and the
+unqualified form buys nothing. `BAY` spends four characters asserting something
+context already makes obvious, while the letter carries real information. Do not
+use a bare `BAY<n>`.
+
+**Name one cage the primary** in the host's map, and assign it `A`. That is what
+informal reference resolves to: "bay 1" said aloud, or scribbled on a note mid-
+swap, means `A1`. The printed label stays qualified regardless — the default
+exists to disambiguate humans, not labels.
 
 **Left and right are defined from the open end, looking in** — i.e. from where you
 stand to pull a drive. That is unambiguous for any cage, but it does *not* by
@@ -165,8 +174,8 @@ cable labels are printed from.
 
 ## 4. Wiring
 
-**If cables are being re-run anyway, wire them monotonically** — `I-SATA2→BAY1`,
-`I-SATA3→BAY2`, and so on. An ordered mapping makes the label nearly redundant,
+**If cables are being re-run anyway, wire them monotonically** — `I-SATA2→A1`,
+`I-SATA3→A2`, and so on. An ordered mapping makes the label nearly redundant,
 which is the ideal state for a label.
 
 ---
