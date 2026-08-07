@@ -58,14 +58,10 @@ jobs:
       - name: Build memory-alpha (x86_64-linux, native)
         run: nix build .#nixosConfigurations.memory-alpha.config.system.build.toplevel --no-link
 
-      # The liskov invariants are written as eval-time assertions, so the
-      # `nix flake check --no-build` step above already fires them. This builds
-      # the check derivations outright so that any check added later which
-      # actually needs to *run* (e.g. a nixosTest) is not silently skipped —
-      # --no-build evaluates those without ever executing them, which reads as
-      # a pass.
-      - name: Build checks
-        run: |
-          nix build --no-link \
-            .#checks.x86_64-linux.liskov-invariants \
-            .#checks.x86_64-linux.liskov-guest-xml
+      # NOTE for whoever adds the next `checks` output: the first step above
+      # runs `nix flake check --no-build`, which *evaluates* check derivations
+      # without ever building them. Eval-time assertions (a `throw` in a `let`)
+      # fire under that; anything needing to actually run — a nixosTest, an
+      # xmllint on a hand-maintained file — is evaluated, skipped, and reported
+      # as a pass. Those need an explicit `nix build .#checks.<system>.<name>`
+      # step here. This repo had one until the liskov VFIO checks were removed.
