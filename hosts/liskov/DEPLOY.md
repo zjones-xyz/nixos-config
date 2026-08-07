@@ -480,12 +480,26 @@ six bytes are a date, `YY MM DD HH MM SS` — the same encoding as the
 mandatory reboot; that re-read is the *only* verification available, since the
 tool has no verify command.
 
-**A free test worth running afterwards.** The card currently needs Gen2 forced
-*and* non-compliance detect (§0), which is a PCIe link-training problem — and
-updated firmware is reported to improve link training on older boards. So once
-flashed, **set the BIOS back to Auto and see whether the card still enumerates.**
-If it does, the §0 landmine is gone for good. Do not count on it; it costs one
-reboot to find out.
+**A free test worth running afterwards — and it is worth more than "free".** The
+card currently needs Gen2 forced *and* non-compliance detect (§0), which is a
+PCIe link-training problem, and improved link training on older boards is one of
+the reported reasons for this firmware. So once flashed, **set the BIOS back to
+Auto and see whether the card still enumerates.** If it does, the §0 landmine is
+gone for good.
+
+Three things ride on that one reboot, not one, because **`PCI Express Port -
+Gen X` almost certainly governs the slots globally rather than per-port**:
+
+| | Gen2 forced (today) | Gen3, if it trains |
+|---|---|---|
+| ASM1166 link | ~1.0 GB/s shared across 6 ports | ~1.97 GB/s |
+| Parity check | ≈ the aggregate of four spinners, so the link is a live constraint | comfortable headroom |
+| A PCIe NVMe root (planned, x4 adapter) | ~2 GB/s | ~4 GB/s |
+
+**Run this before finalising any disk placement.** A Gen3 result removes the link
+as a design constraint altogether. The failure mode is benign and immediately
+visible: if the card does not appear at Auto, set it back to Gen2 and nothing is
+lost.
 
 ### 2b-bis. VFIO tested on real hardware — ✅ PASSED 2026-08-07
 

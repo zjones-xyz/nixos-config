@@ -855,6 +855,86 @@ the migration enormously (§6).
 
 ---
 
+### 5.5 Physical budgets — ports, slots, and the Gen3 question
+
+*Added 2026-08-07 after the report was written, from decisions taken since. This section
+supersedes any disk placement implied above.*
+
+**Hardware changes agreed since the report:**
+
+- **BD-ROM → external USB3 enclosure**, off SATA entirely. Note this makes the ASM1042
+  load-bearing rather than incidental: the C204 is EHCI only, so that card is the machine's
+  *only* USB3.
+- **Kingston 120GB retired → 1TB NVMe on a PCIe adapter.** The Kingston is a 2012 SandForce
+  SF-2281 from the era those controllers were notorious for sudden death, and it currently
+  holds the root filesystem. 1TB also gives `/nix` real room, which matters with this many
+  containers and a large flake closure.
+- **No fifth 12TB.** Not affordable at present, so every layout must work with four.
+- **Drawer inventory: 3× 4TB, 2× 2TB spinners.** Two of the 4TB become the photo tier —
+  4TB of checksummed btrfs raid1 instead of ~450GB on SSDs, which **dissolves the largest
+  unverified assumption in this report** (whether photos fit in 450GB). Photos are cold
+  data; spinning rust is fine.
+
+**⚠ The NVMe probably will not be bootable.** The X9SCM is a 2011 design and NVMe boot
+needs an NVMe DXE driver in firmware, which predates the standard. Linux will see the drive
+regardless — the kernel driver is independent of firmware — but the boot menu likely will
+not. The workaround is standard and costs no port: **ESP on a SATA device, root and `/nix`
+on the NVMe.** systemd-boot only needs firmware to reach the ESP; the initrd loads `nvme`
+and pivots. Put the ESP on whichever SSD lands in the scratch role. Test by installing the
+adapter and looking for it as a boot option.
+
+**Port budget — this now closes, and only just:**
+
+| Role | Devices | Ports |
+|---|---|---|
+| Media SnapRAID | 4× 12TB | 4 |
+| Photos | 2× 4TB btrfs raid1 | 2 |
+| App state | 2× BX500 btrfs raid1 | 2 |
+| Scratch / cache (likely consolidates) | WD Blue 500, 223GB SSD, MX100 | 3 |
+| Third 4TB | 1 | 1 |
+| **Total** | **12** | **12 available** (onboard 6 + ASM1166 6, ASM1064 pulled) |
+
+Root moves to PCIe and the BD-ROM to USB, which is precisely what frees the port that lets
+the third 4TB into service. The 2× 2TB stay in the drawer. There is **zero headroom** — any
+further disk requires either consolidating the three scratch SSDs (they exist in that shape
+because Unraid's cache-and-pools model wanted them to; that reason disappears here) or
+keeping the ASM1064.
+
+**PCIe slot budget:** ASM1166 + ASM1042 + NVMe adapter = three of four, with the ASM1064
+pulled. Fits. Note §4c's question about relocating the ASM1042 for IOMMU isolation is moot
+under bare metal — there are no groups to keep clean.
+
+**⚠ Confirm the onboard port speeds before assigning disks.** The C204 generation typically
+provides **2× 6Gb/s and 4× 3Gb/s**, not six of one kind — worth checking against the board
+manual, because it decides placement. SATA2's ~300 MB/s is comfortably above a 12TB
+spinner's ~250 MB/s but throttles a SATA3 SSD by roughly 40%. So SSDs want the ASM1166
+(SATA3 on all six) or the two fast onboard ports; spinners are happy on SATA2.
+
+#### The Gen3 test is now worth more than §2b of DEPLOY.md credits it
+
+DEPLOY.md §2b records "set `Gen X` back to Auto and see whether the card still enumerates"
+as a *free test* — worth one reboot to find out whether §0's landmine is gone. With the
+NVMe in the picture, the stakes roughly double, because **that BIOS setting almost certainly
+governs the slots globally rather than per-port.** One test, three outcomes:
+
+| | Gen2 forced (today) | Gen3 (if the new firmware trains) |
+|---|---|---|
+| ASM1166 link | ~1.0 GB/s across 6 ports | ~1.97 GB/s |
+| Parity check | ≈ the aggregate of 4 spinners — link is a live constraint | comfortable headroom |
+| NVMe (x4 adapter) | ~2 GB/s | ~4 GB/s |
+| §0 landmine | live; a CMOS clear hides the array controller | **gone permanently** |
+
+The card was flashed 2020-11-05 → 2021-11-08 on 2026-08-07, and improved link training on
+older boards is one of the reported reasons for that firmware. **This test should happen
+before any disk placement is finalised**, since a Gen3 result removes the link as a design
+constraint entirely and makes the "distribute disks across controllers" argument in §2.2 a
+nice-to-have rather than a mitigation.
+
+It is still only one reboot, and the failure mode is benign and immediately visible: if the
+ASM1166 does not appear at Auto, set it back to Gen2 and nothing is lost.
+
+---
+
 ## 6. Migration
 
 ### 6.1 The key realisation: this is mostly not a data migration
@@ -1071,8 +1151,19 @@ Unraid's per-disk independent filesystems are exactly what the target wants.
 
 ### Things I could not establish
 
-- **Total photo size**, and therefore whether ~450 GB of mirrored SSD is sufficient. The whole
-  layout recommendation turns on this. Measure it.
+- ~~**Total photo size**, and therefore whether ~450 GB of mirrored SSD is sufficient.~~
+  **Largely dissolved 2026-08-07** — see §5.5. Photos move to 2× 4TB drawer disks in btrfs
+  raid1, giving 4TB rather than ~450GB, so the layout no longer hinges on the answer. Still
+  worth measuring, but it is no longer load-bearing.
+- **Whether the ASM1166 trains at Gen3 on the new firmware** (§5.5). One reboot. It decides
+  whether the PCIe link is a design constraint at all, and it caps the NVMe root as well
+  because the BIOS setting is almost certainly global rather than per-port.
+- **Onboard SATA port speeds.** The C204 generation typically gives 2× 6Gb/s and 4× 3Gb/s
+  rather than six alike. Unconfirmed against the board manual, and it decides which disks
+  want which ports — SATA2 throttles a SATA3 SSD by ~40% but is fine for a 12TB spinner.
+- **Whether the X9SCM firmware can boot from an NVMe on a PCIe adapter.** Almost certainly
+  not, given a 2011 board and a standard that postdates it. The ESP-on-SATA workaround in
+  §5.5 is standard and costs no port, but confirm before relying on either answer.
 - **Whether the four 12 TB array disks are LUKS-encrypted** under Unraid.
 - **Actual used bytes per data disk.** The brief's "24 TB of data" against 2× 12 TB data disks
   implies they are essentially full, which would leave no slack anywhere and make even the
