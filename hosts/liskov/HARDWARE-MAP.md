@@ -88,46 +88,54 @@ remainder. Being retired regardless.
 
 ---
 
-## 3. The hotswap cage
+## 3. Cages
 
-Four slots, drives in caddies. Currently holds the four 12 TB disks, though that
-is not fixed — a different spinner can occupy a bay if the layout calls for it.
+**Tower has more than one cage.** Bay numbers are therefore namespaced by a
+per-cage letter (`docs/DISK-LABELLING.md` §3), so a bay is `A1`, `B2` and a cable
+label reads `I-SATA2→A1`.
 
-**Numbering follows the fleet convention** (`docs/DISK-LABELLING.md` §3): left to
-right, then top to bottom, with left/right taken from the open end looking in. A
-four-bay cage in a single column is therefore 1 at the top descending to 4.
+| Cage | Description | Arrangement | Type | Bays |
+|---|---|---|---|---|
+| **A** | Built-in hotswap cage | **single column of 4** | **opposed** | `A1`–`A4` |
+| ⟨TBD⟩ | ⟨other cages / brackets — enumerate⟩ | ⟨TBD⟩ | ⟨TBD⟩ | |
 
-⚠ **Two properties of this cage still need confirming**, and both change which
-physical slot a bay number names:
+⚠ **The other cages are unenumerated.** Six of the ten installed disks currently
+sit somewhere recorded only as "internal" in §1. Identify them, assign letters,
+and give each its arrangement and type.
 
-- **Physical arrangement** — single column of four, or two by two.
-- **Cage type: ⟨TBD⟩** — *opposed* (pull from the front, cables on a backplane
-  behind) or *same-side* (drive pulled from the cable end). See
-  `docs/DISK-LABELLING.md` §3. Opposed cages mirror left/right when you are at
-  the cables; same-side cages do not, but require unplugging the cable to remove
-  a drive, which makes the cable label load-bearing on every swap.
+### Cage A — built-in hotswap
 
-And if the cage carries its own printed numbers, adopt those and note the
-divergence here.
+Confirmed 2026-08-07: **single column of four, opposed** (drives pulled from the
+front, cables on a backplane behind). Currently holds the four 12 TB disks,
+though that is not fixed — a different spinner can occupy a bay if the layout
+calls for it.
+
+**Bays run `A1` at the top down to `A4`.** The convention's left-to-right clause
+is moot for a single column.
+
+> **This cage is immune to the mirrored-rear problem**, despite being opposed.
+> Walking round to the backplane flips left and right; it does not flip top and
+> bottom. With one column there is no left/right to confuse, so `A1` is the top
+> from either side.
 
 | Bay | Feeding port | Disk |
 |---|---|---|
-| 1 | ⟨TBD⟩ | ⟨TBD⟩ |
-| 2 | ⟨TBD⟩ | ⟨TBD⟩ |
-| 3 | ⟨TBD⟩ | ⟨TBD⟩ |
-| 4 | ⟨TBD⟩ | ⟨TBD⟩ |
+| `A1` | ⟨TBD⟩ | ⟨TBD⟩ |
+| `A2` | ⟨TBD⟩ | ⟨TBD⟩ |
+| `A3` | ⟨TBD⟩ | ⟨TBD⟩ |
+| `A4` | ⟨TBD⟩ | ⟨TBD⟩ |
 
-**Fill the port column by measurement, not inference.** The cage is hotswap, so
-one insertion per bay settles it — and it makes both questions above moot for
-this purpose, since the answer does not depend on the cage's geometry at all:
+**Fill the port column by measurement.** Hotswap makes it directly observable,
+and it is quicker than tracing:
 
 ```sh
 dmesg -w                                  # insert into a bay; note which sdX appears
 readlink -f /sys/block/sdX/device         # → …/0000:00:1f.2/ata7/… — controller and port
 ```
 
-If the four 12TB caddies get labelled first, the insertions are unnecessary: read
-each disk's `sdX` from its serial and resolve the controller from sysfs directly.
+If the four 12 TB caddies get labelled first, the insertions are unnecessary:
+read each disk's `sdX` from its serial and resolve the controller from sysfs
+directly.
 
 ---
 
@@ -184,14 +192,14 @@ mapping**, which is a measurement rather than a decision. Form is `<port>→<bay
 printed twice per cable:
 
 ```
-I-SATA?→BAY1
-I-SATA?→BAY2
-I-SATA?→BAY3
-I-SATA?→BAY4
+I-SATA?→A1
+I-SATA?→A2
+I-SATA?→A3
+I-SATA?→A4
 ```
 
-Bay labels (`BAY1`…`BAY4`) only if the cage does not already carry printed
-numbers.
+Bay labels (`A1`…`A4`) only if the cage does not already carry printed numbers.
+The other cages need enumerating before their cables can be labelled at all.
 
 ---
 
@@ -199,10 +207,10 @@ numbers.
 
 ```csv
 id,form,serial_suffix,serial_full,model,size,location,role,physical_label
-h-HJDH,hdd35,HJDH,8DKUHJDH,HUH721212ALE601,12TB,cage,array,yes
-h-X4WE,hdd35,X4WE,8CJZX4WE,HUH721212ALE601,12TB,cage,array,yes
-h-T97E,hdd35,T97E,8CG7T97E,HUH721212ALE601,12TB,cage,array,yes
-h-NS3Y,hdd35,NS3Y,8DJPNS3Y,HUH721212ALE601,12TB,cage,array,yes
+h-HJDH,hdd35,HJDH,8DKUHJDH,HUH721212ALE601,12TB,cage-A,array,yes
+h-X4WE,hdd35,X4WE,8CJZX4WE,HUH721212ALE601,12TB,cage-A,array,yes
+h-T97E,hdd35,T97E,8CG7T97E,HUH721212ALE601,12TB,cage-A,array,yes
+h-NS3Y,hdd35,NS3Y,8DJPNS3Y,HUH721212ALE601,12TB,cage-A,array,yes
 s-3255,ssd25,3255,244964803255,WD Blue SA510,500GB,internal,cache,yes
 s-9545,ssd25,9545,19013024009545,SATA SSD,223.6GB,internal,fastservices,yes
 s-768C,ssd25,768C,2422E8B6768C,Crucial BX500,480GB,internal,pool,yes
@@ -222,7 +230,7 @@ n-????,nvme,????,,,1TB,pcie-adapter,root,no
 | Confirm the encryption inferences in §2 | Unraid Main tab | Migration planning |
 | `s-3100` actual state after the `/mnt/services` btrfs removal | Unraid, `btrfs filesystem show` | Whether it is available for reuse |
 | NVMe serial | `lsblk` once installed | Documentary reference only |
-| Cage physical arrangement (single column of four, or 2×2) and cage type (opposed vs same-side) | Eyes | Which physical slot each bay number names |
+| Enumerate the other cages — letters, arrangement, type | Eyes | Bay identifiers and cable labels for six of ten disks |
 | Port-to-bay mapping | Measure it — hotswap insertion + sysfs, see §3 | All cable labels |
 | Which two onboard ports are 6Gb/s | Board manual or silkscreen | Final disk placement |
 | ASM1166 port numbering convention | A decision, if cables run there | Any ASM1166 cable labels |

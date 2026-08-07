@@ -114,6 +114,12 @@ A single-column cage is therefore simply 1 at the top descending. If the cage
 carries its own printed numbers, adopt those instead and note the divergence in
 the host's map.
 
+**Where a host has more than one cage, bay numbers are namespaced per cage.**
+Assign each cage a single uppercase letter in the host's `HARDWARE-MAP.md` and
+write bays as `<letter><n>` — `A1`, `A2`, `B1`. Compact enough for a narrow label,
+and unambiguous. A cable label then reads `I-SATA2→A1`. A host with exactly one
+cage may drop the letter.
+
 **Left and right are defined from the open end, looking in** — i.e. from where you
 stand to pull a drive. That is unambiguous for any cage, but it does *not* by
 itself tell you how the cable end is oriented, because cages differ:
@@ -126,6 +132,10 @@ itself tell you how the cable end is oriented, because cages differ:
 **Record which type each cage is** in the host's `HARDWARE-MAP.md`. It is a
 property of the hardware, not of the convention, and getting it wrong inverts the
 mapping silently.
+
+> **A single-column cage is immune to this**, even when opposed. Walking round to
+> the back flips left and right; it does not flip top and bottom. With one column
+> there is no left/right to confuse, so bay 1 is the top from either side.
 
 Note the second type makes the cable label *more* load-bearing, not less. The
 "neither end moves once wired" justification weakens — the cable comes off every
