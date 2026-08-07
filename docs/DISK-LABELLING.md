@@ -115,16 +115,29 @@ carries its own printed numbers, adopt those instead and note the divergence in
 the host's map.
 
 **Left and right are defined from the open end, looking in** — i.e. from where you
-stand to pull a drive.
+stand to pull a drive. That is unambiguous for any cage, but it does *not* by
+itself tell you how the cable end is oriented, because cages differ:
 
-> ⚠ **The rear is mirrored.** Whoever attaches cables is behind the backplane,
-> where left and right flip relative to this definition. Do not reason about
-> orientation from back there; measure instead (below).
+| Cage type | Cable side | Consequence |
+|---|---|---|
+| **Opposed** — pull from the front, cables on a backplane behind | Opposite the pull side | ⚠ **Left and right are mirrored** when you are at the cables. Do not reason about which connector is bay 1 from back there. |
+| **Same-side** — the drive is pulled from the cable end | Same as the pull side | No mirroring. But the cable must be **unplugged to remove a drive**, so it is disconnected on every swap. |
+
+**Record which type each cage is** in the host's `HARDWARE-MAP.md`. It is a
+property of the hardware, not of the convention, and getting it wrong inverts the
+mapping silently.
+
+Note the second type makes the cable label *more* load-bearing, not less. The
+"neither end moves once wired" justification weakens — the cable comes off every
+time a drive is swapped — and reconnecting it to the correct slot becomes the
+whole job. A topological label is exactly what makes that safe.
 
 ### Establish port-to-bay empirically, not by inference
 
-A hotswap cage makes the mapping directly measurable, which beats any amount of
-careful reasoning about which way round the backplane is.
+Because cage geometry varies across the fleet, **measurement is the only approach
+that generalises.** A hotswap cage makes the mapping directly observable, which
+beats any amount of careful reasoning about which way round a particular
+backplane is.
 
 ```sh
 dmesg -w                                  # insert a drive; note which sdX appears

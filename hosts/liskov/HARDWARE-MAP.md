@@ -97,8 +97,16 @@ is not fixed — a different spinner can occupy a bay if the layout calls for it
 right, then top to bottom, with left/right taken from the open end looking in. A
 four-bay cage in a single column is therefore 1 at the top descending to 4.
 
-⚠ **Confirm the cage's physical arrangement** — single column of four, or two by
-two. It changes nothing about the rule but everything about which bay is which.
+⚠ **Two properties of this cage still need confirming**, and both change which
+physical slot a bay number names:
+
+- **Physical arrangement** — single column of four, or two by two.
+- **Cage type: ⟨TBD⟩** — *opposed* (pull from the front, cables on a backplane
+  behind) or *same-side* (drive pulled from the cable end). See
+  `docs/DISK-LABELLING.md` §3. Opposed cages mirror left/right when you are at
+  the cables; same-side cages do not, but require unplugging the cable to remove
+  a drive, which makes the cable label load-bearing on every swap.
+
 And if the cage carries its own printed numbers, adopt those and note the
 divergence here.
 
@@ -110,8 +118,8 @@ divergence here.
 | 4 | ⟨TBD⟩ | ⟨TBD⟩ |
 
 **Fill the port column by measurement, not inference.** The cage is hotswap, so
-one insertion per bay settles it — and it sidesteps the mirrored-rear problem
-entirely:
+one insertion per bay settles it — and it makes both questions above moot for
+this purpose, since the answer does not depend on the cage's geometry at all:
 
 ```sh
 dmesg -w                                  # insert into a bay; note which sdX appears
@@ -214,7 +222,7 @@ n-????,nvme,????,,,1TB,pcie-adapter,root,no
 | Confirm the encryption inferences in §2 | Unraid Main tab | Migration planning |
 | `s-3100` actual state after the `/mnt/services` btrfs removal | Unraid, `btrfs filesystem show` | Whether it is available for reuse |
 | NVMe serial | `lsblk` once installed | Documentary reference only |
-| Cage physical arrangement — single column of four, or 2×2 | Eyes | Which bay is which (numbering rule itself is settled) |
+| Cage physical arrangement (single column of four, or 2×2) and cage type (opposed vs same-side) | Eyes | Which physical slot each bay number names |
 | Port-to-bay mapping | Measure it — hotswap insertion + sysfs, see §3 | All cable labels |
 | Which two onboard ports are 6Gb/s | Board manual or silkscreen | Final disk placement |
 | ASM1166 port numbering convention | A decision, if cables run there | Any ASM1166 cable labels |
