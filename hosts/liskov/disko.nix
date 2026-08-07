@@ -27,10 +27,15 @@
   disko.devices = {
     disk.main = {
       type = "disk";
-      # TODO(install): replace with the real by-id path read off the machine.
-      # by-id rather than /dev/sdX — with three SATA controllers and a dozen
-      # drives, sdX enumeration order is not stable across boots here.
-      device = "/dev/disk/by-id/ata-KINGSTON_REPLACE_WITH_REAL_SERIAL";
+      # Read off Tower 2026-08-07 (Kingston HyperX 3K 120GB, then on the
+      # ASM1064 as /dev/sdk). by-id rather than /dev/sdX — with three SATA
+      # controllers and a dozen drives, sdX enumeration order is not stable
+      # across boots here. by-id is derived from drive identity, not from port
+      # or controller, so it survives the §3 move onto onboard SATA.
+      #
+      # ⚠ This drive carried four partitions when surveyed. Applying disko
+      # destroys them; confirm nothing on it is wanted before running §6.
+      device = "/dev/disk/by-id/ata-KINGSTON_SH103S3120G_50026B7239015509";
       content = {
         type = "gpt";
         partitions = {
