@@ -31,14 +31,23 @@ identifier travels with the disk.
 | `s-` | 2.5" SATA SSD |
 | `m2-` | M.2 card |
 | `msata-` | mSATA card |
+| `ide-` | PATA/IDE drive, any size — **legacy**, see below |
 
 Examples: `h-HJDH`, `s-768C`, `m2-A1B2`.
 
-Note these are **form factors, not protocols** — consistently with the rest of the
-internal set. An M.2 card may be NVMe or SATA, and the prefix does not say which,
-just as `s-` does not distinguish SATA revisions. Since M.2 and mSATA devices take
-no physical label (§2), the distinction only ever matters in the inventory, where
-the `form` column can carry `m2-nvme` or `m2-sata` if it is worth recording.
+`ide-` is a deliberate exception to the form-factor rule, for the same reason the
+external prefixes are: **for a legacy interface, the interface is what you need to
+know first.** IDE drives come in 3.5" and 2.5" alike, and the decision-relevant
+fact is whether you can attach one at all — no host in this fleet has a PATA port,
+so reaching one means a USB-IDE adapter (`usb2adap-`/`usb3adap-`). None are known
+to exist here; the prefix is reserved so that if one surfaces it is catalogued
+rather than improvised.
+
+`m2-` and `msata-` name **form factors, not protocols.** An M.2 card may be NVMe
+or SATA and the prefix does not say which, just as `s-` does not distinguish SATA
+revisions. Since neither takes a physical label (§2), that distinction only ever
+matters in the inventory, where the `form` column can carry `m2-nvme` or
+`m2-sata` if it is worth recording.
 
 ### External — the prefix encodes interface generation instead
 
@@ -235,7 +244,7 @@ diagram read from one source rather than drifting. Columns:
 id,form,serial_suffix,serial_full,model,size,location,role,colour,physical_label
 ```
 
-`form` is one of `hdd35`, `hdd25`, `ssd25`, `m2-nvme`, `m2-sata`, `msata`, `usb2`, `usb3`, `usb2adap`,
+`form` is one of `hdd35`, `hdd25`, `ssd25`, `m2-nvme`, `m2-sata`, `msata`, `ide`, `usb2`, `usb3`, `usb2adap`,
 `usb3adap` — mirroring the prefixes in §1, so internal entries carry a form factor
 and external ones carry an interface generation. `colour` is the optional suffix
 and is empty for internal devices. `physical_label` is `yes`/`no` per §2.
