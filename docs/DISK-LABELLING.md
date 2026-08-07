@@ -87,6 +87,40 @@ suffix (`100`, on a Crucial MX100) reads as part of its own model name. Four has
 margin. Verify uniqueness within a host before printing; collisions across
 different hosts are harmless, since the labels never meet.
 
+### If four characters collide
+
+**First check whether the *full* serials differ.** That distinction decides which
+of two very different problems you have.
+
+**Full serials differ, suffixes collide** — an ordinary labelling collision.
+Expand **only the two colliding drives** to five characters; leave every other
+label at four. A global expansion would mean reprinting the whole set to solve a
+local problem. Record the exception in the host's `HARDWARE-MAP.md` so nobody
+later "corrects" it back to four.
+
+Note this is rarer than it sounds. Serials from a single batch are usually
+sequential, so two drives bought together differ in their *last* characters and
+will not collide at four. A four-character collision means the drives differ only
+further left — different batches, or different runs.
+
+**Full serials are identical** — not a labelling problem, and do not paper over it
+by expanding the suffix. In likelihood order:
+
+1. **A USB bridge is masking them.** By far the most common cause: read two disks
+   through the same dock and both report the *bridge's* serial. Check with
+   `smartctl -d sat -i /dev/sdX`, or attach over SATA. See the warning above.
+2. **A tool is reporting the wrong field** — WWN or model where you expected the
+   serial.
+3. **The drives are counterfeit.** Duplicated serials are a known signal,
+   particularly on cheap SSDs and USB flash. At this point the identifier is the
+   least of the concerns; verify capacity and health before trusting the device
+   with anything.
+
+**If five characters still collide on genuinely distinct full serials**, be
+suspicious rather than expanding again. Two drives agreeing on their last five
+characters and differing further left is possible but unusual, and the
+explanations above deserve ruling out first.
+
 **Why the prefix.** The identifier alone should tell you what you are reaching
 for, before you have opened anything — a 3.5" spinner in a caddy or a 2.5" SSD on
 a bracket, a USB3 enclosure or a USB2 one. Internal devices encode form factor
