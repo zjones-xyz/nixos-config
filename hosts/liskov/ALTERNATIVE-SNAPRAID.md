@@ -932,6 +932,30 @@ Note this is the exact inverse of DEPLOY.md §3's recabling table, which moves t
 *onto* the ASM1166. That table is correct for the VFIO plan and wrong for this one — a good
 illustration of how much of the existing runbook is load-bearing only under virtualization.
 
+#### ⚠ Under SnapRAID the parity disk must be encrypted too — Unraid's property does not carry over
+
+Confirmed 2026-08-07: Tower's data disks and SSD pools are LUKS-encrypted, and
+**the two 12TB parity disks are not — because under Unraid they cannot be.** Unraid
+parity is raw block-level parity with no filesystem on it. There is nothing to
+encrypt.
+
+That is safe today. Unraid computes parity over the *encrypted* blocks, so the
+parity disks hold combinations of ciphertext and never see plaintext.
+
+**That property does not survive the migration.** SnapRAID runs in userspace and
+computes parity over *files* on *mounted* filesystems — i.e. over plaintext — then
+writes it to an ordinary file on the parity disk. If the parity disk is not itself
+encrypted, its contents are derived from plaintext and can leak. The parity of
+known plaintext is recoverable plaintext.
+
+So: **LUKS the parity disk.** It costs nothing structurally — SnapRAID neither
+knows nor cares that its parity file sits on an encrypted filesystem — but it is
+silent and easy to miss, because the disk it replaces was legitimately unencrypted
+and looked fine that way.
+
+The same reasoning applies to the btrfs raid1 photo tier: it holds plaintext files
+and must be encrypted if the current protection level is to be preserved.
+
 #### The Gen3 test is now worth more than §2b of DEPLOY.md credits it
 
 DEPLOY.md §2b records "set `Gen X` back to Auto and see whether the card still enumerates"
@@ -1186,7 +1210,13 @@ Unraid's per-disk independent filesystems are exactly what the target wants.
 - **Whether the X9SCM firmware can boot from an NVMe on a PCIe adapter.** Almost certainly
   not, given a 2011 board and a standard that postdates it. The ESP-on-SATA workaround in
   §5.5 is standard and costs no port, but confirm before relying on either answer.
-- **Whether the four 12 TB array disks are LUKS-encrypted** under Unraid.
+- ~~**Whether the four 12 TB array disks are LUKS-encrypted** under Unraid.~~
+  **Answered 2026-08-07** — data disks yes, parity disks no *and cannot be*, since
+  Unraid parity carries no filesystem. Safe there because parity is computed over
+  ciphertext; **not** safe under SnapRAID, which parities plaintext files. See
+  §5.5. Inferred from `lsblk` device-mapper layers; confirm against Unraid's own
+  view. `s-3100` (MX100) also shows no crypt layer and is entangled with the
+  `/mnt/services` btrfs removal — establish its state before reusing it.
 - **Actual used bytes per data disk.** The brief's "24 TB of data" against 2× 12 TB data disks
   implies they are essentially full, which would leave no slack anywhere and make even the
   in-place path tighter. If that is literally true, winnow before doing anything else.

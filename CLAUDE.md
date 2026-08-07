@@ -16,6 +16,10 @@ documents the repo's structure and patterns.)
 - **`modules/home/<name>.nix`** — Home Manager modules shared across hosts/platforms
   (e.g. `common.nix`, consumed by both a NixOS host and a darwin host).
 - **`secrets/<host>.yaml`** — sops-encrypted, per host. Policy in `.sops.yaml`.
+- **`docs/<topic>.md`** — fleet-wide documentation that belongs to no single host
+  (e.g. `DISK-LABELLING.md`, the physical disk naming and cable-labelling
+  convention; `DISK-DRAWER.md`, unassigned spare disks). Per-host hardware
+  inventories stay in `hosts/<host>/HARDWARE-MAP.md` and reference these.
 
 ## Style
 
