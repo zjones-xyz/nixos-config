@@ -75,6 +75,15 @@
     # ollama.nix's gaming-drain oneshot is actually freeing VRAM/compute.
     nvtopPackages.nvidia
 
+    # IPMI/BMC out-of-band management client — ipmi-sensors, ipmipower,
+    # ipmiconsole (SOL), bmc-info. Same toolset as on serenity. Pegasus is a
+    # consumer desktop board with no BMC, so this is the LAN client for
+    # reaching other machines' BMCs, not local hardware monitoring; the
+    # local-access tools would additionally need /dev/ipmi0, which means the
+    # ipmi kernel modules and root (or a udev rule) — deliberately not wired
+    # up here since there's nothing on this box to talk to.
+    freeipmi
+
     # Archive handling — wasn't anywhere in the package set (system or home).
     unzip
     p7zip
