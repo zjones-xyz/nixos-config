@@ -88,6 +88,24 @@
     unzip
     p7zip
 
+    # RAR extraction. NOT covered by p7zip above: nixpkgs builds p7zip with
+    # `enableUnfree = false` by default, which strips the RAR codec out of the
+    # source tree entirely — so `7z x foo.rar` fails with "Can not open the
+    # file as archive" rather than a missing-plugin error, which is a
+    # confusing way to find out. libarchive/bsdtar handles some RAR3 but not
+    # RAR5 (the default since WinRAR 5.0), so it isn't a substitute either.
+    # unrar is the reference extractor and covers both.
+    #
+    # This also fixes RAR in Ark (the GUI, already present via the plasma6
+    # module's default app set — Dolphin's "Extract here" goes through it):
+    # Ark's cli plugin shells out to the `unrar` binary on $PATH and silently
+    # hides the format when it's absent.
+    #
+    # Unfree — the UnRAR license permits redistribution but forbids using the
+    # source to build a RAR *compressor*. allowUnfree is already on globally
+    # in modules/nixos/common.nix. Extract-only by design; use zip/7z to pack.
+    unrar
+
     # Winetricks operations scoped to a specific Proton prefix — common
     # companion to protonup-qt/lutris for troubleshooting individual games.
     protontricks
