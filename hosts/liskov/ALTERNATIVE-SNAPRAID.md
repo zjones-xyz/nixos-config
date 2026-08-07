@@ -904,11 +904,33 @@ keeping the ASM1064.
 pulled. Fits. Note §4c's question about relocating the ASM1042 for IOMMU isolation is moot
 under bare metal — there are no groups to keep clean.
 
-**⚠ Confirm the onboard port speeds before assigning disks.** The C204 generation typically
-provides **2× 6Gb/s and 4× 3Gb/s**, not six of one kind — worth checking against the board
-manual, because it decides placement. SATA2's ~300 MB/s is comfortably above a 12TB
-spinner's ~250 MB/s but throttles a SATA3 SSD by roughly 40%. So SSDs want the ASM1166
-(SATA3 on all six) or the two fast onboard ports; spinners are happy on SATA2.
+#### Port speeds are confirmed, and they invert the placement
+
+**Onboard is 2× 6Gb/s + 4× 3Gb/s** — confirmed 2026-08-07, not six alike. The ASM1166 is
+SATA3 on all six, but those six share one PCIe link.
+
+Every earlier version of this plan put the array on the ASM1166. That was never a
+performance decision — Unraid under VFIO *required* it, because passthrough hands over
+whole controllers. Bare metal has no such constraint, and the speeds argue the opposite:
+
+| Ports | Devices | Why |
+|---|---|---|
+| **Onboard SATA2 ×4** | **4× 12TB array** | 3Gb/s is ~275 MB/s practical, comfortably above the drives' ~250 MB/s — no cap. And it takes the parity check **entirely off the ASM1166's shared link**, onto the PCH, where DMI 2.0's ~2 GB/s is double what four spinners can produce. |
+| Onboard SATA3 ×2 | 2× BX500, app-state btrfs raid1 | the two best ports to the most latency-sensitive data |
+| ASM1166 ×6 | 3× 4TB (photos raid1 + third) + WD Blue + 223GB SSD + MX100 | photos are cold, the third 4TB idles, scratch SSDs are bursty — none of it contends for sustained bandwidth |
+
+**This dissolves the Gen2 link bottleneck for the array outright**, without depending on the
+Gen3 test. §2.2 argued for distributing disks across controllers as a mitigation; the
+confirmed port speeds turn that into a straightforward placement rule, and the array simply
+stops touching the constrained link at all.
+
+Consequence worth noting: **the Gen3 test no longer gates the array design.** It still
+decides the NVMe root's ceiling (~2 vs ~4 GB/s at x4), so it remains worth one reboot, but
+the parity check is unaffected either way. One less coupled unknown.
+
+Note this is the exact inverse of DEPLOY.md §3's recabling table, which moves the array
+*onto* the ASM1166. That table is correct for the VFIO plan and wrong for this one — a good
+illustration of how much of the existing runbook is load-bearing only under virtualization.
 
 #### The Gen3 test is now worth more than §2b of DEPLOY.md credits it
 
@@ -1155,12 +1177,12 @@ Unraid's per-disk independent filesystems are exactly what the target wants.
   **Largely dissolved 2026-08-07** — see §5.5. Photos move to 2× 4TB drawer disks in btrfs
   raid1, giving 4TB rather than ~450GB, so the layout no longer hinges on the answer. Still
   worth measuring, but it is no longer load-bearing.
-- **Whether the ASM1166 trains at Gen3 on the new firmware** (§5.5). One reboot. It decides
-  whether the PCIe link is a design constraint at all, and it caps the NVMe root as well
-  because the BIOS setting is almost certainly global rather than per-port.
-- **Onboard SATA port speeds.** The C204 generation typically gives 2× 6Gb/s and 4× 3Gb/s
-  rather than six alike. Unconfirmed against the board manual, and it decides which disks
-  want which ports — SATA2 throttles a SATA3 SSD by ~40% but is fine for a 12TB spinner.
+- **Whether the ASM1166 trains at Gen3 on the new firmware** (§5.5). One reboot. Now
+  narrower than it was: it caps the NVMe root (~2 vs ~4 GB/s at x4) but **no longer gates
+  the array design**, since the confirmed port speeds put the array on onboard SATA2 and
+  off the constrained link entirely.
+- ~~**Onboard SATA port speeds.**~~ **Confirmed 2026-08-07: 2× 6Gb/s + 4× 3Gb/s.** See §5.5
+  — this is what inverts the placement relative to the VFIO plan.
 - **Whether the X9SCM firmware can boot from an NVMe on a PCIe adapter.** Almost certainly
   not, given a 2011 board and a standard that postdates it. The ESP-on-SATA workaround in
   §5.5 is standard and costs no port, but confirm before relying on either answer.
