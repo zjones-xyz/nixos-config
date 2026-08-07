@@ -1232,6 +1232,7 @@ not data — §4's bare-metal run is the data.
 | Large file write over SMB/NFS, MB/s | | | |
 | **ASM1064 aggregate read MB/s** (§4b, all drives at once) | | | |
 | **ASM1064 `LnkSta`** (width × speed) | | *n/a* | |
+| **ASM1166 `LnkSta`** on liskov (expect Gen2 x2 — see below) | | *n/a* | |
 | **`UDMA_CRC_Error_Count` delta**, worst drive | | | |
 
 Use the *same* test set and the same drives for both runs, and run them at
@@ -1243,6 +1244,50 @@ virtualization exists as a suspect, whether that card's PCIe x1 link is a
 bottleneck and whether it is electrically clean under load. `LnkSta` has no
 virtualized counterpart; the guest sees the controller directly, so the link is
 whatever the host negotiated at boot.
+
+### ⚠ The ASM1166 link may bound the parity check, and virtualization will get blamed
+
+Measured on pegasus 2026-08-07, before the ECS06 flash, with the card in a
+modern B550 slot — i.e. this is the card's *capability*, unconstrained:
+
+| | Value |
+|---|---|
+| `LnkCap` / `LnkSta` | **Speed 8GT/s, Width x2** — trains at full capability |
+| `LnkCap2` supported speeds | 2.5–8GT/s (Gen1/2/3) |
+| `LnkSta2` | `EqualizationComplete+`, phases 1/2/3 all `+` |
+| `LaneErrStat` | 0 |
+| AER `UESta` / `CESta` | all clear |
+| `LnkCtl` ASPM | **Disabled** |
+| Expansion ROM | present, 512K, **disabled** (UEFI, no CSM) |
+| IOMMU group (pegasus only) | 15 — *does not transfer to liskov* |
+
+**The card is fine. liskov's slot is the constraint.** §0 requires
+`PCI Express Port - Gen X = Gen2` explicitly or the card is invisible, so on
+liskov this link runs Gen2 x2 rather than Gen3 x2:
+
+- Gen3 x2, 128b/130b encoding → **~1.97 GB/s**
+- Gen2 x2, 8b/10b encoding → **~1.0 GB/s**
+
+Roughly half. And four HUH721212ALE601s stream about 250 MB/s each, so four
+reading at once is ≈1.0 GB/s — **essentially the entire Gen2 x2 budget.** A
+parity check is exactly that workload, so after §3 moves the array onto this
+card, the parity check may be *link*-limited rather than disk-limited.
+
+Two consequences:
+
+1. **Do not attribute that to virtualization.** It will be present in the §4
+   bare-metal baseline too, which is precisely why §4 must run after recabling.
+   Same trap as the ASM1064 x1 rows above.
+2. **Historical parity-check times are not comparable.** Until §3, the array is
+   on onboard SATA (see "Where the drives actually are today"), a completely
+   different topology. Any figure remembered from before this project belongs to
+   a machine that no longer exists.
+
+The ASPM and Expansion ROM rows are pre-flash baselines: §2b flags ASPM as a
+stability risk on a 2011 platform and notes ECS06 changes it, so `LnkCtl` is
+worth re-reading after the flash. The disabled option ROM also confirms §2b's
+CSM reasoning — the ROM exists, nothing executes it under UEFI, and the flash
+tool reached the card regardless.
 
 ### What each number should do, and why
 
