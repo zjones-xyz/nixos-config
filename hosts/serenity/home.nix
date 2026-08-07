@@ -21,15 +21,18 @@
     codex
     curl
     f3
-    # FreeIPMI — drives Tower's BMC (serial-over-LAN console + chassis power)
-    # from somewhere that isn't Tower, which is the whole point: it is how you
-    # reach the LUKS passphrase prompt on liskov and how you power-cycle the
-    # box when it is wedged. NOT ipmitool — that BMC needs FreeIPMI's quirks
-    # handling. See hosts/liskov/DEPLOY.md for the exact invocations.
-    #   ipmiconsole -h 192.168.8.191 -u ADMIN -P
-    #   ipmipower   -h 192.168.8.191 -u ADMIN -P --stat
-    # Only the remote LAN interface matters here; freeipmi's local /dev/ipmi0
-    # path is Linux-only and irrelevant on a Mac.
+    # IPMI/BMC out-of-band management client — ipmi-sensors, ipmipower,
+    # ipmiconsole (SOL), bmc-info. Serenity has no BMC of its own (no Mac
+    # does), so this is purely the LAN client for talking to other machines'
+    # BMCs over IPMI 2.0. nixpkgs builds it for aarch64-darwin (cached
+    # upstream), so no Homebrew fallback needed.
+    #
+    # Its first consumer is liskov: this is how you reach the LUKS passphrase
+    # prompt over serial-over-LAN and power-cycle the box when it is wedged,
+    # from somewhere that is not Tower itself. FreeIPMI rather than ipmitool
+    # is not a preference — that BMC needs FreeIPMI's quirks handling. Exact
+    # invocations and the argument-parsing gotchas are in
+    # hosts/liskov/DEPLOY.md §0.
     freeipmi
     gh
     neovim
