@@ -467,6 +467,12 @@ ls /sys/kernel/iommu_groups | wc -l
   parity check rather than assuming ASPM is free — and note that if you have to
   disable ASPM again afterwards, most of the benefit evaporates.
 
+  *Partly de-risked 2026-08-07:* `LnkCtl` read `ASPM Disabled` both before and
+  after the flash on pegasus, so **ECS06 does not turn ASPM on by itself.**
+  Not conclusive for liskov — ASPM is negotiated with the root port under host
+  policy, and both differ there — so still worth re-reading `LnkCtl` once the
+  card is back in Tower. But the flash is not silently arming it.
+
 **Outcome on this card (pegasus, 2026-08-07).** Flashed successfully:
 `20 11 05 00 00 00` → `21 11 08 00 00 00`, i.e. 2020-11-05 → 2021-11-08. The
 six bytes are a date, `YY MM DD HH MM SS` — the same encoding as the
@@ -1354,19 +1360,38 @@ whatever the host negotiated at boot.
 
 ### ⚠ The ASM1166 link may bound the parity check, and virtualization will get blamed
 
-Measured on pegasus 2026-08-07, before the ECS06 flash, with the card in a
-modern B550 slot — i.e. this is the card's *capability*, unconstrained:
+Measured on pegasus 2026-08-07 in a modern B550 slot — i.e. the card's
+*capability*, unconstrained — both **before and after** the ECS06 flash:
 
-| | Value |
-|---|---|
-| `LnkCap` / `LnkSta` | **Speed 8GT/s, Width x2** — trains at full capability |
-| `LnkCap2` supported speeds | 2.5–8GT/s (Gen1/2/3) |
-| `LnkSta2` | `EqualizationComplete+`, phases 1/2/3 all `+` |
-| `LaneErrStat` | 0 |
-| AER `UESta` / `CESta` | all clear |
-| `LnkCtl` ASPM | **Disabled** |
-| Expansion ROM | present, 512K, **disabled** (UEFI, no CSM) |
-| IOMMU group (pegasus only) | 15 — *does not transfer to liskov* |
+| | Pre-flash (2020-11-05 fw) | Post-flash (2021-11-08 fw) |
+|---|---|---|
+| `LnkCap` / `LnkSta` | **8GT/s, Width x2** — full capability | **unchanged** |
+| `LnkCap2` supported speeds | 2.5–8GT/s (Gen1/2/3) | unchanged |
+| `LnkSta2` | `EqualizationComplete+`, phases 1/2/3 `+` | unchanged |
+| `LaneErrStat` | 0 | 0 |
+| AER `UESta` / `CESta` | all clear | all clear |
+| `LnkCtl` ASPM | **Disabled** | **Disabled** |
+| Expansion ROM | present, 512K, disabled (UEFI, no CSM) | unchanged |
+| IOMMU group (pegasus only) | 15 — *does not transfer to liskov* | 15 |
+
+**Two things that settles.** First, the flash changed nothing electrically —
+same link, no errors, clean equalization — so the card is healthy on both
+firmwares and nothing regressed.
+
+Second, and more usefully: **ECS06 did not enable ASPM of its own accord.**
+That was a stated risk of flashing (see Risks above — Ivy Bridge plus a budget
+controller with newly-enabled power management is the classic intermittent-
+dropout combination). It stayed `Disabled` across the flash. That materially
+reduces the concern without eliminating it, because ASPM state is negotiated
+with the root port under host policy rather than being purely a property of the
+card firmware, and liskov's platform and policy both differ. Re-read `LnkCtl`
+on liskov rather than assuming this carries over.
+
+Note the link readings could not test the thing that matters most for liskov:
+pegasus's slot was never the constraint, so there was no headroom in which
+improved link training could show itself. Whether ECS06 lets the X9SCM run at
+`Gen X = Auto` instead of forced Gen2 is still open — see "A free test worth
+running afterwards" in §2b.
 
 **The card is fine. liskov's slot is the constraint.** §0 requires
 `PCI Express Port - Gen X = Gen2` explicitly or the card is invisible, so on
