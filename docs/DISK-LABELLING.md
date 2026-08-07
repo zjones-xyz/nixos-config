@@ -104,17 +104,38 @@ will not collide at four. A four-character collision means the drives differ onl
 further left — different batches, or different runs.
 
 **Full serials are identical** — not a labelling problem, and do not paper over it
-by expanding the suffix. In likelihood order:
+by expanding the suffix. **The likely cause depends entirely on how you read the
+serial**, so establish that first.
 
-1. **A USB bridge is masking them.** By far the most common cause: read two disks
+*Read in software:*
+
+1. **A USB bridge is masking them.** By far the most common cause — read two disks
    through the same dock and both report the *bridge's* serial. Check with
    `smartctl -d sat -i /dev/sdX`, or attach over SATA. See the warning above.
 2. **A tool is reporting the wrong field** — WWN or model where you expected the
    serial.
-3. **The drives are counterfeit.** Duplicated serials are a known signal,
-   particularly on cheap SSDs and USB flash. At this point the identifier is the
-   least of the concerns; verify capacity and health before trusting the device
-   with anything.
+3. **The drives are counterfeit.**
+
+*Read off the physical labels, holding both drives:*
+
+Neither benign software explanation applies — there is no bridge and no tool in
+the path — so the ordering inverts.
+
+1. **You read the wrong field.** A drive label carries model number, part number,
+   WWN, firmware revision and a date code alongside the serial, and the serial is
+   often not the most prominent. Easily done, and worth eliminating first because
+   it is free.
+2. **The drives are counterfeit, relabelled or refurbished.** Duplicated serials
+   are a known signal, particularly on cheap SSDs and USB flash. At this point the
+   identifier is the least of the concerns — verify capacity and health before
+   trusting either device with anything.
+3. **A genuine manufacturer error.** Real, but rare enough to be the last thing
+   you should believe.
+
+**The cross-check that settles it:** read the serial the *other* way. Attach over
+SATA and compare the software's answer against the printed label. If they
+disagree, you know which reading to distrust. If both methods agree *and* both
+drives still match, the problem is the hardware, not the reading.
 
 **If five characters still collide on genuinely distinct full serials**, be
 suspicious rather than expanding again. Two drives agreeing on their last five
