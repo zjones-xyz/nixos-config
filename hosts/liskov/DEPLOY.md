@@ -295,24 +295,56 @@ substitute one for the other because they happened to download together. The
 ECS06 file ships in the [Silverstone package](https://www.silverstonetek.com/en/product/info/expansion-cards/ECS06/),
 with an Internet Archive mirror in Sources below.
 
+**The zip ships the vendor manual** — `ASM116xfwdl_UserManual.pdf`, ASMedia Rev
+1.0, 2021-07-13. It is the authoritative source for the flags, and it disagrees
+with every third-party guide. Extract it with `pdftotext -layout`; the document
+carries a vertical "ASMedia Confidential" watermark that interleaves itself into
+the text stream and makes the output look like garbage. It is not — there is one
+operational section and it documents exactly two commands.
+
 ```sh
-# Run this FIRST, before flashing anything.
-sudo ./116xfwdl -S                  # prints version info
+# 1. Show firmware version. Run this FIRST, before flashing anything.
+sudo ./116xfwdl -s
+
+# 2. Update firmware. The ROM must be in the same directory as the binary.
+sudo ./116xfwdl -u 11080000.ROM
+# then REBOOT — the vendor requires it, "to reload binary".
 ```
 
-`-S` does double duty: it confirms the tool can see the card at all — the
-"won't appear in the flash tool" failure mode below — and it tells you what
+⚠ **The flags are lowercase.** Earlier revisions of this section, and the
+third-party guides they came from, say `-S` and `-U`. ASMedia's own manual says
+`-s` and `-u`. Both `-S` and `-s` were run with no card attached on 2026-08-07
+and produced **identical** output — the tool banner followed by `Cannot found
+device`. So that test cannot distinguish a parsed flag from an ignored one, and
+the uppercase forms have never been confirmed to do anything at all. Use the
+documented lowercase ones; on a tool whose only other operation overwrites
+firmware with no rollback, this is not a coin worth flipping.
+
+(The manual writes item 2 as `116flash -s`. That is a copy-paste slip in
+ASMedia's document; the shipped binary is `116xfwdl`.)
+
+`-s` does double duty: it confirms the tool can see the card at all — the
+"won't appear in the flash tool" failure mode below — and it reports what
 firmware is currently on it. **Read that version before deciding to flash.** If
 the card already carries something newer than ECS06, flashing would be moving
 backwards, and this section's whole rationale assumes it is an upgrade.
 
-```sh
-sudo ./116xfwdl -U 11080000.ROM     # flash
-```
+**Two findings from exercising the tool on pegasus 2026-08-07, before the card
+was installed:**
 
-Both invocations were carried as UNVERIFIED in earlier revisions; they are now
-corroborated by a second independent source, though still not something anyone
-here has run. Read the Radxa/Steak guides in Sources before committing.
+- **It is statically linked** (`ldd` → "not a dynamic executable"), so it runs on
+  NixOS as-is. No `steam-run` or other FHS wrapper is needed. Worth knowing
+  because a vendor-shipped prebuilt binary usually *does* need one — a dynamic
+  ELF fails on NixOS with `No such file or directory`, which names the file that
+  is plainly present and means the missing loader.
+- **With no card attached it prints `Cannot found device`** (sic). That is the
+  negative-control baseline. If you see the same line *with* the card installed,
+  the problem is detection — seating, slot, or cables — not the tool.
+
+**There is no read-back, backup or verify command.** The manual documents update
+and show-version, and nothing else. That is not an omission in this runbook: it
+confirms from the vendor what "Risks" below infers from forum silence — there is
+no rollback path. Flash accordingly.
 
 **Two gotchas that come up repeatedly:**
 
