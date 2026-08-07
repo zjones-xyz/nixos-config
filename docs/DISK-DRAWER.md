@@ -29,10 +29,10 @@ SMR section, which is the most consequential thing in this file.
 | ID | Device | Size | Full serial | Made | Rec. | Notes |
 |---|---|---|---|---|---|---|
 | `h-3V35` | **WD Red Plus** WD40EFPX-68C6CN0 | 4 TB | `WXM2D72D3V35` | 2022-10-12 | **CMR** | Hand-marked **“1”**. The only CMR 4 TB in the drawer. |
-| `h-CJE9` | **WD Red** WD40EFAX-68JH4N1 | 4 TB | `WXD2D534CJE9` | 2023-07-03 | ⚠ SMR | Hand-marked **“2”** |
-| `h-CY72` | **WD Red** WD40EFAX-68JH4N1 | 4 TB | `WXD2D534CY72` | 2023-07-03 | ⚠ SMR | Hand-marked **“3”** |
-| `h-QUTK` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `WX52A20CQUTK` | 2020-02-25 | ⚠ SMR | |
-| `h-0X2T` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `WX52A20C0X2T` | 2020-02-25 | ⚠ SMR | Same batch as `h-QUTK` |
+| `h-CJE9-smr` | **WD Red** WD40EFAX-68JH4N1 | 4 TB | `WXD2D534CJE9` | 2023-07-03 | ⚠ SMR | Hand-marked **“2”** |
+| `h-CY72-smr` | **WD Red** WD40EFAX-68JH4N1 | 4 TB | `WXD2D534CY72` | 2023-07-03 | ⚠ SMR | Hand-marked **“3”** |
+| `h-QUTK-smr` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `WX52A20CQUTK` | 2020-02-25 | ⚠ SMR | |
+| `h-0X2T-smr` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `WX52A20C0X2T` | 2020-02-25 | ⚠ SMR | Same batch as `h-QUTK-smr` |
 | `h-SDCP` | **WD Blue** WD20EZRZ-00Z5HB0 | 2 TB | `WCC4M4CZSDCP` | 2017-06-27 | CMR | 5400 class |
 | `h-8742` | **Samsung Spinpoint F4EG** HD204UI | 2 TB | `S2H7JD2ZB08742` | 2010-11 | CMR | ⚠ **Firmware defect — see below.** Rev. A. Carries a red `RAPTOR` case sticker. |
 | `h-5N8F` | **WD Black** WD1003FZEX-00MK2A0 | 1 TB | `WCC3F0VZ5N8F` | 2016-02-27 | CMR | 7200 rpm, 64 MB |
@@ -44,7 +44,7 @@ SMR section, which is the most consequential thing in this file.
 **Aggregate: ~23.5 TB.** That is materially more than the ~12 TB this file
 previously credited, which changes the staging arithmetic — see below.
 
-#### ⚠ Five of these are SMR, including two of the three 4 TB disks
+#### ⚠ Four of these are SMR, including two of the three 4 TB disks
 
 The WD Red **EFAX** models are **DM-SMR** (drive-managed shingled recording),
 from the 2020 disclosure that covered WD20EFAX, WD30EFAX, WD40EFAX and WD60EFAX.
@@ -52,8 +52,13 @@ The **EFPX** Red Plus is CMR, as are all the Blues, the Black, the Seagate and
 the Samsung.
 
 This is inferred from model numbers, not read off the labels — the labels do not
-say. It is a well-documented list and worth treating as reliable, but confirm
-against WD's own product brief before it drives a purchase decision.
+say, and no drive reports it. That is method 1 of the two in
+`DISK-LABELLING.md` §1; it is reliable for the documented cases and silent about
+everything else, so **the `CMR` entries above mean "not on any SMR list I checked"
+rather than "measured"**. The `fio` cliff test in that section settles any single
+drive definitively in about half an hour, destructively.
+
+Confirm against WD's own product brief before this drives a purchase decision.
 
 **Why it matters, in order of severity:**
 
@@ -73,8 +78,8 @@ that pair cannot be all-CMR. The options, none of them chosen:
 
 | Option | Cost |
 |---|---|
-| `h-3V35` (CMR) + one EFAX (SMR) | Asymmetric mirror; the SMR half sets rebuild behaviour |
-| Both EFAX (SMR + SMR) | 4 TB, but neither half is a fast rebuild target |
+| `h-3V35` (CMR) + one EFAX (`-smr`) | Asymmetric mirror; the SMR half sets rebuild behaviour |
+| Both EFAX (`-smr` + `-smr`) | 4 TB, but neither half is a fast rebuild target |
 | `h-SDCP` + `h-8742` (both CMR, 2 TB) | Halves the tier to 2 TB, and `h-8742` has the firmware defect below |
 | Buy one CMR 4 TB to pair with `h-3V35` | Money, against a standing no-budget constraint |
 
@@ -125,8 +130,8 @@ rather than guessed — a confidently wrong suffix is worse than a missing one.
 #### The hand-marked 1 / 2 / 3
 
 The three 4 TB disks already carry marker numbers on their labels: **1 =
-`h-3V35`**, **2 = `h-CJE9`**, **3 = `h-CY72`**. Recorded so the old scheme can be
-mapped to the new one rather than silently conflicting with it.
+`h-3V35`**, **2 = `h-CJE9-smr`**, **3 = `h-CY72-smr`**. Recorded so the old scheme
+can be mapped to the new one rather than silently conflicting with it.
 
 Worth noting that the hand numbering does *not* group by recording technology —
 "1" is the odd one out electrically (the only CMR disk) but reads as the first of
@@ -254,7 +259,7 @@ mergerfs pool of them — and it is untested.
 
 ⚠ **Capacity is not the binding constraint on any of these; trust is.** Nothing
 in this drawer has been tested, several are a decade old, one has a known
-data-loss firmware bug, and five are SMR. Aggregate TB is the least interesting
+data-loss firmware bug, and four are SMR. Aggregate TB is the least interesting
 number here.
 
 ---

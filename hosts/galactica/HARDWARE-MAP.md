@@ -56,7 +56,7 @@ Two characteristics worth having on record:
   property of the root device worth knowing rather than discovering.
 - **PCIe Gen 4 ×4.** On this board's forced Gen2 (§0) that is roughly 2 GB/s
   assuming the adapter and slot both give ×4; about 3.9 GB/s if the Gen3 test in
-  `DEPLOY.md` §2b succeeds. Either is several times the Kingston it replaces.
+  `PLATFORM.md` §6e succeeds. Either is several times the Kingston it replaces.
 
 ### Not a disk, but on the bus
 
@@ -88,15 +88,16 @@ is the "Unraid prohibited it" case.
 > plaintext — then writes it to a file on the parity disk. If that parity disk is
 > not itself encrypted, the parity content is derived from plaintext and can leak.
 > **Under SnapRAID the parity disk must be LUKS-encrypted too.** Recorded in
-> `ALTERNATIVE-SNAPRAID.md` §5.5.
+> `DESIGN.md` §5.5.
 
 **The flash drive is not encryptable.** Unraid's boot device holds the licence and
 config and must be readable by the bootloader. The second prohibited case.
 
 **`s-3100` (MX100) shows no `crypt` layer**, and carries two partitions (476 G +
 468 M) rather than a pool member's layout. It is entangled with the
-`btrfs device remove missing /mnt/services` operation tracked in `DEPLOY.md` §1 —
-confirm its actual state before relying on either answer.
+`btrfs device remove missing /mnt/services` operation — an outstanding Unraid-side
+job whose completion has never been confirmed. Confirm its actual state before
+relying on either answer.
 
 **`s-5509` (Kingston) is not encrypted** and carries what looks like a previous
 Linux install — a 1 M BIOS boot partition, a 510 M ESP, a 111.3 G root and a 1.4 M
@@ -173,8 +174,7 @@ silkscreen. It decides placement: SATA2's ~275 MB/s is comfortably above a 12 TB
 spinner's ~250 MB/s, but throttles a SATA3 SSD by roughly 40%.
 
 **Port budget is 12** with the ASM1064 removed (onboard 6 + ASM1166 6), against 12
-devices under the bare-metal layout. Zero headroom. See
-`ALTERNATIVE-SNAPRAID.md` §5.5.
+devices under the bare-metal layout. Zero headroom. See `DESIGN.md` §5.5.
 
 **The ASM1166 has no silkscreen port numbers.** If cables run to it, assign a
 convention — likely counting from the bracket end — and record it here.
@@ -182,7 +182,12 @@ convention — likely counting from the bracket end — and record it here.
 ### Optical
 
 The BD-ROM moves to an **external USB3 enclosure** and does not return to SATA.
-See `DEPLOY.md` §3 move 4.
+That frees the SATA port the port budget above depends on, so it is not optional.
+
+⚠ The C204 has no USB3 of its own — it exists on this machine only via the
+ASM1042 add-in card (`PLATFORM.md` §10). On an onboard port the enclosure runs at
+USB2, roughly 35 MB/s against a BD-ROM's ~54 MB/s at 12x: fine for playback,
+mildly slower for ripping.
 
 ---
 
@@ -226,19 +231,30 @@ The other cages need enumerating before their cables can be labelled at all.
 ## 6. Machine-readable inventory
 
 ```csv
-id,form,serial_suffix,serial_full,model,size,location,role,colour,physical_label
-h-HJDH,hdd35,HJDH,8DKUHJDH,HUH721212ALE601,12TB,cage-A,array,,yes
-h-X4WE,hdd35,X4WE,8CJZX4WE,HUH721212ALE601,12TB,cage-A,array,,yes
-h-T97E,hdd35,T97E,8CG7T97E,HUH721212ALE601,12TB,cage-A,array,,yes
-h-NS3Y,hdd35,NS3Y,8DJPNS3Y,HUH721212ALE601,12TB,cage-A,array,,yes
-s-3255,ssd25,3255,244964803255,WD Blue SA510,500GB,internal,cache,,yes
-s-9545,ssd25,9545,19013024009545,SATA SSD,223.6GB,internal,fastservices,,yes
-s-768C,ssd25,768C,2422E8B6768C,Crucial BX500,480GB,internal,pool,,yes
-s-8162,ssd25,8162,2506E9A58162,Crucial BX500,480GB,internal,pool,,yes
-s-3100,ssd25,3100,15090EE23100,Crucial MX100,512GB,internal,pool,,yes
-s-5509,ssd25,5509,50026B7239015509,Kingston SH103S3120G,120GB,internal,retiring,,no
-m2-140B,m2-nvme,140B,23049339-090140B,Silicon Power UD90 2230,1TB,pcie-adapter,root,,no
+id,form,recording,serial_suffix,serial_full,model,size,location,role,colour,physical_label
+h-HJDH,hdd35,cmr,HJDH,8DKUHJDH,HUH721212ALE601,12TB,cage-A,array,,yes
+h-X4WE,hdd35,cmr,X4WE,8CJZX4WE,HUH721212ALE601,12TB,cage-A,array,,yes
+h-T97E,hdd35,cmr,T97E,8CG7T97E,HUH721212ALE601,12TB,cage-A,array,,yes
+h-NS3Y,hdd35,cmr,NS3Y,8DJPNS3Y,HUH721212ALE601,12TB,cage-A,array,,yes
+s-3255,ssd25,,3255,244964803255,WD Blue SA510,500GB,internal,cache,,yes
+s-9545,ssd25,,9545,19013024009545,SATA SSD,223.6GB,internal,fastservices,,yes
+s-768C,ssd25,,768C,2422E8B6768C,Crucial BX500,480GB,internal,pool,,yes
+s-8162,ssd25,,8162,2506E9A58162,Crucial BX500,480GB,internal,pool,,yes
+s-3100,ssd25,,3100,15090EE23100,Crucial MX100,512GB,internal,pool,,yes
+s-5509,ssd25,,5509,50026B7239015509,Kingston SH103S3120G,120GB,internal,retiring,,no
+m2-140B,m2-nvme,,140B,23049339-090140B,Silicon Power UD90 2230,1TB,pcie-adapter,root,,no
 ```
+
+**All four 12 TB disks are CMR** — the HGST Ultrastar He12 line is conventional
+throughout, so none takes the `-smr` marker (`DISK-LABELLING.md` §1). That is a
+model-number lookup, not a measurement; it is the safe direction to be wrong in,
+since the marker is only ever added, never assumed away. `recording` is empty for
+the SSDs and the NVMe, where the field does not apply.
+
+⚠ Worth knowing because **the drawer is not all CMR**: four of the twelve spares
+are shingled (`docs/DISK-DRAWER.md`). If one of these array disks ever fails, the
+replacement question is not only "is it big enough" — and at 12 TB nothing in the
+drawer is, so the answer is currently no on both counts.
 
 ---
 

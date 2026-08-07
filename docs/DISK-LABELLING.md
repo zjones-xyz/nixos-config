@@ -154,6 +154,72 @@ trivial filter rather than needing a negative match.
 **Case.** Lowercase prefix, uppercase suffix. The suffix then matches what `lsblk`
 and `/dev/disk/by-id` print, so it can be grepped against tool output directly.
 
+### Property markers — currently only `-smr`
+
+A lowercase suffix marking a **permanent physical property that changes how the
+drive must be treated and is invisible once installed.** One exists:
+
+```
+h-CY72-smr            # WD Red WD40EFAX — drive-managed shingled recording
+```
+
+**Only shingled drives are marked.** There is no `-cmr`, and adding one would
+double the length of nearly every label to assert the ordinary case.
+
+⚠ **So absence of the marker is not a claim that a drive is CMR** — it means
+either CMR or not yet established. The label cannot express that difference;
+**the inventory must.** The `recording` column (§5) carries three states —
+`cmr`, `smr`, `????` — and `????` is the honest answer for most older drives
+nobody has checked. This is the same split as everywhere else in this file:
+documents record uncertainty, labels record only what is settled.
+
+**Why this earns a place on a physical label**, when role and capacity
+deliberately do not:
+
+- It is **permanent**, like the serial and unlike the role.
+- It is **invisible once installed** — not printed on the drive body, not in
+  `smartctl -i`, not exposed by any SMART attribute.
+- It **changes what the drive is safe for.** A shingled drive absorbs writes into
+  a conventional cache of 20–40 GB and then collapses to single-digit MB/s while
+  it rewrites whole shingle zones. Sustained scattered writes — array parity
+  above all — are its worst case.
+- The moment a caddy label is read is often **exactly the moment it matters**:
+  pulling a spare out of a drawer to replace a failed member, which is precisely
+  when you do not want to discover what you grabbed.
+
+**Not a prefix**, for two reasons. The prefix slot already means form factor, and
+recording technology is orthogonal to it — a shingled drive can be 3.5" or 2.5".
+And prefixes are the fleet's grep handle: `h-` matching every 3.5" spinner is
+worth more than folding a second axis into it. As a suffix it composes cleanly —
+`h25-ABCD-smr` is a shingled 2.5" spinner and reads correctly on both axes.
+
+**Establishing it takes work, and the doc should say which kind was done.**
+Recording technology is not printed on any label and no drive reports it. Two
+methods, in increasing order of cost and confidence:
+
+1. **Look the model number up** against the vendor's own list. This is how the
+   fleet's current entries were determined, and the inventory says so rather than
+   presenting inference as measurement. Reliable for the documented cases — WD's
+   2020 disclosure covering the Red `EFAX` line, for instance — and silent about
+   everything else.
+2. **Blow past the cache and watch for the cliff.** ⚠ Destructive; blank disks
+   only.
+
+   ```sh
+   sudo fio --name=smr --filename=/dev/sdX --rw=randwrite --bs=64k \
+     --size=80G --direct=1 --ioengine=libaio --iodepth=8 \
+     --time_based --runtime=30m --write_bw_log=smr --log_avg_msec=1000
+   ```
+
+   CMR holds a flat line. DM-SMR runs at full speed until the conventional cache
+   fills, then falls to a fraction of it and never recovers. Unmistakable in the
+   bandwidth log, and about half an hour to settle.
+
+**If a further property ever needs marking**, add it here rather than inventing a
+suffix in a host map. The bar is the four properties above — permanent,
+invisible, safety-relevant, and needed at the moment the label is read. Very
+little clears it; capacity, model and role all fail on at least one.
+
 ### Unresolved serials — two different states
 
 | Placeholder | Means |
@@ -187,6 +253,16 @@ known. Anything recognisable at a glance works — brand, capacity, an ordinal.
 
 Do not print a physical label carrying either placeholder. An identifier that will
 change is worse than no label, because the wrong one outlives the gap.
+
+> ⚠ **Two kinds of suffix, and they behave oppositely.** A *hint* (`-kootion`,
+> `-4tb-1`) is provisional, document-only, and deleted once the serial is read. A
+> *property marker* (`-smr`, above) is permanent, printed, and deleted only if it
+> turns out to have been wrong. They look alike — lowercase, hyphenated, trailing
+> — so the distinction is worth holding: **if it can be resolved by looking
+> harder, it is a hint and never reaches a label.**
+>
+> The colour suffix on external drives (`usb3-HXRY-blue`) is a third case: printed
+> like a marker, but a convenience rather than a warning, and freely droppable.
 
 ---
 
@@ -330,7 +406,7 @@ Each host's map carries a CSV block so the label workflow and any generated
 diagram read from one source rather than drifting. Columns:
 
 ```
-id,form,serial_suffix,serial_full,model,size,location,role,colour,physical_label
+id,form,recording,serial_suffix,serial_full,model,size,location,role,colour,physical_label
 ```
 
 `form` is one of `hdd35`, `hdd25`, `ssd25`, `m2-nvme`, `m2-sata`, `msata`, `ide`, `usb2`, `usb3`, `usb2adap`,
@@ -338,3 +414,11 @@ id,form,serial_suffix,serial_full,model,size,location,role,colour,physical_label
 and external ones carry an interface generation. `colour` is the optional suffix
 and is empty for internal devices. `physical_label` is `yes`/`no` per §2.
 Unresolved fields are `????` or empty.
+
+`recording` is `cmr`, `smr`, or `????`, and is empty for anything that is not a
+spinner. **`????` is the correct entry for most drives** — it means nobody has
+established it, which is different from `cmr`. Only `smr` reaches the physical
+label, via the `-smr` marker in `id` (§1); the column is where the three-way
+distinction lives. Where a value came from a model-number lookup rather than a
+measurement, say so in the surrounding prose — the column has no room for it and
+the difference matters.
