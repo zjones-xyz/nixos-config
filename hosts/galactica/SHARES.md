@@ -8,7 +8,7 @@ storage layout depends on.
 are confirmed dead; the rest of the tiering is still a proposal to argue with.
 Sizes are ⟨TBD⟩ pending a `du -sh /mnt/user/*` pass.
 
-**Triage status: 3 of 34 decided.**
+**Triage status: 4 of 34 decided.**
 
 Dates are UTC.
 
@@ -47,7 +47,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | ~~`ai_models`~~ | fastservices | — | — | public | | 🗑 **DROP** — owner-confirmed dead |
 | `arm` | fastservices | export | — | public | | "automatic ripping machine" |
 | ~~`jellyfin_cache`~~ | fastservices | — | — | public | | 🗑 **DROP** — owner-confirmed dead. See §3 |
-| `swap` | fastservices | — | — | public | | |
+| `swap` | fastservices | — | — | public | | ⚙ **Does not migrate** — Unraid furniture, see §5 |
 | `inbox` | cache | export | — | public | | |
 
 ### Array-resident, cached on write (`yes`)
@@ -217,15 +217,30 @@ are shares whose contents I cannot infer from configuration alone.
 | Proposed tier | Shares | Why |
 |---|---|---|
 | **Irreplaceable** — real-time redundancy + offsite | `immich_photos`, `immich_photos_archived`, `documents`, `archived_disks` ⟨?⟩ | Cannot be re-acquired at any price |
-| **Painful to rebuild, small** — redundancy, cheap because tiny | `appdata`, `arr_config`, `system`, `ha_backup` | Service state. Hours of reconfiguration, but gigabytes not terabytes |
+| **Painful to rebuild, small** — redundancy, cheap because tiny | `appdata`, `arr_config`, `ha_backup` | Service state. Hours of reconfiguration, but gigabytes not terabytes |
 | **Re-acquirable** — snapshot parity, 24 h lag fine | `arr_media`, `arr_managed_data`, `jellyfin`, `isos` | The brief's explicit case |
-| **Regenerable** — parity optional | `swap`, `domains` ⟨?⟩, `serenity_time_machine` | Reproducible from a source that still exists |
-| **Drop** — do not migrate at all | **Confirmed:** `jellyfin_cache`, `ai_models`, `SHARE`. **Suspected:** `appdata_old`, `books_old`. ⟨+ whatever the staleness pass in §3 surfaces⟩ | Dead. Cheapest possible win |
+| **Regenerable** — parity optional | `domains` ⟨?⟩, `serenity_time_machine` | Reproducible from a source that still exists |
+| **Drop** — stale, delete before migrating | **Confirmed:** `jellyfin_cache`, `ai_models`, `SHARE`. **Suspected:** `appdata_old`, `books_old`. ⟨+ whatever the staleness pass in §3 surfaces⟩ | Dead. Cheapest possible win |
+| **Does not migrate** — platform furniture | **Confirmed:** `swap`. **Proposed:** `system` | The concept does not exist on the target; nothing to carry |
 | **⟨?⟩ Needs a decision** | `music`, `books`, `calibre_books`, `podcasts_audiobookshelf`, `manyfold_library`, `bambuddy_library`, `partdb`, `syncthing`, `copyparty`, `webdav`, `public`, `minishare`, `inbox`, `arm` | Could be either — depends on provenance |
 
-**Do the Drop row first.** It is the only tier that makes every other decision
-smaller, and it needs no design thinking — just the staleness pass in §3 and a
-verdict per share.
+**Two tiers mean "gone", and the distinction matters.** *Drop* is data that
+exists and is being deleted on purpose — someone has to be sure. *Does not
+migrate* is a share that only exists because Unraid needs it, where the target
+platform solves the same problem its own way and there is nothing to decide.
+
+- **`swap`** — owner-confirmed. NixOS declares swap in configuration
+  (`swapDevices`, or `zramSwap.enable`), not as a share. Tower is already running
+  `zram1` at 15.7 G as swap, so the mechanism is in use on the box today.
+- **`system`** — *proposed, not confirmed.* Unraid keeps `docker.img` and
+  `libvirt.img` here, and the live machine shows both mounted as loopbacks
+  (`loop2` → `/var/lib/docker`, `loop3` → `/etc/libvirt`). NixOS uses plain
+  directories for both, so the loopback images have no successor. ⟨Confirm
+  nothing else was put in this share.⟩
+
+**Then do the Drop row.** It is the tier that makes every other decision smaller,
+and it needs no design thinking — just the staleness pass in §3 and a verdict per
+share.
 
 **The `⟨?⟩` row is the real work**, and most of it turns on one question per
 share: *if this vanished, could I get it back, and at what cost?* `music` is the
