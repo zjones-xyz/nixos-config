@@ -29,10 +29,13 @@ updated 2026-06-20, *after* the final change to any Pi NixOS config
 serenity.
 
 **This reframes the whole question.** The fleet reads as five hosts with a lot of
-shared surface, but the live fleet is three hosts, and they split cleanly:
-one server (memory-alpha), one desktop (pegasus), one Mac (serenity). A
-desktop/server role split across *three* machines, two of which are the only
-members of their role, is not obviously worth an abstraction layer.
+shared surface, but the live fleet is three: one server (memory-alpha) and two
+desktops (pegasus and serenity).
+
+"Desktop" here means pegasus *and* serenity — Zoe's own framing, notwithstanding
+that serenity is a laptop and pegasus carries a mixed workstation/inference
+workload. That grouping matters for what follows: the desktop role has two real
+members, the server role has one.
 
 ## Finding 1 — most apparent duplication is in dead code
 
@@ -86,6 +89,34 @@ Smaller, purely mechanical repeats among live hosts:
   already anticipates this — serenity's own comment says these "could be
   promoted to common.nix later if wanted on the Linux hosts too."
 
+## Finding 2b — the desktop pair shares intent, not mechanism
+
+pegasus and serenity are the two desktops, and they overlap heavily in *what
+software is present* while sharing almost none of *how it gets there*.
+
+The CLI overlap is straightforwardly shareable — both are Home Manager
+`home.packages` on hosts that already import `modules/home/common.nix`.
+
+The GUI overlap is not. Serenity installs GUI apps as **Homebrew casks**
+(`modules/darwin/homebrew.nix`); pegasus installs them from **nixpkgs**
+(`home.packages`). At least fourteen apps are conceptually common to both —
+affine, bambu-studio, ferdium, jetbrains-toolbox, kitty, makemkv, obsidian,
+openscad, orcaslicer, ticktick, vscode, steam, Claude Desktop, and an
+Alfred-class launcher — and every one is declared twice, in two mechanisms,
+sometimes under different names (`orcaslicer` vs `orca-slicer`,
+`visual-studio-code` vs `vscode`).
+
+This is deliberate, not an oversight. The `kitty` cask carries the reasoning:
+a nix-built `.app` lands in `~/Applications/Home Manager Apps`, which
+Spotlight and Launchpad index unreliably, "same reason every other GUI on this
+host is a cask." That decision is sound and shouldn't be undone to enable
+sharing.
+
+The cost shows up as manual, one-directional sync. `hosts/pegasus/home.nix` has
+a block headed "Found on Serenity's /Applications, not yet replicated
+(2026-07-12)" — fifteen packages added by hand-auditing the Mac. Nothing keeps
+the two rosters aligned afterward, and nothing notices when they drift.
+
 ## Finding 3 — a rootless/rootful Docker split, downstream of Finding 1
 
 `modules/nixos/common.nix` enables **rootful** Docker (`/run/docker.sock`) and
@@ -118,17 +149,39 @@ shape here:
    real payoff, and the one place where drift between two copies has a genuine
    operational cost.
 3. **Land the mechanical dedups** (sops age key, SSH pubkey, rebuild aliases
-   from `networking.hostName`, shared serenity/pegasus packages into
-   `modules/home/common.nix`). Individually trivial, low risk, and they cover
+   from `networking.hostName`). Individually trivial, low risk, and they cover
    most of the day-to-day annoyance that prompted this.
+4. **Add `modules/home/desktop.nix`** for the pegasus/serenity CLI overlap —
+   see below.
 
-**On role modules specifically:** I'd hold off. A `roles/desktop.nix` /
-`roles/server.nix` split pays off when several hosts share a role, and after
-step 1 the live fleet has exactly one host per role. The existing
-"one concern per module, hosts import what they need" pattern already expresses
-everything the fleet currently needs, and it keeps per-host divergence readable
-— which matters in a repo where the comments carry this much hard-won debugging
-history. Revisit if a second desktop or second server ever appears.
+### On role modules
+
+A **desktop role is worth having**, but it can only live in `modules/home/`.
+pegasus is a NixOS host and serenity is a nix-darwin host; they share no
+system-level module system, so a `roles/desktop.nix` in the NixOS sense cannot
+span them. Home Manager is the one layer both already speak, and
+`modules/home/common.nix` is the existing precedent — explicitly cross-platform,
+imported by both.
+
+So: `modules/home/desktop.nix`, imported by `hosts/pegasus/home.nix` and
+`hosts/serenity/home.nix`, carrying the CLI tools both want. `common.nix` stays
+the fleet-wide floor (it is imported by the server too); `desktop.nix` is the
+layer above it. Starting contents are the confirmed overlap — `sl`,
+`claude-code`, `_1password-cli`, `unzip`, `freeipmi` — with the obvious
+candidates to promote next being tools serenity has and pegasus plausibly wants
+(`gh`, `nmap`, `sops`, `httpie`) or vice versa (`p7zip`, `speedtest-cli`).
+
+A **server role is not worth having** — memory-alpha is its only member, and
+`modules/nixos/common.nix` plus per-concern imports already covers it. Revisit
+if a second server appears.
+
+**GUI apps stay out of the shared layer.** Per Finding 2b the mechanisms are
+deliberately different (casks vs nixpkgs) for a good reason, and forcing them
+together would mean overriding a decision that was made on purpose. If the
+drift is worth addressing at all, the tractable version is a checked-in roster —
+a list of "apps both desktops should have," satisfied by each host through its
+native mechanism — rather than a shared nix expression. That is a documentation
+problem, not an abstraction problem, and it is the lowest-priority item here.
 
 ## Open questions
 
