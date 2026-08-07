@@ -360,9 +360,59 @@ no rollback path. Flash accordingly.
   CSM**, not an "additionally enable CSM" checkbox. Every host in this fleet
   boots UEFI (systemd-boot from an ESP), so flipping it makes the flashing
   machine unbootable, and on pegasus you would then be recovering a box that
-  also wants a LUKS passphrase before it will talk to you. If `-S` cannot see
+  also wants a LUKS passphrase before it will talk to you. If `-s` cannot see
   the card, work through the cable and slot causes above first; CSM is a last
   resort, and one to undo immediately afterwards.
+
+  *Confirmed unnecessary 2026-08-07:* the flash succeeded on pegasus with CSM
+  untouched and the card's option ROM present but disabled.
+
+### ⚠ Unbind the storage driver before `-u`, or the tool segfaults
+
+**This is not optional and nothing upstream mentions it.** Verified on pegasus
+2026-08-07.
+
+`116xfwdl -u` maps the card's BAR0 through `/dev/mem`. While `ahci` is bound it
+has claimed that region via `pci_request_regions`, and `CONFIG_IO_STRICT_DEVMEM`
+refuses the mapping with `EPERM`. **The tool does not check `mmap`'s return
+value**, stores `MAP_FAILED` (`-1`) in a global, dereferences it, and dies:
+
+```
+116xfwdl[4364]: segfault at 1b03 ip 0000000000402941 error 4 in 116xfwdl
+```
+
+There is no error message. The symptom is a firmware tool crashing on a card
+mid-flash, which reads exactly like a brick and is nothing of the sort. `-s`
+keeps working throughout, because config-space reads take a different,
+unrestricted path — so "the card still reports a version but `-u` crashes" is
+the signature of this, not of hardware trouble.
+
+```sh
+# Release the BAR. Safe: no drives attached, and a reboot restores it.
+echo 0000:04:00.0 | sudo tee /sys/bus/pci/drivers/ahci/unbind
+
+# Unbind also runs pci_disable_device, which clears bus master. Memory Space
+# Enable survives, but restore the pre-unbind state so a DMA write cannot fail
+# silently — a partial write is the one outcome with no rollback.
+sudo setpci -s 04:00.0 COMMAND=0x07          # I/O + Memory + BusMaster
+sudo lspci -s 04:00.0 -vv | grep Control:    # want I/O+ Mem+ BusMaster+
+
+sudo ./116xfwdl -u 11080000.ROM
+```
+
+Substitute the card's real address; it was `04:00.0` on pegasus. `ahci` rebinds
+by itself on the reboot that `-u` requires anyway.
+
+If the `EPERM` survives an unbind, the remaining lever is booting with
+`iomem=relaxed`, which disables the enforcement globally. That is a rebuild and
+a reboot, and it was not needed here.
+
+To confirm the diagnosis rather than guess at it, `strace` names the failing
+call directly:
+
+```sh
+sudo strace -e trace=openat,mmap,ioctl ./116xfwdl -u 11080000.ROM 2>&1 | tail -20
+```
 
 **pegasus BIOS paths** (MSI MAG B550 Tomahawk MAX WiFi, MS-7C91, Click BIOS 5 —
 recorded because none of these are where you would look, and finding them cost a
@@ -386,16 +436,49 @@ ls /sys/kernel/iommu_groups | wc -l
 
 **Risks.**
 
-- **Some cards have a flash chip the tool cannot write.** This is the
-  most-reported failure. It generally fails safe — "will not flash" rather than
-  "bricked" — but the update may simply not be available to you.
-- **Bricking is possible and no recovery method was found.** The card is cheap;
-  the array is not. See "flash it on pegasus" above.
+- ⚠ **An unrecognised flash chip does NOT stop the tool.** An earlier revision
+  of this section claimed this failure "generally fails safe — *will not flash*
+  rather than *bricked*". **That is wrong, and was disproved on 2026-08-07.**
+  This card's chip is not in the tool's table, and it announced so and then
+  erased it anyway:
+
+  ```
+  Find a SPI flash ROM ID : A1h, 31h, 11h is not in Supported List!!!
+  Try to program...
+  ASM116UpdateSpiFlashRom: Chip Erase status = 0
+  ASM116UpdateSpiFlashRom: Blank Check status = 0
+  ASM116UpdateSpiFlashRom: Write Data status = 0
+  Update SPI flash ROM......PASS!!!
+  ```
+
+  It worked — generic SPI commands were compatible, blank check confirmed the
+  erase reached real silicon, and the card came back on the newer firmware. But
+  **treat that message as "about to erase an unknown chip", not as a warning
+  that anything will stop.** There is no prompt and no abort. `A1h` is Fudan
+  Microelectronics, the sort of budget flash a generic card carries — this is
+  the common case, not an exotic one.
+- **Bricking is possible and no recovery method was found.** Confirmed from the
+  vendor manual, which documents only update and show-version: there is no
+  read-back, so no image to roll back to. The card is cheap; the array is not.
+  See "flash it on pegasus" above.
 - **ASPM on a 2011 platform can itself cause instability.** Ivy Bridge plus a
   budget controller with newly-enabled power management is exactly the
   combination that produces intermittent dropouts. Watch for it during the §4
   parity check rather than assuming ASPM is free — and note that if you have to
   disable ASPM again afterwards, most of the benefit evaporates.
+
+  *Partly de-risked 2026-08-07:* `LnkCtl` read `ASPM Disabled` both before and
+  after the flash on pegasus, so **ECS06 does not turn ASPM on by itself.**
+  Not conclusive for liskov — ASPM is negotiated with the root port under host
+  policy, and both differ there — so still worth re-reading `LnkCtl` once the
+  card is back in Tower. But the flash is not silently arming it.
+
+**Outcome on this card (pegasus, 2026-08-07).** Flashed successfully:
+`20 11 05 00 00 00` → `21 11 08 00 00 00`, i.e. 2020-11-05 → 2021-11-08. The
+six bytes are a date, `YY MM DD HH MM SS` — the same encoding as the
+`221118-0048-00` stock build named above. Read the version with `-s` after the
+mandatory reboot; that re-read is the *only* verification available, since the
+tool has no verify command.
 
 **A free test worth running afterwards.** The card currently needs Gen2 forced
 *and* non-compliance detect (§0), which is a PCIe link-training problem — and
@@ -404,17 +487,47 @@ flashed, **set the BIOS back to Auto and see whether the card still enumerates.*
 If it does, the §0 landmine is gone for good. Do not count on it; it costs one
 reboot to find out.
 
-### 2b-bis. While the ASM1166 is in pegasus: test VFIO on real hardware
+### 2b-bis. VFIO tested on real hardware — ✅ PASSED 2026-08-07
 
-Optional, and the highest-value thing available in this whole plan short of the
-machine itself. `modules/nixos/vfio.nix` has **never been exercised on real
-hardware.** Worse, the mechanism it relies on was wrong until recently: listing
-`vfio_pci` in `boot.initrd.kernelModules` does *not* order it ahead of udev in a
-systemd initrd (which 26.05 uses by default), so the `softdep` lines are what
-actually close the race — and that has only been reasoned about, never observed.
+**Done, and it works.** With the ASM1166 in pegasus and PR #42's temporary
+`homelab.vfio` block applied:
 
-Finding out on liskov means finding out on a host whose array controller is the
-thing being bound. Finding out on pegasus costs one reboot cycle.
+```
+04:00.0 SATA controller [0106]: ASMedia ASM1166 [1b21:1166] (rev 02)
+	Kernel driver in use: vfio-pci
+	Kernel modules: ahci
+```
+
+with `amd_iommu=on`, `iommu=pt`, `vfio-pci.ids=1b21:1166` on the cmdline.
+
+**`Kernel modules: ahci` is the load-bearing half of that result.** It says
+`ahci` was present and eligible to claim the device and did not get it. Had
+`ahci` merely been absent, the test would have proved nothing.
+
+That matters because the mechanism was documented wrongly until recently:
+listing `vfio_pci` in `boot.initrd.kernelModules` does *not* order it ahead of
+udev under the systemd initrd 26.05 uses by default, so the `softdep` lines are
+what actually close the race. **That had been reasoned about and never
+observed. It has now been observed.** `modules/nixos/vfio.nix` is no longer
+theoretical, and BACKGROUND.md's account of why it works is confirmed rather
+than argued.
+
+Finding out on liskov would have meant finding out on a host whose array
+controller is the thing being bound. It cost one reboot on pegasus.
+
+**Still untested, and honest about it:**
+
+- The **`xhci_pci` path**. The ASM1042 did not travel, so only the `ahci`
+  softdep was exercised. Whether that path matters at all depends on §4c — if
+  the ASM1042 moves to the free PCH slot and the host keeps it, `xhci_pci` is
+  defensive only.
+- **Under load, with drives attached.** The card was bare. The race is decided
+  at boot before any disk is touched, so this is the right test for the
+  question asked, but it is not a claim about behaviour under I/O.
+- **liskov's own topology.** pegasus put the card in IOMMU group 15, alone.
+  liskov's grouping is entirely different and nothing here transfers to it.
+
+Original rationale, kept because it is why this was worth doing:
 
 **Safe here because** pegasus boots from NVMe, and `1b21:` matches only the
 ASMedia cards — never its onboard SATA (AMD, `1022:`) or its NVMe. Do not add
@@ -1232,6 +1345,7 @@ not data — §4's bare-metal run is the data.
 | Large file write over SMB/NFS, MB/s | | | |
 | **ASM1064 aggregate read MB/s** (§4b, all drives at once) | | | |
 | **ASM1064 `LnkSta`** (width × speed) | | *n/a* | |
+| **ASM1166 `LnkSta`** on liskov (expect Gen2 x2 — see below) | | *n/a* | |
 | **`UDMA_CRC_Error_Count` delta**, worst drive | | | |
 
 Use the *same* test set and the same drives for both runs, and run them at
@@ -1243,6 +1357,69 @@ virtualization exists as a suspect, whether that card's PCIe x1 link is a
 bottleneck and whether it is electrically clean under load. `LnkSta` has no
 virtualized counterpart; the guest sees the controller directly, so the link is
 whatever the host negotiated at boot.
+
+### ⚠ The ASM1166 link may bound the parity check, and virtualization will get blamed
+
+Measured on pegasus 2026-08-07 in a modern B550 slot — i.e. the card's
+*capability*, unconstrained — both **before and after** the ECS06 flash:
+
+| | Pre-flash (2020-11-05 fw) | Post-flash (2021-11-08 fw) |
+|---|---|---|
+| `LnkCap` / `LnkSta` | **8GT/s, Width x2** — full capability | **unchanged** |
+| `LnkCap2` supported speeds | 2.5–8GT/s (Gen1/2/3) | unchanged |
+| `LnkSta2` | `EqualizationComplete+`, phases 1/2/3 `+` | unchanged |
+| `LaneErrStat` | 0 | 0 |
+| AER `UESta` / `CESta` | all clear | all clear |
+| `LnkCtl` ASPM | **Disabled** | **Disabled** |
+| Expansion ROM | present, 512K, disabled (UEFI, no CSM) | unchanged |
+| IOMMU group (pegasus only) | 15 — *does not transfer to liskov* | 15 |
+
+**Two things that settles.** First, the flash changed nothing electrically —
+same link, no errors, clean equalization — so the card is healthy on both
+firmwares and nothing regressed.
+
+Second, and more usefully: **ECS06 did not enable ASPM of its own accord.**
+That was a stated risk of flashing (see Risks above — Ivy Bridge plus a budget
+controller with newly-enabled power management is the classic intermittent-
+dropout combination). It stayed `Disabled` across the flash. That materially
+reduces the concern without eliminating it, because ASPM state is negotiated
+with the root port under host policy rather than being purely a property of the
+card firmware, and liskov's platform and policy both differ. Re-read `LnkCtl`
+on liskov rather than assuming this carries over.
+
+Note the link readings could not test the thing that matters most for liskov:
+pegasus's slot was never the constraint, so there was no headroom in which
+improved link training could show itself. Whether ECS06 lets the X9SCM run at
+`Gen X = Auto` instead of forced Gen2 is still open — see "A free test worth
+running afterwards" in §2b.
+
+**The card is fine. liskov's slot is the constraint.** §0 requires
+`PCI Express Port - Gen X = Gen2` explicitly or the card is invisible, so on
+liskov this link runs Gen2 x2 rather than Gen3 x2:
+
+- Gen3 x2, 128b/130b encoding → **~1.97 GB/s**
+- Gen2 x2, 8b/10b encoding → **~1.0 GB/s**
+
+Roughly half. And four HUH721212ALE601s stream about 250 MB/s each, so four
+reading at once is ≈1.0 GB/s — **essentially the entire Gen2 x2 budget.** A
+parity check is exactly that workload, so after §3 moves the array onto this
+card, the parity check may be *link*-limited rather than disk-limited.
+
+Two consequences:
+
+1. **Do not attribute that to virtualization.** It will be present in the §4
+   bare-metal baseline too, which is precisely why §4 must run after recabling.
+   Same trap as the ASM1064 x1 rows above.
+2. **Historical parity-check times are not comparable.** Until §3, the array is
+   on onboard SATA (see "Where the drives actually are today"), a completely
+   different topology. Any figure remembered from before this project belongs to
+   a machine that no longer exists.
+
+The ASPM and Expansion ROM rows are pre-flash baselines: §2b flags ASPM as a
+stability risk on a 2011 platform and notes ECS06 changes it, so `LnkCtl` is
+worth re-reading after the flash. The disabled option ROM also confirms §2b's
+CSM reasoning — the ROM exists, nothing executes it under UEFI, and the flash
+tool reached the card regardless.
 
 ### What each number should do, and why
 
