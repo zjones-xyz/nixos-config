@@ -59,8 +59,11 @@ layout with a Microsoft reserved partition, not a damaged pool member.
 ⚠ **`s-5509` (Kingston) is assigned to Unraid's `Boot` pool slot**, reporting
 *"Unmountable: unsupported or no file system"*, while the page also says *"Internal
 Boot: No internal boot setup detected."* So Unraid 7's internal-boot feature was
-started and never completed, and the disk still carries the previous Linux install
-(1 M BIOS boot + 510 M ESP + 111.3 G root).
+started and never completed, and the disk still carries the previous Linux install:
+1 M BIOS boot, 510 M vfat ESP, **111.3 G `zfs_member`**, 1.4 M remainder. The root
+was **ZFS**, not ext4 or btrfs — worth knowing before assuming a stray `mount` will
+read it, and worth a `zpool import -N` look if anything on it is wanted before the
+disk is wiped.
 
 **This matters for retirement.** The Kingston is not merely unused — it is
 *assigned in Unraid's configuration*. Unassign it there before repurposing the
@@ -133,8 +136,9 @@ was entangled with is closed: the Services pool is a healthy two-device mirror
 and this disk is out of it.
 
 **`s-5509` (Kingston) is not encrypted** and carries a previous Linux install — a
-1 M BIOS boot partition, a 510 M ESP, a 111.3 G root and a 1.4 M remainder. Still
-occupying Unraid's `Boot` pool slot (§1); being retired regardless.
+1 M BIOS boot partition, a 510 M vfat ESP, a 111.3 G **`zfs_member`** partition and
+a 1.4 M remainder. Still occupying Unraid's `Boot` pool slot (§1); being retired
+regardless.
 
 ---
 
@@ -202,9 +206,46 @@ directly.
 | ASM1064 (PCIe x1) | 4 | 6Gb/s | ~500 MB/s shared across all four. Slated for removal under the bare-metal layout. |
 | ASM1042 (PCIe) | — | USB3 | Not storage, but **load-bearing**: the C204 is EHCI only, so this card is the machine's only USB3, and the BD-ROM enclosure wants it. |
 
-⚠ **Which onboard ports are the 6Gb/s pair is ⟨TBD⟩** — check the board manual or
-silkscreen. It decides placement: SATA2's ~275 MB/s is comfortably above a 12 TB
-spinner's ~250 MB/s, but throttles a SATA3 SSD by roughly 40%.
+### Measured device-to-port mapping (sysfs, 2026-08-07)
+
+`readlink -f /sys/block/sdX/device` on the live machine. **Two controllers are
+in use; the ASM1166 carries nothing** and does not appear (it was pulled for the
+firmware flash and had only the BD-ROM before that).
+
+| `sdX` | Disk | PCI path | Controller | Port |
+|---|---|---|---|---|
+| `sdb` | `s-3255` Cache | `00:1f.2` | onboard | `ata1` |
+| `sdc` | `s-9545` Fastservices | `00:1f.2` | onboard | `ata2` |
+| `sdd` | `h-HJDH` **parity-2** | `00:1f.2` | onboard | `ata3` |
+| `sde` | `h-X4WE` **parity** | `00:1f.2` | onboard | `ata4` |
+| `sdf` | `h-T97E` **disk-1** | `00:1f.2` | onboard | `ata5` |
+| `sdg` | `h-NS3Y` **disk-2** | `00:1f.2` | onboard | `ata6` |
+| `sdh` | `s-768C` Services 1 | `00:1c.0 → 02:00.0` | **ASM1064** | `ata7` |
+| `sdi` | `s-8162` Services 2 | `00:1c.0 → 02:00.0` | **ASM1064** | `ata8` |
+| `sdj` | `s-3100` MX100 (unassigned) | `00:1c.0 → 02:00.0` | **ASM1064** | `ata9` |
+| `sdk` | `s-5509` Kingston | `00:1c.0 → 02:00.0` | **ASM1064** | `ata10` |
+
+The ASM1064 sits behind PCH root port `00:1c.0` at `02:00.0`. Note the address
+differs from what earlier VFIO-era notes recorded — **which is the documented
+reason the fleet binds PCI devices by vendor:device ID rather than by address.**
+
+### ✅ The current cabling is already the bare-metal optimum — do not re-run it
+
+`ata1`/`ata2` are the C204's two **6 Gb/s** ports and `ata3`–`ata6` its four
+**3 Gb/s** ports. So the machine as wired today puts:
+
+- **both SSDs on the two fast ports**, where SATA 3.0 is worth having, and
+- **all four 12 TB spinners on the slow ports**, where SATA 2.0's ~275 MB/s still
+  clears their ~250 MB/s peak with room (`PLATFORM.md` §8).
+
+That is exactly the placement the bare-metal design argues for, arrived at
+independently. **The array needs no recabling to move to NixOS** — a step the
+retired VFIO plan required, and one of the more disruptive ones. Only the
+ASM1064's four devices are in play, and three of those four are being retired or
+relocated anyway.
+
+⚠ This also confirms the port budget is *currently* full at ten devices across
+two controllers, with the ASM1166's six ports entirely spare.
 
 **Port budget is 12** with the ASM1064 removed (onboard 6 + ASM1166 6), against 12
 devices under the bare-metal layout. Zero headroom. See `DESIGN.md` §5.5.

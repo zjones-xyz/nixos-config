@@ -11,13 +11,14 @@ See `DECISIONS.md` decision 3. Consequently there is no
 `nixosConfigurations.galactica` in the flake and no `secrets/galactica.yaml`
 staging in `.sops.yaml` — both land together with the config.
 
-## The four documents
+## The five documents
 
 | File | Answers | Read it when |
 |---|---|---|
 | **`DESIGN.md`** | *What is being built and why.* The case for leaving Unraid, the SnapRAID/mergerfs stack, failure modes, storage layout, migration plan. | Deciding anything. This is the plan of record. |
 | **`PLATFORM.md`** | *What the machine does.* BIOS quirks, BMC/IPMI access, controller firmware, bus speeds, and how to tell which limit you are hitting. | Standing in front of the machine, or before believing a benchmark. |
 | **`HARDWARE-MAP.md`** | *What is plugged into what.* Disks, cages, bays, controllers, ports, label strings. | Pulling a drive, or printing labels. |
+| **`SHARES.md`** | *What data is actually on it.* Unraid's 34 shares, where each physically lives, and the classification the layout waits on. | Deciding tiers, or planning the migration. |
 | **`DECISIONS.md`** | *Why it is this way.* Decision → alternatives → rationale, what the previous design got right, and **`## Still open`**. | Before changing something that looks arbitrary. |
 
 Fleet-wide: `docs/DISK-LABELLING.md` (naming and labelling convention),
@@ -40,7 +41,8 @@ decoupled. `DECISIONS.md` §2.
 
 ## Blocking item
 
-**The data classification** (`DESIGN.md` §5). The layout assumes a two-way split
+**The data classification** (`SHARES.md` §5). The layout assumes a two-way split
 between irreplaceable data and re-acquirable data; the owner has flagged that
 more categories exist and that classifying them properly will materially change
-the result. Nothing else should be decided ahead of it.
+the result. `SHARES.md` now carries the 34 shares and a starting proposal to
+argue with. Nothing else should be decided ahead of it.

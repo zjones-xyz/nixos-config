@@ -6,7 +6,8 @@ Nothing here has been activated on hardware. There is no `configuration.nix` yet
 deliberately — see *Why there is no config here yet* below.
 
 Companion documents: `DESIGN.md` (what is being built and why), `PLATFORM.md`
-(what the machine does), `HARDWARE-MAP.md` (what is plugged into what).
+(what the machine does), `HARDWARE-MAP.md` (what is plugged into what),
+`SHARES.md` (what data is on it).
 
 > **This log has a predecessor.** Tower's first NixOS identity was `liskov`, a
 > minimal hypervisor that would have run the existing Unraid install as a KVM
@@ -216,6 +217,12 @@ re-derive why it stopped applying.
   has flagged that more categories exist and that classifying them properly will
   materially change the layout. **This is the blocking item.** Nothing else
   should be decided ahead of it.
+
+  **Scaffolded 2026-08-07:** `SHARES.md` now carries all 34 Unraid shares, where
+  each physically lives, and a five-tier starting proposal. Fourteen shares sit
+  in a `⟨?⟩` row whose contents cannot be inferred from configuration — that row
+  is the remaining work, and most of it is one question per share: *if this
+  vanished, could I get it back, and at what cost?*
 - ~~**Which 12 TB is which.**~~ **Closed 2026-08-07** from Unraid's Main tab:
   parity `h-X4WE`, parity-2 `h-HJDH`, disk-1 `h-T97E`, disk-2 `h-NS3Y`. The same
   reading confirmed the encryption inferences in `HARDWARE-MAP.md` §2 exactly, put
@@ -233,7 +240,9 @@ re-derive why it stopped applying.
   shared at Gen2, which a single SATA SSD nearly saturates. Measure it
   (`PLATFORM.md §8`) before it gets mistaken for something else.
 - **Tower's other cages**, beyond the built-in four-slot hotswap one, and the
-  port-to-bay mapping for it. `HARDWARE-MAP.md` §3 and §5 carry placeholders.
+  port-to-bay mapping for it. `HARDWARE-MAP.md` §3 carries placeholders. The
+  *controller* half is now measured (§4) — what remains is purely which physical
+  bay each disk occupies, which sysfs cannot answer.
 - ~~**The five drawer spinners' serials.**~~ **Closed 2026-08-07** — read from
   label photographs. There are **twelve**, not five (~23.5 TB), all identified in
   `docs/DISK-DRAWER.md`. Two findings from that pass are now open in its place:
