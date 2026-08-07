@@ -9,6 +9,10 @@ in five minutes.** Power off, boot the Unraid flash drive, done. Nothing here
 modifies the flash drive or its boot entry, and the NixOS install touches only
 the Kingston 120GB SSD.
 
+> **Dates in this document are UTC**, matching the git commit timestamps. The
+> fleet operates in US Pacific, so an entry stamped with a given date may refer
+> to work done the previous evening locally.
+
 ### Companion documents
 
 | File | Answers |
@@ -208,7 +212,7 @@ stops being "a controller is missing" and becomes "the array disappeared and the
 controller looks dead." It is sitting under the whole project as a latent fault
 waiting for the worst possible moment.
 
-A CR2032 costs about a pound. Replace it.
+A CR2032 costs almost nothing. Replace it.
 
 **This is preventive, not diagnostic.** An earlier revision justified it partly
 by the power-restore question in §1, on the reasoning that settings not
@@ -314,8 +318,39 @@ here has run. Read the Radxa/Steak guides in Sources before committing.
 
 - **Unplug every SATA cable from the card before flashing.** Cards reportedly
   fail to appear in the flash tool with drives attached.
-- **CSM may need enabling** in the flashing machine's BIOS for the card to be
-  seen.
+- **CSM — try without it first, and think before enabling it.** The guides that
+  recommend CSM are concerned with the card's *legacy option ROM* executing, i.e.
+  booting from it or Windows-side tooling that expects it. `116xfwdl` talks to
+  the PCI device directly, and the card enumerates on the bus whether or not its
+  legacy ROM runs.
+
+  ⚠ On many boards — MSI included — the setting is a **toggle between UEFI and
+  CSM**, not an "additionally enable CSM" checkbox. Every host in this fleet
+  boots UEFI (systemd-boot from an ESP), so flipping it makes the flashing
+  machine unbootable, and on pegasus you would then be recovering a box that
+  also wants a LUKS passphrase before it will talk to you. If `-S` cannot see
+  the card, work through the cable and slot causes above first; CSM is a last
+  resort, and one to undo immediately afterwards.
+
+**pegasus BIOS paths** (MSI MAG B550 Tomahawk MAX WiFi, MS-7C91, Click BIOS 5 —
+recorded because none of these are where you would look, and finding them cost a
+search):
+
+| Setting | Path |
+|---|---|
+| IOMMU | `OC` → `Advanced CPU Configuration` → `AMD CBS` → `IOMMU` |
+| SVM Mode | `OC` → `Advanced CPU Configuration` → `SVM Mode` |
+| CSM / UEFI | `Settings` → `Advanced` → `Windows OS Configuration` → `BIOS UEFI/CSM Mode` — see the warning above |
+
+`F7` toggles EZ Mode / Advanced Mode; the `OC` menu is invisible in EZ Mode. Set
+IOMMU to `Enabled` explicitly rather than `Auto`, so the post-boot check means
+something unambiguous — `vfio.nix`'s `cpuVendor` docs note that a silently
+ignored IOMMU parameter is indistinguishable from AMD-Vi being off in firmware:
+
+```sh
+dmesg | grep -iE 'AMD-Vi|IOMMU'
+ls /sys/kernel/iommu_groups | wc -l
+```
 
 **Risks.**
 
