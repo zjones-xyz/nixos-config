@@ -7,14 +7,16 @@
 #   3. Therefore: can that controller be passed through on its own?
 #
 # Usage:
-#   ./iommu-survey.sh                 # everything, including auto-detected
-#                                     #   USB storage — no arguments needed
+#   ./iommu-survey.sh                 # everything, including every auto-detected
+#                                     #   USB device — no arguments needed
 #   ./iommu-survey.sh /dev/sdc ...    # additionally trace specific devices
 #
-# The zero-argument form is the useful one for port mapping: plug flash drives
-# into the ports you want to identify, run it, and every USB storage device is
-# reported with its controller, IOMMU group and USB identity. Plug several in at
-# once — they are distinguished by model and serial.
+# The zero-argument form is the useful one for port mapping: plug something into
+# each port you want to identify, run it, and every attached USB device is
+# reported with its controller, IOMMU group and USB identity. It does not have to
+# be storage — a Logitech receiver or any recognisable dongle identifies a port
+# just as well, and is easier to pick out of a list than two similar-looking
+# sticks. Plug several in at once; they are distinguished by model and serial.
 #
 # REQUIRES intel_iommu=on. /sys/kernel/iommu_groups is empty or absent
 # otherwise, and the script says so rather than silently reporting nothing. On

@@ -165,7 +165,7 @@ mechanisms work).
   IOMMU. If a future change appears to need it, that is a signal to re-examine the
   slot layout. See `BACKGROUND.md`.
 - **Emulating the Unraid licence flash from an image file** — **verified
-  impossible with stock components** (2026-08-06). QEMU 11.0.2's emulated
+  impossible with stock components** (2026-08-06). QEMU 10.2.2's emulated
   mass-storage models (`usb-storage`, `usb-bot`, `usb-uas`) expose only `serial`;
   none exposes `vendorid`/`productid`. Since the Unraid GUID is the
   vendor:product:serial triple, it cannot be reproduced, and

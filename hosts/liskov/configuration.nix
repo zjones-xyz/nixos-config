@@ -182,6 +182,11 @@ in
   # br0 is a LAN interface, not a trusted one — the guest hangs off it. The
   # fleet default firewall (modules/nixos/common.nix) stays on; only SSH is
   # open, inherited from common.nix's openssh.
+  #
+  # This line is a marker of intent, not an enforcement: [ ] is already the
+  # default, and list options merge by concatenation, so it cannot *prevent* a
+  # later import from trusting an interface. It documents that nothing here
+  # trusts br0; grep for it before adding one that does.
   networking.firewall.trustedInterfaces = [ ];
 
   # ── VFIO passthrough ────────────────────────────────────────────────────────
@@ -303,7 +308,14 @@ in
     };
   };
 
-  # Lets libvirt attach guest interfaces to br0 via the qemu bridge helper.
+  # Belt-and-braces only — this guest does NOT depend on it. The option writes
+  # /etc/qemu/bridge.conf, which is read by qemu-bridge-helper for *unprivileged*
+  # QEMU (qemu:///session). This domain runs under qemu:///system with
+  # qemu.runAsRoot, where libvirtd creates and enslaves the tap itself and never
+  # consults that file. Kept so a future session-mode guest works too.
+  #
+  # Note it replaces the [ "virbr0" ] default rather than adding to it; nothing
+  # here uses virbr0, but restore it if a NAT network is ever added.
   virtualisation.libvirtd.allowedBridges = [ "br0" ];
 
   # `libvirtd` for virsh without sudo; `kvm` for /dev/kvm. Merges with the
