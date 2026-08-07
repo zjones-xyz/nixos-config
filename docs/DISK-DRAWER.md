@@ -15,13 +15,49 @@ Dates are UTC.
 
 `????` marks a serial not yet read.
 
+### Spinners
+
 | ID | Size | Form | Full serial | Notes |
 |---|---|---|---|---|
-| `h-????` | 4 TB | ⟨confirm 3.5"⟩ | ⟨TBD⟩ | Candidate: Tower photo tier (btrfs raid1) |
-| `h-????` | 4 TB | ⟨confirm 3.5"⟩ | ⟨TBD⟩ | Candidate: Tower photo tier (btrfs raid1) |
-| `h-????` | 4 TB | ⟨confirm 3.5"⟩ | ⟨TBD⟩ | Candidate: Tower, third array member or spare |
-| `h-????` | 2 TB | ⟨confirm 3.5"⟩ | ⟨TBD⟩ | |
-| `h-????` | 2 TB | ⟨confirm 3.5"⟩ | ⟨TBD⟩ | |
+| `h-????-4tb-1` | 4 TB | ⟨confirm 3.5"⟩ | ⟨TBD⟩ | Candidate: Tower photo tier (btrfs raid1) |
+| `h-????-4tb-2` | 4 TB | ⟨confirm 3.5"⟩ | ⟨TBD⟩ | Candidate: Tower photo tier (btrfs raid1) |
+| `h-????-4tb-3` | 4 TB | ⟨confirm 3.5"⟩ | ⟨TBD⟩ | Candidate: Tower, third array member or spare |
+| `h-????-2tb-1` | 2 TB | ⟨confirm 3.5"⟩ | ⟨TBD⟩ | |
+| `h-????-2tb-2` | 2 TB | ⟨confirm 3.5"⟩ | ⟨TBD⟩ | |
+
+The `-4tb-N` hints are provisional ordinals, present only so five otherwise
+identical `h-????` rows can be told apart. They are dropped once serials are read.
+
+### M.2 cards
+
+Identified from photographs of their labels, 2026-08-07, confirmed by the owner.
+Neither takes a physical label (`DISK-LABELLING.md` §2) — these entries exist for
+inventory only.
+
+| ID | Device | Size | Full serial | Notes |
+|---|---|---|---|---|
+| `m2-wtf?-kootion` | **KOOTION X15**, M.2 NVMe PCIe 3.0, length inferred 2280 | 256 GB | ⚠ **none found** | See below |
+| `m2-0627` | **SanDisk Z400s** (HP OEM), `SD8SMAT-032G-1006`, M.2 **2242** | 32 GB | `182186400627` | ⚠ **SATA, not NVMe** — B+M keyed, and the label carries the SERIAL ATA logo. `form: m2-sata`. |
+
+⚠ **The KOOTION carries no usable serial.** The only alphanumeric on its rear
+sticker is `KB0001`, beside a QR code — six characters, and `0001` reads as unit
+one of a batch rather than a device identity. Its PCB silkscreen
+(`5765DL_BGA_DEMO_M.2_4NAND_1528GA_6L_V3.0_J`) is a reference-design name, not an
+identifier either.
+
+Hence `wtf?` rather than `????`: the label *has* been read, and the answer is
+unusable. Resolve it from the **controller** instead, which reports its own serial
+independently of anything printed:
+
+```sh
+nvme id-ctrl /dev/nvmeN | grep -i '^sn'
+```
+
+Taking the last four of the sticker would give `m2-0001` — both meaningless and
+the most collision-prone string available. Do not.
+
+On the SanDisk, ignore `CT: UFVEL1AH2AV0HG` and `HP P/N: 836705-002`; the label
+prints `SN:` explicitly, which is the one unambiguous serial in this drawer.
 
 ⚠ **Confirm form factor before labelling.** A 2.5" spinner takes `h25-`, not
 `h-` — see `DISK-LABELLING.md` §1. The 2 TB disks are the likely candidates for

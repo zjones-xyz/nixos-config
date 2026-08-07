@@ -154,6 +154,34 @@ trivial filter rather than needing a negative match.
 **Case.** Lowercase prefix, uppercase suffix. The suffix then matches what `lsblk`
 and `/dev/disk/by-id` print, so it can be grepped against tool output directly.
 
+### Unresolved serials — two different states
+
+| Placeholder | Means |
+|---|---|
+| `????` | **Not yet read.** Nobody has looked. |
+| `wtf?` | **Read, and the answer is unusable.** The device reports something absent, generic, obviously sequential, or otherwise not a serial. |
+
+The distinction matters because they call for different actions. `????` is closed
+by going and looking. `wtf?` has already been looked at — so it needs a *different*
+source (software instead of the printed label, or vice versa), and it is a mild
+signal about the device itself, since a manufacturer that cannot be bothered to
+print a real serial may have cut other corners.
+
+Where more than one unresolved disk exists — and it usually does — append a
+lowercase hint so they can be told apart in the meantime:
+
+```
+m2-wtf?-kootion       # rear sticker reads KB0001; not a serial
+h-????-4tb-1          # nobody has read it yet
+```
+
+The hint is **provisional and disposable.** It exists only so unresolved rows are
+distinguishable in a document, and is dropped the moment the real suffix is
+known. Anything recognisable at a glance works — brand, capacity, an ordinal.
+
+Do not print a physical label carrying either placeholder. An identifier that will
+change is worse than no label, because the wrong one outlives the gap.
+
 ---
 
 ## 2. What gets a physical label

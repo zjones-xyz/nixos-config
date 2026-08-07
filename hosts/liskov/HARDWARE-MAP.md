@@ -40,7 +40,20 @@ cannot be mapped to a physical drive, which is this document's whole purpose.
 
 | ID | Device | Size | Full serial | Notes |
 |---|---|---|---|---|
-| `m2-????` | M.2 2242 NVMe on PCIe adapter | 1 TB | ⟨TBD⟩ | Intended root, replacing `s-5509`. **No physical label** — no cable to trace, unambiguous by location, and no room on the card. Identifier is for inventory only. |
+| `m2-140B` | **Silicon Power UD90**, M.2 **2230**, NVMe PCIe Gen 4 ×4, on a PCIe adapter | 1 TB | `23049339-090140B` | Intended root, replacing `s-5509`. **No physical label** — no cable to trace, unambiguous by location, and no room on the card. Identifier is for inventory only. |
+
+Read off the drive's own label 2026-08-07 and confirmed by the owner. **2230, not
+2242** as an earlier revision recorded.
+
+Two characteristics worth having on record:
+
+- **Controller is a Silicon Motion SM2269XT** (PCB silkscreen
+  `SM2269XT_M2-30_W067A_V0C_1130Y22`, one BGA272 NAND package). It is
+  **DRAM-less**, using host memory buffer — unremarkable with 32 GB of RAM, but a
+  property of the root device worth knowing rather than discovering.
+- **PCIe Gen 4 ×4.** On this board's forced Gen2 (§0) that is roughly 2 GB/s
+  assuming the adapter and slot both give ×4; about 3.9 GB/s if the Gen3 test in
+  `DEPLOY.md` §2b succeeds. Either is several times the Kingston it replaces.
 
 ### Not a disk, but on the bus
 
@@ -186,7 +199,7 @@ s-8162
 s-3100
 ```
 
-`s-5509` omitted — retiring. `m2-????` takes no physical label. Drawer disks are
+`s-5509` omitted — retiring. `m2-140B` takes no physical label. Drawer disks are
 pending serials, in `docs/DISK-DRAWER.md`.
 
 ### Cable and bay labels — pending
@@ -221,7 +234,7 @@ s-768C,ssd25,768C,2422E8B6768C,Crucial BX500,480GB,internal,pool,,yes
 s-8162,ssd25,8162,2506E9A58162,Crucial BX500,480GB,internal,pool,,yes
 s-3100,ssd25,3100,15090EE23100,Crucial MX100,512GB,internal,pool,,yes
 s-5509,ssd25,5509,50026B7239015509,Kingston SH103S3120G,120GB,internal,retiring,,no
-m2-????,m2-nvme,????,,,1TB,pcie-adapter,root,,no
+m2-140B,m2-nvme,140B,23049339-090140B,Silicon Power UD90 2230,1TB,pcie-adapter,root,,no
 ```
 
 ---
@@ -233,7 +246,6 @@ m2-????,m2-nvme,????,,,1TB,pcie-adapter,root,,no
 | Which 12TB is parity-1 / parity-2 / data-1 / data-2 | Unraid Main tab | Mapping a failure notice to a physical drive |
 | Confirm the encryption inferences in §2 | Unraid Main tab | Migration planning |
 | `s-3100` actual state after the `/mnt/services` btrfs removal | Unraid, `btrfs filesystem show` | Whether it is available for reuse |
-| NVMe serial | `lsblk` once installed | Documentary reference only |
 | Enumerate the other cages — letters, arrangement, type | Eyes | Bay identifiers and cable labels for six of ten disks |
 | Port-to-bay mapping | Measure it — hotswap insertion + sysfs, see §3 | All cable labels |
 | Which two onboard ports are 6Gb/s | Board manual or silkscreen | Final disk placement |
