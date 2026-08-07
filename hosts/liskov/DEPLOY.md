@@ -654,7 +654,13 @@ Read at least the first two before flashing:
 |---|---|---|
 | ASM1166, 6 ports | Guest (permanent) | 4× 12TB HDD + Cache (WD Blue 500GB) + Fastservices (240GB) |
 | ASM1064, 4 ports | Guest (**temporary**) | BX500 ×2, MX100 (if healthy), 1 spare |
-| Onboard, 6 ports | Host | Kingston 120GB (NixOS root), BD-ROM, 4 spare |
+| Onboard, 6 ports | Host | Kingston 120GB (NixOS root), ~~BD-ROM~~, 5 spare |
+
+⚠ **This table describes the VFIO plan only, and two of its entries are already
+superseded** — the BD-ROM leaves SATA entirely (move 4 below), and the Kingston
+is slated for retirement in favour of an NVMe on a PCIe adapter. Both changes
+apply regardless of which platform is chosen; see `ALTERNATIVE-SNAPRAID.md` for
+the layout that is actually under consideration.
 
 ### Where the drives actually are today (measured 2026-08-07)
 
@@ -700,12 +706,23 @@ identifies a drive and one that tells you whether the array is degraded or lost.
 3. **Kingston off the ASM1064 (port 4) → onboard.** The ASM1064 gets bound to
    vfio-pci and handed to the guest. If the host's root disk is still on it, the
    host cannot see its own filesystem.
-4. **BD-ROM → onboard.** ⚠ **Half done.** It was unplugged from the ASM1166
-   deliberately on 2026-08-07 and is currently connected to nothing. Reconnecting
-   it to an onboard port is outstanding and explicitly **low priority** — it is
-   recorded here only so it is not later mistaken for a missing drive or a dead
-   optical unit. It cannot go back where it was: moves 1 and 2 fill the ASM1166
-   completely, so onboard is its only destination.
+4. **BD-ROM → external USB3 enclosure. Not returning to SATA at all.**
+   ~~→ onboard~~. It was unplugged from the ASM1166 deliberately on 2026-08-07,
+   and the decision on 2026-08-07 is that it stays off: it moves to an external
+   USB3 case rather than consuming a SATA port. That buys portability between
+   machines, easier physical access, and — the reason it matters here — **it
+   removes a device from the port budget entirely**, which is otherwise
+   oversubscribed under every layout being considered.
+
+   Two practical notes. This board is a 2011 design whose C204 is EHCI only, so
+   **USB3 exists on this machine solely because of the ASM1042 add-in card** —
+   plug the enclosure into an onboard port and you get USB2, roughly 35 MB/s
+   against a BD-ROM's ~54 MB/s at 12x. Irrelevant for playback, mildly slower
+   for ripping. And check whether the enclosure is bus-powered: a slimline drive
+   usually is, a full-height 5.25" unit will want a brick.
+
+   Recorded so nobody reading this cold reconnects it to SATA and wonders why
+   the port budget no longer closes.
 
 Note that moves 1–3 are a shuffle between two full controllers, not a set of
 independent swaps: onboard has to give up six drives and take one back. Pulling
