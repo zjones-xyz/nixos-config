@@ -360,9 +360,59 @@ no rollback path. Flash accordingly.
   CSM**, not an "additionally enable CSM" checkbox. Every host in this fleet
   boots UEFI (systemd-boot from an ESP), so flipping it makes the flashing
   machine unbootable, and on pegasus you would then be recovering a box that
-  also wants a LUKS passphrase before it will talk to you. If `-S` cannot see
+  also wants a LUKS passphrase before it will talk to you. If `-s` cannot see
   the card, work through the cable and slot causes above first; CSM is a last
   resort, and one to undo immediately afterwards.
+
+  *Confirmed unnecessary 2026-08-07:* the flash succeeded on pegasus with CSM
+  untouched and the card's option ROM present but disabled.
+
+### ⚠ Unbind the storage driver before `-u`, or the tool segfaults
+
+**This is not optional and nothing upstream mentions it.** Verified on pegasus
+2026-08-07.
+
+`116xfwdl -u` maps the card's BAR0 through `/dev/mem`. While `ahci` is bound it
+has claimed that region via `pci_request_regions`, and `CONFIG_IO_STRICT_DEVMEM`
+refuses the mapping with `EPERM`. **The tool does not check `mmap`'s return
+value**, stores `MAP_FAILED` (`-1`) in a global, dereferences it, and dies:
+
+```
+116xfwdl[4364]: segfault at 1b03 ip 0000000000402941 error 4 in 116xfwdl
+```
+
+There is no error message. The symptom is a firmware tool crashing on a card
+mid-flash, which reads exactly like a brick and is nothing of the sort. `-s`
+keeps working throughout, because config-space reads take a different,
+unrestricted path — so "the card still reports a version but `-u` crashes" is
+the signature of this, not of hardware trouble.
+
+```sh
+# Release the BAR. Safe: no drives attached, and a reboot restores it.
+echo 0000:04:00.0 | sudo tee /sys/bus/pci/drivers/ahci/unbind
+
+# Unbind also runs pci_disable_device, which clears bus master. Memory Space
+# Enable survives, but restore the pre-unbind state so a DMA write cannot fail
+# silently — a partial write is the one outcome with no rollback.
+sudo setpci -s 04:00.0 COMMAND=0x07          # I/O + Memory + BusMaster
+sudo lspci -s 04:00.0 -vv | grep Control:    # want I/O+ Mem+ BusMaster+
+
+sudo ./116xfwdl -u 11080000.ROM
+```
+
+Substitute the card's real address; it was `04:00.0` on pegasus. `ahci` rebinds
+by itself on the reboot that `-u` requires anyway.
+
+If the `EPERM` survives an unbind, the remaining lever is booting with
+`iomem=relaxed`, which disables the enforcement globally. That is a rebuild and
+a reboot, and it was not needed here.
+
+To confirm the diagnosis rather than guess at it, `strace` names the failing
+call directly:
+
+```sh
+sudo strace -e trace=openat,mmap,ioctl ./116xfwdl -u 11080000.ROM 2>&1 | tail -20
+```
 
 **pegasus BIOS paths** (MSI MAG B550 Tomahawk MAX WiFi, MS-7C91, Click BIOS 5 —
 recorded because none of these are where you would look, and finding them cost a
@@ -386,16 +436,43 @@ ls /sys/kernel/iommu_groups | wc -l
 
 **Risks.**
 
-- **Some cards have a flash chip the tool cannot write.** This is the
-  most-reported failure. It generally fails safe — "will not flash" rather than
-  "bricked" — but the update may simply not be available to you.
-- **Bricking is possible and no recovery method was found.** The card is cheap;
-  the array is not. See "flash it on pegasus" above.
+- ⚠ **An unrecognised flash chip does NOT stop the tool.** An earlier revision
+  of this section claimed this failure "generally fails safe — *will not flash*
+  rather than *bricked*". **That is wrong, and was disproved on 2026-08-07.**
+  This card's chip is not in the tool's table, and it announced so and then
+  erased it anyway:
+
+  ```
+  Find a SPI flash ROM ID : A1h, 31h, 11h is not in Supported List!!!
+  Try to program...
+  ASM116UpdateSpiFlashRom: Chip Erase status = 0
+  ASM116UpdateSpiFlashRom: Blank Check status = 0
+  ASM116UpdateSpiFlashRom: Write Data status = 0
+  Update SPI flash ROM......PASS!!!
+  ```
+
+  It worked — generic SPI commands were compatible, blank check confirmed the
+  erase reached real silicon, and the card came back on the newer firmware. But
+  **treat that message as "about to erase an unknown chip", not as a warning
+  that anything will stop.** There is no prompt and no abort. `A1h` is Fudan
+  Microelectronics, the sort of budget flash a generic card carries — this is
+  the common case, not an exotic one.
+- **Bricking is possible and no recovery method was found.** Confirmed from the
+  vendor manual, which documents only update and show-version: there is no
+  read-back, so no image to roll back to. The card is cheap; the array is not.
+  See "flash it on pegasus" above.
 - **ASPM on a 2011 platform can itself cause instability.** Ivy Bridge plus a
   budget controller with newly-enabled power management is exactly the
   combination that produces intermittent dropouts. Watch for it during the §4
   parity check rather than assuming ASPM is free — and note that if you have to
   disable ASPM again afterwards, most of the benefit evaporates.
+
+**Outcome on this card (pegasus, 2026-08-07).** Flashed successfully:
+`20 11 05 00 00 00` → `21 11 08 00 00 00`, i.e. 2020-11-05 → 2021-11-08. The
+six bytes are a date, `YY MM DD HH MM SS` — the same encoding as the
+`221118-0048-00` stock build named above. Read the version with `-s` after the
+mandatory reboot; that re-read is the *only* verification available, since the
+tool has no verify command.
 
 **A free test worth running afterwards.** The card currently needs Gen2 forced
 *and* non-compliance detect (§0), which is a PCIe link-training problem — and
