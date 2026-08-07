@@ -8,7 +8,7 @@ storage layout depends on.
 are confirmed dead; the rest of the tiering is still a proposal to argue with.
 Sizes are ⟨TBD⟩ pending a `du -sh /mnt/user/*` pass.
 
-**Triage status: 5 of 34 decided.**
+**Triage status: 6 of 34 decided.**
 
 Dates are UTC.
 
@@ -66,7 +66,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `copyparty` | cache | export | — | public | | File-sharing service |
 | ~~`manyfold_library`~~ | cache | — | — | public | | 🗑 **DROP** — owner-confirmed dead |
 | `partdb` | cache | — | — | public | | Parts database |
-| `podcasts_audiobookshelf` | cache | — | — | private | | |
+| `podcasts_audiobookshelf` | cache | — | — | private | | ✅ **Re-acquirable** |
 | `syncthing` | cache | — | — | private | | |
 | `webdav` | cache | — | — | public | | |
 | `serenity_time_machine` | cache | export **(TM)** | — | public | | Mac backups, 1 TB volume limit |
@@ -256,28 +256,74 @@ empty for the duration of any migration window. Schedule around it.
 
 ## 5. Classification — the actual open question
 
-`DESIGN.md` §5 assumes a **two-way** split: irreplaceable data gets real-time
-checksummed redundancy (btrfs raid1), re-acquirable data gets snapshot parity
-with a 24 h lag. The owner has flagged that there are more categories than two,
-and that classifying properly will change the layout.
+`DESIGN.md` §5 was written around a **two-way** split: irreplaceable data gets
+real-time checksummed redundancy (btrfs raid1), re-acquirable data gets snapshot
+parity with a 24 h lag. That is not enough categories, and the missing one turned
+out to be load-bearing.
 
-**Below is a starting proposal to argue with, not a decision.** The `⟨?⟩` marks
-are shares whose contents I cannot infer from configuration alone.
+### The tiers
 
-| Proposed tier | Shares | Why |
+Ordered by protection, most to least. **Owner-confirmed entries are bold;**
+everything else is a proposal to argue with, and `⟨?⟩` marks a share whose
+contents cannot be inferred from configuration.
+
+| Tier | Protection | Shares |
 |---|---|---|
-| **Irreplaceable** — real-time redundancy + offsite | `immich_photos`, `immich_photos_archived`, `documents`, `archived_disks` ⟨?⟩ | Cannot be re-acquired at any price |
-| **Painful to rebuild, small** — redundancy, cheap because tiny | `appdata`, `arr_config`, `ha_backup` | Service state. Hours of reconfiguration, but gigabytes not terabytes |
-| **Re-acquirable** — snapshot parity, 24 h lag fine | `arr_media`, `arr_managed_data`, `jellyfin`, `isos` | The brief's explicit case |
-| **Regenerable** — parity optional | `domains` ⟨?⟩, `serenity_time_machine` | Reproducible from a source that still exists |
-| **Drop** — stale, delete before migrating | **Confirmed:** `jellyfin_cache`, `ai_models`, `SHARE`, `manyfold_library`. **Suspected:** `appdata_old`, `books_old`. ⟨+ whatever the staleness pass in §3 surfaces⟩ | Dead. Cheapest possible win |
-| **Does not migrate** — platform furniture | **Confirmed:** `swap`. **Proposed:** `system` | The concept does not exist on the target; nothing to carry |
-| **⟨?⟩ Needs a decision** | `music`, `books`, `calibre_books`, `podcasts_audiobookshelf`, `bambuddy_library`, `partdb`, `syncthing`, `copyparty`, `webdav`, `public`, `minishare`, `inbox`, `arm` | Could be either — depends on provenance |
+| **Irreplaceable** | Real-time redundancy, checksummed, **+ offsite** | `immich_photos`, `immich_photos_archived`, `documents` |
+| **Protected** | Parity. No offsite. | ⟨to populate — see below⟩ |
+| **Painful to rebuild, small** | Redundancy; cheap because tiny | `appdata`, `arr_config`, `ha_backup` |
+| **Re-acquirable** | Snapshot parity, 24 h lag fine | **`podcasts_audiobookshelf`**, `arr_media`, `arr_managed_data`, `jellyfin`, `isos` |
+| **Regenerable** | Parity optional | `domains` ⟨?⟩, `serenity_time_machine` |
+| ⚙ **Does not migrate** | n/a — no successor concept | **`swap`**, `system` *(proposed)* |
+| 🗑 **Drop** | n/a — deleted before migrating | **`jellyfin_cache`**, **`ai_models`**, **`SHARE`**, **`manyfold_library`**; `appdata_old` + `books_old` suspected |
+| **⟨?⟩ Undecided** | — | `music`, `books`, `calibre_books`, `bambuddy_library`, `partdb`, `syncthing`, `copyparty`, `webdav`, `public`, `minishare`, `inbox`, `arm`, `archived_disks` |
 
-**Two tiers mean "gone", and the distinction matters.** *Drop* is data that
-exists and is being deleted on purpose — someone has to be sure. *Does not
-migrate* is a share that only exists because Unraid needs it, where the target
-platform solves the same problem its own way and there is nothing to decide.
+### Why "Protected" is the tier that matters
+
+**Owner's definition, 2026-08-07:** *"stuff I would attempt to save in a disaster
+once more important things have been saved, but ultimately it's not irreplaceably
+precious. It may not be replaceable, but losing it isn't going to make me cry."*
+
+This separates two axes that "irreplaceable" had been conflating: **can I get it
+back**, and **how much do I care**. Those are independent. A share can be
+genuinely unrecoverable *and* a tolerable loss, and before this tier existed such
+data had nowhere to go — it got filed as irreplaceable by default, because the
+alternative label said "re-acquirable" and that was simply false.
+
+**The practical consequence is that Protected draws the offsite boundary**, and
+offsite is the expensive part of any of this — bandwidth, a storage service, or
+disks rotated somewhere else, all of it recurring. Parity is a one-time cost in
+disks you mostly already own.
+
+So the ladder resolves to something with real teeth:
+
+| | Survives disk failure | Survives fire, theft, ransomware | Recurring cost |
+|---|---|---|---|
+| **Irreplaceable** | yes | **yes** | yes — this is the tier you pay for |
+| **Protected** | yes | no | no |
+| **Re-acquirable** | yes | no, and it does not matter | no |
+
+**Keeping Irreplaceable small is the whole point.** Every share that moves from
+Irreplaceable to Protected is one that stops costing money every month, and the
+honest question for each is not "would I be annoyed" but *"would I pay to get
+this back?"*
+
+`music` is the archetype and is exactly what this tier was invented for: ripped
+from discs still owned is Regenerable, twenty years of accumulation from sources
+that no longer exist is unrecoverable — but for most people that is Protected,
+not Irreplaceable. The config cannot tell the difference; only you can.
+
+`archived_disks` moves back to undecided on the same reasoning. It was proposed
+as Irreplaceable purely because it is `secure` and owner-writable, which says
+something about *access* and nothing about *value*.
+
+### Notes on the "gone" tiers
+
+**Two tiers mean gone, and the distinction matters.** *Drop* is data that exists
+and is being deleted on purpose — someone has to be sure, and being wrong is
+unrecoverable. *Does not migrate* is a share that exists only because Unraid needs
+it, where the target platform solves the same problem its own way and there is
+nothing to weigh.
 
 - **`swap`** — owner-confirmed. NixOS declares swap in configuration
   (`swapDevices`, or `zramSwap.enable`), not as a share. Tower is already running
@@ -288,16 +334,14 @@ platform solves the same problem its own way and there is nothing to decide.
   directories for both, so the loopback images have no successor. ⟨Confirm
   nothing else was put in this share.⟩
 
-**Then do the Drop row.** It is the tier that makes every other decision smaller,
+**Do the Drop row first.** It is the tier that makes every other decision smaller,
 and it needs no design thinking — just the staleness pass in §3 and a verdict per
 share.
-
-**The `⟨?⟩` row is the real work**, and most of it turns on one question per
-share: *if this vanished, could I get it back, and at what cost?* `music` is the
-archetype — ripped from discs you still own is regenerable; accumulated over
-twenty years from sources that no longer exist is irreplaceable, and the config
-cannot tell the difference.
 
 `serenity_time_machine` deserves its own thought: it is a *backup*, so losing it
 costs nothing while the Mac is healthy, and everything if both fail together.
 Whether that pairing is worth protecting against is a judgement, not a fact.
+
+⚠ **`DESIGN.md` §5's layout assumes two tiers and now has six.** Revisit it once
+Protected is populated — the photo-tier sizing in particular was derived from a
+world where everything unrecoverable had to go in the mirror.
