@@ -17,16 +17,122 @@ Dates are UTC.
 
 ### Spinners
 
-| ID | Size | Form | Full serial | Notes |
-|---|---|---|---|---|
-| `h-????-4tb-1` | 4 TB | ⟨confirm 3.5"⟩ | ⟨TBD⟩ | Candidate: Tower photo tier (btrfs raid1) |
-| `h-????-4tb-2` | 4 TB | ⟨confirm 3.5"⟩ | ⟨TBD⟩ | Candidate: Tower photo tier (btrfs raid1) |
-| `h-????-4tb-3` | 4 TB | ⟨confirm 3.5"⟩ | ⟨TBD⟩ | Candidate: Tower, third array member or spare |
-| `h-????-2tb-1` | 2 TB | ⟨confirm 3.5"⟩ | ⟨TBD⟩ | |
-| `h-????-2tb-2` | 2 TB | ⟨confirm 3.5"⟩ | ⟨TBD⟩ | |
+Read from photographs of the drives' own labels, 2026-08-07. Twelve, not the five
+an earlier revision of this file assumed — that count came from recollection and
+was low on every size class except 4 TB.
 
-The `-4tb-N` hints are provisional ordinals, present only so five otherwise
-identical `h-????` rows can be told apart. They are dropped once serials are read.
+Reading off the label rather than over a USB dock sidesteps the bridge-masking
+problem described below, so these identifiers are trustworthy. **Recording
+technology is not on the label** and is inferred from the model number; see the
+SMR section, which is the most consequential thing in this file.
+
+| ID | Device | Size | Full serial | Made | Rec. | Notes |
+|---|---|---|---|---|---|---|
+| `h-3V35` | **WD Red Plus** WD40EFPX-68C6CN0 | 4 TB | `WXM2D72D3V35` | 2022-10-12 | **CMR** | Hand-marked **“1”**. The only CMR 4 TB in the drawer. |
+| `h-CJE9` | **WD Red** WD40EFAX-68JH4N1 | 4 TB | `WXD2D534CJE9` | 2023-07-03 | ⚠ SMR | Hand-marked **“2”** |
+| `h-CY72` | **WD Red** WD40EFAX-68JH4N1 | 4 TB | `WXD2D534CY72` | 2023-07-03 | ⚠ SMR | Hand-marked **“3”** |
+| `h-QUTK` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `WX52A20CQUTK` | 2020-02-25 | ⚠ SMR | |
+| `h-0X2T` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `WX52A20C0X2T` | 2020-02-25 | ⚠ SMR | Same batch as `h-QUTK` |
+| `h-SDCP` | **WD Blue** WD20EZRZ-00Z5HB0 | 2 TB | `WCC4M4CZSDCP` | 2017-06-27 | CMR | 5400 class |
+| `h-8742` | **Samsung Spinpoint F4EG** HD204UI | 2 TB | `S2H7JD2ZB08742` | 2010-11 | CMR | ⚠ **Firmware defect — see below.** Rev. A. Carries a red `RAPTOR` case sticker. |
+| `h-5N8F` | **WD Black** WD1003FZEX-00MK2A0 | 1 TB | `WCC3F0VZ5N8F` | 2016-02-27 | CMR | 7200 rpm, 64 MB |
+| `h-NYXN` | **WD Blue** WD10EZEX-00BN5A0 | 1 TB | `WCC3F2NRNYXN` | 2015-05-01 | CMR | 7200 class |
+| `h-6D0X` | **WD Blue** WD10EZRZ-00HTKB0 | 1 TB | `WCC4J6NP6D0X` | 2017-03-19 | CMR | 5400 class. ⚠ serial char, see below |
+| `h-AFYJ` | **Seagate Barracuda ES** ST3500630NS | 500 GB | `9QG9AFYJ` | 2008 (date code `08396`) | CMR | Still sealed in an antistatic bag. Firmware `3.AQN`, P/N `9BL146-038`. |
+| `h25-P4TH` | **Hitachi Travelstar 5K250** HTS542560K9SA00 | ⚠ 40 GB? | `WAG0P4TH` | 2009 (date code `4907`) | CMR | **2.5"**, hence `h25-`. Carries a `Microsoft P/N` field. ⚠ capacity, see below |
+
+**Aggregate: ~23.5 TB.** That is materially more than the ~12 TB this file
+previously credited, which changes the staging arithmetic — see below.
+
+#### ⚠ Five of these are SMR, including two of the three 4 TB disks
+
+The WD Red **EFAX** models are **DM-SMR** (drive-managed shingled recording),
+from the 2020 disclosure that covered WD20EFAX, WD30EFAX, WD40EFAX and WD60EFAX.
+The **EFPX** Red Plus is CMR, as are all the Blues, the Black, the Seagate and
+the Samsung.
+
+This is inferred from model numbers, not read off the labels — the labels do not
+say. It is a well-documented list and worth treating as reliable, but confirm
+against WD's own product brief before it drives a purchase decision.
+
+**Why it matters, in order of severity:**
+
+1. **SMR is a bad fit for parity.** SnapRAID parity updates are scattered writes
+   across the whole parity disk, which is the workload DM-SMR handles worst — the
+   drive's persistent cache fills and it stalls into a read-modify-write of whole
+   shingled zones. **Do not put parity on an EFAX.**
+2. **SMR is mediocre for a mirror rebuild**, though less badly than folklore
+   suggests: a resilver is largely sequential, which DM-SMR tolerates. The risk
+   is the tail — random writes late in a rebuild, on a disk already degraded.
+3. **SMR is fine for bulk sequential storage and for staging.** A migration copy
+   is one long sequential write. These disks are perfectly good for that.
+
+**Consequence for the photo tier.** `hosts/galactica/DESIGN.md` §5 proposes two
+4 TB disks in btrfs raid1 for photos. **There is only one CMR 4 TB disk here**, so
+that pair cannot be all-CMR. The options, none of them chosen:
+
+| Option | Cost |
+|---|---|
+| `h-3V35` (CMR) + one EFAX (SMR) | Asymmetric mirror; the SMR half sets rebuild behaviour |
+| Both EFAX (SMR + SMR) | 4 TB, but neither half is a fast rebuild target |
+| `h-SDCP` + `h-8742` (both CMR, 2 TB) | Halves the tier to 2 TB, and `h-8742` has the firmware defect below |
+| Buy one CMR 4 TB to pair with `h-3V35` | Money, against a standing no-budget constraint |
+
+**This is a design decision, not an inventory one** — it belongs to whoever
+settles the data classification. Flagged here because the layout in `DESIGN.md`
+was written assuming three interchangeable 4 TB disks, and they are not
+interchangeable.
+
+#### ⚠ `h-8742` (Samsung HD204UI) has a known data-loss firmware defect
+
+Units manufactured around 2010-11 — which this one is, Rev. A — shipped with a
+bug where **a SMART command issued while the drive is writing can corrupt data**.
+Samsung released a patched firmware (`1AQ10001`) and a bootable checker.
+
+That is close to a disqualifier for this fleet specifically, because **everything
+here polls SMART constantly**: `smartd`, SnapRAID's own health checks, and the
+`UDMA_CRC_Error_Count` baseline procedure in `hosts/galactica/PLATFORM.md` §12.
+The exact condition the bug needs is the condition normal operation creates.
+
+**Check the firmware revision before this disk is used for anything**
+(`smartctl -i /dev/sdX`, look at `Firmware Version`). If it is unpatched, either
+patch it or treat the disk as scratch. It is a 2010 drive either way; this is a
+reason to be unsentimental about it.
+
+#### Two label readings to confirm at attach time
+
+Per `DISK-LABELLING.md`, a character that cannot be read confidently gets flagged
+rather than guessed — a confidently wrong suffix is worse than a missing one.
+
+- **`h-6D0X`** — the full serial reads `WCC4J6NP6D0X`, but the third-from-last
+  glyph is a `0`/`O` judgement call at this resolution. **The four-char suffix is
+  affected**, so confirm it before printing a caddy label. Nothing else in the
+  fleet is close enough for a collision either way.
+- **`h25-P4TH`** — the label reads **40 GB**, but the model number
+  `HTS542560K9SA00` is Hitachi's 5K250 **60 GB** part. One of the two is being
+  misread, or this is a capacity-limited OEM unit — the `Microsoft P/N` field on
+  the label suggests it is an Xbox 360 drive, which shipped in capacity-limited
+  variants. Resolve by attaching it; `lsblk` settles it in one command.
+
+  It has no role in this fleet at either capacity. Recorded for completeness, and
+  because a 2.5" drive in a drawer of 3.5" drives is exactly the kind of thing
+  that gets mislabelled — it takes `h25-`, not `h-` (`DISK-LABELLING.md` §1).
+
+  The full serial `9QG9AFYJ` on `h-AFYJ` has the same class of ambiguity in its
+  *third* character (`9` vs `3`, read differently across two photographs) — but
+  that character is outside the four-char suffix, so the identifier is unaffected.
+
+#### The hand-marked 1 / 2 / 3
+
+The three 4 TB disks already carry marker numbers on their labels: **1 =
+`h-3V35`**, **2 = `h-CJE9`**, **3 = `h-CY72`**. Recorded so the old scheme can be
+mapped to the new one rather than silently conflicting with it.
+
+Worth noting that the hand numbering does *not* group by recording technology —
+"1" is the odd one out electrically (the only CMR disk) but reads as the first of
+a matched set. That is precisely the failure mode serial-derived identifiers
+avoid: **an ordinal encodes the order you happened to pick them up, and nothing
+else.**
 
 ### M.2 cards
 
@@ -90,33 +196,33 @@ testing only.
 On the SanDisk, ignore `CT: UFVEL1AH2AV0HG` and `HP P/N: 836705-002`; the label
 prints `SN:` explicitly, which is the one unambiguous serial in this drawer.
 
-⚠ **Confirm form factor before labelling.** A 2.5" spinner takes `h25-`, not
-`h-` — see `DISK-LABELLING.md` §1. The 2 TB disks are the likely candidates for
-that, being the sort of capacity that shipped in laptops.
+---
 
-**Read the serials with the disks attached to any machine:**
+## How these serials were read, and why that matters
 
-```sh
-lsblk -o NAME,SIZE,MODEL,SERIAL,TYPE
-```
+**Off the drives' own labels, photographed.** That is the reliable method, and it
+is worth stating rather than assuming, because the obvious alternative is worse.
 
-> ⚠ **Not over a USB dock without checking.** A USB-SATA bridge usually reports
-> *its own* serial rather than the disk's, so a disk read that way can be given
-> the wrong identifier entirely — and these five all need identifiers before they
-> can be labelled. Either attach over SATA, or pierce the bridge:
+> ⚠ **Do not identify a disk over a USB dock without checking.** A USB-SATA
+> bridge usually reports *its own* serial rather than the disk's, so a disk read
+> that way can be given the wrong identifier entirely. If you must read one
+> attached, pierce the bridge:
 >
 > ```sh
+> lsblk -o NAME,SIZE,MODEL,SERIAL,TYPE
 > smartctl -d sat -i /dev/sdX
 > ```
 >
-> Compare the two: if `lsblk` and `smartctl` disagree, trust `smartctl` and
-> suspect the bridge.
+> If the two disagree, trust `smartctl` and suspect the bridge.
 
-**Or read the serial off the drive's own label.** Photographing it sidesteps the
-bridge problem entirely — the printed label carries the drive's true identity
-regardless of what any adapter reports — and it does not require attaching the
-disk to anything. For disks that are only going to sit in a drawer, this is the
-lower-effort path as well as the safer one.
+The printed label carries the drive's true identity regardless of what any
+adapter reports, and it does not require attaching the disk to anything — so for
+disks that are only going to sit in a drawer, photographing is both the safer
+path and the cheaper one.
+
+**What the label does not carry** is recording technology, firmware revision, or
+actual health. Those need the disk attached, and two of them are flagged above as
+needing exactly that before the disk is trusted.
 
 ---
 
@@ -127,17 +233,29 @@ each parity disk to be at least as large as the largest data disk, and Unraid ha
 the same constraint — so a 4 TB disk cannot stand in for a 12 TB one under either
 platform, as parity or as a like-for-like data replacement.
 
-What the three 4 TB disks are is **12 TB of aggregate emergency capacity**, which
-is exactly one 12 TB disk's worth. That is more useful than it sounds under
-SnapRAID specifically, because disks are independent filesystems rather than a
-stripe: a failed disk's contents can be restored piecemeal and everything on the
-surviving disks stays readable throughout. The operational path is fiddly —
-`snapraid fix` targets one mount point, so restoring across three disks means
-pointing it at a mergerfs pool of them — and it is untested.
+What they are instead is **~23.5 TB of aggregate emergency capacity**, nearly two
+12 TB disks' worth. That is more useful than it sounds under SnapRAID
+specifically, because disks are independent filesystems rather than a stripe: a
+failed disk's contents can be restored piecemeal and everything on the surviving
+disks stays readable throughout. The operational path is fiddly — `snapraid fix`
+targets one mount point, so restoring across several disks means pointing it at a
+mergerfs pool of them — and it is untested.
 
-Their better use is as Tower's **photo tier**: two of them in btrfs raid1 gives
-4 TB of checksummed, real-time-redundant storage for irreplaceable data, on disks
-already owned. See `hosts/galactica/DESIGN.md` §5.
+**This is roughly double what was assumed**, and it moves two things:
+
+- **Staging for the migration.** `hosts/galactica/DESIGN.md` §6 assumes three
+  4 TB disks and therefore that *arr* media must be winnowed to fit 12 TB. With
+  the four 2 TB disks that becomes **20 TB of staging** before touching the
+  1 TB class — likely enough to avoid winnowing at all. SMR is not a problem
+  here: a staging copy is one long sequential write.
+- **The photo tier.** Two 4 TB disks in btrfs raid1 remains the shape, but the
+  recording-technology split above means the pair cannot be all-CMR without
+  buying a disk. See the options table.
+
+⚠ **Capacity is not the binding constraint on any of these; trust is.** Nothing
+in this drawer has been tested, several are a decade old, one has a known
+data-loss firmware bug, and five are SMR. Aggregate TB is the least interesting
+number here.
 
 ---
 

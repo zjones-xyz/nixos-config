@@ -233,9 +233,20 @@ re-derive why it stopped applying.
   (`PLATFORM.md §8`) before it gets mistaken for something else.
 - **Tower's other cages**, beyond the built-in four-slot hotswap one, and the
   port-to-bay mapping for it. `HARDWARE-MAP.md` §3 and §5 carry placeholders.
-- **The five drawer spinners' serials.** `docs/DISK-DRAWER.md` cannot assign
-  identifiers until they are read, and two of the 4 TB disks are candidates for
-  the photo tier.
+- ~~**The five drawer spinners' serials.**~~ **Closed 2026-08-07** — read from
+  label photographs. There are **twelve**, not five (~23.5 TB), all identified in
+  `docs/DISK-DRAWER.md`. Two findings from that pass are now open in its place:
+  - **Only one 4 TB disk is CMR.** The other two are WD Red EFAX, which are
+    DM-SMR, so the photo tier cannot be an all-CMR pair without buying a disk.
+    Options tabulated in `DISK-DRAWER.md`; **no SnapRAID parity on an EFAX**
+    under any of them.
+  - **The Samsung 2 TB has the HD204UI firmware defect** where a SMART command
+    during a write can corrupt data. Check its firmware revision before use.
+    Everything in this fleet polls SMART constantly.
+
+  Two label characters still need confirming at attach time: the `0`/`O` in
+  `h-6D0X` (inside the four-char suffix, so it affects the identifier) and
+  whether `h25-P4TH` is 40 GB or 60 GB.
 - **Staging capacity.** Three 4 TB disks are available for the migration, which
   is not enough for everything at once; the plan assumes *arr* media is winnowed
   to fit. `DESIGN.md` §6.

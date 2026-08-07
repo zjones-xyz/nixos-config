@@ -890,6 +890,25 @@ supersedes any disk placement implied above.*
   unverified assumption in this report** (whether photos fit in 450GB). Photos are cold
   data; spinning rust is fine.
 
+  > ⚠ **Corrected 2026-08-07 from photographs of the drives' labels
+  > (`docs/DISK-DRAWER.md`).** The drawer holds **twelve** spinners, ~23.5 TB, not five —
+  > 3× 4 TB, 4× 2 TB, 3× 1 TB, a 500 GB and a 2.5" oddity. Two consequences for this
+  > section, neither of which changes the recommendation:
+  >
+  > 1. **Only one of the three 4 TB disks is CMR** (`h-3V35`, a Red Plus WD40EFPX). The
+  >    other two are WD Red **EFAX**, which are DM-SMR. So the photo tier as written —
+  >    two 4 TB in btrfs raid1 — cannot be an all-CMR pair without buying a disk. The
+  >    options and their costs are tabulated in `DISK-DRAWER.md`; this is a live decision,
+  >    not a settled one. **Whatever else happens, do not put SnapRAID parity on an EFAX**
+  >    — scattered parity writes are DM-SMR's worst case.
+  > 2. **Staging capacity is ~20 TB, not 12 TB**, counting the 2 TB disks. That likely
+  >    removes the need to winnow *arr* media before the migration (§6). A staging copy is
+  >    sequential, which SMR handles fine.
+  >
+  > Also flagged there: the Samsung 2 TB (`h-8742`) has the 2010-era HD204UI firmware
+  > defect where a SMART command during a write can corrupt data. Check its firmware
+  > revision before using it for anything — this fleet polls SMART constantly.
+
 **⚠ The NVMe probably will not be bootable.** The X9SCM is a 2011 design and NVMe boot
 needs an NVMe DXE driver in firmware, which predates the standard. Linux will see the drive
 regardless — the kernel driver is independent of firmware — but the boot menu likely will
@@ -1092,11 +1111,18 @@ not exist yet. Three mitigations:
   before migrating. Less data means a shorter initial sync means a shorter window, and it is
   free. This is the honest use of the "re-acquirable" property: not as a reason to skip
   parity, but as a reason to carry less.
-- **The 3× 4 TB staging disks are your parachute, not your vehicle.** Rather than trying to
-  stage 24 TB (impossible), use the 12 TB to hold **the subset you would most hate to
-  re-acquire** — the stuff with poor retention, hand-curated collections, anything not
-  trivially re-grabbable. Copy it there before step 11 and keep it until step 13 completes.
-  That converts "a disk dies during the window" from a real loss into an inconvenience.
+- **The staging disks are your parachute, not your vehicle.** Rather than trying to stage
+  24 TB (impossible), use them to hold **the subset you would most hate to re-acquire** —
+  the stuff with poor retention, hand-curated collections, anything not trivially
+  re-grabbable. Copy it there before step 11 and keep it until step 13 completes. That
+  converts "a disk dies during the window" from a real loss into an inconvenience.
+
+  *Updated 2026-08-07:* the parachute is bigger than this section assumed — **~20 TB**
+  across three 4 TB and four 2 TB disks, not 12 TB (`docs/DISK-DRAWER.md`). Enough that
+  "winnow first" above may be optional rather than forced. It is still worth doing on its
+  own merits — a shorter initial sync is a shorter exposure window — but it stops being a
+  precondition. ⚠ None of these disks has been tested; see the burn-in note in
+  `PLATFORM.md` §12 before trusting one with the only copy of anything.
 
 ### 6.4 If in-place conversion turns out not to be possible
 
