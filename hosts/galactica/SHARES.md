@@ -8,7 +8,7 @@ storage layout depends on.
 are confirmed dead; the rest of the tiering is still a proposal to argue with.
 Sizes are ⟨TBD⟩ pending a `du -sh /mnt/user/*` pass.
 
-**Triage status: 6 of 34 decided.**
+**Triage status: 9 of 34 decided.**
 
 Dates are UTC.
 
@@ -58,8 +58,8 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `arr_managed_data` | cache | export | **fsid 102** | public | | Mounted by memory-alpha |
 | `jellyfin` | **fastservices** | export | **fsid 101** | public | | Mounted by memory-alpha. ⚠ floor, see §3 |
 | `bambuddy_library` | cache | — | **fsid 103** | public | | 3D printing |
-| `immich_photos` | cache | export | — | public | | **Photos** |
-| `immich_photos_archived` | cache | export | — | private | `z` | **Photos** |
+| `immich_photos` | cache | export | — | public | | 💎 **Precious** |
+| `immich_photos_archived` | cache | export | — | private | `z` | 💎 **Precious** |
 | `books` | cache | export | — | public | | |
 | `books_old` | cache | export | — | public | | "top level store for BookLore" — ⚠ **suspected** leftover |
 | `calibre_books` | cache | — | — | private | | |
@@ -76,7 +76,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 
 | Share | SMB | NFS | Sec. | Write | Comment |
 |---|---|---|---|---|---|
-| `documents` | export | — | private | `z` | |
+| `documents` | export | — | private | `z` | 🔴 **Critical** |
 | `archived_disks` | export | — | **secure** | `z` | Images of retired disks? ⟨confirm⟩ |
 | `ha_backup` | export | — | private | `ha` | Home Assistant backups |
 | `music` | export | — | public | | |
@@ -269,7 +269,8 @@ contents cannot be inferred from configuration.
 
 | Tier | Protection | Shares |
 |---|---|---|
-| **Irreplaceable** | Real-time redundancy, checksummed, **+ offsite** | `immich_photos`, `immich_photos_archived`, `documents` |
+| **Critical** | Everything below, **plus versioning and a tested restore** | **`documents`** |
+| **Precious and Irreplaceable** | Real-time redundancy, checksummed, **+ offsite** | **`immich_photos`**, **`immich_photos_archived`** |
 | **Protected** | Parity. No offsite. | ⟨to populate — see below⟩ |
 | **Painful to rebuild, small** | Redundancy; cheap because tiny | `appdata`, `arr_config`, `ha_backup` |
 | **Re-acquirable** | Snapshot parity, 24 h lag fine | **`podcasts_audiobookshelf`**, `arr_media`, `arr_managed_data`, `jellyfin`, `isos` |
@@ -277,6 +278,59 @@ contents cannot be inferred from configuration.
 | ⚙ **Does not migrate** | n/a — no successor concept | **`swap`**, `system` *(proposed)* |
 | 🗑 **Drop** | n/a — deleted before migrating | **`jellyfin_cache`**, **`ai_models`**, **`SHARE`**, **`manyfold_library`**; `appdata_old` + `books_old` suspected |
 | **⟨?⟩ Undecided** | — | `music`, `books`, `calibre_books`, `bambuddy_library`, `partdb`, `syncthing`, `copyparty`, `webdav`, `public`, `minishare`, `inbox`, `arm`, `archived_disks` |
+
+### Critical vs. Precious — consequence against grief
+
+**Owner's framing, 2026-08-07.** *Critical* is "stuff where if I lose it, that's
+a huge problem." *Precious and Irreplaceable* is "stuff like photos that would
+make me cry if it was lost."
+
+Those are not degrees of the same thing. They are **different kinds of harm**:
+
+- **Critical** is measured in *consequence*. Records, credentials, licences,
+  anything with a legal, financial or operational tail. Losing it creates work
+  and exposure in the world.
+- **Precious** is measured in *grief*. Photos. Nothing breaks, no deadline is
+  missed, and you cannot ever get it back.
+
+**The design consequence is recovery time, not durability.** Both tiers want
+offsite copies. But Precious can be restored at leisure — a week to pull photos
+back from cold storage costs nothing but patience. Critical often has to be
+*available*, and losing access at the wrong moment is itself the problem,
+independent of whether the bytes still exist somewhere.
+
+So Critical earns two things Precious does not need: **versioning** (a document
+corrupted or wrongly edited three months ago must still be recoverable, which a
+mirror does not give you) and **a restore you have actually tested**, because the
+first time you exercise a critical restore should not be the time you need it.
+
+That is affordable precisely because **Critical is small.** Records and documents
+are gigabytes; the whole belt-and-braces treatment costs almost nothing.
+
+### ⚠ The over-classification rule
+
+**Owner's reasoning on `documents`, 2026-08-07:** *"most files in that share
+probably aren't actually critical, but I'd rather just have some miscellania come
+along for the ride rather than risk critical things being lost."*
+
+Worth stating as a general rule, because it will come up repeatedly:
+
+> **Classify a share at the level its most valuable content warrants.** Do not
+> split a share to avoid over-protecting the boring parts.
+
+Sorting is human work, it is error-prone, and the failure mode is asymmetric: a
+misfiled critical document is unrecoverable, while a needlessly-protected junk
+file costs some bytes. Freeloaders are cheap; misses are not.
+
+⚠ **The rule has a size limit.** It holds while the waste is negligible, which is
+true for every small share and false for a multi-terabyte one. Over-protecting a
+50 GB `documents` share costs nothing worth counting; over-protecting a 9 TB
+media share would mean mirroring and shipping offsite several terabytes of
+re-downloadable video. **Over-classify small shares; split large ones.**
+
+That is also why `appdata` still needs its per-container pass (§3) despite being
+only 240 GB — there the reason to split is not storage cost but that some of its
+contents are stale caches that *should not* be restored, not merely need not be.
 
 ### Why "Protected" is the tier that matters
 
@@ -297,24 +351,25 @@ disks you mostly already own.
 
 So the ladder resolves to something with real teeth:
 
-| | Survives disk failure | Survives fire, theft, ransomware | Recurring cost |
-|---|---|---|---|
-| **Irreplaceable** | yes | **yes** | yes — this is the tier you pay for |
-| **Protected** | yes | no | no |
-| **Re-acquirable** | yes | no, and it does not matter | no |
+| | Survives disk failure | Survives fire, theft, ransomware | Survives a mistake made months ago | Recurring cost |
+|---|---|---|---|---|
+| **Critical** | yes | yes | **yes — versioned** | yes |
+| **Precious** | yes | **yes** | no | yes — this is the tier you pay for |
+| **Protected** | yes | no | no | no |
+| **Re-acquirable** | yes | no, and it does not matter | no | no |
 
-**Keeping Irreplaceable small is the whole point.** Every share that moves from
-Irreplaceable to Protected is one that stops costing money every month, and the
+**Keeping the top two tiers small is the whole point.** Every share that moves from
+Precious to Protected is one that stops costing money every month, and the
 honest question for each is not "would I be annoyed" but *"would I pay to get
 this back?"*
 
 `music` is the archetype and is exactly what this tier was invented for: ripped
 from discs still owned is Regenerable, twenty years of accumulation from sources
 that no longer exist is unrecoverable — but for most people that is Protected,
-not Irreplaceable. The config cannot tell the difference; only you can.
+not Precious. The config cannot tell the difference; only you can.
 
 `archived_disks` moves back to undecided on the same reasoning. It was proposed
-as Irreplaceable purely because it is `secure` and owner-writable, which says
+as irreplaceable purely because it is `secure` and owner-writable, which says
 something about *access* and nothing about *value*.
 
 ### Notes on the "gone" tiers
@@ -342,6 +397,10 @@ share.
 costs nothing while the Mac is healthy, and everything if both fail together.
 Whether that pairing is worth protecting against is a judgement, not a fact.
 
-⚠ **`DESIGN.md` §5's layout assumes two tiers and now has six.** Revisit it once
-Protected is populated — the photo-tier sizing in particular was derived from a
-world where everything unrecoverable had to go in the mirror.
+⚠ **`DESIGN.md` §5's layout assumes two tiers and now has eight.** Revisit it once
+Protected is populated. Two things there need rework: the photo-tier sizing was
+derived from a world where everything unrecoverable had to go in the mirror, and
+**nothing in it provides versioning**, which Critical now requires — btrfs raid1
+protects against a disk dying, not against a file being wrong for three months.
+Snapshots or a versioned offsite target close that, and neither is in the design
+yet.
