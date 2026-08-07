@@ -8,7 +8,7 @@ storage layout depends on.
 are confirmed dead; the rest of the tiering is still a proposal to argue with.
 Sizes are ⟨TBD⟩ pending a `du -sh /mnt/user/*` pass.
 
-**Triage status: 4 of 34 decided.**
+**Triage status: 5 of 34 decided.**
 
 Dates are UTC.
 
@@ -64,7 +64,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `books_old` | cache | export | — | public | | "top level store for BookLore" — ⚠ **suspected** leftover |
 | `calibre_books` | cache | — | — | private | | |
 | `copyparty` | cache | export | — | public | | File-sharing service |
-| `manyfold_library` | cache | — | — | public | | 3D model library |
+| ~~`manyfold_library`~~ | cache | — | — | public | | 🗑 **DROP** — owner-confirmed dead |
 | `partdb` | cache | — | — | public | | Parts database |
 | `podcasts_audiobookshelf` | cache | — | — | private | | |
 | `syncthing` | cache | — | — | private | | |
@@ -137,6 +137,15 @@ at zero risk to anything live.
 | `jellyfin_cache` | fastservices | See the floor correlation below |
 | `ai_models` | fastservices | |
 | `SHARE` | array | Also the one that read as an Unraid template |
+| `manyfold_library` | **array** | 3D model library. First drop that reduces the 17.1 TB |
+
+⚠ **`manyfold_library` is the first confirmed drop with real volume behind it.**
+The other three are pool-resident or an empty template; this one is array data, so
+it comes straight off the migration payload. Worth a `du -sh` on it specifically
+before deleting, purely to know what the win was.
+
+⟨`bambuddy_library` is the other 3D-printing share and is still unclassified —
+adjacent tooling, so worth deciding in the same pass rather than separately.⟩
 
 **Suspected from configuration, not yet confirmed:**
 
@@ -220,9 +229,9 @@ are shares whose contents I cannot infer from configuration alone.
 | **Painful to rebuild, small** — redundancy, cheap because tiny | `appdata`, `arr_config`, `ha_backup` | Service state. Hours of reconfiguration, but gigabytes not terabytes |
 | **Re-acquirable** — snapshot parity, 24 h lag fine | `arr_media`, `arr_managed_data`, `jellyfin`, `isos` | The brief's explicit case |
 | **Regenerable** — parity optional | `domains` ⟨?⟩, `serenity_time_machine` | Reproducible from a source that still exists |
-| **Drop** — stale, delete before migrating | **Confirmed:** `jellyfin_cache`, `ai_models`, `SHARE`. **Suspected:** `appdata_old`, `books_old`. ⟨+ whatever the staleness pass in §3 surfaces⟩ | Dead. Cheapest possible win |
+| **Drop** — stale, delete before migrating | **Confirmed:** `jellyfin_cache`, `ai_models`, `SHARE`, `manyfold_library`. **Suspected:** `appdata_old`, `books_old`. ⟨+ whatever the staleness pass in §3 surfaces⟩ | Dead. Cheapest possible win |
 | **Does not migrate** — platform furniture | **Confirmed:** `swap`. **Proposed:** `system` | The concept does not exist on the target; nothing to carry |
-| **⟨?⟩ Needs a decision** | `music`, `books`, `calibre_books`, `podcasts_audiobookshelf`, `manyfold_library`, `bambuddy_library`, `partdb`, `syncthing`, `copyparty`, `webdav`, `public`, `minishare`, `inbox`, `arm` | Could be either — depends on provenance |
+| **⟨?⟩ Needs a decision** | `music`, `books`, `calibre_books`, `podcasts_audiobookshelf`, `bambuddy_library`, `partdb`, `syncthing`, `copyparty`, `webdav`, `public`, `minishare`, `inbox`, `arm` | Could be either — depends on provenance |
 
 **Two tiers mean "gone", and the distinction matters.** *Drop* is data that
 exists and is being deleted on purpose — someone has to be sure. *Does not
