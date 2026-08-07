@@ -679,6 +679,12 @@ So the current layout is forced, and every remaining port is full:
 Array serials, for the cage map: `8DKUHJDH`, `8CJZX4WE`, `8CG7T97E`, `8DJPNS3Y`.
 (The Unraid flash is USB — a 28.6G SanDisk 3.2Gen1 — not on any of these.)
 
+**The array is 2 parity + 2 data**, not 1 + 3 — so it tolerates two simultaneous
+drive failures, and the dual-parity computation is a candidate bottleneck in its
+own right (see Performance expectations). Which serial holds which role is still
+to be recorded from Unraid's Main tab; it is the difference between a label that
+identifies a drive and one that tells you whether the array is degraded or lost.
+
 ### The moves
 
 **Four** moves, not three. Each breaks something specific:
@@ -1414,6 +1420,27 @@ Two consequences:
    on onboard SATA (see "Where the drives actually are today"), a completely
    different topology. Any figure remembered from before this project belongs to
    a machine that no longer exists.
+
+#### Three candidate bottlenecks, not one — this array runs dual parity
+
+The array is **2 parity + 2 data**, not 1 + 3. That matters, because Unraid's
+second parity (Q) is a Galois-field computation rather than the plain XOR used
+for P, and it is markedly more expensive. The E3-1230 v2 is a 2012 Ivy Bridge
+part — four cores, AVX but **no AVX2** — so on this hardware the CPU is a
+genuine candidate for the limiting factor, not a theoretical one.
+
+So a slow parity check has three plausible causes, and they are distinguishable
+if you look while it runs:
+
+| Limit | Signature |
+|---|---|
+| **PCIe link** (Gen2 x2, ~1.0 GB/s) | throughput plateaus near 1.0 GB/s; CPU well below saturation; individual drives below their solo speed |
+| **CPU** (dual-parity Q) | cores pegged; aggregate throughput *below* both the link ceiling and the drives' combined capability |
+| **Disks** | throughput ≈ sum of solo drive speeds; neither link nor CPU saturated |
+
+Capture CPU utilisation alongside throughput during the §4 run, or the number is
+uninterpretable. All three of these are present on bare metal and none of them
+is virtualization — which is the whole reason §4 exists.
 
 The ASPM and Expansion ROM rows are pre-flash baselines: §2b flags ASPM as a
 stability risk on a 2011 platform and notes ECS06 changes it, so `LnkCtl` is
