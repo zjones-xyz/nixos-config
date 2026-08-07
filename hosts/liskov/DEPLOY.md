@@ -650,7 +650,22 @@ Two questions to answer while you are in there:
 
 **ANSWERED 2026-08-06.** The internal header is `00:1a.0` (EHCI #2, group 3) and
 it also carries the BMC's virtual HID; the rear/other ports are `00:1d.0`
-(EHCI #1, group 6), which holds the Unraid flash today. Both are isolated.
+(EHCI #1, group 6). Both are isolated.
+
+**UPDATED 2026-08-07 — the flash moved.** It was on `00:1d.0` (rear); it is now
+on the internal header, which is the right physical home for a flash you do not
+want knocked out of a socket. `lsusb` confirms the consequence: the SanDisk
+(`0781:5581`) now shares a bus with `0557:2221` (ATEN Winbond Hermon — the BMC's
+virtual device).
+
+That does not affect the plan of record, because `<hostdev type='usb'>` matches
+on vendor:product rather than bus or port, chosen precisely so it survives this.
+**It does degrade the fallback.** The documented escape hatch was to leave the
+flash on `00:1d.0` and PCI-pass that whole controller, which worked because
+`00:1d.0` carries no BMC device. The internal header does. Passing it whole
+would hand IPMI's virtual HID to the guest and cost the host the only way to
+type a LUKS passphrase until initrd SSH unlock exists. If the forwarded device
+will not boot, move the flash back to a rear port rather than passing `00:1a.0`.
 
 Re-run only if ports are recabled. Note that **a USB device has no IOMMU group of
 its own** — groups are a property of PCI devices, so what the script identifies
@@ -833,7 +848,7 @@ The guest MAC is **already correct** in the checked-in XML —
 address, inherited from primary slave eth0, and it is what the DHCP reservation
 keys on. Nothing to edit; just do not let anything overwrite it.
 
-Before the first start, edit two things in the live definition
+Before the first start, **one** thing needs checking in the live definition
 (`sudo virsh edit unraid`):
 
 1. **The `<hostdev>` bus addresses.** libvirt has no by-ID form for PCI
@@ -841,13 +856,14 @@ Before the first start, edit two things in the live definition
    Addresses have been observed to shift on this board — which is exactly why
    the *host* binds by vendor:device ID instead. Re-check with
    `lspci -nn | grep 1b21` and fix if they moved.
-2. ⚠ **Add the `<hostdev type='usb'>` for the licence flash.** The checked-in
-   XML has no such entry and cannot — it needs the flash's real vendor:product,
-   read off the machine in §4c. The domain has **no `<disk>` entries at all**,
-   so until this is added the guest has *no boot device* and drops into the
-   OVMF shell. The template and the reasoning are in the `<devices>` comment in
-   `unraid-guest.xml`; note it carries `<boot order='1'/>`, and `<os>` must
-   therefore stay free of `<boot dev='hd'/>` or libvirt rejects the definition.
+
+The licence flash **no longer needs adding by hand.** The checked-in XML now
+carries its `<hostdev type='usb'>` entry, matched on `0781:5581` (SanDisk Ultra,
+read off Tower 2026-08-07). It is the domain's only boot device — there are no
+`<disk>` entries at all — so if you find yourself in the OVMF shell, that entry
+is what to look at first. It carries `<boot order='1'/>`, which is also why
+`<os>` must stay free of `<boot dev='hd'/>`: libvirt rejects a domain that mixes
+the two forms.
 
 Then, deliberately by hand (the domain is not set to autostart, and libvirtd is
 configured with `onBoot = "ignore"`):
@@ -865,8 +881,8 @@ sudo virsh console unraid       # or the webGUI once it has an address
       *real* device — forwarded with `<hostdev type='usb'>` from the internal
       header — so it keeps its true vendor:product:serial. An emulated USB disk
       presents a synthetic GUID and will not license.
-      (The entry itself is added as **§9 pre-start edit 3** — if you reached
-      this checklist without it, the guest has no boot device at all.)
+      (The entry is checked into `unraid-guest.xml` as of 2026-08-07, matched
+      on `0781:5581`. It is also the domain's only boot device.)
 - [ ] All four pools import: array (4× 12TB), Cache, Fastservices, and the
       ASM1064 pool.
 - [ ] Array members are recognised **by serial** — no "new device" prompts.
@@ -1008,24 +1024,32 @@ Not in this deployment, each for a stated reason:
   | Controller | Group | Physical | Notes |
   |---|---|---|---|
   | `00:1a.0` EHCI #2 | 3 (isolated) | **internal header** | also carries the BMC virtual HID |
-  | `00:1d.0` EHCI #1 | 6 (isolated) | rear/other | Unraid boot flash lives here today |
+  | `00:1d.0` EHCI #1 | 6 (isolated) | rear/other | no BMC device — the clean one to pass, if ever needed |
   | `02:00.0` ASM1042 | 1 (with ASM1166 + both CPU root ports) | add-in card | goes to the guest **in its current slot** — see §4c |
 
-  **Recommended: licence key on the internal header, forwarded with
-  `<hostdev type='usb'>`.** Internal is the better physical home for a licence
-  dongle — inside the case, not bumpable, not pullable. And device passthrough
-  leaves `00:1a.0` with the host, so the BMC's virtual keyboard and mouse are
-  untouched.
+  **DONE 2026-08-07: licence key is on the internal header**, forwarded with
+  `<hostdev type='usb'>` matched on `0781:5581`, now checked into
+  `unraid-guest.xml`. Internal is the better physical home for a licence dongle
+  — inside the case, not bumpable, not pullable. And device passthrough leaves
+  `00:1a.0` with the host, so the BMC's virtual keyboard and mouse are
+  untouched. `lsusb` confirms the flash and `0557:2221` (ATEN Winbond Hermon,
+  the BMC) now share that bus.
 
   ⚠ **Never PCI-pass `00:1a.0`.** It is isolated, so VFIO would happily let you —
   and it would take IPMI's virtual HID away from the host. That is the remote-
   hands path this deployment depends on, and the only way to type a LUKS
   passphrase until initrd SSH unlock exists. Isolated does not mean safe to pass.
 
-  Fallback if `usb-host` boot proves troublesome under OVMF: leave the flash on
-  `00:1d.0` and PCI-pass that controller whole. It is isolated and carries no BMC
-  device, so it is a clean handover — at the cost of the host losing those ports
-  and the flash being pinned to that controller.
+  Fallback if `usb-host` boot proves troublesome under OVMF: **move the flash
+  back to a rear port on `00:1d.0` first**, then PCI-pass that controller whole.
+  It is isolated and carries no BMC device, so it is a clean handover — at the
+  cost of the host losing those ports and the flash being pinned there.
+
+  ⚠ The "move it back first" is not optional now that the flash lives on the
+  internal header. Reaching for this fallback where the flash currently sits
+  would mean passing `00:1a.0`, which is exactly the thing the warning above
+  forbids. The fallback trades a physically-safer flash location for a clean
+  controller handover; it cannot give you both.
 
   The mechanisms, for reference:
 

@@ -225,27 +225,37 @@
       doing so would take IPMI's virtual HID from the host, which is the only
       way to type a LUKS passphrase until initrd SSH unlock exists.
 
-      When adding it, the entry looks like this — match on the flash's real
-      vendor:product (read them with scripts/iommu-survey.sh), not on bus/port,
-      so it survives being moved between ports:
-
-        <hostdev mode='subsystem' type='usb' managed='yes'>
-          <source>
-            <vendor id='0xXXXX'/>
-            <product id='0xXXXX'/>
-          </source>
-          <boot order='1'/>
-        </hostdev>
+      The entry below matches on vendor:product rather than bus/port, so it
+      survives the flash being moved between ports. 0781:5581 is the SanDisk
+      Ultra, read off Tower 2026-08-07 (`lsusb`). Only the two IDs are needed —
+      libvirt does not match on serial, so the licence GUID triple stays out of
+      this repo.
 
       <boot order='1'/> maps to qemu's bootindex, which usb-host supports, and is
-      what makes the firmware boot from it. Verify OVMF actually does; if not,
-      the documented fallback is to leave the flash on 00:1d.0 (group 6, isolated,
-      no BMC device) and PCI-pass that controller whole instead.
+      what makes the firmware boot from it. Verify OVMF actually does.
+
+      ⚠ THE DOCUMENTED FALLBACK IS NO LONGER CLEAN. It used to read "leave the
+      flash on 00:1d.0 (group 6, isolated, no BMC device) and PCI-pass that
+      controller whole". That relied on the flash living on the rear ports. It
+      was moved to the internal header on 2026-08-07, and `lsusb` confirms the
+      consequence: the SanDisk now shares a bus with 0557:2221 (ATEN Winbond
+      Hermon — the BMC's virtual device). PCI-passing the controller it is on
+      now would take IPMI's virtual HID with it, which is the only way to type
+      a LUKS passphrase until initrd SSH unlock exists. If OVMF cannot boot the
+      forwarded device, either move the flash back to a rear port first, or use
+      the SeaBIOS route in <os> — do not pass 00:1a.0 whole.
 
       Do NOT also add <boot dev='hd'/> back to <os> — libvirt rejects a domain
       that mixes per-device <boot order=…/> with os/boot, so reintroducing it
       makes this entry undefinable. See the note in <os> above.
     -->
+    <hostdev mode='subsystem' type='usb' managed='yes'>
+      <source>
+        <vendor id='0x0781'/>
+        <product id='0x5581'/>
+      </source>
+      <boot order='1'/>
+    </hostdev>
     <hostdev mode='subsystem' type='pci' managed='yes'>
       <source>
         <address domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
