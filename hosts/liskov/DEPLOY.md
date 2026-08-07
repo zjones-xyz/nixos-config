@@ -126,11 +126,12 @@ Do not start the install until all of these are true.
       before the baseline in §4, for the reason given there.
 - [ ] **Recabled** per §3.
 - [ ] **Bare-metal parity check passed** after recabling, per §4.
-- [ ] **Power-restore behaviour reconciled** — partly resolved 2026-08-07, see
-      below. The remaining question is only whether the observed no-autoboot
-      followed a *full drain* or an ordinary power cut.
+- [x] ~~**Power-restore behaviour reconciled**~~ — **closed 2026-08-07, see
+      below.** There was no anomaly: the BIOS/BMC disagreement is a reporting
+      artifact, and the no-autoboot symptom that put this on the list is
+      unsubstantiated.
 
-### Power-restore: what the BMC survey settled (2026-08-07)
+### Power-restore: closed, and why it was never a real item (2026-08-07)
 
 **The BIOS/BMC "mismatch" was never real.** `ipmi-chassis --get-chassis-status`
 reports `Power restore policy : Always off`, but AC-loss behaviour on this board
@@ -147,22 +148,34 @@ uninitialised. **The BMC clock has never been set**, so the SEL carries no usabl
 timeline and cannot corroborate the power anomaly. Use event *IDs*, not
 timestamps, for any before/after comparison.
 
-**What is still open:** §2a's weak-battery hypothesis. The two observations are
-compatible rather than contradictory, and the distinction decides it:
+**The no-autoboot symptom is unsubstantiated.** This item originally read "the
+machine did not autoboot after a full drain", and that sentence has been carried
+as fact since the host's first commit (`afba29d`) — it came from the initial
+authoring, not from an observation logged during this work. Asked directly on
+2026-08-07, the only person who could have witnessed it does not recall the
+machine ever failing to autoboot. Most likely the BMC's cosmetic "Always off"
+was read as evidence of a behaviour nobody had actually seen.
 
-- *Ordinary power loss* — CMOS is carried by the standby rail, the BIOS setting
-  survives, the machine autoboots. This is the normal, observed behaviour.
-- *Full drain* — standby is gone and CMOS is carried by **the coin cell alone**.
-  A weak cell loses the setting and the machine does not autoboot.
+Not proof it never happened, but there is no symptom left to explain: BIOS says
+Power On, the machine autoboots, and the contradicting readout is a field BIOS
+never writes. **Removed from the blocking list.** If the machine ever does fail
+to come back after an outage, reopen this — and note whether the outage was an
+ordinary power cut or a full drain, because only the latter implicates the cell.
 
-The cell is only load-bearing when AC is fully removed, which is why a flat one
-is invisible day to day and shows up only after a drain. It is also why
-`VBAT = 3.04 V` from `ipmi-sensors` proves nothing: the reading is taken on
-standby, when the cell is not carrying anything, and 3.04 V is exactly what a
-3.3 V standby rail reads through a Schottky drop (`VSB` reads 3.33 V on the same
-list). **To actually test it:** pull the cell with standby still applied and
-re-read VBAT — if it still reads ~3.04 V with an empty holder, the sensor was
-reading standby all along. A multimeter across the removed cell settles it.
+**Consequence for §2a:** the CMOS battery loses its diagnostic urgency. It is
+now ordinary preventive maintenance rather than a live fault being chased —
+still worth doing, because the board is from 2011 and §0's failure mode is a
+"when" rather than an "if", but it does not need forcing into a service window
+of its own.
+
+While the battery is being replaced anyway, note that `VBAT = 3.04 V` from
+`ipmi-sensors` is not evidence the cell is healthy. The reading is taken on
+standby, when the cell is carrying nothing, and 3.04 V is exactly what a 3.3 V
+standby rail reads through a Schottky drop (`VSB` reads 3.33 V on the same
+list). The cheap check, once the case is open: pull the cell with standby still
+applied and re-read VBAT — if it still reads ~3.04 V with an empty holder, the
+sensor was reading standby all along. A multimeter across the removed cell
+settles it either way.
 
 ---
 
@@ -188,12 +201,17 @@ whole project as a latent fault waiting for the worst possible moment.
 
 A CR2032 costs about a pound. Replace it.
 
-It may also close out a currently-open question. Prerequisite §1 records that the
-BIOS claims `Restore on AC Power Loss = Power On` while the BMC reports "Always
-off", and the machine did not autoboot after a full drain. **Settings not
-persisting across a full power drain is exactly what a weak CMOS battery looks
-like.** Worth resolving that way before hunting for a firmware or BMC
-explanation.
+**This is preventive, not diagnostic.** An earlier revision justified it partly
+by the power-restore question in §1, on the reasoning that settings not
+surviving a full drain is the textbook weak-battery symptom. That is still true
+in general, but the symptom itself turned out to be unsubstantiated and the item
+is closed — see §1. Nothing is currently misbehaving in a way this would fix.
+
+So it does not need a service window of its own. Do it in one you are already
+taking with the case open — the §2b window when the ASM1166 comes back from
+pegasus is the natural one, since the §0 settings have to be re-entered and
+verified afterwards regardless, and the card's reappearance in `lspci` is the
+check that proves the re-entry worked.
 
 ⚠ **Replacing the battery clears CMOS.** So it must come *before* re-entering
 BIOS settings, and everything in §0 has to be set again afterwards:
@@ -204,7 +222,12 @@ BIOS settings, and everything in §0 has to be set again afterwards:
       Kingston (§12)
 - [ ] Serial Port Console Redirection — note the unit and baud, they feed
       `boot.kernelParams` in `configuration.nix` (§6)
-- [ ] `Restore on AC Power Loss` — and re-test with a full drain
+- [ ] `Restore on AC Power Loss` = **Power On** — set it back to what it was.
+      Confirming the re-entry took is enough; there is no anomaly to reproduce
+      (§1), so a deliberate full-drain test is optional rather than owed.
+- [ ] `Legacy USB Support` / `Port 60/64 Emulation` — note the values. They
+      govern whether a USB keyboard works in BIOS setup at all, and a CMOS
+      clear resets them along with everything else here.
 
 Verify the ASM1166 reappears in `lspci` before going any further.
 
