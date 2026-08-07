@@ -33,6 +33,18 @@ that, being the sort of capacity that shipped in laptops.
 lsblk -o NAME,SIZE,MODEL,SERIAL,TYPE
 ```
 
+> ⚠ **Not over a USB dock without checking.** A USB-SATA bridge usually reports
+> *its own* serial rather than the disk's, so a disk read that way can be given
+> the wrong identifier entirely — and these five all need identifiers before they
+> can be labelled. Either attach over SATA, or pierce the bridge:
+>
+> ```sh
+> smartctl -d sat -i /dev/sdX
+> ```
+>
+> Compare the two: if `lsblk` and `smartctl` disagree, trust `smartctl` and
+> suspect the bridge.
+
 ---
 
 ## Why these are not simply spares

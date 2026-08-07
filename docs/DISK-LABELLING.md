@@ -22,6 +22,8 @@ identifier travels with the disk.
 
 **Prefix plus the last four characters of the serial, uppercase.**
 
+### Internal — the prefix encodes form factor
+
 | Prefix | Meaning |
 |---|---|
 | `h-` | 3.5" HDD |
@@ -30,6 +32,38 @@ identifier travels with the disk.
 | `n-` | M.2 NVMe |
 
 Examples: `h-HJDH`, `s-768C`, `n-A1B2`.
+
+### External — the prefix encodes interface generation instead
+
+| Prefix | Meaning |
+|---|---|
+| `usb2-` | External USB 2.0 drive |
+| `usb3-` | External USB 3.x drive |
+| `usb2adap-` | USB 2.0 adapter or dock |
+| `usb3adap-` | USB 3.x adapter or dock |
+
+Optionally suffixed with a colour: `usb3-HXRY-blue`.
+
+**Form factor is deliberately not encoded for external devices.** You cannot see
+whether an enclosure holds a spinner or an SSD without opening it, and it rarely
+matters — what you are identifying is a box on a shelf. The interface generation
+is the performance-relevant fact instead, and it is visible from the label where
+the media type is not.
+
+The **colour suffix** exists for the common case of several visually identical
+enclosures. Optional; use it when it helps and omit it when it does not.
+
+> ⚠ **Adapters and docks often have no usable serial**, and cheap USB-SATA bridges
+> frequently report a generic or duplicated one. Where the serial is unusable,
+> substitute a sequence number or lean on the colour: `usb3adap-02`,
+> `usb3adap-grey`. Record the choice here rather than leaving it implicit.
+
+> ⚠ **A USB bridge usually masks the drive's serial.** Attach a bare disk through
+> a dock and `lsblk` typically reports the *bridge's* serial rather than the
+> disk's — so a disk identified that way can be given the wrong identifier
+> entirely. `smartctl -d sat -i /dev/sdX` pierces most bridges and reports the
+> real device; attaching over SATA directly always works. **Verify before
+> printing** any label derived from a disk read over USB.
 
 **Why four characters.** Three was unique across Tower's inventory at the time of
 writing, but leaves nothing for future disks — and one drive's three-character
@@ -57,6 +91,8 @@ reference** — and not every device needs both.
 |---|---|---|
 | 3.5" HDD in a caddy | **Yes** | Interchangeable, and identical models are common |
 | 2.5" SATA SSD | **Yes** | Same-model pairs are easy to confuse, and mirrors make confusing them costly |
+| External drive | **Yes** | Lives on a shelf among lookalikes; the label is often the only way to tell them apart |
+| Adapter or dock | **Yes** | Multiple, interchangeable, and easily confused for one another |
 | M.2 NVMe | **No** | No cable to trace, unambiguous by location, usually only one |
 | Anything being retired | **No** | Do not print labels for disks on their way out |
 
@@ -186,8 +222,11 @@ Each host's map carries a CSV block so the label workflow and any generated
 diagram read from one source rather than drifting. Columns:
 
 ```
-id,form,serial_suffix,serial_full,model,size,location,role,physical_label
+id,form,serial_suffix,serial_full,model,size,location,role,colour,physical_label
 ```
 
-`form` is one of `hdd35`, `hdd25`, `ssd25`, `nvme`. `physical_label` is `yes`/`no`
-per §2. Unresolved fields are `????` or empty.
+`form` is one of `hdd35`, `hdd25`, `ssd25`, `nvme`, `usb2`, `usb3`, `usb2adap`,
+`usb3adap` — mirroring the prefixes in §1, so internal entries carry a form factor
+and external ones carry an interface generation. `colour` is the optional suffix
+and is empty for internal devices. `physical_label` is `yes`/`no` per §2.
+Unresolved fields are `????` or empty.

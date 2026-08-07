@@ -210,18 +210,18 @@ The other cages need enumerating before their cables can be labelled at all.
 ## 6. Machine-readable inventory
 
 ```csv
-id,form,serial_suffix,serial_full,model,size,location,role,physical_label
-h-HJDH,hdd35,HJDH,8DKUHJDH,HUH721212ALE601,12TB,cage-A,array,yes
-h-X4WE,hdd35,X4WE,8CJZX4WE,HUH721212ALE601,12TB,cage-A,array,yes
-h-T97E,hdd35,T97E,8CG7T97E,HUH721212ALE601,12TB,cage-A,array,yes
-h-NS3Y,hdd35,NS3Y,8DJPNS3Y,HUH721212ALE601,12TB,cage-A,array,yes
-s-3255,ssd25,3255,244964803255,WD Blue SA510,500GB,internal,cache,yes
-s-9545,ssd25,9545,19013024009545,SATA SSD,223.6GB,internal,fastservices,yes
-s-768C,ssd25,768C,2422E8B6768C,Crucial BX500,480GB,internal,pool,yes
-s-8162,ssd25,8162,2506E9A58162,Crucial BX500,480GB,internal,pool,yes
-s-3100,ssd25,3100,15090EE23100,Crucial MX100,512GB,internal,pool,yes
-s-5509,ssd25,5509,50026B7239015509,Kingston SH103S3120G,120GB,internal,retiring,no
-n-????,nvme,????,,,1TB,pcie-adapter,root,no
+id,form,serial_suffix,serial_full,model,size,location,role,colour,physical_label
+h-HJDH,hdd35,HJDH,8DKUHJDH,HUH721212ALE601,12TB,cage-A,array,,yes
+h-X4WE,hdd35,X4WE,8CJZX4WE,HUH721212ALE601,12TB,cage-A,array,,yes
+h-T97E,hdd35,T97E,8CG7T97E,HUH721212ALE601,12TB,cage-A,array,,yes
+h-NS3Y,hdd35,NS3Y,8DJPNS3Y,HUH721212ALE601,12TB,cage-A,array,,yes
+s-3255,ssd25,3255,244964803255,WD Blue SA510,500GB,internal,cache,,yes
+s-9545,ssd25,9545,19013024009545,SATA SSD,223.6GB,internal,fastservices,,yes
+s-768C,ssd25,768C,2422E8B6768C,Crucial BX500,480GB,internal,pool,,yes
+s-8162,ssd25,8162,2506E9A58162,Crucial BX500,480GB,internal,pool,,yes
+s-3100,ssd25,3100,15090EE23100,Crucial MX100,512GB,internal,pool,,yes
+s-5509,ssd25,5509,50026B7239015509,Kingston SH103S3120G,120GB,internal,retiring,,no
+n-????,nvme,????,,,1TB,pcie-adapter,root,,no
 ```
 
 ---
