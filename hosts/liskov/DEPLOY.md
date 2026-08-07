@@ -90,8 +90,15 @@ The ASM1166 SATA card is **completely invisible** — no POST banner, absent fro
 `Auto` fails because the slot is Gen3-capable and the card cannot train at Gen3.
 
 **A CMOS clear or a dead coin-cell resets both and makes the card vanish.** It
-looks exactly like hardware failure. If the array's disks are suddenly missing,
-check this before suspecting the card, the cables, or the drives.
+looks exactly like hardware failure — check this before suspecting the card, the
+cables, or the drives.
+
+How that presents depends on when: **after §3 the array lives on this card**, so
+losing it means the array's disks all disappear at once. **Before §3 it does
+not** — as of 2026-08-07 the array is still on onboard SATA and this card
+carries almost nothing (see §3), so today the same fault would show up merely as
+the card missing from `lspci`. Do not use "the array is fine" as evidence the
+setting survived until the recabling is done.
 
 This board is from 2011, so that coin cell is a live risk rather than a
 hypothetical — it is why §2a replaces it up front, before this becomes a 3am
@@ -195,9 +202,11 @@ This board is from 2011. The battery is very likely original.
 
 Read §0 again with that in mind: **a dead coin cell makes the ASM1166 vanish**,
 because it wipes the two settings the card needs to be visible at all. That is
-the single most confusing failure mode in this document — the array disappears
-and it looks like a dead controller — and right now it is sitting under the
-whole project as a latent fault waiting for the worst possible moment.
+the single most confusing failure mode in this document, and it gets worse after
+§3 rather than better — once the array is moved onto this card, the symptom
+stops being "a controller is missing" and becomes "the array disappeared and the
+controller looks dead." It is sitting under the whole project as a latent fault
+waiting for the worst possible moment.
 
 A CR2032 costs about a pound. Replace it.
 
@@ -437,16 +446,55 @@ Read at least the first two before flashing:
 | ASM1064, 4 ports | Guest (**temporary**) | BX500 ×2, MX100 (if healthy), 1 spare |
 | Onboard, 6 ports | Host | Kingston 120GB (NixOS root), BD-ROM, 4 spare |
 
-Three moves are easy to miss and each one breaks something specific:
+### Where the drives actually are today (measured 2026-08-07)
 
-1. **Kingston off the ASM1064 (port 4) → onboard.** The ASM1064 gets bound to
+Earlier revisions of this section listed three moves and implied the array was
+already on the ASM1166. **It is not, and never has been.** Established while the
+card was out of the machine for §2b:
+
+With the ASM1166 physically removed, `lsblk` still showed **all ten** SATA
+devices — Cache (WD Blue SA510 500GB), Fastservices (223.6G SATA SSD), all four
+12TB HUH721212ALE601, both BX500 480GB, the MX100 512GB, and the Kingston.
+Onboard has 6 ports and the ASM1064 has 4; ten ports, ten devices, nothing
+missing. **The ASM1166 was carrying only the BD-ROM.**
+
+So the current layout is forced, and every remaining port is full:
+
+| Controller | Currently holds |
+|---|---|
+| Onboard, 6 ports | Cache, Fastservices, **4× 12TB array** — full |
+| ASM1064, 4 ports | Kingston, BX500 ×2, MX100 — full |
+| ASM1166, 6 ports | BD-ROM only (now unplugged, see below) |
+
+Array serials, for the cage map: `8DKUHJDH`, `8CJZX4WE`, `8CG7T97E`, `8DJPNS3Y`.
+(The Unraid flash is USB — a 28.6G SanDisk 3.2Gen1 — not on any of these.)
+
+### The moves
+
+**Four** moves, not three. Each breaks something specific:
+
+1. **The 4× 12TB array off onboard → ASM1166.** The big one, and the one this
+   section used to omit entirely. Onboard SATA is never passed through, so an
+   array left there is invisible to the guest — which is the entire point of the
+   exercise. Unraid matches members by serial, so port order among the four does
+   not matter to it.
+2. **Cache and Fastservices off onboard (I-SATA 0/1) → ASM1166.** Same reason:
+   leaving them behind costs the guest two pools. With move 1 this fills all six
+   ASM1166 ports exactly.
+3. **Kingston off the ASM1064 (port 4) → onboard.** The ASM1064 gets bound to
    vfio-pci and handed to the guest. If the host's root disk is still on it, the
    host cannot see its own filesystem.
-2. **Cache and Fastservices off onboard (I-SATA 0/1) → ASM1166.** Onboard SATA
-   is never passed through, so leaving them there means the guest loses two
-   pools.
-3. **BD-ROM off the ASM1166 → onboard.** The ASM1166's six ports fill exactly
-   with array + cache + fastservices.
+4. **BD-ROM → onboard.** ⚠ **Half done.** It was unplugged from the ASM1166
+   deliberately on 2026-08-07 and is currently connected to nothing. Reconnecting
+   it to an onboard port is outstanding and explicitly **low priority** — it is
+   recorded here only so it is not later mistaken for a missing drive or a dead
+   optical unit. It cannot go back where it was: moves 1 and 2 fill the ASM1166
+   completely, so onboard is its only destination.
+
+Note that moves 1–3 are a shuffle between two full controllers, not a set of
+independent swaps: onboard has to give up six drives and take one back. Pulling
+the array and both pools off onboard first, then landing the Kingston, avoids
+running out of ports mid-way.
 
 Update the drive-to-cage-slot map as drives move. Unraid matches array members by
 serial, so slot order is irrelevant *to Unraid* — the physical map is what tells
