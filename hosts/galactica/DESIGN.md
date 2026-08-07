@@ -1117,12 +1117,21 @@ not exist yet. Three mitigations:
   re-grabbable. Copy it there before step 11 and keep it until step 13 completes. That
   converts "a disk dies during the window" from a real loss into an inconvenience.
 
-  *Updated 2026-08-07:* the parachute is bigger than this section assumed — **~20 TB**
-  across three 4 TB and four 2 TB disks, not 12 TB (`docs/DISK-DRAWER.md`). Enough that
-  "winnow first" above may be optional rather than forced. It is still worth doing on its
-  own merits — a shorter initial sync is a shorter exposure window — but it stops being a
-  precondition. ⚠ None of these disks has been tested; see the burn-in note in
-  `PLATFORM.md` §12 before trusting one with the only copy of anything.
+  *Updated 2026-08-07, and both halves of the arithmetic moved in the same direction.*
+  The parachute is bigger than this section assumed — **~20 TB** across three 4 TB and
+  four 2 TB disks, not 12 TB (`docs/DISK-DRAWER.md`). And the load is smaller: Unraid's
+  Main tab reports **17.1 TB used of 24 TB**, not the 24 TB the brief implied.
+
+  **So it fits, with room.** The parachute stops being a subset you have to choose and
+  becomes the whole array. "Winnow first" above drops from precondition to optimisation —
+  still worth doing, since a shorter initial sync is a shorter exposure window, but no
+  longer something the plan depends on.
+
+  ⚠ Two caveats before relying on that. None of the drawer disks has been tested — see
+  the burn-in note in `PLATFORM.md` §12 before trusting one with the only copy of
+  anything. And the fit is 17.1 into ~20, which is comfortable but not generous; it
+  assumes every drawer disk is healthy and usable, including the four shingled ones and
+  the Samsung with the firmware defect.
 
 ### 6.4 If in-place conversion turns out not to be possible
 
@@ -1265,12 +1274,21 @@ Unraid's per-disk independent filesystems are exactly what the target wants.
   **Answered 2026-08-07** — data disks yes, parity disks no *and cannot be*, since
   Unraid parity carries no filesystem. Safe there because parity is computed over
   ciphertext; **not** safe under SnapRAID, which parities plaintext files. See
-  §5.5. Inferred from `lsblk` device-mapper layers; confirm against Unraid's own
-  view. `s-3100` (MX100) also shows no crypt layer and is entangled with the
-  `/mnt/services` btrfs removal — establish its state before reusing it.
-- **Actual used bytes per data disk.** The brief's "24 TB of data" against 2× 12 TB data disks
-  implies they are essentially full, which would leave no slack anywhere and make even the
-  in-place path tighter. If that is literally true, winnow before doing anything else.
+  §5.5. ~~Inferred from `lsblk`; confirm against Unraid's own view.~~ **Confirmed
+  2026-08-07 from Unraid's Main tab: both data disks and all three pools are
+  encrypted, both parity disks carry no filesystem.** `s-3100` (MX100) is
+  unassigned and NTFS, and the `/mnt/services` btrfs removal completed.
+- ~~**Actual used bytes per data disk.**~~ **Closed 2026-08-07, and the news is
+  good.** The brief's "24 TB of data" was capacity, not occupancy. Actual: **Disk 1
+  9.05 TB used / 2.95 TB free, Disk 2 8.06 TB / 3.94 TB — 17.1 TB used of 24 TB,
+  6.88 TB free**, plus 240 GB on Services, 38.5 GB on Fastservices and 9.31 GB on
+  Cache. So roughly **17.4 TB total, not 24 TB**, and the disks are ~71% full
+  rather than essentially full.
+
+  Two consequences. The in-place path has real slack rather than none. And 17.1 TB
+  fits inside the drawer's ~20 TB of staging (`docs/DISK-DRAWER.md`), so **the
+  copy-based fallback is viable end-to-end without winnowing first** — it stops
+  being a precondition and becomes an optimisation.
 - **Unraid's on-disk partition offset** on these specific disks — verify it mounts cleanly
   from a Linux live environment before planning around in-place conversion.
 - **Whether `nconnect=4` NFSv4 over mergerfs is trouble-free.** This is the least-trodden

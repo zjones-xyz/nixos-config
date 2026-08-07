@@ -20,24 +20,52 @@ Dates are UTC.
 
 ## 1. Installed disks
 
-Read from `lsblk -o NAME,SIZE,MODEL,SERIAL` on Tower, 2026-08-07.
+**Read from Unraid's Main tab, 2026-08-07** — roles, filesystems, encryption and
+usage are all as that page reported them, not inferred. All error counts zero;
+temperatures 30–39 °C.
 
-| ID | Device | Size | Full serial | Current role | LUKS |
-|---|---|---|---|---|---|
-| `h-HJDH` | HGST HUH721212ALE601 | 12 TB | `8DKUHJDH` | array — parity or data, **⟨TBD⟩** | see §2 |
-| `h-X4WE` | HGST HUH721212ALE601 | 12 TB | `8CJZX4WE` | array — parity or data, **⟨TBD⟩** | see §2 |
-| `h-T97E` | HGST HUH721212ALE601 | 12 TB | `8CG7T97E` | array — parity or data, **⟨TBD⟩** | see §2 |
-| `h-NS3Y` | HGST HUH721212ALE601 | 12 TB | `8DJPNS3Y` | array — parity or data, **⟨TBD⟩** | see §2 |
-| `s-3255` | WD Blue SA510 | 500 GB | `244964803255` | Cache | **yes** |
-| `s-9545` | SATA SSD (generic) | 223.6 GB | `19013024009545` | Fastservices | **yes** |
-| `s-768C` | Crucial BX500 | 480 GB | `2422E8B6768C` | pool | **yes** |
-| `s-8162` | Crucial BX500 | 480 GB | `2506E9A58162` | pool | **yes** |
-| `s-3100` | Crucial MX100 | 512 GB | `15090EE23100` | pool — see §2 | **no** |
-| `s-5509` | Kingston SH103S3120G | 120 GB | `50026B7239015509` | **retiring** — 2012 SandForce SF-2281 | **no** |
+| ID | Device | Size | Full serial | Role | `sdX` | FS | Used / free | Enc. |
+|---|---|---|---|---|---|---|---|---|
+| `h-X4WE` | HGST HUH721212ALE601 | 12 TB | `8CJZX4WE` | **Parity** | `sde` | — | — | n/a |
+| `h-HJDH` | HGST HUH721212ALE601 | 12 TB | `8DKUHJDH` | **Parity 2** | `sdd` | — | — | n/a |
+| `h-T97E` | HGST HUH721212ALE601 | 12 TB | `8CG7T97E` | **Disk 1** (data) | `sdf` | btrfs | 9.05 TB / 2.95 TB | **yes** |
+| `h-NS3Y` | HGST HUH721212ALE601 | 12 TB | `8DJPNS3Y` | **Disk 2** (data) | `sdg` | btrfs | 8.06 TB / 3.94 TB | **yes** |
+| `s-3255` | WD Blue SA510 | 500 GB | `244964803255` | **Cache** pool | `sdb` | btrfs | 9.31 GB / 487 GB | **yes** |
+| `s-9545` | SATA SSD (generic) | 240 GB | `19013024009545` | **Fastservices** pool | `sdc` | btrfs | 38.5 GB / 199 GB | **yes** |
+| `s-768C` | Crucial BX500 | 480 GB | `2422E8B6768C` | **Services** pool, dev 1 | `sdh` | btrfs | 240 GB / 239 GB | **yes** |
+| `s-8162` | Crucial BX500 | 480 GB | `2506E9A58162` | **Services** pool, dev 2 | `sdi` | *(same pool)* | *(same pool)* | **yes** |
+| `s-3100` | Crucial MX100 | 512 GB | `15090EE23100` | ⚠ **unassigned** | `sdj` | **ntfs** | not mounted | **no** |
+| `s-5509` | Kingston SH103S3120G | 120 GB | `50026B7239015509` | ⚠ **Boot pool slot** — see below | `sdk` | unmountable | — | **no** |
 
-⚠ **`⟨TBD⟩`: which 12TB holds which array role.** The array is **2 parity + 2
-data**. Read it from Unraid's Main tab. Until then a failure notice naming a disk
-cannot be mapped to a physical drive, which is this document's whole purpose.
+**Array total: 24 TB, 17.1 TB used, 6.88 TB free.** That is the number the
+migration plan turns on — see `DESIGN.md` §6, where it closes an assumption.
+
+⚠ **`sdX` letters are not stable** across reboots or recabling. They are recorded
+because they were captured in the same reading as everything else and make the
+sysfs port lookup in §3 cheaper; **map by serial, never by `sdX`.**
+
+**The Services pool is a two-device btrfs mirror.** 479 GB usable from two 480 GB
+devices is raid1 by arithmetic — a stripe would show ~960 GB. So the pair is
+redundant, not aggregated, and losing one BX500 costs no data.
+
+⚠ **`s-3100` (MX100) is out of the array entirely** and now carries an **NTFS**
+filesystem, unmounted, listed under Unassigned Devices. This retires the open
+question about `btrfs device remove missing /mnt/services`: the Services pool
+shows both BX500s online and healthy, so **that operation completed** and the
+MX100 was reformatted afterwards. It also explains the earlier `lsblk` reading of
+"two partitions, 476 G + 468 M" with no `crypt` layer — that is an ordinary NTFS
+layout with a Microsoft reserved partition, not a damaged pool member.
+
+⚠ **`s-5509` (Kingston) is assigned to Unraid's `Boot` pool slot**, reporting
+*"Unmountable: unsupported or no file system"*, while the page also says *"Internal
+Boot: No internal boot setup detected."* So Unraid 7's internal-boot feature was
+started and never completed, and the disk still carries the previous Linux install
+(1 M BIOS boot + 510 M ESP + 111.3 G root).
+
+**This matters for retirement.** The Kingston is not merely unused — it is
+*assigned in Unraid's configuration*. Unassign it there before repurposing the
+disk, so a fallback boot into Unraid does not come up referencing a device that
+has been wiped and handed to NixOS.
 
 ### Not yet installed
 
@@ -69,11 +97,17 @@ SATA, so it takes no port from the budget. Relevant only while Unraid is in play
 ## 2. Encryption
 
 Everything is LUKS **except where the platform prohibits it**, and there are two
-distinct such cases plus one open question. Inferred from `lsblk` device-mapper
-layers on 2026-08-07 — confirm against Unraid's own view.
+such cases.
 
-**The two 12TB data disks are encrypted.** They surface as `md1p1` and `md2p1`
-with `crypt` layers, Unraid's md devices sitting over the raw members.
+**Confirmed against Unraid's Main tab, 2026-08-07.** This section was previously
+inferred from `lsblk` device-mapper layers; the Main tab shows a padlock on both
+data disks and on all three pools, and no filesystem at all on either parity disk.
+**The inference was right in every particular** — recorded because a confirmed
+reading and a lucky guess are worth distinguishing.
+
+**The two 12TB data disks are encrypted**, as are **all three pools** — Cache,
+Fastservices and Services. Under `lsblk` the data disks surface as `md1p1` and
+`md2p1` with `crypt` layers, Unraid's md devices sitting over the raw members.
 
 **The two 12TB parity disks are not, and cannot be.** Unraid parity is raw
 block-level parity with no filesystem on it — there is nothing to encrypt. This
@@ -93,15 +127,14 @@ is the "Unraid prohibited it" case.
 **The flash drive is not encryptable.** Unraid's boot device holds the licence and
 config and must be readable by the bootloader. The second prohibited case.
 
-**`s-3100` (MX100) shows no `crypt` layer**, and carries two partitions (476 G +
-468 M) rather than a pool member's layout. It is entangled with the
-`btrfs device remove missing /mnt/services` operation — an outstanding Unraid-side
-job whose completion has never been confirmed. Confirm its actual state before
-relying on either answer.
+**`s-3100` (MX100) is unencrypted, and no longer part of anything** — unassigned,
+NTFS, unmounted (§1). The `btrfs device remove missing /mnt/services` question it
+was entangled with is closed: the Services pool is a healthy two-device mirror
+and this disk is out of it.
 
-**`s-5509` (Kingston) is not encrypted** and carries what looks like a previous
-Linux install — a 1 M BIOS boot partition, a 510 M ESP, a 111.3 G root and a 1.4 M
-remainder. Being retired regardless.
+**`s-5509` (Kingston) is not encrypted** and carries a previous Linux install — a
+1 M BIOS boot partition, a 510 M ESP, a 111.3 G root and a 1.4 M remainder. Still
+occupying Unraid's `Boot` pool slot (§1); being retired regardless.
 
 ---
 
@@ -262,8 +295,11 @@ drawer is, so the answer is currently no on both counts.
 
 | Item | Source | Blocks |
 |---|---|---|
-| Which 12TB is parity-1 / parity-2 / data-1 / data-2 | Unraid Main tab | Mapping a failure notice to a physical drive |
-| Confirm the encryption inferences in §2 | Unraid Main tab | Migration planning |
+| ~~Which 12TB is parity / parity-2 / disk-1 / disk-2~~ | ~~Unraid Main tab~~ | **Closed 2026-08-07** — see §1 |
+| ~~Confirm the encryption inferences in §2~~ | ~~Unraid Main tab~~ | **Closed 2026-08-07** — all confirmed |
+| ~~MX100 / `btrfs device remove missing` state~~ | ~~Unraid~~ | **Closed 2026-08-07** — completed; disk unassigned |
+| **Enumerate the non-primary cages** | Case open | Six installed disks recorded only as "internal" |
+| **Port-to-bay mapping for cage A** | Hotswap insertion + sysfs | Printing cable labels |
 | `s-3100` actual state after the `/mnt/services` btrfs removal | Unraid, `btrfs filesystem show` | Whether it is available for reuse |
 | Enumerate the other cages — letters, arrangement, type | Eyes | Bay identifiers and cable labels for six of ten disks |
 | Port-to-bay mapping | Measure it — hotswap insertion + sysfs, see §3 | All cable labels |

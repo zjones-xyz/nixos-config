@@ -216,11 +216,12 @@ re-derive why it stopped applying.
   has flagged that more categories exist and that classifying them properly will
   materially change the layout. **This is the blocking item.** Nothing else
   should be decided ahead of it.
-- **Which 12 TB is which.** The four array serials are `8DKUHJDH`, `8CJZX4WE`,
-  `8CG7T97E`, `8DJPNS3Y`; which two are parity and which two are data is still to
-  be read off Unraid's Main tab. It is the difference between a label that
-  identifies a drive and one that tells you whether the array is degraded or
-  lost.
+- ~~**Which 12 TB is which.**~~ **Closed 2026-08-07** from Unraid's Main tab:
+  parity `h-X4WE`, parity-2 `h-HJDH`, disk-1 `h-T97E`, disk-2 `h-NS3Y`. The same
+  reading confirmed the encryption inferences in `HARDWARE-MAP.md` §2 exactly, put
+  the array at **17.1 TB used of 24 TB**, and closed the `/mnt/services` btrfs
+  question. Caddy labels for the four 12 TB disks are now printable — roles stay
+  off them by design (`DISK-LABELLING.md` §3); the map is what carries the role.
 - **Whether to hold a 12 TB back as a cold spare.** There is no budget for a
   fifth and the drive market makes rapid replacement unlikely. Analysed in
   `DESIGN.md` §5.5; the short version is that shelving one costs 12 TB of usable
