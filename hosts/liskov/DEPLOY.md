@@ -269,16 +269,46 @@ Check pegasus has a free PCIe slot alongside the 4070 first.
 
 **Tooling.** The mainstream path is `RomUpdWin.exe`, which is Windows-only — and
 there is no Windows machine in this fleet. The Linux path is `116xfwdl`,
-distributed by Radxa for their hexa-SATA adapter:
+distributed by Radxa for their hexa-SATA adapter. Directory listing confirmed
+2026-08-07 from pegasus (it is **not** reachable from an agent session — the
+egress proxy blocks `dl.radxa.com`, which is why earlier revisions of this
+section named the tool but gave no location):
 
 ```sh
-# UNVERIFIED — confirm against the Radxa/Steak guides before running.
-sudo ./116xfwdl -S                  # reported to print version info
+wget https://dl.radxa.com/accessories/m2-to-hexa-sata-adapter/tools/116xfwdl_bin_v1110_x86_64.zip
+unzip 116xfwdl_bin_v1110_x86_64.zip
+```
+
+That directory holds exactly three files: `116xfwdl_bin_v1000_ARM.zip`,
+`116xfwdl_bin_v1110_x86_64.zip`, and `ASM1166_10250005.ROM`. Take the **x86_64**
+build — it is also the newer tool (v1.1.1.0 against ARM's v1.0.0.0).
+
+⚠ **Radxa's ROM is not the one this section calls for.** `ASM1166_10250005.ROM`
+sits in the same directory as the tool and is a *different image* from
+`11080000.ROM`, which is the Silverstone ECS06 firmware chosen here for the
+hot-plug fix, the ASPM behaviour and the link-training improvement. Do not
+substitute one for the other because they happened to download together. The
+ECS06 file ships in the [Silverstone package](https://www.silverstonetek.com/en/product/info/expansion-cards/ECS06/),
+with an Internet Archive mirror in Sources below.
+
+```sh
+# Run this FIRST, before flashing anything.
+sudo ./116xfwdl -S                  # prints version info
+```
+
+`-S` does double duty: it confirms the tool can see the card at all — the
+"won't appear in the flash tool" failure mode below — and it tells you what
+firmware is currently on it. **Read that version before deciding to flash.** If
+the card already carries something newer than ECS06, flashing would be moving
+backwards, and this section's whole rationale assumes it is an upgrade.
+
+```sh
 sudo ./116xfwdl -U 11080000.ROM     # flash
 ```
 
-`11080000.ROM` is the ECS06 firmware file; the Silverstone package ships it
-alongside the Windows tool.
+Both invocations were carried as UNVERIFIED in earlier revisions; they are now
+corroborated by a second independent source, though still not something anyone
+here has run. Read the Radxa/Steak guides in Sources before committing.
 
 **Two gotchas that come up repeatedly:**
 
