@@ -40,6 +40,18 @@ in
   networking.hostName = "pegasus";
   networking.networkmanager.enable = true;
 
+  # Added during the liskov VFIO bring-up test (DEPLOY.md §2b-bis, since
+  # completed and the temporary homelab.vfio block removed): pegasus had no
+  # lspci at all, which made the test unrunnable on the machine it was written
+  # for. Kept because a box with an add-in card and a discrete GPU has no
+  # business being unable to enumerate its own PCI bus.
+  #
+  # environment.systemPackages rather than home.packages so `sudo lspci`
+  # resolves — sudo does not inherit the user profile's PATH.
+  environment.systemPackages = with pkgs; [
+    pciutils
+  ];
+
   # ── Boot ────────────────────────────────────────────────────────────────────
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
