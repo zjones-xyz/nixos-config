@@ -105,9 +105,12 @@ in
     # softdep note below, which is what actually closes the race.
     #
     # `vfio-pci.ids=` on the kernel command line rather than an options line in
-    # modprobe.d: the cmdline is parsed by the module itself at load time and so
-    # applies inside the initrd, whereas /etc/modprobe.d is a property of the
-    # booted system and may not be consulted early enough.
+    # modprobe.d: the cmdline is parsed by the module itself at load time, is
+    # equally honoured by kmod and by libvirt, and does not depend on
+    # modprobe.d file ordering. (NOT because modprobe.d is unreadable early —
+    # NixOS copies /etc/modprobe.d into the initrd, which is exactly why the
+    # softdep below works. `options vfio-pci ids=…` there would be read too;
+    # the cmdline is just the more robust place to say it.)
     #
     # NOTE: vfio_virqfd must NOT be listed. It was folded into vfio_pci in Linux
     # 6.2 and no longer exists as a separate module; every pre-6.2 guide on the

@@ -72,9 +72,12 @@ indivisible and the ASM1166 must go to the guest.**
 
 **Groups follow slot topology, so they are not a fixed property of the cards.**
 Move the ASM1042 behind a different root port and it may land in its own group,
-at which point the host could keep it. Whether a suitable slot exists on this
-board is an open question — see `DEPLOY.md §4c`. Any reshuffle invalidates the
-map above; re-derive it with `scripts/iommu-survey.sh` rather than assuming.
+at which point the host could keep it. The board has **four PCIe slots, visually
+confirmed identical**: two CPU-attached (ASM1166, ASM1042), one PCH-attached
+(ASM1064), one free — so there is a slot to move it to, and the prediction is
+that a third PCH root port appears with the ASM1042 isolated behind it. Still to
+be confirmed empirically; see `DEPLOY.md §4c`. Any reshuffle invalidates the map
+above; re-derive it with `scripts/iommu-survey.sh` rather than assuming.
 
 Group 8 is the mirror image: onboard SATA shares a group with the LPC bridge and
 SMBus, so passing the SATA controller would mean passing the LPC bridge — which
@@ -113,17 +116,36 @@ to find the root filesystem. If `ahci` gets there first, it binds the controller
 and passthrough silently does not happen: the guest fails to start, or worse,
 starts without its disks.
 
-Two mechanisms, in `modules/nixos/vfio.nix`:
+Two mechanisms, in `modules/nixos/vfio.nix`, and it matters which one is doing
+the work:
 
-1. **`boot.initrd.kernelModules = [ "vfio_pci" … ]`** force-loads vfio-pci inside
-   the initrd, *before* the storage modules. This is the load-bearing one.
-2. **`softdep ahci pre: vfio-pci`** in modprobe config covers the booted system,
-   where load order is not under the initrd's control.
+1. **`softdep ahci pre: vfio-pci`** in modprobe config is **the load-bearing
+   one.** libkmod honours softdep for udev-driven autoloads, so whenever udev
+   coldplug goes to bind `ahci`, vfio-pci is pulled in first and has already
+   claimed the device.
+2. **`boot.initrd.kernelModules = [ "vfio_pci" … ]`** guarantees the modules are
+   *present* in the initrd. It does **not** guarantee they load first.
+
+The intuitive reading — that listing `vfio_pci` in `boot.initrd.kernelModules`
+force-loads it ahead of the storage drivers — is only true of the *scripted*
+initrd. `boot.initrd.systemd.enable` defaults to true on 26.05, and in the
+systemd initrd that option becomes `/etc/modules-load.d/nixos.conf`, loaded by
+`systemd-modules-load.service`, which has no ordering relationship to
+`systemd-udevd` or `systemd-udev-trigger`. So udev can get there first, and the
+softdep is what stops it.
+
+**Practical consequence:** do not trim `homelab.vfio.softdepDrivers` on the
+theory that the initrd module list already covers it. Dropping a driver from
+that list is a silent passthrough failure that looks exactly like a bad device
+ID or the §0 BIOS quirk.
 
 The binding itself is by **`vfio-pci.ids=` on the kernel command line**, not
-`modprobe.d`. The cmdline is parsed by the module at load time and so applies
-inside the initrd; `/etc/modprobe.d` is a property of the booted root filesystem
-and may not be readable early enough.
+`modprobe.d` — because the cmdline is what both kmod and libvirt honour, and it
+does not depend on modprobe.d file ordering. (Note it is *not* because
+modprobe.d is unreadable early: NixOS copies `/etc/modprobe.d` into the initrd,
+which is precisely why the softdep above works. An `options vfio-pci ids=…`
+line there would in fact be read — the cmdline is simply the more robust
+expression.)
 
 > Stale-guide trap: nearly every pre-2023 VFIO tutorial tells you to load
 > `vfio_virqfd`. It was folded into `vfio_pci` in Linux 6.2 and no longer exists.
