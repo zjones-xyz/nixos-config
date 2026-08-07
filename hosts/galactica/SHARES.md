@@ -88,7 +88,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 
 ---
 
-## 3. Three things worth looking at before classifying
+## 3. Four things worth looking at before classifying
 
 ### ⚠ `jellyfin`'s cache floor exceeds its pool's capacity
 
@@ -177,6 +177,47 @@ that distinction is not in the filesystem.
 ⚠ **`_old` in a name is a hint, not evidence.** Confirm each is genuinely dead
 before deleting; the whole point of the exercise is that this data is not coming
 back.
+
+### ⚠ `appdata` — the hard one, and the wrong granularity
+
+**Owner's assessment, 2026-08-07: this is the share that will be a bear.** On
+Unraid `/mnt/user/appdata/<container>` is the idiomatic place for every container
+to squirrel away whatever it likes, with no convention about what belongs there.
+Expect databases, caches, logs, downloaded artwork, credentials and junk, side by
+side, in per-container subtrees written by whoever wrote each image.
+
+**So `appdata` is the one share where per-share classification is the wrong unit.**
+Everything else on this page is homogeneous enough to get a single verdict.
+`appdata` is not: Immich's database is irreplaceable, Jellyfin's metadata cache
+regenerates itself, and they sit in sibling directories. The real work item is a
+per-container pass:
+
+```sh
+du -sh /mnt/user/appdata/* | sort -h
+```
+
+**Decided: take a full verified copy before touching anything.** Cheap insurance
+— the whole Services pool holds 240 GB, so this is not a case where backing up
+first costs anything meaningful.
+
+Three things that make the difference between a copy and a *useful* copy:
+
+- ⚠ **Stop the containers first.** Copying a live SQLite or Postgres file yields
+  a torn database that restores cleanly and fails later. Services is btrfs, so
+  `btrfs subvolume snapshot -r` is an alternative if downtime is unwelcome — but
+  that is crash-consistent, not application-consistent, and for 240 GB a straight
+  stop-copy-start is simpler and strictly better.
+- ⚠ **Preserve ownership, ACLs, xattrs and hardlinks** — `rsync -aHAX`, not
+  `cp -r`. Containers run under specific UIDs (Unraid's default is `99:100`), and
+  a copy that loses ownership restores into a stack that will not start.
+- ⚠ **Verify it, and date it.** "In case I miss something" means opening it months
+  later, when a silently truncated backup is worse than none. Check the copy, and
+  keep the manifest with it.
+
+**Put the copy somewhere the migration will not touch** — a drawer disk rather
+than the array or the Services pool. A backup that shares a failure domain with
+the thing it protects is not one, and the specific scenario here is *the migration
+itself goes wrong*.
 
 ### `arr_media` and `arr_managed_data` are separate shares
 
