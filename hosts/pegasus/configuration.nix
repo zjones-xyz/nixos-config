@@ -74,6 +74,18 @@ in
     ];
   };
 
+  # NOT temporary — keep this when the homelab.vfio block above comes out.
+  #
+  # Added because the bring-up test's only verification step is
+  # `lspci -nnk -d 1b21:1166`, and pegasus had no lspci at all, which made the
+  # test unrunnable on the machine it was written for. liskov already carries
+  # pciutils for the same reason (hosts/liskov/configuration.nix). It belongs in
+  # environment.systemPackages rather than home.packages so that `sudo lspci`
+  # resolves — sudo does not inherit the user profile's PATH.
+  environment.systemPackages = with pkgs; [
+    pciutils
+  ];
+
   # ── Boot ────────────────────────────────────────────────────────────────────
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
