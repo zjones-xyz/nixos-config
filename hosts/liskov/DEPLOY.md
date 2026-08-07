@@ -126,12 +126,43 @@ Do not start the install until all of these are true.
       before the baseline in §4, for the reason given there.
 - [ ] **Recabled** per §3.
 - [ ] **Bare-metal parity check passed** after recabling, per §4.
-- [ ] **Power-restore behaviour reconciled** — BIOS says `Restore on AC Power
-      Loss = Power On`, the BMC reports "Always off", and the machine did not
-      autoboot after a full drain. Settle which is authoritative before relying
-      on unattended recovery. **Try the CMOS battery first** (§2) — settings not
-      surviving a full power drain is the textbook weak-battery symptom, and
-      this board is old enough that it is the leading hypothesis.
+- [ ] **Power-restore behaviour reconciled** — partly resolved 2026-08-07, see
+      below. The remaining question is only whether the observed no-autoboot
+      followed a *full drain* or an ordinary power cut.
+
+### Power-restore: what the BMC survey settled (2026-08-07)
+
+**The BIOS/BMC "mismatch" was never real.** `ipmi-chassis --get-chassis-status`
+reports `Power restore policy : Always off`, but AC-loss behaviour on this board
+is implemented by BIOS via the PCH, and BIOS never writes the IPMI field — it
+sits at its default forever. Observed behaviour follows BIOS (`Restore on AC
+Power Loss = Power On`, and the machine does autoboot), so **the IPMI field is
+cosmetic here. Do not "fix" it with `--set-power-restore-policy`** — writing it
+has no upside and can only perturb something that currently works.
+
+Corroborating that the BMC's power bookkeeping is generally unreliable rather
+than wrong about this one field: `Last Power Event : unknown`, and every SEL
+entry is timestamped `Feb-07-2106 02:29:xx` — the 32-bit `time_t` rollover, i.e.
+uninitialised. **The BMC clock has never been set**, so the SEL carries no usable
+timeline and cannot corroborate the power anomaly. Use event *IDs*, not
+timestamps, for any before/after comparison.
+
+**What is still open:** §2a's weak-battery hypothesis. The two observations are
+compatible rather than contradictory, and the distinction decides it:
+
+- *Ordinary power loss* — CMOS is carried by the standby rail, the BIOS setting
+  survives, the machine autoboots. This is the normal, observed behaviour.
+- *Full drain* — standby is gone and CMOS is carried by **the coin cell alone**.
+  A weak cell loses the setting and the machine does not autoboot.
+
+The cell is only load-bearing when AC is fully removed, which is why a flat one
+is invisible day to day and shows up only after a drain. It is also why
+`VBAT = 3.04 V` from `ipmi-sensors` proves nothing: the reading is taken on
+standby, when the cell is not carrying anything, and 3.04 V is exactly what a
+3.3 V standby rail reads through a Schottky drop (`VSB` reads 3.33 V on the same
+list). **To actually test it:** pull the cell with standby still applied and
+re-read VBAT — if it still reads ~3.04 V with an empty holder, the sensor was
+reading standby all along. A multimeter across the removed cell settles it.
 
 ---
 
@@ -726,19 +757,20 @@ presents identically to the BIOS quirk in §0.
 sudo virsh --connect qemu:///system define hosts/liskov/unraid-guest.xml
 ```
 
-Before the first start, edit three things in the live definition
+The guest MAC is **already correct** in the checked-in XML —
+`0c:c4:7a:0f:3b:81`, read off bare-metal Tower 2026-08-07. It is bond0's
+address, inherited from primary slave eth0, and it is what the DHCP reservation
+keys on. Nothing to edit; just do not let anything overwrite it.
+
+Before the first start, edit two things in the live definition
 (`sudo virsh edit unraid`):
 
-1. **The MAC address.** Set it to the bare-metal Tower NIC's address so the
-   existing DHCP reservation hands the guest the same IP and `tower.internal`
-   keeps resolving with no DNS change. This is the single most important line in
-   that file — memory-alpha's NFS mounts and NUT client both resolve that name.
-2. **The `<hostdev>` bus addresses.** libvirt has no by-ID form for PCI
+1. **The `<hostdev>` bus addresses.** libvirt has no by-ID form for PCI
    passthrough, so those entries reference `01:00.0` / `02:00.0` / `03:00.0`.
    Addresses have been observed to shift on this board — which is exactly why
    the *host* binds by vendor:device ID instead. Re-check with
    `lspci -nn | grep 1b21` and fix if they moved.
-3. ⚠ **Add the `<hostdev type='usb'>` for the licence flash.** The checked-in
+2. ⚠ **Add the `<hostdev type='usb'>` for the licence flash.** The checked-in
    XML has no such entry and cannot — it needs the flash's real vendor:product,
    read off the machine in §4c. The domain has **no `<disk>` entries at all**,
    so until this is added the guest has *no boot device* and drops into the

@@ -278,14 +278,33 @@
       on the LAN: same DHCP reservation, same address, same NFS exports that
       memory-alpha mounts as tower.internal.
 
-      TODO(install): set the MAC to the bare-metal Tower NIC's address, so the
-      existing DHCP reservation hands it the same IP and tower.internal keeps
-      resolving with no DNS change. This is the single most important line in
-      this file for preserving the five minute fallback guarantee.
+      The MAC is bare-metal Tower's, read off the machine 2026-08-07, so the
+      existing DHCP reservation hands the guest the same IP and tower.internal
+      keeps resolving with no DNS change. This is the single most important
+      line in this file for preserving the five minute fallback guarantee.
+
+      Where it comes from: Tower bonds eth0 (0c:c4:7a:0f:3b:81) and eth1
+      (0c:c4:7a:0f:3b:80) into bond0 in mode 6 (balance-alb), with br0 on top;
+      bond0 takes eth0's address as the primary slave, so br0 — and therefore
+      the DHCP reservation — is 0c:c4:7a:0f:3b:81. Do NOT confuse this with the
+      BMC, which is 0c:c4:7a:0f:38:16 on a different prefix.
+
+      ══ ONE INTERFACE, DELIBERATELY ══
+      Unraid's network.cfg still describes a two-member bond, and is left that
+      way so the bare-metal fallback stays byte-identical. In the guest, eth1
+      simply does not exist and bond0 comes up with a single slave — fine in
+      mode 6, which needs no switch-side configuration (unlike 802.3ad, where a
+      single-member bond would fail to negotiate). Presenting two virtual NICs
+      would be worse than useless: liskov's br0 rides one physical NIC, so the
+      "redundancy" would be fake and both slaves would fail together.
+
+      If Unraid's network script chokes on the missing eth1 rather than
+      shrugging it off, there is no webGUI to fix it from — recover over
+      `virsh console unraid` and edit /boot/config/network.cfg there.
     -->
     <interface type='bridge'>
       <source bridge='br0'/>
-      <mac address='00:00:00:00:00:00'/>
+      <mac address='0c:c4:7a:0f:3b:81'/>
       <model type='virtio'/>
     </interface>
 
