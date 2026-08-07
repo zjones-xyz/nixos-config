@@ -21,6 +21,12 @@
     codex
     curl
     f3
+    # IPMI/BMC out-of-band management client — ipmi-sensors, ipmipower,
+    # ipmiconsole (SOL), bmc-info. Serenity has no BMC of its own (no Mac
+    # does), so this is purely the LAN client for talking to other machines'
+    # BMCs over IPMI 2.0. nixpkgs builds it for aarch64-darwin (cached
+    # upstream), so no Homebrew fallback needed.
+    freeipmi
     gh
     neovim
     nmap
