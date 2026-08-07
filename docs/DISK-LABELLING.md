@@ -99,11 +99,44 @@ The failure path this serves: the array software names a failed disk → look it
 in the map → get its bay → pull that bay, with the caddy label confirming you took
 the right drive before it leaves the chassis.
 
-### Record the bay numbering convention
+### Bay numbering
 
-Adopt the cage's printed numbers if it has them. If not, pick a direction and
-**write down which end you counted from**. "Bay 1" is ambiguous — top or bottom —
-and that ambiguity is precisely the 3am failure the labels exist to prevent.
+**Bays ascend left to right, then top to bottom** — reading order. For a cage two
+wide and three high:
+
+```
+1  2
+3  4
+5  6
+```
+
+A single-column cage is therefore simply 1 at the top descending. If the cage
+carries its own printed numbers, adopt those instead and note the divergence in
+the host's map.
+
+**Left and right are defined from the open end, looking in** — i.e. from where you
+stand to pull a drive.
+
+> ⚠ **The rear is mirrored.** Whoever attaches cables is behind the backplane,
+> where left and right flip relative to this definition. Do not reason about
+> orientation from back there; measure instead (below).
+
+### Establish port-to-bay empirically, not by inference
+
+A hotswap cage makes the mapping directly measurable, which beats any amount of
+careful reasoning about which way round the backplane is.
+
+```sh
+dmesg -w                                  # insert a drive; note which sdX appears
+readlink -f /sys/block/sdX/device         # → …/0000:00:1f.2/ata7/… — controller and port
+```
+
+One insertion per bay gives the true mapping. If the caddies are already labelled
+and you know which disk sits in which bay, you can skip the insertions and map
+serial → `sdX` → controller straight from sysfs.
+
+Record the result in the host's `HARDWARE-MAP.md`. It is the ground truth the
+cable labels are printed from.
 
 ---
 

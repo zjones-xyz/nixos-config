@@ -93,9 +93,14 @@ remainder. Being retired regardless.
 Four slots, drives in caddies. Currently holds the four 12 TB disks, though that
 is not fixed — a different spinner can occupy a bay if the layout calls for it.
 
-⚠ **Bay numbering convention: ⟨TBD⟩.** Adopt the cage's printed numbers if it has
-them; otherwise pick a direction and record which end you counted from. See
-`docs/DISK-LABELLING.md` §3.
+**Numbering follows the fleet convention** (`docs/DISK-LABELLING.md` §3): left to
+right, then top to bottom, with left/right taken from the open end looking in. A
+four-bay cage in a single column is therefore 1 at the top descending to 4.
+
+⚠ **Confirm the cage's physical arrangement** — single column of four, or two by
+two. It changes nothing about the rule but everything about which bay is which.
+And if the cage carries its own printed numbers, adopt those and note the
+divergence here.
 
 | Bay | Feeding port | Disk |
 |---|---|---|
@@ -103,6 +108,18 @@ them; otherwise pick a direction and record which end you counted from. See
 | 2 | ⟨TBD⟩ | ⟨TBD⟩ |
 | 3 | ⟨TBD⟩ | ⟨TBD⟩ |
 | 4 | ⟨TBD⟩ | ⟨TBD⟩ |
+
+**Fill the port column by measurement, not inference.** The cage is hotswap, so
+one insertion per bay settles it — and it sidesteps the mirrored-rear problem
+entirely:
+
+```sh
+dmesg -w                                  # insert into a bay; note which sdX appears
+readlink -f /sys/block/sdX/device         # → …/0000:00:1f.2/ata7/… — controller and port
+```
+
+If the four 12TB caddies get labelled first, the insertions are unnecessary: read
+each disk's `sdX` from its serial and resolve the controller from sysfs directly.
 
 ---
 
@@ -154,8 +171,9 @@ pending serials, in `docs/DISK-DRAWER.md`.
 
 ### Cable and bay labels — pending
 
-Blocked on the bay numbering and the port-to-bay mapping (§3). Form is
-`<port>→<bay>`, printed twice per cable:
+Bay numbering is settled (§3); these are blocked only on the **port-to-bay
+mapping**, which is a measurement rather than a decision. Form is `<port>→<bay>`,
+printed twice per cable:
 
 ```
 I-SATA?→BAY1
@@ -196,8 +214,8 @@ n-????,nvme,????,,,1TB,pcie-adapter,root,no
 | Confirm the encryption inferences in §2 | Unraid Main tab | Migration planning |
 | `s-3100` actual state after the `/mnt/services` btrfs removal | Unraid, `btrfs filesystem show` | Whether it is available for reuse |
 | NVMe serial | `lsblk` once installed | Documentary reference only |
-| Cage bay numbering, and which end it counts from | The cage, or a decision | All cable and bay labels |
-| Port-to-bay mapping | Tracing, or a decision to re-wire monotonically | All cable labels |
+| Cage physical arrangement — single column of four, or 2×2 | Eyes | Which bay is which (numbering rule itself is settled) |
+| Port-to-bay mapping | Measure it — hotswap insertion + sysfs, see §3 | All cable labels |
 | Which two onboard ports are 6Gb/s | Board manual or silkscreen | Final disk placement |
 | ASM1166 port numbering convention | A decision, if cables run there | Any ASM1166 cable labels |
 
