@@ -9,6 +9,10 @@ in five minutes.** Power off, boot the Unraid flash drive, done. Nothing here
 modifies the flash drive or its boot entry, and the NixOS install touches only
 the Kingston 120GB SSD.
 
+> **Dates in this document are UTC**, matching the git commit timestamps. The
+> fleet operates in US Pacific, so an entry stamped with a given date may refer
+> to work done the previous evening locally.
+
 ### Companion documents
 
 | File | Answers |
@@ -90,8 +94,15 @@ The ASM1166 SATA card is **completely invisible** — no POST banner, absent fro
 `Auto` fails because the slot is Gen3-capable and the card cannot train at Gen3.
 
 **A CMOS clear or a dead coin-cell resets both and makes the card vanish.** It
-looks exactly like hardware failure. If the array's disks are suddenly missing,
-check this before suspecting the card, the cables, or the drives.
+looks exactly like hardware failure — check this before suspecting the card, the
+cables, or the drives.
+
+How that presents depends on when: **after §3 the array lives on this card**, so
+losing it means the array's disks all disappear at once. **Before §3 it does
+not** — as of 2026-08-07 the array is still on onboard SATA and this card
+carries almost nothing (see §3), so today the same fault would show up merely as
+the card missing from `lspci`. Do not use "the array is fine" as evidence the
+setting survived until the recabling is done.
 
 This board is from 2011, so that coin cell is a live risk rather than a
 hypothetical — it is why §2a replaces it up front, before this becomes a 3am
@@ -195,11 +206,13 @@ This board is from 2011. The battery is very likely original.
 
 Read §0 again with that in mind: **a dead coin cell makes the ASM1166 vanish**,
 because it wipes the two settings the card needs to be visible at all. That is
-the single most confusing failure mode in this document — the array disappears
-and it looks like a dead controller — and right now it is sitting under the
-whole project as a latent fault waiting for the worst possible moment.
+the single most confusing failure mode in this document, and it gets worse after
+§3 rather than better — once the array is moved onto this card, the symptom
+stops being "a controller is missing" and becomes "the array disappeared and the
+controller looks dead." It is sitting under the whole project as a latent fault
+waiting for the worst possible moment.
 
-A CR2032 costs about a pound. Replace it.
+A CR2032 costs almost nothing. Replace it.
 
 **This is preventive, not diagnostic.** An earlier revision justified it partly
 by the power-restore question in §1, on the reasoning that settings not
@@ -260,23 +273,116 @@ Check pegasus has a free PCIe slot alongside the 4070 first.
 
 **Tooling.** The mainstream path is `RomUpdWin.exe`, which is Windows-only — and
 there is no Windows machine in this fleet. The Linux path is `116xfwdl`,
-distributed by Radxa for their hexa-SATA adapter:
+distributed by Radxa for their hexa-SATA adapter. Directory listing confirmed
+2026-08-07 from pegasus (it is **not** reachable from an agent session — the
+egress proxy blocks `dl.radxa.com`, which is why earlier revisions of this
+section named the tool but gave no location):
 
 ```sh
-# UNVERIFIED — confirm against the Radxa/Steak guides before running.
-sudo ./116xfwdl -S                  # reported to print version info
-sudo ./116xfwdl -U 11080000.ROM     # flash
+wget https://dl.radxa.com/accessories/m2-to-hexa-sata-adapter/tools/116xfwdl_bin_v1110_x86_64.zip
+unzip 116xfwdl_bin_v1110_x86_64.zip
 ```
 
-`11080000.ROM` is the ECS06 firmware file; the Silverstone package ships it
-alongside the Windows tool.
+That directory holds exactly three files: `116xfwdl_bin_v1000_ARM.zip`,
+`116xfwdl_bin_v1110_x86_64.zip`, and `ASM1166_10250005.ROM`. Take the **x86_64**
+build — it is also the newer tool (v1.1.1.0 against ARM's v1.0.0.0).
+
+⚠ **Radxa's ROM is not the one this section calls for.** `ASM1166_10250005.ROM`
+sits in the same directory as the tool and is a *different image* from
+`11080000.ROM`, which is the Silverstone ECS06 firmware chosen here for the
+hot-plug fix, the ASPM behaviour and the link-training improvement. Do not
+substitute one for the other because they happened to download together. The
+ECS06 file ships in the [Silverstone package](https://www.silverstonetek.com/en/product/info/expansion-cards/ECS06/),
+with an Internet Archive mirror in Sources below.
+
+**The zip ships the vendor manual** — `ASM116xfwdl_UserManual.pdf`, ASMedia Rev
+1.0, 2021-07-13. It is the authoritative source for the flags, and it disagrees
+with every third-party guide. Extract it with `pdftotext -layout`; the document
+carries a vertical "ASMedia Confidential" watermark that interleaves itself into
+the text stream and makes the output look like garbage. It is not — there is one
+operational section and it documents exactly two commands.
+
+```sh
+# 1. Show firmware version. Run this FIRST, before flashing anything.
+sudo ./116xfwdl -s
+
+# 2. Update firmware. The ROM must be in the same directory as the binary.
+sudo ./116xfwdl -u 11080000.ROM
+# then REBOOT — the vendor requires it, "to reload binary".
+```
+
+⚠ **The flags are lowercase.** Earlier revisions of this section, and the
+third-party guides they came from, say `-S` and `-U`. ASMedia's own manual says
+`-s` and `-u`. Both `-S` and `-s` were run with no card attached on 2026-08-07
+and produced **identical** output — the tool banner followed by `Cannot found
+device`. So that test cannot distinguish a parsed flag from an ignored one, and
+the uppercase forms have never been confirmed to do anything at all. Use the
+documented lowercase ones; on a tool whose only other operation overwrites
+firmware with no rollback, this is not a coin worth flipping.
+
+(The manual writes item 2 as `116flash -s`. That is a copy-paste slip in
+ASMedia's document; the shipped binary is `116xfwdl`.)
+
+`-s` does double duty: it confirms the tool can see the card at all — the
+"won't appear in the flash tool" failure mode below — and it reports what
+firmware is currently on it. **Read that version before deciding to flash.** If
+the card already carries something newer than ECS06, flashing would be moving
+backwards, and this section's whole rationale assumes it is an upgrade.
+
+**Two findings from exercising the tool on pegasus 2026-08-07, before the card
+was installed:**
+
+- **It is statically linked** (`ldd` → "not a dynamic executable"), so it runs on
+  NixOS as-is. No `steam-run` or other FHS wrapper is needed. Worth knowing
+  because a vendor-shipped prebuilt binary usually *does* need one — a dynamic
+  ELF fails on NixOS with `No such file or directory`, which names the file that
+  is plainly present and means the missing loader.
+- **With no card attached it prints `Cannot found device`** (sic). That is the
+  negative-control baseline. If you see the same line *with* the card installed,
+  the problem is detection — seating, slot, or cables — not the tool.
+
+**There is no read-back, backup or verify command.** The manual documents update
+and show-version, and nothing else. That is not an omission in this runbook: it
+confirms from the vendor what "Risks" below infers from forum silence — there is
+no rollback path. Flash accordingly.
 
 **Two gotchas that come up repeatedly:**
 
 - **Unplug every SATA cable from the card before flashing.** Cards reportedly
   fail to appear in the flash tool with drives attached.
-- **CSM may need enabling** in the flashing machine's BIOS for the card to be
-  seen.
+- **CSM — try without it first, and think before enabling it.** The guides that
+  recommend CSM are concerned with the card's *legacy option ROM* executing, i.e.
+  booting from it or Windows-side tooling that expects it. `116xfwdl` talks to
+  the PCI device directly, and the card enumerates on the bus whether or not its
+  legacy ROM runs.
+
+  ⚠ On many boards — MSI included — the setting is a **toggle between UEFI and
+  CSM**, not an "additionally enable CSM" checkbox. Every host in this fleet
+  boots UEFI (systemd-boot from an ESP), so flipping it makes the flashing
+  machine unbootable, and on pegasus you would then be recovering a box that
+  also wants a LUKS passphrase before it will talk to you. If `-S` cannot see
+  the card, work through the cable and slot causes above first; CSM is a last
+  resort, and one to undo immediately afterwards.
+
+**pegasus BIOS paths** (MSI MAG B550 Tomahawk MAX WiFi, MS-7C91, Click BIOS 5 —
+recorded because none of these are where you would look, and finding them cost a
+search):
+
+| Setting | Path |
+|---|---|
+| IOMMU | `OC` → `Advanced CPU Configuration` → `AMD CBS` → `IOMMU` |
+| SVM Mode | `OC` → `Advanced CPU Configuration` → `SVM Mode` |
+| CSM / UEFI | `Settings` → `Advanced` → `Windows OS Configuration` → `BIOS UEFI/CSM Mode` — see the warning above |
+
+`F7` toggles EZ Mode / Advanced Mode; the `OC` menu is invisible in EZ Mode. Set
+IOMMU to `Enabled` explicitly rather than `Auto`, so the post-boot check means
+something unambiguous — `vfio.nix`'s `cpuVendor` docs note that a silently
+ignored IOMMU parameter is indistinguishable from AMD-Vi being off in firmware:
+
+```sh
+dmesg | grep -iE 'AMD-Vi|IOMMU'
+ls /sys/kernel/iommu_groups | wc -l
+```
 
 **Risks.**
 
@@ -437,16 +543,55 @@ Read at least the first two before flashing:
 | ASM1064, 4 ports | Guest (**temporary**) | BX500 ×2, MX100 (if healthy), 1 spare |
 | Onboard, 6 ports | Host | Kingston 120GB (NixOS root), BD-ROM, 4 spare |
 
-Three moves are easy to miss and each one breaks something specific:
+### Where the drives actually are today (measured 2026-08-07)
 
-1. **Kingston off the ASM1064 (port 4) → onboard.** The ASM1064 gets bound to
+Earlier revisions of this section listed three moves and implied the array was
+already on the ASM1166. **It is not, and never has been.** Established while the
+card was out of the machine for §2b:
+
+With the ASM1166 physically removed, `lsblk` still showed **all ten** SATA
+devices — Cache (WD Blue SA510 500GB), Fastservices (223.6G SATA SSD), all four
+12TB HUH721212ALE601, both BX500 480GB, the MX100 512GB, and the Kingston.
+Onboard has 6 ports and the ASM1064 has 4; ten ports, ten devices, nothing
+missing. **The ASM1166 was carrying only the BD-ROM.**
+
+So the current layout is forced, and every remaining port is full:
+
+| Controller | Currently holds |
+|---|---|
+| Onboard, 6 ports | Cache, Fastservices, **4× 12TB array** — full |
+| ASM1064, 4 ports | Kingston, BX500 ×2, MX100 — full |
+| ASM1166, 6 ports | BD-ROM only (now unplugged, see below) |
+
+Array serials, for the cage map: `8DKUHJDH`, `8CJZX4WE`, `8CG7T97E`, `8DJPNS3Y`.
+(The Unraid flash is USB — a 28.6G SanDisk 3.2Gen1 — not on any of these.)
+
+### The moves
+
+**Four** moves, not three. Each breaks something specific:
+
+1. **The 4× 12TB array off onboard → ASM1166.** The big one, and the one this
+   section used to omit entirely. Onboard SATA is never passed through, so an
+   array left there is invisible to the guest — which is the entire point of the
+   exercise. Unraid matches members by serial, so port order among the four does
+   not matter to it.
+2. **Cache and Fastservices off onboard (I-SATA 0/1) → ASM1166.** Same reason:
+   leaving them behind costs the guest two pools. With move 1 this fills all six
+   ASM1166 ports exactly.
+3. **Kingston off the ASM1064 (port 4) → onboard.** The ASM1064 gets bound to
    vfio-pci and handed to the guest. If the host's root disk is still on it, the
    host cannot see its own filesystem.
-2. **Cache and Fastservices off onboard (I-SATA 0/1) → ASM1166.** Onboard SATA
-   is never passed through, so leaving them there means the guest loses two
-   pools.
-3. **BD-ROM off the ASM1166 → onboard.** The ASM1166's six ports fill exactly
-   with array + cache + fastservices.
+4. **BD-ROM → onboard.** ⚠ **Half done.** It was unplugged from the ASM1166
+   deliberately on 2026-08-07 and is currently connected to nothing. Reconnecting
+   it to an onboard port is outstanding and explicitly **low priority** — it is
+   recorded here only so it is not later mistaken for a missing drive or a dead
+   optical unit. It cannot go back where it was: moves 1 and 2 fill the ASM1166
+   completely, so onboard is its only destination.
+
+Note that moves 1–3 are a shuffle between two full controllers, not a set of
+independent swaps: onboard has to give up six drives and take one back. Pulling
+the array and both pools off onboard first, then landing the Kingston, avoids
+running out of ports mid-way.
 
 Update the drive-to-cage-slot map as drives move. Unraid matches array members by
 serial, so slot order is irrelevant *to Unraid* — the physical map is what tells
@@ -602,7 +747,22 @@ Two questions to answer while you are in there:
 
 **ANSWERED 2026-08-06.** The internal header is `00:1a.0` (EHCI #2, group 3) and
 it also carries the BMC's virtual HID; the rear/other ports are `00:1d.0`
-(EHCI #1, group 6), which holds the Unraid flash today. Both are isolated.
+(EHCI #1, group 6). Both are isolated.
+
+**UPDATED 2026-08-07 — the flash moved.** It was on `00:1d.0` (rear); it is now
+on the internal header, which is the right physical home for a flash you do not
+want knocked out of a socket. `lsusb` confirms the consequence: the SanDisk
+(`0781:5581`) now shares a bus with `0557:2221` (ATEN Winbond Hermon — the BMC's
+virtual device).
+
+That does not affect the plan of record, because `<hostdev type='usb'>` matches
+on vendor:product rather than bus or port, chosen precisely so it survives this.
+**It does degrade the fallback.** The documented escape hatch was to leave the
+flash on `00:1d.0` and PCI-pass that whole controller, which worked because
+`00:1d.0` carries no BMC device. The internal header does. Passing it whole
+would hand IPMI's virtual HID to the guest and cost the host the only way to
+type a LUKS passphrase until initrd SSH unlock exists. If the forwarded device
+will not boot, move the flash back to a rear port rather than passing `00:1a.0`.
 
 Re-run only if ports are recabled. Note that **a USB device has no IOMMU group of
 its own** — groups are a property of PCI devices, so what the script identifies
@@ -785,7 +945,7 @@ The guest MAC is **already correct** in the checked-in XML —
 address, inherited from primary slave eth0, and it is what the DHCP reservation
 keys on. Nothing to edit; just do not let anything overwrite it.
 
-Before the first start, edit two things in the live definition
+Before the first start, **one** thing needs checking in the live definition
 (`sudo virsh edit unraid`):
 
 1. **The `<hostdev>` bus addresses.** libvirt has no by-ID form for PCI
@@ -793,13 +953,14 @@ Before the first start, edit two things in the live definition
    Addresses have been observed to shift on this board — which is exactly why
    the *host* binds by vendor:device ID instead. Re-check with
    `lspci -nn | grep 1b21` and fix if they moved.
-2. ⚠ **Add the `<hostdev type='usb'>` for the licence flash.** The checked-in
-   XML has no such entry and cannot — it needs the flash's real vendor:product,
-   read off the machine in §4c. The domain has **no `<disk>` entries at all**,
-   so until this is added the guest has *no boot device* and drops into the
-   OVMF shell. The template and the reasoning are in the `<devices>` comment in
-   `unraid-guest.xml`; note it carries `<boot order='1'/>`, and `<os>` must
-   therefore stay free of `<boot dev='hd'/>` or libvirt rejects the definition.
+
+The licence flash **no longer needs adding by hand.** The checked-in XML now
+carries its `<hostdev type='usb'>` entry, matched on `0781:5581` (SanDisk Ultra,
+read off Tower 2026-08-07). It is the domain's only boot device — there are no
+`<disk>` entries at all — so if you find yourself in the OVMF shell, that entry
+is what to look at first. It carries `<boot order='1'/>`, which is also why
+`<os>` must stay free of `<boot dev='hd'/>`: libvirt rejects a domain that mixes
+the two forms.
 
 Then, deliberately by hand (the domain is not set to autostart, and libvirtd is
 configured with `onBoot = "ignore"`):
@@ -817,8 +978,8 @@ sudo virsh console unraid       # or the webGUI once it has an address
       *real* device — forwarded with `<hostdev type='usb'>` from the internal
       header — so it keeps its true vendor:product:serial. An emulated USB disk
       presents a synthetic GUID and will not license.
-      (The entry itself is added as **§9 pre-start edit 3** — if you reached
-      this checklist without it, the guest has no boot device at all.)
+      (The entry is checked into `unraid-guest.xml` as of 2026-08-07, matched
+      on `0781:5581`. It is also the domain's only boot device.)
 - [ ] All four pools import: array (4× 12TB), Cache, Fastservices, and the
       ASM1064 pool.
 - [ ] Array members are recognised **by serial** — no "new device" prompts.
@@ -960,24 +1121,32 @@ Not in this deployment, each for a stated reason:
   | Controller | Group | Physical | Notes |
   |---|---|---|---|
   | `00:1a.0` EHCI #2 | 3 (isolated) | **internal header** | also carries the BMC virtual HID |
-  | `00:1d.0` EHCI #1 | 6 (isolated) | rear/other | Unraid boot flash lives here today |
+  | `00:1d.0` EHCI #1 | 6 (isolated) | rear/other | no BMC device — the clean one to pass, if ever needed |
   | `02:00.0` ASM1042 | 1 (with ASM1166 + both CPU root ports) | add-in card | goes to the guest **in its current slot** — see §4c |
 
-  **Recommended: licence key on the internal header, forwarded with
-  `<hostdev type='usb'>`.** Internal is the better physical home for a licence
-  dongle — inside the case, not bumpable, not pullable. And device passthrough
-  leaves `00:1a.0` with the host, so the BMC's virtual keyboard and mouse are
-  untouched.
+  **DONE 2026-08-07: licence key is on the internal header**, forwarded with
+  `<hostdev type='usb'>` matched on `0781:5581`, now checked into
+  `unraid-guest.xml`. Internal is the better physical home for a licence dongle
+  — inside the case, not bumpable, not pullable. And device passthrough leaves
+  `00:1a.0` with the host, so the BMC's virtual keyboard and mouse are
+  untouched. `lsusb` confirms the flash and `0557:2221` (ATEN Winbond Hermon,
+  the BMC) now share that bus.
 
   ⚠ **Never PCI-pass `00:1a.0`.** It is isolated, so VFIO would happily let you —
   and it would take IPMI's virtual HID away from the host. That is the remote-
   hands path this deployment depends on, and the only way to type a LUKS
   passphrase until initrd SSH unlock exists. Isolated does not mean safe to pass.
 
-  Fallback if `usb-host` boot proves troublesome under OVMF: leave the flash on
-  `00:1d.0` and PCI-pass that controller whole. It is isolated and carries no BMC
-  device, so it is a clean handover — at the cost of the host losing those ports
-  and the flash being pinned to that controller.
+  Fallback if `usb-host` boot proves troublesome under OVMF: **move the flash
+  back to a rear port on `00:1d.0` first**, then PCI-pass that controller whole.
+  It is isolated and carries no BMC device, so it is a clean handover — at the
+  cost of the host losing those ports and the flash being pinned there.
+
+  ⚠ The "move it back first" is not optional now that the flash lives on the
+  internal header. Reaching for this fallback where the flash currently sits
+  would mean passing `00:1a.0`, which is exactly the thing the warning above
+  forbids. The fallback trades a physically-safer flash location for a clean
+  controller handover; it cannot give you both.
 
   The mechanisms, for reference:
 

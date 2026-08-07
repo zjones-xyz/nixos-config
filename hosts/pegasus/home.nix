@@ -43,14 +43,6 @@
     _1password-cli
     claude-code
 
-    # FreeIPMI — drives Tower's BMC (serial-over-LAN console + chassis power)
-    # from somewhere that isn't Tower. Same reason as serenity: it is how you
-    # reach liskov's LUKS passphrase prompt and how you power-cycle a wedged
-    # box. Having it on both machines means neither one being down blocks
-    # recovery of the other. NOT ipmitool — that BMC needs FreeIPMI's quirks
-    # handling. See hosts/liskov/DEPLOY.md.
-    freeipmi
-
     discord
     ferdium
     bambu-studio
@@ -84,9 +76,42 @@
     # ollama.nix's gaming-drain oneshot is actually freeing VRAM/compute.
     nvtopPackages.nvidia
 
+    # IPMI/BMC out-of-band management client — ipmi-sensors, ipmipower,
+    # ipmiconsole (SOL), bmc-info. Same toolset as on serenity. Pegasus is a
+    # consumer desktop board with no BMC, so this is the LAN client for
+    # reaching other machines' BMCs, not local hardware monitoring; the
+    # local-access tools would additionally need /dev/ipmi0, which means the
+    # ipmi kernel modules and root (or a udev rule) — deliberately not wired
+    # up here since there's nothing on this box to talk to.
+    #
+    # On both this machine and serenity deliberately, so neither one being
+    # down blocks recovering the other — which is the case that matters, since
+    # the thing being recovered is liskov's LUKS prompt over serial-over-LAN.
+    # See hosts/liskov/DEPLOY.md §0 for the invocations and the FreeIPMI-not-
+    # ipmitool rationale.
+    freeipmi
+
     # Archive handling — wasn't anywhere in the package set (system or home).
     unzip
     p7zip
+
+    # RAR extraction. NOT covered by p7zip above: nixpkgs builds p7zip with
+    # `enableUnfree = false` by default, which strips the RAR codec out of the
+    # source tree entirely — so `7z x foo.rar` fails with "Can not open the
+    # file as archive" rather than a missing-plugin error, which is a
+    # confusing way to find out. libarchive/bsdtar handles some RAR3 but not
+    # RAR5 (the default since WinRAR 5.0), so it isn't a substitute either.
+    # unrar is the reference extractor and covers both.
+    #
+    # This also fixes RAR in Ark (the GUI, already present via the plasma6
+    # module's default app set — Dolphin's "Extract here" goes through it):
+    # Ark's cli plugin shells out to the `unrar` binary on $PATH and silently
+    # hides the format when it's absent.
+    #
+    # Unfree — the UnRAR license permits redistribution but forbids using the
+    # source to build a RAR *compressor*. allowUnfree is already on globally
+    # in modules/nixos/common.nix. Extract-only by design; use zip/7z to pack.
+    unrar
 
     # Winetricks operations scoped to a specific Proton prefix — common
     # companion to protonup-qt/lutris for troubleshooting individual games.
