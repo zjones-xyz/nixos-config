@@ -29,9 +29,16 @@ identifier travels with the disk.
 | `h-` | 3.5" HDD |
 | `h25-` | 2.5" HDD — **exceptional**, deliberately long and ugly as a signal that something is unusual |
 | `s-` | 2.5" SATA SSD |
-| `n-` | M.2 NVMe |
+| `m2-` | M.2 card |
+| `msata-` | mSATA card |
 
-Examples: `h-HJDH`, `s-768C`, `n-A1B2`.
+Examples: `h-HJDH`, `s-768C`, `m2-A1B2`.
+
+Note these are **form factors, not protocols** — consistently with the rest of the
+internal set. An M.2 card may be NVMe or SATA, and the prefix does not say which,
+just as `s-` does not distinguish SATA revisions. Since M.2 and mSATA devices take
+no physical label (§2), the distinction only ever matters in the inventory, where
+the `form` column can carry `m2-nvme` or `m2-sata` if it is worth recording.
 
 ### External — the prefix encodes interface generation instead
 
@@ -71,10 +78,13 @@ suffix (`100`, on a Crucial MX100) reads as part of its own model name. Four has
 margin. Verify uniqueness within a host before printing; collisions across
 different hosts are harmless, since the labels never meet.
 
-**Why the prefix.** The identifier alone should tell you the form factor — whether
-you are reaching for a 3.5" spinner in a caddy or a 2.5" SSD on a bracket, before
-you have opened anything. `h25-` breaks that assumption loudly on purpose. It also
-greps cleanly: `h-` never matches `h25-`, so "all 3.5-inch spinners" stays a
+**Why the prefix.** The identifier alone should tell you what you are reaching
+for, before you have opened anything — a 3.5" spinner in a caddy or a 2.5" SSD on
+a bracket, a USB3 enclosure or a USB2 one. Internal devices encode form factor
+because that is what you cannot otherwise know without looking; external devices
+encode interface generation because that is what you cannot otherwise know
+without opening. `h25-` breaks the internal assumption loudly on purpose. Prefixes
+also grep cleanly: `h-` never matches `h25-`, so "all 3.5-inch spinners" stays a
 trivial filter rather than needing a negative match.
 
 **Case.** Lowercase prefix, uppercase suffix. The suffix then matches what `lsblk`
@@ -93,7 +103,7 @@ reference** — and not every device needs both.
 | 2.5" SATA SSD | **Yes** | Same-model pairs are easy to confuse, and mirrors make confusing them costly |
 | External drive | **Yes** | Lives on a shelf among lookalikes; the label is often the only way to tell them apart |
 | Adapter or dock | **Yes** | Multiple, interchangeable, and easily confused for one another |
-| M.2 NVMe | **No** | No cable to trace, unambiguous by location, usually only one |
+| M.2 / mSATA card | **No** | No cable to trace, unambiguous by location, and frequently no room on the device for a sticker |
 | Anything being retired | **No** | Do not print labels for disks on their way out |
 
 Devices that get no label still get an identifier, for use in documentation and
@@ -225,7 +235,7 @@ diagram read from one source rather than drifting. Columns:
 id,form,serial_suffix,serial_full,model,size,location,role,colour,physical_label
 ```
 
-`form` is one of `hdd35`, `hdd25`, `ssd25`, `nvme`, `usb2`, `usb3`, `usb2adap`,
+`form` is one of `hdd35`, `hdd25`, `ssd25`, `m2-nvme`, `m2-sata`, `msata`, `usb2`, `usb3`, `usb2adap`,
 `usb3adap` — mirroring the prefixes in §1, so internal entries carry a form factor
 and external ones carry an interface generation. `colour` is the optional suffix
 and is empty for internal devices. `physical_label` is `yes`/`no` per §2.

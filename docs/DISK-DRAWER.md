@@ -45,6 +45,12 @@ lsblk -o NAME,SIZE,MODEL,SERIAL,TYPE
 > Compare the two: if `lsblk` and `smartctl` disagree, trust `smartctl` and
 > suspect the bridge.
 
+**Or read the serial off the drive's own label.** Photographing it sidesteps the
+bridge problem entirely — the printed label carries the drive's true identity
+regardless of what any adapter reports — and it does not require attaching the
+disk to anything. For disks that are only going to sit in a drawer, this is the
+lower-effort path as well as the safer one.
+
 ---
 
 ## Why these are not simply spares

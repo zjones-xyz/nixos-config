@@ -40,7 +40,7 @@ cannot be mapped to a physical drive, which is this document's whole purpose.
 
 | ID | Device | Size | Full serial | Notes |
 |---|---|---|---|---|
-| `n-????` | M.2 2242 NVMe on PCIe adapter | 1 TB | ⟨TBD⟩ | Intended root, replacing `s-5509`. **No physical label** — no cable to trace and only one of them. |
+| `m2-????` | M.2 2242 NVMe on PCIe adapter | 1 TB | ⟨TBD⟩ | Intended root, replacing `s-5509`. **No physical label** — no cable to trace, unambiguous by location, and no room on the card. Identifier is for inventory only. |
 
 ### Not a disk, but on the bus
 
@@ -186,7 +186,7 @@ s-8162
 s-3100
 ```
 
-`s-5509` omitted — retiring. `n-????` takes no physical label. Drawer disks are
+`s-5509` omitted — retiring. `m2-????` takes no physical label. Drawer disks are
 pending serials, in `docs/DISK-DRAWER.md`.
 
 ### Cable and bay labels — pending
@@ -221,7 +221,7 @@ s-768C,ssd25,768C,2422E8B6768C,Crucial BX500,480GB,internal,pool,,yes
 s-8162,ssd25,8162,2506E9A58162,Crucial BX500,480GB,internal,pool,,yes
 s-3100,ssd25,3100,15090EE23100,Crucial MX100,512GB,internal,pool,,yes
 s-5509,ssd25,5509,50026B7239015509,Kingston SH103S3120G,120GB,internal,retiring,,no
-n-????,nvme,????,,,1TB,pcie-adapter,root,,no
+m2-????,m2-nvme,????,,,1TB,pcie-adapter,root,,no
 ```
 
 ---
