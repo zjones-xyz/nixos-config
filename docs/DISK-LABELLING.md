@@ -162,10 +162,16 @@ and `/dev/disk/by-id` print, so it can be grepped against tool output directly.
 | `wtf?` | **Read, and the answer is unusable.** The device reports something absent, generic, obviously sequential, or otherwise not a serial. |
 
 The distinction matters because they call for different actions. `????` is closed
-by going and looking. `wtf?` has already been looked at — so it needs a *different*
-source (software instead of the printed label, or vice versa), and it is a mild
-signal about the device itself, since a manufacturer that cannot be bothered to
-print a real serial may have cut other corners.
+by going and looking. `wtf?` has already been looked at, so it needs a *different*
+source — software instead of the printed label, or vice versa.
+
+**`wtf?` is also a trust marker, not merely a gap.** A device that shows nothing
+resembling a serial invites the question of what else was skipped, and that
+suspicion is worth carrying. Where it applies, **say so explicitly in the
+inventory** rather than leaving a reader to infer it from the placeholder —
+otherwise the next person reads `wtf?` as "just needs looking up", resolves it,
+and puts something they care about on a drive nobody trusted. See
+`DISK-DRAWER.md` for a worked example.
 
 Where more than one unresolved disk exists — and it usually does — append a
 lowercase hint so they can be told apart in the meantime:

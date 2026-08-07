@@ -46,15 +46,46 @@ one of a batch rather than a device identity. Its PCB silkscreen
 identifier either.
 
 Hence `wtf?` rather than `????`: the label *has* been read, and the answer is
-unusable. Resolve it from the **controller** instead, which reports its own serial
-independently of anything printed:
+unusable. Taking the last four of the sticker would give `m2-0001` — both
+meaningless and the most collision-prone string available. Do not.
+
+#### ⚠ Not trusted with anything that matters
+
+**Owner's judgment, 2026-08-07: this drive holds nothing worth keeping.** The
+`wtf?` is not only an identification gap — a device showing nothing resembling a
+serial raises questions about what else was skipped, and that suspicion is the
+point of the marker.
+
+It is a reasonable suspicion, because **the NVMe specification makes the serial
+mandatory**: Identify Controller carries a 20-byte ASCII SN field. A useless
+sticker proves little on its own, but the controller must report something real.
 
 ```sh
 nvme id-ctrl /dev/nvmeN | grep -i '^sn'
 ```
 
-Taking the last four of the sticker would give `m2-0001` — both meaningless and
-the most collision-prone string available. Do not.
+- **Returns a plausible serial** → the sticker was just cheap. Fill in `wtf?` with
+  the last four and treat the drive as ordinary budget hardware.
+- **Blank, generic, or shared with another device** → escalate. That is a
+  spec-violating controller, and the concern moves from sloppy labelling to a
+  device misrepresenting itself.
+
+**The specific risk worth ruling out is capacity fraud** — a controller reporting
+256 GB over far less flash and wrapping silently, which destroys data with no
+error surfaced. `f3` tests exactly this and is already in the fleet (serenity's
+package set):
+
+```sh
+f3probe --destructive --time-ops /dev/nvmeNn1   # fast, DESTRUCTIVE
+# or non-destructively, by filling it:
+f3write /mnt/somewhere && f3read /mnt/somewhere
+```
+
+Until it passes both checks, **do not put it in a redundant set.** A mirror or a
+parity array assumes members fail *visibly*; a drive that silently returns wrong
+data violates that assumption. btrfs raid1 would at least detect it via
+checksums, but SnapRAID would fold the corruption into parity. Scratch and
+testing only.
 
 On the SanDisk, ignore `CT: UFVEL1AH2AV0HG` and `HP P/N: 836705-002`; the label
 prints `SN:` explicitly, which is the one unambiguous serial in this drawer.
