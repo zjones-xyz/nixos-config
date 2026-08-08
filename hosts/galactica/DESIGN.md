@@ -1159,14 +1159,25 @@ The original three, still valid:
   converts "a disk dies during the window" from a real loss into an inconvenience.
 
   *Updated 2026-08-07, and both halves of the arithmetic moved in the same direction.*
-  The parachute is bigger than this section assumed — **~20 TB** across three 4 TB and
-  four 2 TB disks, not 12 TB (`docs/DISK-DRAWER.md`). And the load is smaller: Unraid's
+  The parachute is bigger than this section assumed — three 4 TB and the usable 2 TB
+  disks, not 12 TB (`docs/DISK-DRAWER.md`). And the load is smaller: Unraid's
   Main tab reports **17.1 TB used of 24 TB**, not the 24 TB the brief implied.
 
-  **So it fits, with room.** The parachute stops being a subset you have to choose and
-  becomes the whole array. "Winnow first" above drops from precondition to optimisation —
-  still worth doing, since a shorter initial sync is a shorter exposure window, but no
-  longer something the plan depends on.
+  **So it fits — but revised 2026-08-08, it fits by less than it looked.** The Samsung
+  `h-8742` is now archival and out of the pool (HD204UI firmware defect), which takes
+  staging from ~20 TB to **~18 TB**. Against 17.1 TB that is a **~0.9 TB margin, about
+  5%**, where 20 TB looked like ~17%.
+
+  **The parachute still covers the whole array rather than a chosen subset**, which is
+  the conclusion that matters. But two things change:
+
+  - ⚠ **The four confirmed drops become load-bearing again**, not merely tidy. `SHARE`,
+    `manyfold_library`, `syncthing` and `minishare` are array-resident, and at a 5%
+    margin their combined size may decide whether staging fits. **`du -sh` them before
+    deleting** — that number now feeds a decision.
+  - **"Winnow first" is contingent rather than optional.** This section previously
+    demoted it from precondition to optimisation on the 20 TB figure. At 18 TB it is
+    neither; measuring the drops resolves which it is.
 
   ⚠ Two caveats before relying on that. None of the drawer disks has been tested — see
   the burn-in note in `PLATFORM.md` §12 before trusting one with the only copy of

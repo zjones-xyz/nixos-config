@@ -34,7 +34,7 @@ SMR section, which is the most consequential thing in this file.
 | `h-QUTK-smr` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `WX52A20CQUTK` | 2020-02-25 | ⚠ SMR | |
 | `h-0X2T-smr` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `WX52A20C0X2T` | 2020-02-25 | ⚠ SMR | Same batch as `h-QUTK-smr` |
 | `h-SDCP` | **WD Blue** WD20EZRZ-00Z5HB0 | 2 TB | `WCC4M4CZSDCP` | 2017-06-27 | CMR | 5400 class |
-| `h-8742` | **Samsung Spinpoint F4EG** HD204UI | 2 TB | `S2H7JD2ZB08742` | 2010-11 | CMR | ⚠ **Firmware defect — see below.** Rev. A. Carries a red `RAPTOR` case sticker. |
+| ~~`h-8742`~~ | **Samsung Spinpoint F4EG** HD204UI | 2 TB | `S2H7JD2ZB08742` | 2010-11 | CMR | 📦 **ARCHIVAL — out of service, 2026-08-08.** Firmware defect, see below. Rev. A. Red `RAPTOR` case sticker. |
 | `h-5N8F` | **WD Black** WD1003FZEX-00MK2A0 | 1 TB | `WCC3F0VZ5N8F` | 2016-02-27 | CMR | 7200 rpm, 64 MB |
 | `h-NYXN` | **WD Blue** WD10EZEX-00BN5A0 | 1 TB | `WCC3F2NRNYXN` | 2015-05-01 | CMR | 7200 class |
 | `h-6D0X` | **WD Blue** WD10EZRZ-00HTKB0 | 1 TB | `WCC4J6NP6D0X` | 2017-03-19 | CMR | 5400 class. ⚠ serial char, see below |
@@ -99,10 +99,15 @@ here polls SMART constantly**: `smartd`, SnapRAID's own health checks, and the
 `UDMA_CRC_Error_Count` baseline procedure in `hosts/galactica/PLATFORM.md` §12.
 The exact condition the bug needs is the condition normal operation creates.
 
-**Check the firmware revision before this disk is used for anything**
-(`smartctl -i /dev/sdX`, look at `Firmware Version`). If it is unpatched, either
-patch it or treat the disk as scratch. It is a 2010 drive either way; this is a
-reason to be unsentimental about it.
+📦 **Resolved 2026-08-08: the owner has designated it archival — it will not be
+used.** That closes the question without needing the firmware check, and it is
+the right call: the exact condition the bug requires is the condition normal
+operation in this fleet creates, so the disk would have needed a permanent
+exception from SMART polling to be safe.
+
+**Treat it as out of the pool entirely.** It is not a spare, not staging, and not
+burn-in material. Anywhere this document or `hosts/galactica/` counts drawer
+capacity, `h-8742` does not count.
 
 #### Two label readings to confirm at attach time
 
@@ -250,9 +255,24 @@ mergerfs pool of them — and it is untested.
 
 - **Staging for the migration.** `hosts/galactica/DESIGN.md` §6 assumes three
   4 TB disks and therefore that *arr* media must be winnowed to fit 12 TB. With
-  the four 2 TB disks that becomes **20 TB of staging** before touching the
-  1 TB class — likely enough to avoid winnowing at all. SMR is not a problem
-  here: a staging copy is one long sequential write.
+  the 2 TB disks that rises substantially before touching the 1 TB class. SMR is
+  not a problem here: a staging copy is one long sequential write.
+
+  ⚠ **Revised 2026-08-08 — it is 18 TB, not 20 TB**, because `h-8742` is archival
+  and no longer counts (three 4 TB + **three** usable 2 TB). Against Tower's
+  **17.1 TB** used that is a **~0.9 TB margin, about 5%** — where the 20 TB
+  figure looked like ~17%. The conclusion survives but stops being comfortable,
+  and two things follow:
+
+  **The four confirmed drops become load-bearing again.** `SHARE`,
+  `manyfold_library`, `syncthing` and `minishare` are array-resident and already
+  queued for deletion; at a 5% margin their combined size may decide whether
+  staging fits at all. ⚠ `du -sh` them **before** deleting — that figure now
+  feeds a decision rather than merely informing one.
+
+  **And "winnow first" moves back toward the middle.** `DESIGN.md` §6.3 demoted
+  it from precondition to optimisation on the strength of the 20 TB figure. At
+  18 TB it is neither — call it *contingent*, resolved by measuring the drops.
 - **The photo tier.** Two 4 TB disks in btrfs raid1 remains the shape, but the
   recording-technology split above means the pair cannot be all-CMR without
   buying a disk. See the options table.

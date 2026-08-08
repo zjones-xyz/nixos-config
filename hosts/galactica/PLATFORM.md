@@ -605,10 +605,11 @@ symptom you would otherwise blame on a dead card, a bad flash, or §1. Cables
 bundled with an HBA are almost always forward, so this is a glance rather than an
 investigation, but know the failure signature before you are debugging it.
 
-⚠ **Do not use the Samsung 2 TB (`h-8742`) for this.** It carries the HD204UI
-firmware defect where a SMART command issued during a write can corrupt data
-(`docs/DISK-DRAWER.md`), and this test is specifically about polling SMART. Any
-other drawer disk is fine — prefer one that needs burn-in anyway.
+📦 **The Samsung 2 TB (`h-8742`) is archival as of 2026-08-08 and out of the pool
+entirely**, so it is not a candidate here or anywhere — the HD204UI firmware
+defect (a SMART command during a write can corrupt data) made it a poor fit for a
+fleet that polls SMART constantly. Use any other drawer disk; prefer one that
+needs burn-in anyway. See `docs/DISK-DRAWER.md`.
 
 ### Step 4 — test it in Tower first, and additively
 
