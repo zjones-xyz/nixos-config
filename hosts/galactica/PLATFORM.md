@@ -565,6 +565,55 @@ tests each with the other and costs one setup instead of two. Watch for:
 - controller temperature: **SAS2008 expects server airflow and runs hot
   passively**
 
+#### ⚠ The fan is what creates the clearance problem — so decide whether it is needed
+
+**Test the temperature before adding a fan.** The "SAS2008 needs a fan" advice
+comes overwhelmingly from desktop cases with stagnant air; in a chassis with real
+front-to-back airflow it is frequently unnecessary. Adding one anyway is not
+free, because it is the fan — not the card — that costs a slot position.
+
+⚠ **Be honest about the measurement: there is no reliable in-band temperature
+sensor for SAS2008 in IT mode.** `storcli`/`megacli` can read a ROC temperature
+in *MegaRAID* mode, which is the personality you do not want. So the practical
+signals are indirect and worth stating so nobody hunts for a sensor that is not
+there:
+
+- `dmesg | grep -i mpt3sas` under sustained load — resets, timeouts or bus faults
+  appearing only when hot is the real thermal symptom
+- an IR thermometer or a careful touch on the heatsink after a long run
+
+**If the fan is needed, it makes the card physically 2-slot.** A 40 mm fan
+strapped to the heatsink protrudes into the neighbouring slot's space, so the LSI
+occupies its own position *plus* one adjacent. Check which side it protrudes
+toward and seat the card so the overhang lands on an end position or a slot being
+left empty.
+
+**Then the slot budget closes exactly, with nothing spare:**
+
+| Card | Slot positions |
+|---|---|
+| LSI 9240-8i **with fan** | **2** |
+| ASM1042 (USB3, x1) | 1 |
+| NVMe adapter (x4) | 1 |
+| **Total** | **4 of 4** |
+
+**This is why the ASM1042's width matters mechanically rather than
+electrically.** It is a x1 card (`HARDWARE-MAP.md` §4), so **a x1 riser can
+relocate it out of the slot stack entirely** — which is the difference between
+the configuration fitting comfortably and fitting exactly. Relocating it also
+opens airflow around the LSI, which may remove the need for the fan that caused
+the problem.
+
+⚠ Two cautions on the riser: a card on a ribbon still needs **mechanical
+support** — an unsecured board next to a fan is a bad idea — and cheap flexible
+risers can cost **signal integrity**. At PCIe 2.0 x1 that is usually fine, and
+the failure is visible: `LnkSta` training below spec, or USB devices dropping
+under load.
+
+Note this also means **a fan-modded LSI and a returning ASM1166 cannot coexist**
+— five positions against four. They are alternatives anyway, so this is
+confirmation rather than a constraint.
+
 **pegasus is now the fallback bench, not the primary** — useful only if Tower
 cannot be powered down at all, and explicitly unable to answer step 2.
 
