@@ -204,7 +204,7 @@ directly.
 | Onboard Intel C204 | 6 | **2× 6Gb/s + 4× 3Gb/s** | Confirmed 2026-08-07. Not six alike. Silkscreened `I-SATA0`…`I-SATA5`. |
 | ASM1166 (PCIe) | 6 | 6Gb/s all six | Shares one PCIe link — Gen2 x2 ≈ 1.0 GB/s today, ~1.97 GB/s if it trains Gen3 on the new firmware. Flashed to ECS06 (2021-11-08) on 2026-08-07. |
 | ASM1064 (PCIe x1) | 4 | 6Gb/s | ~500 MB/s shared across all four. Slated for removal under the bare-metal layout. |
-| ASM1042 (PCIe) | — | USB3 | Not storage, but **load-bearing**: the C204 is EHCI only, so this card is the machine's only USB3, and the BD-ROM enclosure wants it. |
+| ASM1042 (PCIe **x1**, unmeasured) | — | USB3 | Not storage, but **load-bearing**: the C204 is EHCI only, so this card is the machine's only USB3, and the BD-ROM enclosure wants it. x1 is the chip's spec and is *well matched* — PCIe 2.0 x1 ≈ 500 MB/s against USB 3.0's own ~500 MB/s ceiling, so there is no bandwidth to reclaim. ⟨Confirm `LnkCap`/`LnkSta`; never read on this machine.⟩ |
 
 ### Measured device-to-port mapping (sysfs, 2026-08-07)
 
@@ -246,6 +246,32 @@ relocated anyway.
 
 ⚠ This also confirms the port budget is *currently* full at ten devices across
 two controllers, with the ASM1166's six ports entirely spare.
+
+### ⚠ The slot widths are the real unknown, and `lspci` cannot tell you
+
+`PLATFORM.md` §10 records **four PCIe slots, visually confirmed identical** — but
+that is the *physical* connector. Their **electrical** widths are not recorded
+anywhere, and on this board they cannot be discovered by inspection: Supermicro
+hides root ports with nothing behind them, so an **empty slot does not appear in
+`lspci` at all**. Populate it or read the manual; there is no third option.
+
+That gap is newly load-bearing. `DESIGN.md` §6.7 may add an **x8** LSI HBA, and
+§5.5 already wants an **x4** NVMe adapter — so slot assignment now matters, and a
+**x1 card sitting in the widest slot would waste it**. The ASM1042 is the x1 card;
+put it in whichever slot is electrically narrowest.
+
+Read what is actually negotiated, per card:
+
+```sh
+# LnkCap = what the card is capable of; LnkSta = what it negotiated in this slot
+for d in $(lspci -D -d 1b21: | cut -d' ' -f1); do
+  echo "== $d"; sudo lspci -vvs "$d" | grep -E "LnkCap:|LnkSta:"
+done
+```
+
+⚠ **`LnkCap` settles the card, `LnkSta` settles the pairing.** A card reporting
+`LnkCap … x1` is x1 no matter which slot it occupies — so a narrow `LnkSta` is
+only evidence about the *slot* when `LnkCap` is wider.
 
 **Port budget is 12** with the ASM1064 removed (onboard 6 + ASM1166 6), against 12
 devices under the bare-metal layout. Zero headroom. See `DESIGN.md` §5.5.
