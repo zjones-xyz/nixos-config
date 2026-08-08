@@ -530,16 +530,20 @@ Three reasons it lands that way here:
   (§ Protected), and absorbing another machine's obligation into it is how that
   tier quietly grows.
 
-⚠ **This names a gap rather than closing one.** Assigning responsibility to
-Serenity does not give Serenity an offsite path — as far as this repo shows,
-there is no `restic`/`borg`/cloud backup configured on it at all. Serenity's data
-therefore has **no offsite protection today**, and it did not have any before
-this decision either; the decision only makes that explicit instead of leaving it
-to be assumed away by the presence of a Time Machine share.
+✅ **Serenity already holds up its end** — corrected 2026-08-07. An earlier
+revision of this section inferred from the repo that Serenity had no offsite path
+at all. That was wrong: the repo simply does not describe it, because nothing
+about it is NixOS-managed. Serenity actually runs **three** offsite paths —
+an iDrive subscription, plus Time Machine to portable drives kept at two separate
+locations and refreshed whenever the owner is physically there.
 
-**Serenity-side action item**, tracked in `DECISIONS.md` `## Still open`. Tower's
-Protected tier is the right home for the local copy either way, so nothing here
-blocks on it.
+So the responsibility assignment is not a gap being deferred; it is an
+acknowledgement that the machine which owns the data is **already** the one
+protecting it, and better than Tower could. Tower's copy is the fast local
+restore tier, which is what a Time Machine target should be.
+
+The real asymmetry runs the other way — see `DESIGN.md` and the backup discussion:
+**Tower backs up Serenity, and nothing backs up Tower.**
 
 ⚠ **`DESIGN.md` §5's layout assumes two tiers and now has eight.** Revisit it once
 Protected is populated. Two things there need rework: the photo-tier sizing was

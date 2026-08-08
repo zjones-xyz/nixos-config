@@ -257,15 +257,21 @@ re-derive why it stopped applying.
   Two label characters still need confirming at attach time: the `0`/`O` in
   `h-6D0X` (inside the four-char suffix, so it affects the identifier) and
   whether `h25-P4TH` is 40 GB or 60 GB.
-- **Serenity has no offsite backup path** — a *fleet* gap surfaced while
-  classifying `serenity_time_machine` (`SHARES.md` §5). Tower holds the Mac's
-  Time Machine copy and will keep it under parity, but the owner's call is that
-  **offsite for Serenity's data is Serenity's responsibility**, on the principle
-  that an offsite obligation belongs to the machine that owns the data rather
-  than to whatever holds a copy. Nothing in this repo configures a backup on
-  serenity, so that obligation is currently unmet. It blocks nothing on
-  galactica; it is recorded here because this is where it was noticed and
-  `hosts/serenity/` has no decision log to hold it.
+- **Tower has no offsite backup, and that is the fleet's real asymmetry.**
+  Surfaced while classifying `serenity_time_machine` (`SHARES.md` §5). The owner's
+  call is that **offsite for Serenity's data is Serenity's responsibility**, on
+  the principle that an offsite obligation belongs to the machine that owns the
+  data rather than to whatever holds a copy — and Serenity already discharges it
+  three ways (iDrive, plus Time Machine to portable drives at two off-site
+  locations). ⚠ An earlier revision of this entry claimed Serenity had no offsite
+  path; that was inferred from this repo's silence and was simply wrong.
+
+  **Tower is the machine with no offsite copy.** Its dual parity protects against
+  disk failure and against nothing else — not deletion, not ransomware, not fire
+  or theft. The Critical and Precious tiers (`documents`, both Immich shares) are
+  the scope that needs one. Blocked on sizing (`du`) and on choosing a mechanism;
+  the owner's stated irritation is that iDrive, which serves Serenity well, has no
+  good path for a Linux fileserver.
 
 - **Staging capacity.** Three 4 TB disks are available for the migration, which
   is not enough for everything at once; the plan assumes *arr* media is winnowed
