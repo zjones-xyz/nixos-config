@@ -239,8 +239,17 @@ remain true under this one.
   scrub. **The copy is paid once per import; the parity tax would be paid on
   every write, forever.** Size it against *seeding retention* rather than library
   size, since seeded content exists twice.
-- **No Ceph, no Incus clustering, no LSI HBA.** Considered and ruled out before
-  either design; not revisited.
+- **No Ceph, no Incus clustering.** Considered and ruled out before either design;
+  not revisited.
+- ⚠ ~~**No LSI HBA.**~~ **Reopened 2026-08-08.** A 9240-8i was ordered and not
+  cancelled, and it may replace the ASM1166 outright. This entry recorded a
+  *conclusion with no argument*, reached under the VFIO design where
+  whole-controller passthrough drove the requirements — so there is nothing to
+  overturn, and it should be decided on bare-metal merits. The strongest point in
+  its favour is not bandwidth but that it **deletes `PLATFORM.md` §1's landmine**,
+  where a CMOS clear makes the array controller vanish and look like hardware
+  failure. `DESIGN.md` §6.7 has the full case, including the IT-mode crossflash and
+  the return-window sequencing.
 - **Bind PCI devices by vendor:device ID, not bus address** — addresses have been
   observed to shift across reboots on this board. Now only relevant if libvirt
   ever comes back, but the observation stands.

@@ -1033,26 +1033,45 @@ constraint is largely irrelevant.
 
 Two things to verify on the machine before committing `[unverified]`:
 
-- **Are the four array disks LUKS-encrypted?** You listed cache/fastservices/pool as LUKS but
-  not the array. Unraid's array encryption is plain LUKS on each disk, so `cryptsetup open`
-  works fine from NixOS — but you need the passphrase and a `/etc/crypttab` entry, and it
-  changes the boot sequence. `blkid` will tell you in seconds.
+- ~~**Are the four array disks LUKS-encrypted?**~~ ✅ **Answered 2026-08-07**
+  (`HARDWARE-MAP.md` §2): the two data disks and the SSD pools are LUKS; **the two parity
+  disks are not, because under Unraid they cannot be.** Unraid's array encryption is plain
+  LUKS per disk, so `cryptsetup open` works from NixOS — you need the passphrase and
+  `/etc/crypttab` entries, and it changes the boot sequence. ⚠ The parity asymmetry does
+  **not** carry over; see step 12.
 - **Partition layout.** Unraid partitions array disks itself; check `lsblk`/`parted` and
   confirm the filesystem mounts cleanly read-only from a Linux live environment *before* you
   plan around it.
 
 ### 6.2 Recommended sequence
 
-**Phase 0 — under Unraid, reversible, protects the irreplaceable data first.**
+> **Reordered 2026-08-08.** This section originally assumed you migrate and then
+> arrange backups. That is backwards now that the offsite path is fully specified
+> (borgmatic → BorgBase, 950 GB — `docs/BACKUP.md`). **Backups first, under
+> Unraid, because that is what makes the migration's one dangerous window
+> survivable** (§6.3). Three steps below were also simply stale; they are marked.
+
+**Phase 0 — under Unraid, reversible, and it is the phase that matters most.**
 
 1. Back up off-box: *arr databases, Jellyfin config, Docker compose (`homelab-stacks/`),
    Unraid share/user config, LUKS headers (`cryptsetup luksHeaderBackup`). Small, cheap,
-   valuable.
-2. Create a **btrfs raid1 pool of the 2× BX500** in Unraid (Unraid supports this natively).
-   Move photos onto it. Verify. Set up the offsite backup **now**, independent of everything
-   else.
-3. **Photos are now better protected than they have ever been**, and every later step is
-   about re-acquirable data only. This phase is worth doing even if you abandon the rest.
+   valuable. ⚠ The LUKS headers are the unrecoverable one — without them the disks are
+   noise, and no later step restores them.
+2. **Stand up borgmatic → BorgBase and get the Precious tier offsite, from Unraid.**
+   borgmatic runs as a container today; nothing here waits on NixOS, on the layout
+   decision, or on any disk moving. ⟨Confirm the current container image.⟩
+   Scope: `documents`, `immich_photos`, `immich_photos_archived`, plus Immich's
+   database via borgmatic's native hook.
+3. **Run the pilot (§6.6) before trusting step 2.** A backup that has never been
+   restored is a belief.
+4. ~~Create a btrfs raid1 pool of the 2× BX500 and move photos onto it.~~
+   ⚠ **Superseded by §5.5.** Photos go to a **4 TB pair**, not the SSDs — which
+   dissolved the "do photos fit in 450 GB?" assumption entirely. The BX500 pair
+   became the app-state tier. This step is *blocked* on the CMR question (§6.7)
+   and is no longer urgent, because step 2 already protects the photos.
+
+**Once step 2 is verified, every later step risks re-acquirable data only.** That is
+the whole point of the reordering, and it is worth doing even if you abandon the rest.
 
 **Phase 1 — free a disk at zero risk.**
 
@@ -1071,9 +1090,15 @@ Two things to verify on the machine before committing `[unverified]`:
    stays plugged in and bootable.** You can boot either. Note: once you write to the Unraid
    data disks from NixOS, Unraid's parity is stale — falling back then means a parity rebuild
    (~20 h), not data loss. That is an acceptable fallback and worth writing down.
-7. Physically re-lay the SATA cabling per §2.2 and **remove the ASM1064**.
+7. ⚠ **Not a re-lay — the array cabling is already right.** `HARDWARE-MAP.md` §4
+   measured the actual port map and found both SSDs already on the 6 Gb/s ports and
+   all four spinners on the 3 Gb/s ports, which *is* the bare-metal optimum. What
+   remains is additive: NVMe on its adapter, BD-ROM out to USB, photo and scratch
+   disks onto whatever card wins §6.7, and **remove the ASM1064**.
 8. Bring up the host config with **no storage**: hostname/DNS, bond, sops, Tailscale, NUT
-   server, ntfy, Traefik, Dockge. Prove the fleet plumbing before touching disks.
+   server, ntfy, Traefik, and a **Beszel agent** (`modules/nixos/beszel.nix` — the hub
+   already runs on hopper). Prove the fleet plumbing before touching disks.
+   ⚠ Dockge is deliberately *not* in this list any more — see §6.5.
 
 **Phase 3 — the pivot.**
 
@@ -1083,7 +1108,12 @@ Two things to verify on the machine before committing `[unverified]`:
 11. Remount disk1/disk2 read-write. Build the mergerfs pool at **`/mnt/user`** over
     disk1:disk2:disk3, with the mountpoint safety options from §4.5.
 12. Format the remaining Unraid parity disk as the **SnapRAID parity disk**. XFS or
-    ext4 (or btrfs + `chattr +C`).
+    ext4 (or btrfs + `chattr +C` set on the *directory* before the parity file exists —
+    the flag only takes on a file with no data blocks). ⚠ **LUKS it.** Under Unraid the
+    parity disk holds combinations of ciphertext and is legitimately unencrypted;
+    SnapRAID parities *plaintext files*, and parity of known plaintext is recoverable
+    plaintext (§5.5). This is silent and easy to miss precisely because the disk it
+    replaces was fine unencrypted.
 13. `snapraid sync` — the initial parity build, **~12–18 h** (§2.3).
 14. Bring up NFS exports (§4.6), then the Docker stacks. Verify memory-alpha's two mounts
     and hardlink behaviour inside the *arr containers before declaring done.
@@ -1103,7 +1133,18 @@ Two things to verify on the machine before committing `[unverified]`:
 
 **Shrinking the exposure window.** The only genuinely at-risk window is 11–13, and it is
 unavoidable in any in-place conversion — you cannot have valid parity for a layout that does
-not exist yet. Three mitigations:
+not exist yet. Four mitigations, the first of which is new and is worth more than the other
+three combined:
+
+- ⭐ **Get the Precious tier offsite first (Phase 0 step 2).** This does not shrink the
+  window; it **changes what the window can cost.** With photos and `documents` already in
+  BorgBase, a disk failure between steps 11 and 13 threatens *re-acquirable media only* —
+  it stops being "lose the irreplaceable thing" and becomes "re-download, or pull it off
+  the parachute." Everything below is about reducing probability; this one caps the
+  damage, which is the stronger move. **It is also the only mitigation you can complete
+  before deciding anything else about the layout.**
+
+The original three, still valid:
 
 - **Do it in the right order.** Build parity (step 13) *before* migrating Docker workloads
   and re-enabling writes (step 14). The window is then read-mostly.
@@ -1136,7 +1177,9 @@ not exist yet. Three mitigations:
 ### 6.4 If in-place conversion turns out not to be possible
 
 If the disks fail verification, or you decide you want a clean btrfs layout everywhere, the
-copy-based path is: freed 12 TB disk (step 4) + 12 TB of 4 TB staging = **24 TB of scratch**,
+copy-based path is: freed 12 TB disk (step 4) + ~20 TB of drawer staging = **~32 TB of
+scratch** (updated 2026-08-07 from `docs/DISK-DRAWER.md`; this said 24 TB when the drawer
+was believed to hold five disks),
 which is enough to evacuate and reformat one 12 TB disk at a time. Three sequential ~19 h
 copies plus the sync ≈ **3–4 days elapsed**, mostly unattended, with a longer
 no-redundancy window. Workable but strictly worse. **Dropping to single parity first is what
@@ -1168,6 +1211,119 @@ makes even this fallback tractable** — without step 4 you genuinely do not hav
   client.
 - **The Unraid licence flash** — keep it. It is your rollback for six months, and it costs a
   USB header.
+- ⏸ **Container management — deferred, with the criterion recorded.** Step 8 used to bring
+  up Dockge. Whether it should is now an open question, and the owner has given the
+  deciding criterion: **tailscale proxy configuration, Traefik routing and now backup
+  scope should live in the same place as the stack itself.** The name for the alternative
+  is *shotgun surgery* — one logical change forcing many small edits scattered across
+  unrelated files.
+
+  That criterion points at Nix-owned stacks, and the fleet already demonstrates the shape:
+  `traefik.nix`, `arcane.nix` and `beszel.nix` each put the service, its Traefik labels and
+  its wiring in one module. Adding a backup tier to that attrset is one more field, not a
+  fourth place to remember. The gap is the Dockge-managed stacks under `homelab-stacks/`,
+  which are the ones that would have to move.
+
+  **What the decision does *not* have to settle is visibility.** Dockge does management and
+  visibility; Nix absorbs the management half, and Beszel covers the rest — so "drop Dockge"
+  does not mean "fly blind". `docs/BACKUP.md` §4c has the full argument, including the
+  ⚠ `virtualisation.oci-containers.backend` default of **podman** against a Beszel agent
+  that watches a *Docker* socket.
+
+  ⟨Decide after the `appdata` pass, which produces the per-container tier map this would
+  express.⟩
+
+### 6.6 The pilot — prove backup and migration in miniature, on `partdb`
+
+**Owner's proposal, 2026-08-08, and it is the right shape:** wire a couple of small
+services for backup, then test-migrate and restore them onto **memory-alpha** before
+galactica exists. A rehearsal at low stakes for two things that are otherwise first
+attempted at high stakes.
+
+**`partdb` is the best possible choice, not an arbitrary one.** It is the case that
+*generated* the paired-appdata rule (`SHARES.md` §5): attachments live in
+`/mnt/user/partdb`, and the MariaDB database that gives them meaning lives in
+`/mnt/user/appdata/partdb`. Restore one without the other and you have a heap of
+unlabelled files. So the pilot exercises the exact failure the rule exists to prevent,
+at a size where getting it wrong costs nothing.
+
+What it proves, concretely:
+
+| Question | How the pilot answers it |
+|---|---|
+| Does the borgmatic config shape work? | It either backs up or it does not |
+| Does the native database hook produce a *restorable* dump? | Restore it on memory-alpha and open the app |
+| Does the paired-appdata rule hold? | Restore data + `appdata` together; then deliberately restore only one and confirm it is useless |
+| Does BorgBase append-only actually refuse deletes? | Run `borgmatic prune` from the client key and watch the server refuse (`BACKUP.md` §3) |
+| Is the tier → `source_directories` path sound? | It is the same mechanism galactica will use |
+| Does a service survive a host move at all? | Container, bind mounts, Traefik routing, DNS |
+
+⚠ **Be clear about what it does not prove.** The pilot says nothing about the array
+conversion, SnapRAID, mergerfs, the exposure window, or hardlink behaviour across the
+*arr stack — those are galactica-specific and untestable this way. Treating a green pilot
+as validation of the migration would be exactly the over-reading this document keeps
+warning about elsewhere.
+
+**Second candidate worth adding:** one service with *no* database and a large data
+directory, to prove the boring path too. `bambuddy_library` or `webdav` would do.
+
+memory-alpha is the right target: it already runs the container tooling, already mounts
+Tower over NFS, and is not the machine being rebuilt.
+
+### 6.7 Open hardware decisions that gate the layout
+
+Both arrived 2026-08-08 and both are live rather than settled.
+
+**1. CMR disks for the non-SnapRAID tiers.** Only one of the three 4 TB drawer disks is
+CMR (`h-3V35`, a Red Plus WD40EFPX); the other two are WD Red EFAX, which are DM-SMR
+(`docs/DISK-DRAWER.md`). The owner is pricing one or two CMR replacements. **If they are
+cheap, buy them** — it removes the photo tier's blocker outright and is the smallest sum
+of money in this plan that unblocks the most.
+
+⚠ Whatever else happens, **no SnapRAID parity on an EFAX.** Scattered parity writes are
+DM-SMR's worst case.
+
+**2. ⚠ The LSI 9240-8i — reopened, and it may retire the ASM1166.** An order was placed
+and not cancelled, and the owner may prefer it *and return the ASM1166* if it validates.
+
+`DECISIONS.md` carries "no LSI HBA" as a prior ruling — but it records the **conclusion
+with no argument**, and it was reached under the VFIO design where whole-controller
+passthrough drove the requirements. So there is nothing here to overturn; the question is
+simply open, and it should be decided on bare-metal merits.
+
+The case *for* it is stronger than it first looks:
+
+- **It deletes `PLATFORM.md` §1's landmine permanently.** The ASM1166 is invisible unless
+  the BIOS carries `PCI Express Port - Gen X = Gen2` *and* `Detect Non-Compliance Device =
+  Enabled`. **A CMOS clear or a dead battery makes the array controller vanish and look
+  like hardware failure.** That trap does not exist with an LSI card, and §5 of PLATFORM
+  already flags the CMOS battery as aging.
+- **Bandwidth stops being a design constraint.** The 9240-8i is PCIe **2.0 x8** —
+  roughly 4 GB/s, against the ASM1166's shared ~1.0 GB/s at Gen2. Four spinners at
+  ~250 MB/s is 1.0 GB/s, i.e. *the entire* ASM1166 Gen2 budget and a quarter of the LSI's.
+  It also makes the §6e Gen3 retest irrelevant to the array.
+- **Eight ports instead of six**, which restores the headroom §5.5 currently does not have.
+- **SAS2008 is a genuinely well-supported HBA** — `mpt3sas` is in-tree and maintained,
+  SMART passes through cleanly, and it is the standard recommendation for exactly this job.
+
+⚠ The costs are real and should not be discovered mid-migration:
+
+- **It must be crossflashed to IT mode.** Stock 9240-8i firmware is IR/MegaRAID and does
+  not present raw disks properly. This is well-trodden but is a flashing procedure on a
+  card that boots its own option ROM — and `PLATFORM.md` §6 is a standing reminder of how
+  a "routine" controller flash on this machine actually goes. ⟨Budget a day, not an hour.⟩
+- **Cables.** It needs 2× SFF-8087 → 4× SATA *forward breakout*, usually not included.
+  Buying the wrong direction (reverse breakout) is a common and annoying mistake.
+- **Heat.** SAS2008 expects server airflow and runs hot passively. Check it under a
+  sustained sync, not at idle.
+- **Validate before returning anything.** The ASM1166 was flashed on 2026-08-07 at some
+  cost in effort; that is sunk and should not influence the decision — but the return
+  window is a *deadline*, and the validation is a full parity-check-equivalent load test,
+  not a boot-and-see. Sequence it accordingly.
+
+**If the LSI wins, §5.5's port budget and placement table are rewritten**, and the
+"distribute disks across controllers" reasoning in §2.2 becomes moot. Do not finalise disk
+placement until this is decided.
 
 ---
 
