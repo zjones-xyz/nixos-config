@@ -233,6 +233,30 @@ stronger than a vendor holding it on your behalf and promising not to look** —
 and it costs the credential-scoping problem in §4's Proton section to get the
 weaker version.
 
+**This is one of the owner's standing complaints about the iDrive subscription**,
+confirmed 2026-08-07 — and the two complaints turn out to be the same complaint.
+
+Consumer backup products offer zero-knowledge as an *optional mode with penalties
+attached*: turn on private-key encryption and the web restore degrades, the
+key becomes unrotatable without re-uploading, and assisted recovery stops being
+available. That is not a badly built feature. **It is the honest expression of a
+tradeoff that cannot be avoided**: a vendor cannot both help you restore and be
+unable to read your data. Every feature that justifies the subscription — browse
+in a browser, support-assisted recovery, courier restore — needs the key.
+
+restic has no such tension because there is no vendor-side feature to disable.
+Zero-knowledge is the only mode, so nothing degrades by choosing it, and key
+rotation is cheap because the passphrase only ever wrapped a master key.
+
+> ⚠ **The cost is real and worth naming: you become your own recovery vendor.**
+
+That is what elevates §5 from good practice to *the thing that replaces a service
+you were paying for*. Nobody can be called when the passphrase is lost. Nobody
+verifies the archive is restorable but you. The fireproof-box key copy and the
+from-zero restore test are not paranoia — they are the in-house replacement for
+the support line you are giving up, and they are the reason this trade comes out
+favourably rather than merely cheaper.
+
 Three honest caveats:
 
 - **Metadata still leaks a little.** The provider sees total volume, upload
