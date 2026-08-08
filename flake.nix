@@ -54,7 +54,8 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, ... }: {
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, ... }:
+  {
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";

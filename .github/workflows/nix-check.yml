@@ -4,10 +4,35 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Manual trigger. Added after a stretch where GitHub stopped creating runs
+  # for pushes entirely (five in a row, workflow still state=active) and there
+  # was no way to ask for one. Note this only becomes available once the
+  # workflow is on the default branch — GitHub reads the dispatch trigger from
+  # there, not from the PR head.
+  workflow_dispatch:
+
+# A full run takes ~15 minutes, dominated by the native memory-alpha build. On a
+# branch with frequent pushes that means runs pile up and supersede each other,
+# and superseded runs land as `cancelled` — which reads as a CI failure on the
+# PR even though nothing is wrong. (Observed on #37: runs 166, 167 and 170 all
+# cancelled, with 168 and 169 passing in between.)
+#
+# Grouping per-ref with cancel-in-progress makes that supersession explicit and
+# intentional: only the newest commit's run matters, older ones are dropped on
+# purpose, and CI minutes are not spent validating a tree nobody will merge.
+#
+# github.ref is the right key — it is per-PR (refs/pull/N/merge) and per-branch,
+# so concurrent work on main and on a PR never cancel each other.
+concurrency:
+  group: nix-check-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   flake-check:
     runs-on: ubuntu-latest
+    # A wedged runner should fail loudly and quickly rather than occupying a
+    # slot for the 360-minute default.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -32,3 +57,11 @@ jobs:
 
       - name: Build memory-alpha (x86_64-linux, native)
         run: nix build .#nixosConfigurations.memory-alpha.config.system.build.toplevel --no-link
+
+      # NOTE for whoever adds the next `checks` output: the first step above
+      # runs `nix flake check --no-build`, which *evaluates* check derivations
+      # without ever building them. Eval-time assertions (a `throw` in a `let`)
+      # fire under that; anything needing to actually run — a nixosTest, an
+      # xmllint on a hand-maintained file — is evaluated, skipped, and reported
+      # as a pass. Those need an explicit `nix build .#checks.<system>.<name>`
+      # step here. This repo had one until the liskov VFIO checks were removed.

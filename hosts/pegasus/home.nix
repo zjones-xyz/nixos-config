@@ -42,6 +42,7 @@
     _1password-gui
     _1password-cli
     claude-code
+
     discord
     ferdium
     bambu-studio
@@ -82,6 +83,12 @@
     # local-access tools would additionally need /dev/ipmi0, which means the
     # ipmi kernel modules and root (or a udev rule) — deliberately not wired
     # up here since there's nothing on this box to talk to.
+    #
+    # On both this machine and serenity deliberately, so neither one being
+    # down blocks recovering the other — which is the case that matters, since
+    # the thing being recovered is Tower's LUKS prompt over serial-over-LAN.
+    # See hosts/galactica/PLATFORM.md §2 for the invocations and the
+    # FreeIPMI-not-ipmitool rationale.
     freeipmi
 
     # Archive handling — wasn't anywhere in the package set (system or home).

@@ -1,0 +1,469 @@
+# Disk naming and labelling convention
+
+Fleet-wide. Applies to any host with disks worth identifying physically —
+realistically Tower, memory-alpha and pegasus. The Pis boot from SD or USB and
+serenity is a Mac, so neither has cables worth tracing.
+
+This file is the **rules**. The disks themselves live elsewhere:
+
+| Where | What |
+|---|---|
+| `docs/DISK-LABELLING.md` (this) | The convention. Stable. |
+| `docs/DISK-DRAWER.md` | Unassigned spare disks, belonging to no host. Changes as stock moves. |
+| `hosts/<host>/HARDWARE-MAP.md` | Disks installed in that host, plus its controllers, bays and cabling. |
+
+A disk moving from the drawer into a machine is a row moving from
+`DISK-DRAWER.md` into a host's `HARDWARE-MAP.md`. Nothing else changes — the
+identifier travels with the disk.
+
+---
+
+## 1. Disk identifiers
+
+**Prefix plus the last four characters of the serial, uppercase.**
+
+### Internal — the prefix encodes form factor
+
+| Prefix | Meaning |
+|---|---|
+| `h-` | 3.5" HDD |
+| `h25-` | 2.5" HDD — **exceptional**, deliberately long and ugly as a signal that something is unusual |
+| `s-` | 2.5" SATA SSD |
+| `m2-` | M.2 card |
+| `msata-` | mSATA card |
+| `ide-` | PATA/IDE drive, any size — **legacy**, see below |
+
+Examples: `h-HJDH`, `s-768C`, `m2-A1B2`.
+
+`ide-` is a deliberate exception to the form-factor rule, for the same reason the
+external prefixes are: **for a legacy interface, the interface is what you need to
+know first.** IDE drives come in 3.5" and 2.5" alike, and the decision-relevant
+fact is whether you can attach one at all — no host in this fleet has a PATA port,
+so reaching one means a USB-IDE adapter (`usb2adap-`/`usb3adap-`). None are known
+to exist here; the prefix is reserved so that if one surfaces it is catalogued
+rather than improvised.
+
+`m2-` and `msata-` name **form factors, not protocols.** An M.2 card may be NVMe
+or SATA and the prefix does not say which, just as `s-` does not distinguish SATA
+revisions. Since neither takes a physical label (§2), that distinction only ever
+matters in the inventory, where the `form` column can carry `m2-nvme` or
+`m2-sata` if it is worth recording.
+
+### External — the prefix encodes interface generation instead
+
+| Prefix | Meaning |
+|---|---|
+| `usb2-` | External USB 2.0 drive |
+| `usb3-` | External USB 3.x drive |
+| `usb2adap-` | USB 2.0 adapter or dock |
+| `usb3adap-` | USB 3.x adapter or dock |
+
+Optionally suffixed with a colour: `usb3-HXRY-blue`.
+
+**Form factor is deliberately not encoded for external devices.** You cannot see
+whether an enclosure holds a spinner or an SSD without opening it, and it rarely
+matters — what you are identifying is a box on a shelf. The interface generation
+is the performance-relevant fact instead, and it is visible from the label where
+the media type is not.
+
+The **colour suffix** exists for the common case of several visually identical
+enclosures. Optional; use it when it helps and omit it when it does not.
+
+> ⚠ **Adapters and docks often have no usable serial**, and cheap USB-SATA bridges
+> frequently report a generic or duplicated one. Where the serial is unusable,
+> substitute a sequence number or lean on the colour: `usb3adap-02`,
+> `usb3adap-grey`. Record the choice here rather than leaving it implicit.
+
+> ⚠ **A USB bridge usually masks the drive's serial.** Attach a bare disk through
+> a dock and `lsblk` typically reports the *bridge's* serial rather than the
+> disk's — so a disk identified that way can be given the wrong identifier
+> entirely. `smartctl -d sat -i /dev/sdX` pierces most bridges and reports the
+> real device; attaching over SATA directly always works. **Verify before
+> printing** any label derived from a disk read over USB.
+
+**Why four characters.** Three was unique across Tower's inventory at the time of
+writing, but leaves nothing for future disks — and one drive's three-character
+suffix (`100`, on a Crucial MX100) reads as part of its own model name. Four has
+margin. Verify uniqueness within a host before printing; collisions across
+different hosts are harmless, since the labels never meet.
+
+### If four characters collide
+
+**First check whether the *full* serials differ.** That distinction decides which
+of two very different problems you have.
+
+**Full serials differ, suffixes collide** — an ordinary labelling collision.
+Expand **only the two colliding drives** to five characters; leave every other
+label at four. A global expansion would mean reprinting the whole set to solve a
+local problem. Record the exception in the host's `HARDWARE-MAP.md` so nobody
+later "corrects" it back to four.
+
+Note this is rarer than it sounds. Serials from a single batch are usually
+sequential, so two drives bought together differ in their *last* characters and
+will not collide at four. A four-character collision means the drives differ only
+further left — different batches, or different runs.
+
+**Full serials are identical** — not a labelling problem, and do not paper over it
+by expanding the suffix. **The likely cause depends entirely on how you read the
+serial**, so establish that first.
+
+*Read in software:*
+
+1. **A USB bridge is masking them.** By far the most common cause — read two disks
+   through the same dock and both report the *bridge's* serial. Check with
+   `smartctl -d sat -i /dev/sdX`, or attach over SATA. See the warning above.
+2. **A tool is reporting the wrong field** — WWN or model where you expected the
+   serial.
+3. **The drives are counterfeit.**
+
+*Read off the physical labels, holding both drives:*
+
+Neither benign software explanation applies — there is no bridge and no tool in
+the path — so the ordering inverts.
+
+1. **You read the wrong field.** A drive label carries model number, part number,
+   WWN, firmware revision and a date code alongside the serial, and the serial is
+   often not the most prominent. Easily done, and worth eliminating first because
+   it is free.
+2. **The drives are counterfeit, relabelled or refurbished.** Duplicated serials
+   are a known signal, particularly on cheap SSDs and USB flash. At this point the
+   identifier is the least of the concerns — verify capacity and health before
+   trusting either device with anything.
+3. **A genuine manufacturer error.** Real, but rare enough to be the last thing
+   you should believe.
+
+**The cross-check that settles it:** read the serial the *other* way. Attach over
+SATA and compare the software's answer against the printed label. If they
+disagree, you know which reading to distrust. If both methods agree *and* both
+drives still match, the problem is the hardware, not the reading.
+
+**If five characters still collide on genuinely distinct full serials**, be
+suspicious rather than expanding again. Two drives agreeing on their last five
+characters and differing further left is possible but unusual, and the
+explanations above deserve ruling out first.
+
+**Why the prefix.** The identifier alone should tell you what you are reaching
+for, before you have opened anything — a 3.5" spinner in a caddy or a 2.5" SSD on
+a bracket, a USB3 enclosure or a USB2 one. Internal devices encode form factor
+because that is what you cannot otherwise know without looking; external devices
+encode interface generation because that is what you cannot otherwise know
+without opening. `h25-` breaks the internal assumption loudly on purpose. Prefixes
+also grep cleanly: `h-` never matches `h25-`, so "all 3.5-inch spinners" stays a
+trivial filter rather than needing a negative match.
+
+**Case.** Lowercase prefix, uppercase suffix. The suffix then matches what `lsblk`
+and `/dev/disk/by-id` print, so it can be grepped against tool output directly.
+
+### Property markers — currently only `-smr`
+
+A lowercase suffix marking a **permanent physical property that changes how the
+drive must be treated and is invisible once installed.** One exists:
+
+```
+h-CY72-smr            # WD Red WD40EFAX — drive-managed shingled recording
+```
+
+**Only shingled drives are marked.** There is no `-cmr`, and adding one would
+double the length of nearly every label to assert the ordinary case.
+
+⚠ **So absence of the marker is not a claim that a drive is CMR** — it means
+either CMR or not yet established. The label cannot express that difference;
+**the inventory must.** The `recording` column (§5) carries three states —
+`cmr`, `smr`, `????` — and `????` is the honest answer for most older drives
+nobody has checked. This is the same split as everywhere else in this file:
+documents record uncertainty, labels record only what is settled.
+
+**Why this earns a place on a physical label**, when role and capacity
+deliberately do not:
+
+- It is **permanent**, like the serial and unlike the role.
+- It is **invisible once installed** — not printed on the drive body, not in
+  `smartctl -i`, not exposed by any SMART attribute.
+- It **changes what the drive is safe for.** A shingled drive absorbs writes into
+  a conventional cache of 20–40 GB and then collapses to single-digit MB/s while
+  it rewrites whole shingle zones. Sustained scattered writes — array parity
+  above all — are its worst case.
+- The moment a caddy label is read is often **exactly the moment it matters**:
+  pulling a spare out of a drawer to replace a failed member, which is precisely
+  when you do not want to discover what you grabbed.
+
+**Not a prefix**, for two reasons. The prefix slot already means form factor, and
+recording technology is orthogonal to it — a shingled drive can be 3.5" or 2.5".
+And prefixes are the fleet's grep handle: `h-` matching every 3.5" spinner is
+worth more than folding a second axis into it. As a suffix it composes cleanly —
+`h25-ABCD-smr` is a shingled 2.5" spinner and reads correctly on both axes.
+
+**Establishing it takes work, and the doc should say which kind was done.**
+Recording technology is not printed on any label and no drive reports it. Two
+methods, in increasing order of cost and confidence:
+
+1. **Look the model number up** against the vendor's own list. This is how the
+   fleet's current entries were determined, and the inventory says so rather than
+   presenting inference as measurement. Reliable for the documented cases — WD's
+   2020 disclosure covering the Red `EFAX` line, for instance — and silent about
+   everything else.
+2. **Blow past the cache and watch for the cliff.** ⚠ Destructive; blank disks
+   only.
+
+   ```sh
+   sudo fio --name=smr --filename=/dev/sdX --rw=randwrite --bs=64k \
+     --size=80G --direct=1 --ioengine=libaio --iodepth=8 \
+     --time_based --runtime=30m --write_bw_log=smr --log_avg_msec=1000
+   ```
+
+   CMR holds a flat line. DM-SMR runs at full speed until the conventional cache
+   fills, then falls to a fraction of it and never recovers. Unmistakable in the
+   bandwidth log, and about half an hour to settle.
+
+**If a further property ever needs marking**, add it here rather than inventing a
+suffix in a host map. The bar is the four properties above — permanent,
+invisible, safety-relevant, and needed at the moment the label is read. Very
+little clears it; capacity, model and role all fail on at least one.
+
+### Unresolved serials — two different states
+
+| Placeholder | Means |
+|---|---|
+| `????` | **Not yet read.** Nobody has looked. |
+| `wtf?` | **Read, and the answer is unusable.** The device reports something absent, generic, obviously sequential, or otherwise not a serial. |
+
+The distinction matters because they call for different actions. `????` is closed
+by going and looking. `wtf?` has already been looked at, so it needs a *different*
+source — software instead of the printed label, or vice versa.
+
+**`wtf?` is also a trust marker, not merely a gap.** A device that shows nothing
+resembling a serial invites the question of what else was skipped, and that
+suspicion is worth carrying. Where it applies, **say so explicitly in the
+inventory** rather than leaving a reader to infer it from the placeholder —
+otherwise the next person reads `wtf?` as "just needs looking up", resolves it,
+and puts something they care about on a drive nobody trusted. See
+`DISK-DRAWER.md` for a worked example.
+
+Where more than one unresolved disk exists — and it usually does — append a
+lowercase hint so they can be told apart in the meantime:
+
+```
+m2-wtf?-kootion       # rear sticker reads KB0001; not a serial
+h-????-4tb-1          # nobody has read it yet
+```
+
+The hint is **provisional and disposable.** It exists only so unresolved rows are
+distinguishable in a document, and is dropped the moment the real suffix is
+known. Anything recognisable at a glance works — brand, capacity, an ordinal.
+
+Do not print a physical label carrying either placeholder. An identifier that will
+change is worse than no label, because the wrong one outlives the gap.
+
+> ⚠ **Two kinds of suffix, and they behave oppositely.** A *hint* (`-kootion`,
+> `-4tb-1`) is provisional, document-only, and deleted once the serial is read. A
+> *property marker* (`-smr`, above) is permanent, printed, and deleted only if it
+> turns out to have been wrong. They look alike — lowercase, hyphenated, trailing
+> — so the distinction is worth holding: **if it can be resolved by looking
+> harder, it is a hint and never reaches a label.**
+>
+> The colour suffix on external drives (`usb3-HXRY-blue`) is a third case: printed
+> like a marker, but a convenience rather than a warning, and freely droppable.
+
+---
+
+## 2. What gets a physical label
+
+The convention does two jobs — **physical identification** and **documentary
+reference** — and not every device needs both.
+
+| Device class | Physical label? | Why |
+|---|---|---|
+| 3.5" HDD in a caddy | **Yes** | Interchangeable, and identical models are common |
+| 2.5" SATA SSD | **Yes** | Same-model pairs are easy to confuse, and mirrors make confusing them costly |
+| External drive | **Yes** | Lives on a shelf among lookalikes; the label is often the only way to tell them apart |
+| Adapter or dock | **Yes** | Multiple, interchangeable, and easily confused for one another |
+| M.2 / mSATA card | **No** | No cable to trace, unambiguous by location, and frequently no room on the device for a sticker |
+| Anything being retired | **No** | Do not print labels for disks on their way out |
+
+Devices that get no label still get an identifier, for use in documentation and
+configuration.
+
+---
+
+## 3. Label classes
+
+Three distinct things get labelled. **Conflating them is the mistake this scheme
+exists to prevent.**
+
+| Class | Carries | Why it is stable |
+|---|---|---|
+| **Cable** | `<port> → <bay>` | Neither end moves once wired |
+| **Caddy** | disk identifier, e.g. `h-HJDH` | Travels with the drive |
+| **Bay** | bay number | Fixed to the chassis |
+
+### Cables are labelled topologically, never by disk
+
+On a hotswap cage a cable runs to a **bay**, not to a drive. Swap a caddy and a
+serial-labelled cable begins lying, with the case never opened — which is the
+exact failure the label was supposed to prevent. Roles are worse still: today's
+`parity-1` becomes a data disk after one reassignment.
+
+**Label both ends of each cable with the same string**, so whichever end you are
+holding tells you both facts without tracing.
+
+Use the board's own silkscreen names for controller ports (`I-SATA0`…) so the
+label matches what is printed beside the connector. Add-in cards usually have no
+silkscreen — assign a convention, record which end you counted from, and write it
+in the host's `HARDWARE-MAP.md`.
+
+#### Fan-out cables: concatenate the two printed labels
+
+**Adopted 2026-08-08** for SFF-8087 breakouts on the LSI HBA
+(`hosts/galactica/PLATFORM.md` §7b), and it generalises to any one-to-many cable.
+
+A breakout has **two** printed identifiers: the card's connector (`PORT 0`,
+`PORT 1`) and the cable's own lead labels (`P1`–`P4`). Concatenate them:
+
+```
+0P1  0P2  0P3  0P4      1P1  1P2  1P3  1P4
+```
+
+**This is the silkscreen rule, not an exception to it.** Both halves are *read
+off physical printing* — nothing is assigned, nothing is counted, and there is no
+"which end did I count from?" to record. That is strictly better than the
+fallback above, and it is available whenever the cable is labelled.
+
+⚠ **The mixed indexing is deliberate.** Ports are 0-based and leads are 1-based,
+which looks untidy written down. Renumbering to `0`–`7` or `1`–`8` would be
+tidier on the page and **worse in the machine**, because it reintroduces exactly
+the mental arithmetic this rule exists to remove — performed under a chassis,
+with a torch, on the disk that just failed. Match the printing; let the page look
+odd.
+
+⚠ **`0P1` names a physical cable lead, not a PHY.** Breakout vendors do not
+guarantee that lead `P1` is phy 0 of that connector. For the label's actual job —
+*which plug do I pull* — the lead is the right referent. Do not read it as a
+hardware lane number.
+
+⚠ **It also breaks the `ataN` shortcut.** Onboard AHCI disks map cleanly to
+`ata1`…`ataN` (`hosts/galactica/HARDWARE-MAP.md` §4), but an HBA presents SCSI
+devices through `mpt3sas` and there is no equivalent column. Start from:
+
+```sh
+lsblk -S -o NAME,HCTL,SERIAL,MODEL,SIZE
+```
+
+…and establish lead → disk **empirically**, exactly as *Establish port-to-bay
+empirically* below already requires. That section is advice for onboard ports; on
+an HBA it is the only method.
+
+*Namespace note:* onboard ports label as `I-SATA0`… and HBA leads as `0P1`…, so
+the two are distinguishable at a glance. If a second HBA is ever added, prefix
+the card (`A0P1`) rather than renumbering anything.
+
+### Keep the role off the caddy
+
+The serial never changes; the role does. Role lives in the host's hardware map.
+
+The failure path this serves: the array software names a failed disk → look it up
+in the map → get its bay → pull that bay, with the caddy label confirming you took
+the right drive before it leaves the chassis.
+
+### Bay numbering
+
+**Bays ascend left to right, then top to bottom** — reading order. For a cage two
+wide and three high:
+
+```
+1  2
+3  4
+5  6
+```
+
+A single-column cage is therefore simply 1 at the top descending. If the cage
+carries its own printed numbers, adopt those instead and note the divergence in
+the host's map.
+
+**Bay numbers are namespaced per cage.** Assign each cage a single uppercase
+letter in the host's `HARDWARE-MAP.md` and write bays as `<letter><n>` — `A1`,
+`A2`, `B1`. A cable label then reads `I-SATA2→A1`.
+
+**Always qualify, even on a host with one cage.** `A1` is *shorter* than `BAY1` —
+two characters against four — so the qualified form costs nothing and the
+unqualified form buys nothing. `BAY` spends four characters asserting something
+context already makes obvious, while the letter carries real information. Do not
+use a bare `BAY<n>`.
+
+**Name one cage the primary** in the host's map, and assign it `A`. That is what
+informal reference resolves to: "bay 1" said aloud, or scribbled on a note mid-
+swap, means `A1`. The printed label stays qualified regardless — the default
+exists to disambiguate humans, not labels.
+
+**Left and right are defined from the open end, looking in** — i.e. from where you
+stand to pull a drive. That is unambiguous for any cage, but it does *not* by
+itself tell you how the cable end is oriented, because cages differ:
+
+| Cage type | Cable side | Consequence |
+|---|---|---|
+| **Opposed** — pull from the front, cables on a backplane behind | Opposite the pull side | ⚠ **Left and right are mirrored** when you are at the cables. Do not reason about which connector is bay 1 from back there. |
+| **Same-side** — the drive is pulled from the cable end | Same as the pull side | No mirroring. But the cable must be **unplugged to remove a drive**, so it is disconnected on every swap. |
+
+**Record which type each cage is** in the host's `HARDWARE-MAP.md`. It is a
+property of the hardware, not of the convention, and getting it wrong inverts the
+mapping silently.
+
+> **A single-column cage is immune to this**, even when opposed. Walking round to
+> the back flips left and right; it does not flip top and bottom. With one column
+> there is no left/right to confuse, so bay 1 is the top from either side.
+
+Note the second type makes the cable label *more* load-bearing, not less. The
+"neither end moves once wired" justification weakens — the cable comes off every
+time a drive is swapped — and reconnecting it to the correct slot becomes the
+whole job. A topological label is exactly what makes that safe.
+
+### Establish port-to-bay empirically, not by inference
+
+Because cage geometry varies across the fleet, **measurement is the only approach
+that generalises.** A hotswap cage makes the mapping directly observable, which
+beats any amount of careful reasoning about which way round a particular
+backplane is.
+
+```sh
+dmesg -w                                  # insert a drive; note which sdX appears
+readlink -f /sys/block/sdX/device         # → …/0000:00:1f.2/ata7/… — controller and port
+```
+
+One insertion per bay gives the true mapping. If the caddies are already labelled
+and you know which disk sits in which bay, you can skip the insertions and map
+serial → `sdX` → controller straight from sysfs.
+
+Record the result in the host's `HARDWARE-MAP.md`. It is the ground truth the
+cable labels are printed from.
+
+---
+
+## 4. Wiring
+
+**If cables are being re-run anyway, wire them monotonically** — `I-SATA2→A1`,
+`I-SATA3→A2`, and so on. An ordered mapping makes the label nearly redundant,
+which is the ideal state for a label.
+
+---
+
+## 5. Machine-readable form
+
+Each host's map carries a CSV block so the label workflow and any generated
+diagram read from one source rather than drifting. Columns:
+
+```
+id,form,recording,serial_suffix,serial_full,model,size,location,role,colour,physical_label
+```
+
+`form` is one of `hdd35`, `hdd25`, `ssd25`, `m2-nvme`, `m2-sata`, `msata`, `ide`, `usb2`, `usb3`, `usb2adap`,
+`usb3adap` — mirroring the prefixes in §1, so internal entries carry a form factor
+and external ones carry an interface generation. `colour` is the optional suffix
+and is empty for internal devices. `physical_label` is `yes`/`no` per §2.
+Unresolved fields are `????` or empty.
+
+`recording` is `cmr`, `smr`, or `????`, and is empty for anything that is not a
+spinner. **`????` is the correct entry for most drives** — it means nobody has
+established it, which is different from `cmr`. Only `smr` reaches the physical
+label, via the `-smr` marker in `id` (§1); the column is where the three-way
+distinction lives. Where a value came from a model-number lookup rather than a
+measurement, say so in the surrounding prose — the column has no room for it and
+the difference matters.

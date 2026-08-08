@@ -11,11 +11,19 @@ documents the repo's structure and patterns.)
   home-manager and sops-nix follow it.
 - **`hosts/<host>/`** — `configuration.nix` (host wiring), `hardware-configuration.nix`,
   `home.nix` (per-host Home Manager). Pi hosts also have `DEPLOY.md`/`bootstrap.sh`.
+  A host directory may exist as **documentation only**, before any config is written
+  — `hosts/galactica/` is the live example, and its `README.md` says why. Don't
+  "fix" a missing `configuration.nix` without reading that host's `DECISIONS.md`.
 - **`modules/nixos/<concern>.nix`** — one concern per module (e.g. `traefik.nix`,
   `dockge.nix`, `nvidia.nix`, `gaming.nix`). Hosts import the modules they need.
 - **`modules/home/<name>.nix`** — Home Manager modules shared across hosts/platforms
   (e.g. `common.nix`, consumed by both a NixOS host and a darwin host).
 - **`secrets/<host>.yaml`** — sops-encrypted, per host. Policy in `.sops.yaml`.
+- **`docs/<topic>.md`** — fleet-wide documentation that belongs to no single host
+  (e.g. `DISK-LABELLING.md`, the physical disk naming and cable-labelling
+  convention; `DISK-DRAWER.md`, unassigned spare disks; `BACKUP.md`, which host
+  owes what an offsite copy). Per-host hardware inventories stay in
+  `hosts/<host>/HARDWARE-MAP.md` and reference these.
 
 ## Style
 
