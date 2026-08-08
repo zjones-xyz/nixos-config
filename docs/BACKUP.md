@@ -448,6 +448,76 @@ discriminator between the three — it is a reason all three beat the status quo
 
 NixOS has `services.restic.backups.<name>`; nothing in this fleet uses it yet.
 
+## 4b. Sequencing — the iDrive subscription has eight months left
+
+**Owner, 2026-08-07:** eight months remain (so renewal falls around **2027-04**),
+there is spare capacity for pegasus to use it too, and the intent is to hold off
+moving the desktops to restic for roughly **5–6 months**.
+
+**Deferring the desktops is sound, and it is sequencing rather than
+procrastination.** Tower cannot use the subscription at all — that was the
+original objection — so Tower moves to restic now regardless. By the time the
+desktop decision comes up there will be five or six months of operational
+experience with restic on a real workload, including at least two quarterly
+restore tests (§3b). That is exactly the evidence the decision wants, and it
+cannot be gathered any faster.
+
+### ⚠ But the logic inverts for pegasus
+
+Deferring is free where iDrive is *already working* and switching is the cost.
+That describes **serenity**: the client is installed, the subscription is live,
+and moving it to restic is effort spent to replace something functioning.
+
+**It does not describe pegasus, which has no offsite copy at all today (§2).**
+There, *adopting* iDrive is the effort, and it is effort discarded at renewal:
+
+- ⚠ **iDrive's Linux client is not in nixpkgs.** Checked directly —
+  `nix eval nixpkgs#idrive` resolves to nothing. Getting it onto a NixOS host
+  means an FHS wrapper around a vendor script bundle, plus imperative state
+  outside the flake. That is precisely the shape `DESIGN.md` §3.2 gives as the
+  reason for this whole migration.
+- **restic on pegasus is a `services.restic.backups.<name>` block** — declarative,
+  reviewed in a PR, and sharing its configuration shape with Tower's.
+- **The marginal storage cost is small.** A desktop's backup scope is a home
+  directory and some config, not a photo library.
+
+**So the recommendation is: defer serenity as planned, and put pegasus straight
+onto restic alongside Tower.** It closes pegasus's gap sooner, with the tooling
+that is being kept rather than the tooling being retired.
+
+⟨Owner's call. The counter-argument is that iDrive capacity is already paid for,
+which is true and is a real consideration if pegasus's scope turns out large.⟩
+
+**Repo layout for a second host:** restic supports several hosts writing to one
+repository, which buys cross-host deduplication. The alternative is a repo per
+host in the same bucket, which trades a little dedup for isolation — pegasus's
+key then cannot read Tower's snapshots. Both are defensible in a single trust
+domain; decide when pegasus is wired.
+
+### ⚠ Do not let the renewal pass by default
+
+The one scheduling risk worth naming: **if pegasus ends up depending on iDrive
+and the subscription lapses before the restic migration happens, pegasus silently
+loses its only offsite copy.** Auto-renewal is the benign version; a lapsed card
+is not.
+
+**Set a reminder for roughly 2027-02** — about six months out, two months before
+renewal. ntfy already exists (§3b) and a one-shot systemd timer or a calendar
+entry both work. The point is that the decision gets made deliberately rather
+than by the date arriving.
+
+### Timeline
+
+| When | What |
+|---|---|
+| **Now** (2026-08) | Tower → restic. It has no offsite and cannot use iDrive. |
+| **Now** | pegasus → restic *(recommended)*, or iDrive if the paid capacity wins |
+| **~2027-02** | ⚠ Reminder fires. Decide on serenity with five months of restic evidence in hand |
+| **~2027-04** | iDrive renewal. Renew or lapse — deliberately |
+
+Serenity is under no pressure in any of this: it has three working offsite paths
+and is the best-covered machine in the fleet (§2).
+
 ## 5. ⚠ The key custody problem — design this before trusting anything
 
 Self-managed encryption removes the vendor's ability to lose your key. It also
@@ -496,6 +566,9 @@ box, can you get `documents` back? Anything less is rehearsing the easy half.
 - **Verify the no-delete key actually works** with restic on the chosen provider
   (§3). This is the security-relevant one.
 - **Design key custody** (§5) *before* the first backup runs, not after.
+- **Set the 2027-02 renewal reminder** (§4b) so the iDrive decision is made
+  deliberately rather than by the date arriving.
+- **Decide pegasus's target** (§4b) — restic now, or iDrive until renewal.
 - **Wire the three signals** (§3b) — Kuma push monitor for the heartbeat, ntfy
   for the budget thresholds, `RequiresMountsFor=` so an unmounted source cannot
   produce a green empty backup. Plus the quarterly restore-test nag.
