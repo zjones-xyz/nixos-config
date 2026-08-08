@@ -22,6 +22,28 @@ wiring automatically.
 4. `sops updatekeys secrets/pegasus.yaml`, commit, deploy. Until then, run
    `tailscale up --ssh` once interactively on the box.
 
+## Beszel agent key (optional — enables monitoring from hopper's hub)
+
+`modules/nixos/beszel-agent.nix` is imported but stays completely inert until
+this secret exists: it greps the committed `secrets/pegasus.yaml` for a
+`beszel:` key (sops encrypts values, not key names) and only then declares the
+secret and enables the unit. Declaring a sops secret that isn't in the file
+fails *activation*, so this ordering is deliberate — a `nixos-rebuild switch`
+before you do this is a no-op, not a breakage.
+
+1. In the Beszel hub (hopper), add a new system and copy the public key it
+   shows you.
+2. `sops secrets/pegasus.yaml` and add — note the `KEY=` prefix, the value is
+   consumed as a systemd `EnvironmentFile`, not as bare YAML:
+   ```yaml
+   beszel:
+     agentKey: KEY=ssh-ed25519 AAAA...
+   ```
+3. Commit and switch. The agent starts on its own.
+4. In the hub, point the system at pegasus's **tailnet** address. Port 45876 is
+   deliberately not opened on the LAN — the hub dials the agent, and
+   `tailscale0` is already a trusted interface on this host.
+
 ## Inference API keys (only if used)
 
 If any upstream that Olla fronts needs an API key (e.g. a hosted endpoint added
