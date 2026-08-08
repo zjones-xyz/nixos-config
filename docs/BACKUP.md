@@ -596,6 +596,103 @@ container before snapshotting its database" (`hosts/galactica/SHARES.md` §3 on
 tier-per-container mapping this section is about *expressing*, and doing it in the
 wrong order means inventing a schema before knowing what it has to carry.⟩
 
+## 4d. Databases — a file-level backup of a running database is not a backup
+
+**The single most common way a backup turns out worthless.** restic walks the
+filesystem and copies files as it finds them; a database writing during that walk
+yields a mixture of old and new pages. The result restores cleanly, mounts
+cleanly, and fails later — often much later, and often only on the rows you
+needed.
+
+Tower's `appdata` holds several: Immich on PostgreSQL, the *arr stack and
+Audiobookshelf on SQLite, BookLore and PartDB on MySQL/MariaDB.
+
+### The three approaches, best first
+
+**1. Dump natively, then back up the dump.** Correct, portable, verifiable.
+
+```sh
+# PostgreSQL — plain SQL, NOT -Fc. See the compression warning below.
+docker exec immich_postgres pg_dumpall -U postgres --clean --if-exists > immich.sql
+
+# MySQL / MariaDB
+docker exec booklore_db mysqldump --single-transaction --all-databases > booklore.sql
+
+# SQLite — online, consistent, and no downtime at all
+sqlite3 /path/to/app.db ".backup '/var/backup/app.db'"
+```
+
+⚠ **SQLite's `.backup` (and `VACUUM INTO`) are online-safe.** They take a
+consistent copy of a live database without stopping the application. That means
+the entire *arr stack and Audiobookshelf need **no downtime** — which removes most
+of the reason to stop containers at all.
+
+**2. Stop the container, copy, start.** Always correct, costs downtime. The right
+fallback for anything whose dump path is unclear.
+
+**3. A btrfs snapshot of the data directory, then back up the snapshot.**
+Crash-consistent, not application-consistent — equivalent to pulling the power.
+Postgres and SQLite-in-WAL-mode are both designed to recover from exactly that,
+so this is defensible rather than reckless, and the Services pool is btrfs so it
+is available. ⚠ But it only holds if the whole data directory is captured
+atomically in one snapshot; a database spanning subvolumes loses the guarantee
+silently.
+
+**4. Never: `cp`, `rsync` or `restic` straight over live database files.** This is
+the default behaviour if nobody intervenes, which is why it is the common failure.
+
+### ⚠ Do not compress dumps before handing them to restic
+
+Non-obvious and expensive to get wrong. **restic deduplicates with content-defined
+chunking, which needs the input to change only where the data changed.** A
+compressed dump changes in its entirety when one row changes — gzip and zstd
+output diverge globally from a small input delta.
+
+So a nightly `pg_dump | gzip` stores a **full copy every night**, while a nightly
+plain-text `pg_dump` stores roughly the delta. On a 500 GB budget with a
+years-long retention window, that is the difference between a rounding error and
+the dominant line item.
+
+- **PostgreSQL:** use plain format (`-Fp`, the default for `pg_dump`). ⚠ `-Fc`
+  custom format compresses by default — pass `-Z0` if you want it.
+- **MySQL/MariaDB:** plain `mysqldump` output is already text. Do not pipe it
+  through `gzip`.
+- **Let restic compress**, which it has done natively with zstd since 0.14.
+
+### Dumps are also the migration mechanism, not just the backup
+
+A PostgreSQL *data directory* is bound to its major version, its build, and its
+extension set. A `pg_dump` is portable text.
+
+Since Tower is moving from Unraid's Docker to NixOS's, **the dump discipline this
+section describes is the same discipline the migration needs.** Getting it working
+now is not overhead ahead of the move — it is the move's prerequisite, exercised
+early and repeatedly on a system that still works.
+
+⚠ **Immich's PostgreSQL is the one to be careful with.** It depends on a vector
+extension, and restoring a dump requires a compatible extension version present in
+the target. This is a documented sharp edge with its own upstream guidance —
+**follow Immich's own backup and restore documentation for that database rather
+than a generic `pg_dumpall` recipe**, and test the restore before relying on it.
+It is Precious-adjacent data (§3), so it deserves the extra care.
+
+### What NixOS gives you, and what it does not
+
+The pinned tree ships `services.postgresqlBackup`, `services.mysqlBackup`,
+`services.automysqlbackup` and `services.pgbackrest`. ⚠ **All of them target
+host-native database services, not containerised ones**, so none applies directly
+to a Docker-hosted Immich or BookLore.
+
+The pattern is still worth mirroring: a systemd timer dumps into a directory,
+restic backs up that directory, and the dumps carry their own small retention so
+the directory does not grow without bound. Ordering matters — **the dump timer
+must complete before the restic run starts**, or the backup captures yesterday's
+dump and reports success.
+
+⟨Feeds the `appdata` per-container pass (`hosts/galactica/SHARES.md` §3): each
+container needs a verdict on which of the three approaches applies, and that is
+the same pass that assigns its tier.⟩
+
 ## 5. ⚠ The key custody problem — design this before trusting anything
 
 Self-managed encryption removes the vendor's ability to lose your key. It also
@@ -647,6 +744,9 @@ box, can you get `documents` back? Anything less is rehearsing the easy half.
 - **Set the 2027-02 renewal reminder** (§4b) so the iDrive decision is made
   deliberately rather than by the date arriving.
 - **Decide pegasus's target** (§4b) — restic now, or iDrive until renewal.
+- **Work out a dump path per database** (§4d) before the first backup runs. A
+  file-level copy of a live database is the most common way a backup turns out
+  worthless, and it is also the migration's prerequisite.
 - **Wire the three signals** (§3b) — Kuma push monitor for the heartbeat, ntfy
   for the budget thresholds, `RequiresMountsFor=` so an unmounted source cannot
   produce a green empty backup. Plus the quarterly restore-test nag.
