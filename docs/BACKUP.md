@@ -575,6 +575,56 @@ against one repo is a known footgun. So **pegasus gets its own repository**, whi
 also means no cross-host deduplication. That is a change from the restic plan in
 §4b, where sharing a repo was an option worth weighing.
 
+#### ⚠ Repos are unlimited at BorgBase — that is not a reason to use one per service
+
+Asked 2026-08-08: BorgBase does not charge per repository (billing is on stored
+bytes), so should each backed-up service get its own?
+
+**Per-*host* is forced** — that is point 3 above, a borg constraint rather than a
+choice. **Per-*service* within a host is a net loss**, and the argument that most
+recommends it does not survive contact with this architecture:
+
+- ⚠ **The blast-radius argument dissolves here.** A scoped append-only key per
+  service sounds like real containment — a compromised service could only append to
+  its own repo. But **borgmatic runs as root on the host, not inside the
+  containers**, so a compromised container never holds a borg key at all. Splitting
+  buys no containment against the threat it appears to address.
+- **Deduplication is per-repository.** Borg dedupes within a repo and never across
+  them, so N repos are N dedup domains. Against a **950 GB** budget that is a direct
+  cost — modest for genuinely distinct data, real for `appdata` subtrees that share
+  base images and near-identical SQLite and config structure.
+- ⚠ **Monitoring multiplies, and it fails toward silence.** §3b's heartbeat works
+  because a run that does not happen trips the alarm. That needs one monitor per
+  repo — and **a monitor that was never created is a gap nothing reports.** The
+  failure mode of per-service is a service quietly not being backed up for months.
+- **N repos need N passphrases** to keep the isolation that motivated the split,
+  multiplying §5's unresolved custody circularity by N. Sharing one passphrase
+  across them gives the isolation back.
+- **Prune runs from the privileged side** under the no-delete design above, so N
+  repos means N prune jobs scheduled and monitored somewhere else.
+
+⚠ One mechanical note, since it is easy to misread the config format: borgmatic's
+`repositories:` list inside a single config means *mirror these same sources to all
+of them*, *not* different sources per repo. Per-service would need separate files
+under `/etc/borgmatic.d/`. That part is clean — it is the operational surface, not
+the mechanism, that costs.
+
+**The split that does pay is churn and retention, not service.** Two repos per host:
+
+| Repo | Contents | Why separate |
+|---|---|---|
+| **hot** | documents, database dumps | Small, high churn, long *versioned* retention, runs nightly |
+| **cold** | `immich_photos` and friends | Hundreds of GB, near-immutable, needs far fewer versions |
+
+**The operational reason is `check` and `prune`, which walk the whole chunk
+index.** Mixing hundreds of GB of near-immutable photos with nightly dumps drags
+the photo archive through every integrity check and every prune, forever. That is a
+*size and churn* boundary, not a service one — and it happens to fall out of the
+tier work in `SHARES.md` §5 for free, since Critical and Precious already differ in
+exactly these properties.
+
+Two repos per host, three hosts, is six — tractable to monitor. Thirty is not.
+
 **4. borg 2 will eventually mean a repository migration.** Verified: this tree
 ships **borgbackup 1.4.4**, and `borgbackup_2` is **not packaged at all**. So borg
 2 is a future event rather than an imminent one, and there is no decision to make
