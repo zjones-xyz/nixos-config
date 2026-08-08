@@ -92,39 +92,53 @@ that habit is harder than Serenity's.
 du -sh /mnt/user/immich_photos /mnt/user/immich_photos_archived /mnt/user/documents
 ```
 
-**Expect the stored size to be close to the source size.** restic dedups and
-compresses, but photos are already-compressed JPEG/HEIC and will store at
-roughly 1:1. `documents` may compress well, and it is small either way. So plan
-as though 500 GB of budget buys about 500 GB of photos.
+**Expect the stored size to be close to the source size.** borg dedups and
+compresses, but photos are already-compressed JPEG/HEIC and will store at roughly
+1:1. `documents` may compress well, and it is small either way. So plan as though
+500 GB of budget buys about 500 GB of photos.
 
 If the Precious tier overflows the budget, the options in preference order are:
 raise the budget (it is single-digit dollars per 500 GB), cloud the newer
 material and leave the deep archive to the scattered-but-extant originals (§3),
 or reintroduce rotation for the overflow only.
 
-### ⚠ Cloud-only loses the air-gap — buy most of it back with a restricted key
+### ⚠ Cloud-only loses the air-gap — `borg serve --append-only` buys most of it back
 
 Serenity's rotated drives are air-gapped by construction: a compromised machine
 cannot reach a disk sitting in another building. Cloud-only gives that up, and
 the specific scenario is that something with root on Tower deletes the backups
 before anyone notices.
 
-**Do not give Tower a credential that can delete.** Both B2 and e2 support scoped
-keys and object lock / bucket versioning:
+> ⚠ **Rewritten 2026-08-07 for borg (§4).** An earlier revision built this around
+> S3 scoped keys and object lock, which no longer applies — borg speaks SSH, not
+> object storage. The replacement is **stronger**, which is part of why borg was
+> chosen.
 
-- **Tower's key writes and lists, and cannot delete or overwrite.** restic is
-  happy in this mode for `backup`; it only needs delete rights for `prune` and
-  `forget`.
-- **Run `prune` from elsewhere, rarely** — the admin machine, with a separate
-  privileged key that never lives on Tower.
-- **Enable object lock or versioning** on the bucket so that even a mistaken
-  privileged delete is recoverable for a retention window.
+**Do not let Tower hold a credential that can delete.** With borg this is enforced
+by the *server* rather than by a policy you configured correctly:
 
-That recovers most of the air-gap benefit for none of the logistics, and it is
-the single highest-value configuration choice in this document. ⚠ Verify the
-specific provider's key-scoping semantics before relying on it — "supports object
-lock" on a pricing page is not the same as "restic works correctly against a
-no-delete key on this provider".
+- **`borg serve --append-only`** lets a client add archives and forbids removing
+  them. Pinned in the provider's `~/.ssh/authorized_keys` as a forced command, so
+  the client cannot opt out:
+
+  ```
+  command="borg serve --append-only --restrict-to-repository /path/to/repo",restrict ssh-ed25519 AAAA…tower
+  ```
+
+- **Prune from elsewhere, rarely** — a second SSH key *without* `--append-only`,
+  living on the admin machine and never on Tower.
+
+**This is a real guarantee rather than an approximation.** The restic plan relied
+on an IAM policy plus object lock, i.e. on having written the policy correctly
+and on the provider honouring it. Here the storage server simply refuses the
+operation, and the refusal is visible in `authorized_keys`.
+
+⚠ **Append-only support is a genuine differentiator between providers.**
+**rsync.net** documents it and **BorgBase** exposes it as a per-key toggle. A
+**Hetzner Storage Box** supports borg over SSH, but whether a forced command with
+`--append-only` can be configured is worth confirming before choosing it for this
+property. ⟨Verify rather than assume; a pricing page saying "BorgBackup
+supported" is not the same claim.⟩
 
 ## 3b. Monitoring — the fleet already has both halves
 
@@ -162,14 +176,18 @@ that false-alarms is a monitor that gets muted.
 
 **2. Budget — is the repo approaching 500 GB?**
 
-After each run, `restic stats --mode raw-data`, compared against thresholds and
-posted to ntfy with escalating priority — 80% informational, 90% high, 100%
-urgent. Follow the `nut.nix` curl pattern rather than inventing a second one.
+After each run, `borg info` reports the repository's deduplicated size; compare it
+against thresholds and post to ntfy with escalating priority — 80% informational,
+90% high, 100% urgent.
+
+⚠ borgmatic's native `ntfy` hook fires on run **success and failure**, not on a
+size threshold, so this specific signal is still a small script. It can hang off
+borgmatic's `after_backup` command rather than a separate timer.
 
 **3. ⚠ Did the backup contain anything? — the failure that defeats both above**
 
-If a source path exists but its filesystem is not mounted, restic will happily
-snapshot an empty directory, **exit 0, ping the heartbeat, and not grow the
+If a source path exists but its filesystem is not mounted, borg will happily
+archive an empty directory, **exit 0, fire the success hook, and not grow the
 repo**. Heartbeat green, budget quiet, backup worthless. On a host whose data
 lives behind mergerfs and LUKS this is a realistic Tuesday, not an exotic edge
 case.
@@ -394,16 +412,21 @@ not Tower, so the Proton credential never lives on the fileserver. That preserve
 provider diversity for the data that matters most without handing a fileserver
 the keys to an entire identity. Even then, a second S3 vendor is simpler.
 
-### Key custody favours restic, mildly
+### Key custody — a difference borg can configure away
 
 §5 requires a copy of the credential that survives losing every machine. restic's
-model is **one secret** — the repository password, which unwraps the master key —
-so the fireproof-box copy is a passphrase written on paper. Borg's *repokey* mode
-is equivalent, but its *keyfile* mode splits custody in two: the key lives in
-`~/.config/borg/keys` and the passphrase protects it, so losing the machine loses
-the key even if you remember the passphrase. Borg ships `borg key export --paper`
-precisely because that failure is real — a good solution to a problem restic does
-not have.
+model is **one secret**: the repository password, which unwraps the master key, so
+the fireproof-box copy is a passphrase on paper.
+
+Borg has two modes and only one of them matches that. **`repokey` is equivalent
+to restic** — key in the repository, passphrase protects it, one secret. **`keyfile`
+splits custody in two**: the key lives in `~/.config/borg/keys` on the client and
+the passphrase protects *it*, so losing the machine loses the key even if the
+passphrase is remembered. Borg ships `borg key export --paper` precisely because
+that failure is real.
+
+**So this is not a reason to prefer either tool — it is a setting to get right
+once**, at repository creation. See the decision below.
 
 All three rotate credentials cheaply, which is the property that fixes the iDrive
 annoyance (below).
@@ -469,33 +492,60 @@ a wind-down for the desktops rather than a possible shared destination. That is
 not an argument either way, but it should be a conscious consequence rather than
 a discovered one.
 
-### Recommendation: restic
+### ✅ Decision: borg + borgmatic
 
-Ranked, decisive first:
+**Owner, 2026-08-07: "borgmatic seems like it'll have less sharp edges."**
+Agreed, and the earlier restic recommendation is superseded — it was written
+before borgmatic was found and rested on a comparison that undercounted what borg
+brings with it.
 
-1. **It talks S3**, so iDrive e2 stays a live option and the provider stays
-   swappable later. Borg does not.
-2. **It has a real NixOS module**, so the backup is reviewable configuration
-   rather than hand-rolled units. Kopia does not.
-3. **It separates backup from prune**, which is what makes the restricted
-   no-delete credential in §3 work at all.
-4. **One tool across every target** — cloud now, a local disk or `rest-server`
-   later — means **one restore procedure to test**, and restores are where backup
-   plans die.
-5. **It scales to the rest of the fleet** if memory-alpha or pegasus ever need
-   offsite, without a repo-per-host rule.
+**What the choice removes**, all of which was otherwise code to write and own:
 
-The nixpkgs module also ships `createWrapper`, which generates a `restic-<name>`
-command with the repository and credentials preloaded. Small, but it is the
-difference between a documented restore and a remembered one.
+- Database dumps for Postgres, MariaDB/MySQL and SQLite, **streamed into the
+  archive** — no intermediate file, no dump-before-backup ordering constraint, no
+  retention policy on dump files.
+- The §4d pre-compression footgun, which cannot be stepped on because there is no
+  step where you would compress.
+- The ntfy and Uptime Kuma calls in §3b, both native hooks.
+- Retention, consistency-check scheduling, and restore of individual databases.
 
-⚠ **The honest cost of choosing restic over borg is now larger than first
-written.** It is not only the weaker append-only story — an IAM policy and object
-lock you configured, rather than a server that refuses deletes by design. It is
-also that §4d's database handling and §3b's monitoring become code you write and
-maintain, where borgmatic ships both. **This recommendation is no longer clear-cut**
-and should be re-taken deliberately against the table above rather than inherited
-from an earlier draft that had not found borgmatic.
+**What the choice costs, and it is now a live decision rather than a footnote:**
+
+⚠ **A storage provider must be chosen, from a smaller set, and iDrive e2 is
+permanently out.** borg needs SSH to a host running `borg serve`. The realistic
+options are **rsync.net** (borg-specific plans), **BorgBase** (purpose-built), or
+a **Hetzner Storage Box**. ⟨Verify current pricing and, specifically, that the
+provider supports `--append-only`, since that is the ransomware property borg was
+picked partly for and it is a *server-side* feature.⟩
+
+### ⚠ Sharp edges this does not remove — and one it adds
+
+Worth naming now rather than discovering later.
+
+**1. Use `repokey`, not `keyfile`, at repository creation.** This is the one edge
+borg has that restic does not. In `keyfile` mode the encryption key lives in
+`~/.config/borg/keys` on the client and the passphrase merely protects it — so
+losing the machine loses the key even if you remember the passphrase. `repokey`
+stores the key in the repository, protected by the passphrase, which collapses
+custody to **one secret** and matches what §5's fireproof-box copy assumes.
+
+Borg ships `borg key export --paper` precisely because `keyfile` mode's two-part
+custody bites people. Choosing `repokey` means never needing it.
+
+**2. §5's key-custody circularity is unchanged.** borgmatic does not help here.
+The passphrase still has to survive an event that takes both Tower and Serenity,
+and the from-zero restore test is still the only thing that proves it.
+
+**3. One client per repository.** Borg is emphatic about this; concurrent clients
+against one repo is a known footgun. So **pegasus gets its own repository**, which
+also means no cross-host deduplication. That is a change from the restic plan in
+§4b, where sharing a repo was an option worth weighing.
+
+**4. borg 2 will eventually mean a repository migration.** Verified: this tree
+ships **borgbackup 1.4.5**, and `borgbackup_2` is **not packaged at all**. So borg
+2 is a future event rather than an imminent one, and there is no decision to make
+today — but it is a known cost that restic does not have pending, and it should
+not arrive as a surprise.
 
 ### All three fix the thing that annoys about iDrive
 
@@ -509,7 +559,8 @@ encrypted with a master key, and the passphrase merely *wraps* it. So
 credentials in milliseconds without touching a byte of stored data. This is not a
 discriminator between the three — it is a reason all three beat the status quo.
 
-NixOS has `services.restic.backups.<name>`; nothing in this fleet uses it yet.
+NixOS has `services.borgmatic` (and `services.borgbackup.jobs.*`, and
+`services.restic.backups.*`); **nothing in this fleet uses any of them yet.**
 
 ## 4b. Sequencing — the iDrive subscription has eight months left
 
@@ -545,17 +596,22 @@ There, *adopting* iDrive is the effort, and it is effort discarded at renewal:
   directory and some config, not a photo library.
 
 **So the recommendation is: defer serenity as planned, and put pegasus straight
-onto restic alongside Tower.** It closes pegasus's gap sooner, with the tooling
+onto borgmatic alongside Tower.** It closes pegasus's gap sooner, with the tooling
 that is being kept rather than the tooling being retired.
+
+⚠ Updated 2026-08-07 — this said *restic* before borg + borgmatic was chosen
+(§4). The reasoning is unchanged: iDrive's Linux client is not packaged, so
+adopting it on a NixOS host is effort discarded at renewal, while borgmatic is
+declarative and shares Tower's configuration shape.
 
 ⟨Owner's call. The counter-argument is that iDrive capacity is already paid for,
 which is true and is a real consideration if pegasus's scope turns out large.⟩
 
-**Repo layout for a second host:** restic supports several hosts writing to one
-repository, which buys cross-host deduplication. The alternative is a repo per
-host in the same bucket, which trades a little dedup for isolation — pegasus's
-key then cannot read Tower's snapshots. Both are defensible in a single trust
-domain; decide when pegasus is wired.
+**Repo layout for a second host: decided by the tool.** Borg wants **one client
+per repository**, so pegasus gets its own — no decision to make, and no cross-host
+deduplication. ⚠ This was an open choice under the restic plan, where several
+hosts can share a repository; borg closes it. Budget for two repositories on the
+provider rather than one.
 
 ### ⚠ Do not let the renewal pass by default
 
@@ -574,8 +630,8 @@ than by the date arriving.
 | When | What |
 |---|---|
 | **Now** (2026-08) | Tower → restic. It has no offsite and cannot use iDrive. |
-| **Now** | pegasus → restic *(recommended)*, or iDrive if the paid capacity wins |
-| **~2027-02** | ⚠ Reminder fires. Decide on serenity with five months of restic evidence in hand |
+| **Now** | pegasus → borgmatic *(recommended)*, its own repo, or iDrive if the paid capacity wins |
+| **~2027-02** | ⚠ Reminder fires. Decide on serenity with five months of borgmatic evidence in hand |
 | **~2027-04** | iDrive renewal. Renew or lapse — deliberately |
 
 Serenity is under no pressure in any of this: it has three working offsite paths
@@ -795,12 +851,13 @@ box, can you get `documents` back? Anything less is rehearsing the easy half.
 
 - **Size the Critical and Precious tiers** (§3) — against the 500 GB ceiling
   rather than to choose a mechanism, which is now settled.
-- **Choose the provider** — e2 or B2; restic makes the choice reversible, so this
-  is not a decision to agonise over. Decide on key-scoping support, not price,
-  and **not on the vendor's privacy claims** — client-side encryption makes those
-  irrelevant (§4). ⚠ Proton Drive was evaluated and rejected (§4): its E2EE is the
-  weaker form of a property restic already provides, and it offers no scoped
-  credentials.
+- **Choose an SSH-based provider** — rsync.net, BorgBase or a Hetzner Storage
+  Box, now that borg + borgmatic is the decision (§4). Verify `--append-only`
+  support specifically; it is server-side and is part of why borg was chosen.
+  ⚠ Object storage, including iDrive e2 and B2, is out. Proton Drive was already
+  rejected for offering no scoped credentials.
+- **Create the repository in `repokey` mode**, not `keyfile` (§4) — it collapses
+  key custody to one secret and is decided once, at creation.
 - **Verify the no-delete key actually works** with restic on the chosen provider
   (§3). This is the security-relevant one.
 - **Design key custody** (§5) *before* the first backup runs, not after.
