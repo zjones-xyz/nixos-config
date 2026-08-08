@@ -408,6 +408,67 @@ not have.
 All three rotate credentials cheaply, which is the property that fixes the iDrive
 annoyance (below).
 
+### ⚠ borgmatic reopens this — verified 2026-08-07
+
+**The owner recalled a tool that plugs into MariaDB and Postgres and integrates
+with borg or restic. It is `borgmatic`, and the recollection is right except for
+"or restic".** Checked against the pinned tree (**borgmatic 2.1.6**, with a
+`services.borgmatic` NixOS module exposing `settings` and `configurations`):
+
+**Native data-source hooks shipped:**
+`postgresql.py`, `mariadb.py`, `mysql.py`, `sqlite.py`, `mongodb.py`.
+
+**Native monitoring hooks shipped:**
+`ntfy.py`, `uptime_kuma.py`, `healthchecks.py`, `cronitor.py`, `cronhub.py`,
+`pagerduty.py`, `pushover.py`, `apprise.py`, `loki.py`, `sentry.py`, `zabbix.py`.
+
+❌ **It is borg-only.** Grepping its entire Python source for "restic" returns
+nothing. There is no backend abstraction; the name is not a coincidence.
+
+**This matters because borgmatic natively does two of the messiest things in this
+document.** §4d's database dumps — including *streaming* them into the archive,
+so there is no intermediate file, no dump-then-backup ordering constraint, no
+retention to manage on dump files, and no chance of the pre-compression footgun.
+And §3b's monitoring — with hooks for **exactly the two services this fleet
+already runs on hopper**.
+
+⚠ **I framed borg's advantage as server-side append-only. That was the smaller
+half.** The larger half is that borgmatic turns most of §3b and §4d from
+hand-rolled systemd units into configuration. That is a correction of emphasis,
+not of fact — every fact above still stands — but it materially rebalances the
+recommendation below.
+
+### The decision is now genuinely close, and hinges on one axis
+
+| | **restic + wrapper** | **borg + borgmatic** |
+|---|---|---|
+| **Storage** | ✅ S3/object — iDrive e2, B2, anything; provider swappable | ❌ SSH only — rsync.net, BorgBase, Hetzner Storage Box |
+| **Database handling** | Write it: `pg_dump \| restic backup --stdin`, plus ordering and retention | ✅ Native, streamed, with restore |
+| **ntfy + Uptime Kuma** | Write the `curl` calls | ✅ Native hooks |
+| **Append-only** | Object lock / IAM policy you configure | ✅ Server-enforced |
+| **Config surface** | `services.restic.backups.*` + glue | ✅ One YAML, one module |
+| **Restic wrappers packaged** | `autorestic` 1.8.3, `resticprofile` 0.31.0, `backrest` 1.14.1 | — |
+
+The restic wrappers all offer *generic* before/after hooks, so a database dump is
+perfectly achievable — `restic backup --stdin` even streams it, avoiding the
+intermediate file the same way. **The difference is native versus scripted**, and
+scripted means the correctness of §4d is yours to maintain.
+
+**So the question reduces to:** is object storage worth writing the glue?
+
+- **Object storage matters more** → restic. Keeps iDrive e2 live, keeps the
+  provider swappable, and the glue is a few dozen lines you control.
+- **Turnkey matters more** → borgmatic, on an SSH-based host. Accept a smaller
+  provider set — rsync.net has borg-specific plans, BorgBase is purpose-built,
+  Hetzner Storage Boxes are cheap — and get databases, monitoring, retention and
+  check scheduling as configuration. ⟨Verify current pricing; it moves.⟩
+
+⚠ **Note what this does to §4b's sequencing.** Choosing borgmatic means iDrive e2
+is off the table permanently, so the eight-months-left subscription becomes purely
+a wind-down for the desktops rather than a possible shared destination. That is
+not an argument either way, but it should be a conscious consequence rather than
+a discovered one.
+
 ### Recommendation: restic
 
 Ranked, decisive first:
@@ -428,11 +489,13 @@ The nixpkgs module also ships `createWrapper`, which generates a `restic-<name>`
 command with the repository and credentials preloaded. Small, but it is the
 difference between a documented restore and a remembered one.
 
-⚠ **The honest cost of choosing restic over borg** is the weaker append-only
-story: an IAM policy and object lock you configured, rather than a server that
-refuses deletes by design. §3 says to verify that policy rather than assume it.
-That is the one place this recommendation should be revisited if it does not hold
-up in practice.
+⚠ **The honest cost of choosing restic over borg is now larger than first
+written.** It is not only the weaker append-only story — an IAM policy and object
+lock you configured, rather than a server that refuses deletes by design. It is
+also that §4d's database handling and §3b's monitoring become code you write and
+maintain, where borgmatic ships both. **This recommendation is no longer clear-cut**
+and should be re-taken deliberately against the table above rather than inherited
+from an earlier draft that had not found borgmatic.
 
 ### All three fix the thing that annoys about iDrive
 
