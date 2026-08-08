@@ -257,6 +257,16 @@ re-derive why it stopped applying.
   Two label characters still need confirming at attach time: the `0`/`O` in
   `h-6D0X` (inside the four-char suffix, so it affects the identifier) and
   whether `h25-P4TH` is 40 GB or 60 GB.
+- **Serenity has no offsite backup path** — a *fleet* gap surfaced while
+  classifying `serenity_time_machine` (`SHARES.md` §5). Tower holds the Mac's
+  Time Machine copy and will keep it under parity, but the owner's call is that
+  **offsite for Serenity's data is Serenity's responsibility**, on the principle
+  that an offsite obligation belongs to the machine that owns the data rather
+  than to whatever holds a copy. Nothing in this repo configures a backup on
+  serenity, so that obligation is currently unmet. It blocks nothing on
+  galactica; it is recorded here because this is where it was noticed and
+  `hosts/serenity/` has no decision log to hold it.
+
 - **Staging capacity.** Three 4 TB disks are available for the migration, which
   is not enough for everything at once; the plan assumes *arr* media is winnowed
   to fit. `DESIGN.md` §6.

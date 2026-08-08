@@ -8,8 +8,8 @@ storage layout depends on.
 are confirmed dead; the rest of the tiering is still a proposal to argue with.
 Sizes are ⟨TBD⟩ pending a `du -sh /mnt/user/*` pass.
 
-**Triage status: 22 of 34 owner-confirmed** (1 parked). The undecided row is
-empty — what remains is **12 proposals awaiting confirmation or correction**, not
+**Triage status: 23 of 34 owner-confirmed** (1 parked). The undecided row is
+empty — what remains is **11 proposals awaiting confirmation or correction**, not
 unknowns.
 
 Dates are UTC.
@@ -71,7 +71,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `podcasts_audiobookshelf` | cache | — | — | private | | ✅ **Re-acquirable** |
 | ~~`syncthing`~~ | cache | — | — | private | | 🗑 **DROP** — owner-confirmed junk |
 | `webdav` | cache | — | — | public | | 🛡 **Protected** |
-| `serenity_time_machine` | cache | export **(TM)** | — | public | | Mac backups, 1 TB volume limit |
+| `serenity_time_machine` | cache | export **(TM)** | — | public | | 🛡 **Protected** — Mac backups, 1 TB limit. See §5 |
 | `system` | services | — | — | public | | "system data", split level 1 |
 
 ### Array-only (`no`)
@@ -275,10 +275,10 @@ contents cannot be inferred from configuration.
 |---|---|---|
 | **Critical** | Everything below, **plus versioning and a tested restore** | **`documents`** |
 | **Precious and Irreplaceable** | Real-time redundancy, checksummed, **+ offsite** | **`immich_photos`**, **`immich_photos_archived`** |
-| **Protected** | Parity. No offsite. | **`music`**, **`books`**, **`bambuddy_library`**, **`partdb`**, **`webdav`**, **`public`**, **`arm`**, **`archived_disks`**, **`inbox`**, ⏸ **`calibre_books`** *(parked)* |
+| **Protected** | Parity. No offsite. | **`music`**, **`books`**, **`bambuddy_library`**, **`partdb`**, **`webdav`**, **`public`**, **`arm`**, **`archived_disks`**, **`inbox`**, **`serenity_time_machine`**, ⏸ **`calibre_books`** *(parked)* |
 | **Painful to rebuild, small** | Redundancy; cheap because tiny | `appdata`, `arr_config`, `ha_backup` |
 | **Re-acquirable** | Snapshot parity, 24 h lag fine | **`podcasts_audiobookshelf`**, `arr_media`, `arr_managed_data`, `jellyfin`, `isos` |
-| **Regenerable** | Parity optional | **`copyparty`**, `domains` ⟨?⟩, `serenity_time_machine` |
+| **Regenerable** | Parity optional | **`copyparty`**, `domains` ⟨?⟩ |
 | ⚙ **Does not migrate** | n/a — no successor concept | **`swap`**, `system` *(proposed)* |
 | 🗑 **Drop** | n/a — deleted before migrating | **`jellyfin_cache`**, **`ai_models`**, **`SHARE`**, **`manyfold_library`**, **`syncthing`**, **`minishare`**; `appdata_old` + `books_old` suspected |
 | **⟨?⟩ Undecided** | — | *(none — every share is now assigned)* |
@@ -407,7 +407,7 @@ Still proposals, not decisions:
 |---|---|
 | Painful to rebuild, small | `appdata` *(placeholder — see the paired-appdata rule)*, `arr_config`, `ha_backup` |
 | Re-acquirable | `arr_media`, `arr_managed_data`, `jellyfin`, `isos` |
-| Regenerable | `domains`, `serenity_time_machine` |
+| Regenerable | `domains` |
 | Does not migrate | `system` |
 | Drop *(suspected)* | `appdata_old`, `books_old` |
 
@@ -502,9 +502,44 @@ nothing to weigh.
 and it needs no design thinking — just the staleness pass in §3 and a verdict per
 share.
 
-`serenity_time_machine` deserves its own thought: it is a *backup*, so losing it
-costs nothing while the Mac is healthy, and everything if both fail together.
-Whether that pairing is worth protecting against is a judgement, not a fact.
+### `serenity_time_machine` — offsite is Serenity's job, not Tower's
+
+**Owner, 2026-08-07:** *"the data there should be backed up, but I think putting
+it offsite should be Serenity's responsibility."*
+
+**Classified Protected** — parity, no offsite from here. That matches both halves
+of the statement exactly: it must survive Tower losing a disk, since the whole
+point is being there when the Mac is not, but Tower does not owe it a fire-and-
+theft copy.
+
+The general principle, worth stating because it will recur:
+
+> **An offsite obligation belongs to the machine that owns the data, not to
+> whatever happens to hold a copy of it.**
+
+Three reasons it lands that way here:
+
+- **Backing up a backup is a bad path.** Tower's copy is a Time Machine
+  sparsebundle. Shipping *that* offsite makes the remote copy two hops from the
+  source in an opaque format, and restoring means recovering a TM image and then
+  restoring from it. Serenity pushing its own files offsite is one hop and
+  legible.
+- **The source of truth should own its own durability.** Serenity has the files;
+  it is the only place that knows what changed and when.
+- **It keeps Tower's expensive tier honest.** Offsite is the recurring cost
+  (§ Protected), and absorbing another machine's obligation into it is how that
+  tier quietly grows.
+
+⚠ **This names a gap rather than closing one.** Assigning responsibility to
+Serenity does not give Serenity an offsite path — as far as this repo shows,
+there is no `restic`/`borg`/cloud backup configured on it at all. Serenity's data
+therefore has **no offsite protection today**, and it did not have any before
+this decision either; the decision only makes that explicit instead of leaving it
+to be assumed away by the presence of a Time Machine share.
+
+**Serenity-side action item**, tracked in `DECISIONS.md` `## Still open`. Tower's
+Protected tier is the right home for the local copy either way, so nothing here
+blocks on it.
 
 ⚠ **`DESIGN.md` §5's layout assumes two tiers and now has eight.** Revisit it once
 Protected is populated. Two things there need rework: the photo-tier sizing was
