@@ -149,6 +149,74 @@ invocations from their `freeipmi` package comments; they now point at
 **No `DEPLOY.md` exists right now.** It gets written when there is something to
 deploy, and it should be short — the durable material has already been extracted.
 
+## 7. Filesystems — btrfs everywhere, and the one place that is not a default
+
+**btrfs for every role, except SnapRAID parity, which goes on XFS or ext4** —
+*alt:* ZFS for the photo mirror and the app-state pool; ZFS on root; RAIDZ for
+the array.
+
+*Why btrfs generally:* fleet consistency is doing most of the work here.
+memory-alpha and pegasus are both btrfs on the `@ @home @nix @snapshots` layout,
+and `modules/nixos/btrfs-snapshots.nix` (btrbk) is written against exactly that
+layout and says in its own header that any host carrying it imports the module
+unchanged. Putting ZFS anywhere means standing up a second snapshot and
+retention mechanism — sanoid or equivalent — for one pool.
+
+*Why the parity disk is the decisive case:* `DESIGN.md` §4.3 already requires
+parity off copy-on-write — a 12 TB file rewritten in place on every sync is the
+pathological CoW workload, and SnapRAID 11.2 had to change its `fallocate()`
+usage specifically to behave on btrfs parity disks. btrfs has an escape hatch for
+this, `chattr +C`. **ZFS has none** — CoW is unconditional, with no per-dataset
+or per-file opt-out. So ZFS is not merely unnecessary for parity; it is the wrong
+tool for it, and that settles four of the twelve disks on its own.
+
+⚠ `chattr +C` only takes effect on a file that has no data blocks yet, so it must
+be set on the **directory** before SnapRAID creates the parity file — not on the
+file afterwards.
+
+*Where ZFS genuinely competes:* the photo tier, and it is a real contest. A
+two-disk ZFS mirror gives read-time checksums, automatic repair, and native
+encryption — at least btrfs raid1's equal for that shape, and arguably better
+tested. It loses on fit rather than on merit, three ways:
+
+1. **Its best feature goes unused.** `zfs send`/`recv` is the strongest argument
+   for ZFS anywhere, and the offsite path is borg + borgmatic reading files
+   (`docs/BACKUP.md` §4). Nothing in this design replicates at the filesystem
+   layer.
+2. **The snapshot tooling already exists and is btrfs-shaped** (above).
+3. **Native encryption would fork the fleet's unlock story.** memory-alpha and
+   pegasus both do initrd SSH LUKS unlock driven by `scripts/luks-unlock-remote.sh`
+   with per-host `unlock-*` aliases. `DESIGN.md` §5.5 requires this tier be
+   encrypted, so this is a live decision and not a hypothetical one.
+
+*Why not RAIDZ for the array:* `DESIGN.md` §4.4 treats **damage confinement** as
+a valued property — exceed your parity count and you lose only the failed disks,
+while every survivor stays a mountable filesystem full of readable files. RAIDZ
+trades that away for striping, and takes mixed disk sizes poorly. Declined on
+purpose, not overlooked.
+
+⚠ **The argument not to make: "ZFS pins your kernel."** Checked against the
+pinned tree on 2026-08-08 rather than assumed — zfs 2.4.2, unbroken against both
+the default 6.18.35 and `linuxPackages_latest` at 7.0.12. The upkeep cost of ZFS
+on this flake today is modest. **The case against it is fit, not maintenance.**
+Worth recording precisely, because if ZFS is ever wanted here the folklore reason
+is not what would stop it.
+
+**Reversal conditions.** Both are plausible enough to write down:
+
+- **The offsite strategy moves from "borg reads files" to replication.**
+  `zfs send`/`recv` is materially better than `btrfs send`/`receive` — resumable,
+  and without btrfs's history of edge cases. That single change flips the photo
+  and app-state tiers.
+- **The photo tier outgrows a two-disk mirror.** btrfs raid1 across more than two
+  devices is fine, but if it ever wants raid5/6-shaped capacity, btrfs cannot go
+  there safely and ZFS can.
+
+*Unrelated leftover, so it is not mistaken for precedent:* the Kingston carries a
+111.3 G `zfs_member` partition from a previous Linux install
+(`HARDWARE-MAP.md` §1). It is the only ZFS on the machine and it is about to be
+wiped — `zpool import -N` for a look first if anything on it is wanted.
+
 ---
 
 ## Carried forward from the VFIO plan
@@ -211,18 +279,25 @@ re-derive why it stopped applying.
 
 ## Still open
 
-- **The data classification.** `DESIGN.md` §5 assumes a split between
-  irreplaceable data (photos — real-time redundancy, checksummed) and
-  re-acquirable data (media — snapshot parity, 24 h lag acceptable). The owner
-  has flagged that more categories exist and that classifying them properly will
-  materially change the layout. **This is the blocking item.** Nothing else
-  should be decided ahead of it.
+- ~~**The data classification.**~~ **No longer the blocking item, 2026-08-08.**
+  `SHARES.md` §5 now carries a tier on every one of the 34 shares — twenty-two
+  owner-confirmed, twelve standing as proposals that need confirming or
+  correcting rather than investigating. The `⟨?⟩` row is empty.
 
-  **Scaffolded 2026-08-07:** `SHARES.md` now carries all 34 Unraid shares, where
-  each physically lives, and a five-tier starting proposal. Fourteen shares sit
-  in a `⟨?⟩` row whose contents cannot be inferred from configuration — that row
-  is the remaining work, and most of it is one question per share: *if this
-  vanished, could I get it back, and at what cost?*
+  **What blocks now is the layout, not the data.** `DESIGN.md` §5 was written
+  around a two-way split — irreplaceable data gets real-time checksummed
+  redundancy, re-acquirable data gets snapshot parity at a 24 h lag — and it now
+  faces **eight** tiers. Two specific gaps: it has no versioning at all, which
+  the Critical tier requires by definition, and Protected turned out to span both
+  the array and the SSD pools, so it is a *policy* rather than a place and has to
+  be implemented twice (SnapRAID parity for array members, something else for
+  pool residents, since SnapRAID does not cover the pools).
+
+  Two rules from that pass constrain the layout and are easy to miss:
+  **a service's `appdata` subtree inherits the highest tier of any data share it
+  indexes** (so `appdata` cannot carry one tier), and the over-classification
+  rule — parking a share too high wastes bytes, deciding hastily deletes
+  something wanted.
 - ~~**Which 12 TB is which.**~~ **Closed 2026-08-07** from Unraid's Main tab:
   parity `h-X4WE`, parity-2 `h-HJDH`, disk-1 `h-T97E`, disk-2 `h-NS3Y`. The same
   reading confirmed the encryption inferences in `HARDWARE-MAP.md` §2 exactly, put
@@ -269,8 +344,17 @@ re-derive why it stopped applying.
   **Tower is the machine with no offsite copy.** Its dual parity protects against
   disk failure and against nothing else. Moved to **`docs/BACKUP.md`**, which now
   carries the fleet survey (no host runs declarative backup software at all), the
-  scope, the restic-over-borg reasoning, and the key-custody circularity that has
-  to be designed before the first backup runs.
+  scope, the tool decision, and the key-custody circularity that has to be
+  designed before the first backup runs.
+
+  **The tool is borg + borgmatic**, against a 500 GB budget, offsite to an
+  SSH-based provider with verified `--append-only` support. restic was the
+  recommendation until borgmatic surfaced; the reversal is recorded in
+  `docs/BACKUP.md` §4 rather than edited away, because the reasoning that
+  produced the first answer was sound and only became wrong when a fact arrived.
+  The governing requirement throughout: **the vendor must not be able to decrypt
+  the data** — which is what rules out the existing iDrive subscription for this
+  purpose.
 
 - **Staging capacity.** Three 4 TB disks are available for the migration, which
   is not enough for everything at once; the plan assumes *arr* media is winnowed

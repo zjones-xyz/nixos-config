@@ -42,8 +42,12 @@ decoupled. `DECISIONS.md` §2.
 
 ## Blocking item
 
-**The data classification** (`SHARES.md` §5). The layout assumes a two-way split
-between irreplaceable data and re-acquirable data; the owner has flagged that
-more categories exist and that classifying them properly will materially change
-the result. `SHARES.md` now carries the 34 shares and a starting proposal to
-argue with. Nothing else should be decided ahead of it.
+**The storage layout, which has not caught up to the data.** `SHARES.md` §5 now
+puts a tier on all 34 shares — twenty-two owner-confirmed, twelve still
+proposals. That was the blocking item and it is closed.
+
+What blocks now is `DESIGN.md` §5: it was written around a **two-way** split and
+faces **eight** tiers, it provides no versioning (which the Critical tier
+requires), and Protected turned out to span both the array and the SSD pools —
+so it is a policy rather than a place, and needs implementing in two mechanisms.
+`DECISIONS.md` `## Still open` has the detail.
