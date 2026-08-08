@@ -279,7 +279,7 @@ contents cannot be inferred from configuration.
 |---|---|---|
 | **Critical** | Everything below, **plus versioning and a tested restore** | **`documents`** |
 | **Precious and Irreplaceable** | Real-time redundancy, checksummed, **+ offsite** | **`immich_photos`**, **`immich_photos_archived`** |
-| **Protected** | Parity. No offsite. | **`music`**, **`books`**, **`bambuddy_library`**, **`partdb`**, **`webdav`**, **`public`**, **`arm`**, **`archived_disks`**, **`inbox`**, **`serenity_time_machine`**, ⏸ **`calibre_books`** *(parked)* |
+| **Protected** | Parity. No offsite. | **`music`**, **`books`**, **`bambuddy_library`**, **`partdb`**, **`webdav`**, **`public`**, **`arm`**, **`inbox`**, **`serenity_time_machine`**, ⏸ **`calibre_books`** *(parked)*, `archived_disks` ⟨?⟩ |
 | **Painful to rebuild, small** | Redundancy; cheap because tiny | `appdata`, `arr_config`, `ha_backup` |
 | **Re-acquirable** | Snapshot parity, 24 h lag fine | **`podcasts_audiobookshelf`**, `arr_media`, `arr_managed_data`, `jellyfin`, `isos` |
 | **Regenerable** | Parity optional | **`copyparty`**, `domains` ⟨?⟩ |
@@ -367,7 +367,8 @@ So the ladder resolves to something with real teeth:
 | **Re-acquirable** | yes | no, and it does not matter | no | no |
 
 **The offsite scope is currently three shares** — `documents`, `immich_photos`,
-`immich_photos_archived` — against nine in Protected. That is the shape you want:
+`immich_photos_archived` — against eleven in Protected (ten owner-confirmed, plus
+`archived_disks` still proposed). That is the shape you want:
 the tier that costs money every month stayed small while the tier that costs a
 one-time slice of parity absorbed most of the inventory.
 
@@ -389,10 +390,11 @@ Regenerable, twenty years of accumulation from sources that no longer exist is
 unrecoverable — and the answer turned out to be neither of the labels that existed
 before Protected did.
 
-⟨**`calibre_books` is adjacent to `books` and still undecided.** Same subject
-matter, different share, one of them private. Worth deciding together rather than
-tripping over the second one later — as with the `books_old` suspected drop, which
-is the third member of that group.⟩
+⟨**`calibre_books` is adjacent to `books`, and is parked rather than settled** —
+see *Parked* below. Same subject matter, different share, one of them private.
+`books_old` is the third member of that group and is still only a *suspected*
+drop. Worth finishing all three together rather than tripping over the leftovers
+later.⟩
 
 `archived_disks` moves back to undecided on the same reasoning. It was proposed
 as irreplaceable purely because it is `secure` and owner-writable, which says
@@ -409,6 +411,7 @@ Still proposals, not decisions:
 
 | Proposed tier | Shares |
 |---|---|
+| Protected | `archived_disks` ⟨?⟩ — demoted from Precious above; contents still unconfirmed |
 | Painful to rebuild, small | `appdata` *(placeholder — see the paired-appdata rule)*, `arr_config`, `ha_backup` |
 | Re-acquirable | `arr_media`, `arr_managed_data`, `jellyfin`, `isos` |
 | Regenerable | `domains` |
