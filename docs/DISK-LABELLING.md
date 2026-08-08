@@ -311,6 +311,51 @@ label matches what is printed beside the connector. Add-in cards usually have no
 silkscreen — assign a convention, record which end you counted from, and write it
 in the host's `HARDWARE-MAP.md`.
 
+#### Fan-out cables: concatenate the two printed labels
+
+**Adopted 2026-08-08** for SFF-8087 breakouts on the LSI HBA
+(`hosts/galactica/PLATFORM.md` §7b), and it generalises to any one-to-many cable.
+
+A breakout has **two** printed identifiers: the card's connector (`PORT 0`,
+`PORT 1`) and the cable's own lead labels (`P1`–`P4`). Concatenate them:
+
+```
+0P1  0P2  0P3  0P4      1P1  1P2  1P3  1P4
+```
+
+**This is the silkscreen rule, not an exception to it.** Both halves are *read
+off physical printing* — nothing is assigned, nothing is counted, and there is no
+"which end did I count from?" to record. That is strictly better than the
+fallback above, and it is available whenever the cable is labelled.
+
+⚠ **The mixed indexing is deliberate.** Ports are 0-based and leads are 1-based,
+which looks untidy written down. Renumbering to `0`–`7` or `1`–`8` would be
+tidier on the page and **worse in the machine**, because it reintroduces exactly
+the mental arithmetic this rule exists to remove — performed under a chassis,
+with a torch, on the disk that just failed. Match the printing; let the page look
+odd.
+
+⚠ **`0P1` names a physical cable lead, not a PHY.** Breakout vendors do not
+guarantee that lead `P1` is phy 0 of that connector. For the label's actual job —
+*which plug do I pull* — the lead is the right referent. Do not read it as a
+hardware lane number.
+
+⚠ **It also breaks the `ataN` shortcut.** Onboard AHCI disks map cleanly to
+`ata1`…`ataN` (`hosts/galactica/HARDWARE-MAP.md` §4), but an HBA presents SCSI
+devices through `mpt3sas` and there is no equivalent column. Start from:
+
+```sh
+lsblk -S -o NAME,HCTL,SERIAL,MODEL,SIZE
+```
+
+…and establish lead → disk **empirically**, exactly as *Establish port-to-bay
+empirically* below already requires. That section is advice for onboard ports; on
+an HBA it is the only method.
+
+*Namespace note:* onboard ports label as `I-SATA0`… and HBA leads as `0P1`…, so
+the two are distinguishable at a glance. If a second HBA is ever added, prefix
+the card (`A0P1`) rather than renumbering anything.
+
 ### Keep the role off the caddy
 
 The serial never changes; the role does. Role lives in the host's hardware map.

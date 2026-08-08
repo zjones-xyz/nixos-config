@@ -276,6 +276,12 @@ only evidence about the *slot* when `LnkCap` is wider.
 **Port budget is 12** with the ASM1064 removed (onboard 6 + ASM1166 6), against 12
 devices under the bare-metal layout. Zero headroom. See `DESIGN.md` §5.5.
 
+⚠ **The `ata` column above only works for onboard AHCI ports.** If the LSI HBA
+(`PLATFORM.md` §7b) goes in, its disks arrive via `mpt3sas` as SCSI devices with
+no `ataN` equivalent — start from `lsblk -S -o NAME,HCTL,SERIAL,MODEL` and
+establish the mapping empirically. Its cable leads label as `0P1`…`1P4` per
+`docs/DISK-LABELLING.md` §3.
+
 **The ASM1166 has no silkscreen port numbers.** If cables run to it, assign a
 convention — likely counting from the bracket end — and record it here.
 
