@@ -494,6 +494,47 @@ repaired*, not as proof of fraud.
 Also check the **board assembly and tracer numbers** (`sas2flash -list`, or the
 physical sticker); blank or zeroed fields are a common clone tell.
 
+### Step 3b — this specific card, identified from photographs (2026-08-08)
+
+**Verdict: genuine, and an OEM-channel card rather than a clone.** The evidence
+is consistent in the way counterfeits usually are not:
+
+| Marking | Reading |
+|---|---|
+| Board assembly | `MR SAS 9240-8i`, **`L3-25083-12F`** — the real LSI assembly number |
+| Tracer | `SP41724979` (printed label, with barcode) |
+| Silkscreen | `LSI` logo, **`PCIe2 x8`**, `6Gb/s SAS`, `(c) 2009 LSI Corp`, `ASSEMBLED IN THAILAND` |
+| OEM identity | **`FRU 03T6739`** with an `11S…` barcode — IBM/Lenovo part numbering |
+| Regulatory | UL, FCC, CE, `CLASS B ICES-003`, and a **KC** mark (`L82-8AS9240-8I(B)`) |
+| Ports | `PORT 0` (`J4`), `PORT 1` (`J5`), vertical SFF-8087 |
+
+`PCIe2 x8` in silkscreen also **confirms the link width from the card itself** —
+PCIe 2.0 x8, as §7b's bandwidth argument assumed.
+
+A red **信** QC sticker indicates the card passed through the secondary market,
+which is consistent with a seller who flashes cards. Not a fault.
+
+⚠ **The photographs cannot settle the firmware, and the label is a trap.** The
+sticker reads `MR SAS 9240-8i` — MR for MegaRAID — but **that is the hardware
+identity and does not change when the card is crossflashed.** A successfully
+IT-flashed card carries exactly the same sticker. The only weak signal is a
+negative: sellers who flash cards often add an "IT MODE" label and this one has
+none. **Step 1's `lspci` check remains the only real test.**
+
+#### ⭐ The SAS address sticker is the most valuable thing on the card
+
+It reads **`5006058 0-07E4-1650`**, i.e. almost certainly
+**`500605B0-07E4-1650`** — and `500605B` is **LSI's OUI**, so this is a properly
+populated factory address rather than the zeros this section warns about.
+
+⚠ **But it is not evidence of the card's current state.** It records what the
+card left the factory with; a botched crossflash can zero the address in NVRAM
+while the sticker still reads perfectly. That inverts what it is for:
+
+> **The sticker is not proof — it is the restore value.** If the card comes up
+> with a zeroed or default SAS address, this is how you put the right one back.
+> **Photograph it and keep the photograph** before the card goes into service.
+
 ### Step 4 — test it in Tower first, and additively
 
 > ⚠ **Corrected 2026-08-08.** An earlier revision said "test it on pegasus, not
@@ -613,6 +654,37 @@ under load.
 Note this also means **a fan-modded LSI and a returning ASM1166 cannot coexist**
 — five positions against four. They are alternatives anyway, so this is
 confirmation rather than a constraint.
+
+#### Slot assignment — NVMe in the top slot, LSI below it
+
+**Owner's plan, 2026-08-08, and it is right on bandwidth grounds** — for a reason
+worth stating, because the intuitive argument runs the other way ("give the x8
+card the x8 slot").
+
+| Card | Needs | Verdict |
+|---|---|---|
+| **LSI**, 6–8 spinners at ~250 MB/s | ~1.5–2 GB/s | Gen2 **x4** (≈2 GB/s) already suffices; x8 is luxury |
+| **NVMe** on a x4 adapter | 2 GB/s at Gen2 x4, ~3.9 GB/s at Gen3 x4 | **Actually constrained by the slot** |
+
+**So the NVMe benefits more from a CPU-attached Gen3 slot than the LSI benefits
+from eight lanes.** Give the NVMe the best slot; the LSI can take a lesser one
+without the array noticing. (`HARDWARE-MAP.md` §1 already records the ~3.9 GB/s
+Gen3 figure as conditional on both adapter and slot giving x4.)
+
+⚠ **Two things to check before committing to that order:**
+
+1. **The electrical widths are still unrecorded** (`HARDWARE-MAP.md` §4), and on
+   this board an empty slot does not appear in `lspci` at all. The plan assumes
+   the top slot is the fast one — likely, since it is CPU-attached, but assumed.
+2. ⚠ **Fan clearance runs the wrong way for this order.** A heatsink-mounted fan
+   protrudes from the card's component side, which in a conventional tower faces
+   the slot *above* — i.e. straight at the NVMe adapter. **Adjacent is the one
+   arrangement a fan-modded LSI cannot have.** Confirm which side the fan would
+   protrude toward on this card in this chassis before finalising.
+
+**If the thermal test says no fan is needed, both concerns evaporate** and the
+plan is unconditionally fine — which is one more reason to measure before
+modifying. An IR thermometer on the heatsink after a sustained run is the check.
 
 **pegasus is now the fallback bench, not the primary** — useful only if Tower
 cannot be powered down at all, and explicitly unable to answer step 2.
