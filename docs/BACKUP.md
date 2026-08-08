@@ -74,17 +74,22 @@ partial loss wherever a source has since died. **The irreplaceable artifact is t
 consolidation, not the bytes.** That keeps the tier Precious for a softer reason
 than "only copy", and it means an imperfect backup here is worth a great deal.
 
-### ✅ Budget: 500 GB of cloud storage — physical rotation is off the table
+### ✅ Budget: 950 GB at BorgBase — physical rotation is off the table
 
-**Owner, 2026-08-07.** That settles the mechanism question that sizing was gating,
-and it settles it toward the simpler answer: **cloud only, no drive swap, no new
-habit.**
+**Owner, 2026-08-07**, revised **2026-08-08** to **950 GB on BorgBase**. That
+settles the mechanism question that sizing was gating, and it settles it toward
+the simpler answer: **cloud only, no drive swap, no new habit.**
 
-Roughly $3/month at commodity object-storage rates (~$6/TB/month); iDrive e2 and
-Backblaze B2 are both in that neighbourhood, e2 typically cheaper on an annual
-commitment. Against that, a rotation habit costs a dock, two drives, and a ritual
-that has to survive contact with a busy month — see §6 on why Tower's version of
-that habit is harder than Serenity's.
+> **Revised from 500 GB.** The original figure was set against commodity
+> object-storage rates (~$6/TB/month, iDrive e2 or B2). Choosing borg + borgmatic
+> (§4) took object storage off the table entirely — borg speaks SSH — so the
+> pricing shape changed with the provider. 950 GB sits just under a 1 TB plan,
+> leaving headroom rather than budgeting to the exact quota, which is the right
+> way round: **hitting a hard quota mid-run fails the backup, and §3b's budget
+> signal exists precisely so that never happens by surprise.**
+
+⟨Take the actual monthly figure from BorgBase's current plan page rather than
+from this document — it is not something to record here and let rot.⟩
 
 ⚠ **Still measure the tiers**, because the budget is a ceiling, not a fit:
 
@@ -95,12 +100,12 @@ du -sh /mnt/user/immich_photos /mnt/user/immich_photos_archived /mnt/user/docume
 **Expect the stored size to be close to the source size.** borg dedups and
 compresses, but photos are already-compressed JPEG/HEIC and will store at roughly
 1:1. `documents` may compress well, and it is small either way. So plan as though
-500 GB of budget buys about 500 GB of photos.
+950 GB of budget buys about 950 GB of photos.
 
 If the Precious tier overflows the budget, the options in preference order are:
-raise the budget (it is single-digit dollars per 500 GB), cloud the newer
-material and leave the deep archive to the scattered-but-extant originals (§3),
-or reintroduce rotation for the overflow only.
+raise the budget (BorgBase sells larger plans), cloud the newer material and
+leave the deep archive to the scattered-but-extant originals (§3), or reintroduce
+rotation for the overflow only.
 
 ### ⚠ Cloud-only loses the air-gap — `borg serve --append-only` buys most of it back
 
@@ -133,12 +138,28 @@ on an IAM policy plus object lock, i.e. on having written the policy correctly
 and on the provider honouring it. Here the storage server simply refuses the
 operation, and the refusal is visible in `authorized_keys`.
 
-⚠ **Append-only support is a genuine differentiator between providers.**
-**rsync.net** documents it and **BorgBase** exposes it as a per-key toggle. A
-**Hetzner Storage Box** supports borg over SSH, but whether a forced command with
-`--append-only` can be configured is worth confirming before choosing it for this
-property. ⟨Verify rather than assume; a pricing page saying "BorgBackup
-supported" is not the same claim.⟩
+✅ **Provider decided 2026-08-08: BorgBase**, which is the option that exposes
+append-only as a **per-key toggle in its own UI** rather than as an
+`authorized_keys` line you hand-maintain. Append-only support was the genuine
+differentiator here — rsync.net documents it too, and a Hetzner Storage Box left
+it needing confirmation — so this closes the property §3 is built on.
+
+⚠ **Still verify it end to end before trusting it.** A toggle in a web UI is a
+claim, and the test is cheap: with the append-only key configured, attempt a
+`borg delete` or a `borgmatic prune` from Tower and confirm the *server* refuses.
+Passing that test is what makes the paragraph above true; assuming it is what
+makes it decorative.
+
+**Two consequences worth noting now that the provider is known:**
+
+- **Prune has to run from somewhere else.** With Tower's key append-only, retention
+  cannot be enforced by Tower. Use a second BorgBase key without the toggle, kept
+  on the admin machine, and run prune deliberately rather than nightly.
+- **BorgBase has its own inactivity alerting**, independent of the fleet's
+  monitoring. That is worth turning on *in addition to* the Kuma heartbeat (§3b),
+  precisely because it does not run on hopper — it survives the fleet being down,
+  which is the case a self-hosted watcher cannot cover. ⟨Confirm the exact
+  alerting options on the current plan.⟩
 
 ## 3b. Monitoring — the fleet already has both halves
 
@@ -174,7 +195,7 @@ healthy enough to report its own failure. Use both, but trust the heartbeat.
 rather than exactly 24, or ordinary jitter and a slow run will cry wolf. A monitor
 that false-alarms is a monitor that gets muted.
 
-**2. Budget — is the repo approaching 500 GB?**
+**2. Budget — is the repo approaching 950 GB?**
 
 After each run, `borg info` reports the repository's deduplicated size; compare it
 against thresholds and post to ntfy with escalating priority — 80% informational,
@@ -523,10 +544,13 @@ brings with it.
 
 ⚠ **A storage provider must be chosen, from a smaller set, and iDrive e2 is
 permanently out.** borg needs SSH to a host running `borg serve`. The realistic
-options are **rsync.net** (borg-specific plans), **BorgBase** (purpose-built), or
-a **Hetzner Storage Box**. ⟨Verify current pricing and, specifically, that the
-provider supports `--append-only`, since that is the ransomware property borg was
-picked partly for and it is a *server-side* feature.⟩
+options were **rsync.net** (borg-specific plans), **BorgBase** (purpose-built),
+or a **Hetzner Storage Box**.
+
+✅ **Resolved 2026-08-08: BorgBase**, at a 950 GB budget (§3). Append-only was
+the deciding property — it is *server-side*, it is the ransomware protection borg
+was picked partly for, and BorgBase exposes it as a per-key toggle rather than an
+`authorized_keys` line to hand-maintain.
 
 ### ⚠ Sharp edges this does not remove — and one it adds
 
@@ -619,7 +643,9 @@ which is true and is a real consideration if pegasus's scope turns out large.⟩
 
 **Repo layout for a second host: decided by the tool.** Borg wants **one client
 per repository**, so pegasus gets its own — no decision to make, and no cross-host
-deduplication. ⚠ This was an open choice under the restic plan, where several
+deduplication. ⚠ On BorgBase that means **two repositories against the same
+950 GB budget**, so pegasus's scope competes with Tower's photos rather than
+being free. ⚠ This was an open choice under the restic plan, where several
 hosts can share a repository; borg closes it. Budget for two repositories on the
 provider rather than one.
 
@@ -639,8 +665,8 @@ than by the date arriving.
 
 | When | What |
 |---|---|
-| **Now** (2026-08) | Tower → **borgmatic**. It has no offsite and cannot use iDrive. |
-| **Now** | pegasus → borgmatic *(recommended)*, its own repo, or iDrive if the paid capacity wins |
+| **Now** (2026-08) | Tower → **borgmatic → BorgBase**, 950 GB. It has no offsite and cannot use iDrive. |
+| **Now** | pegasus → borgmatic *(recommended)*, its own BorgBase repo against the same budget, or iDrive if the paid capacity wins |
 | **~2027-02** | ⚠ Reminder fires. Decide on serenity with five months of borgmatic evidence in hand |
 | **~2027-04** | iDrive renewal. Renew or lapse — deliberately |
 
@@ -768,14 +794,43 @@ is genuinely valuable for Tower — turning "transcribe ~30 Unraid stacks by han
 into "generate, then review" is real work saved — but it is a one-time tool and
 should be judged as one.
 
-⚠ **The thing that actually decides this is Dockge, not backups.**
-`modules/nixos/dockge.nix` exists so stacks under `homelab-stacks/` can be
-managed through a web UI, deliberately *outside* the flake. Converting those to
-`oci-containers` deletes Dockge's reason to exist, and loses Compose semantics
-along the way (`depends_on` becomes systemd ordering, healthchecks differ,
-`docker compose up` stops being how you operate). That is a real choice about how
-you want to run this machine — web UI for some things, flake for everything —
-and the fleet currently answers it *both ways on purpose*, per the table above.
+#### ⚠ What decides it is the dashboard question — and Dockge is not the answer to it
+
+> **Corrected 2026-08-08.** An earlier revision of this section said *"the thing
+> that actually decides this is Dockge"*, on the assumption that Dockge's web UI
+> was a requirement. **The owner is not attached to Dockge** — what is wanted is
+> *visibility*, not stack management. That materially weakens the argument, so it
+> is restated rather than left standing.
+
+`modules/nixos/dockge.nix` exists so stacks under `homelab-stacks/` can be managed
+through a web UI, deliberately *outside* the flake. It does two jobs that are
+easy to conflate:
+
+| Job | Who needs it if Nix owns the stacks |
+|---|---|
+| **Management** — create, edit, start/stop, redeploy | ❌ Nobody. That *is* what Nix takes over, and a PR-reviewed change beats a text box |
+| **Visibility** — what is running, what is unhealthy, what is eating RAM | ✅ Still wanted, and unrelated to who owns the definitions |
+
+**So the split is clean: Nix absorbs the half Dockge exists for, and the half that
+remains is monitoring — which is Beszel's job, not Dockge's.** Beszel already runs
+in the fleet (`modules/nixos/beszel.nix`, hub + agent on hopper), so the hub
+exists and galactica needs only an agent. This is the direction the owner
+identified, and it holds up.
+
+⚠ **The trap, verified against the pinned tree:
+`virtualisation.oci-containers.backend` defaults to `"podman"`.** Beszel's agent
+watches a **Docker** socket (`/run/user/1000/docker.sock` on hopper). So
+compose2nix output, taken at its default, produces containers that are *invisible
+to the monitoring that was the reason for doing it*. Set `backend = "docker"`
+explicitly, or point the agent at podman's socket — but decide it deliberately,
+because the failure is silent and looks like "the dashboard is broken".
+
+**The gap Beszel does not close is logs.** It is a metrics tool. Under
+`oci-containers` container logs land in the journal
+(`journalctl -u docker-<name>`), which is arguably an upgrade — greppable,
+rotated, and collected the same way as everything else on the host — but there is
+no web view. If one is wanted, that is a separate small service (Dozzle is the
+usual answer), not a reason to keep Dockge.
 
 **One genuine side-benefit, recorded so it is not overclaimed:** under
 `oci-containers` each container is a systemd unit, which makes `RequiresMountsFor=`
@@ -845,7 +900,7 @@ compressed dump changes in its entirety when one row changes — gzip and zstd
 output diverge globally from a small input delta.
 
 So a nightly `pg_dump | gzip` stores a **full copy every night**, while a nightly
-plain-text `pg_dump` stores roughly the delta. On a 500 GB budget with a
+plain-text `pg_dump` stores roughly the delta. On a 950 GB budget with a
 years-long retention window, that is the difference between a rounding error and
 the dominant line item.
 
@@ -939,20 +994,25 @@ box, can you get `documents` back? Anything less is rehearsing the easy half.
 
 ## 6. Open
 
-- **Size the Critical and Precious tiers** (§3) — against the 500 GB ceiling
+- **Size the Critical and Precious tiers** (§3) — against the 950 GB ceiling
   rather than to choose a mechanism, which is now settled.
-- **Choose an SSH-based provider** — rsync.net, BorgBase or a Hetzner Storage
-  Box, now that borg + borgmatic is the decision (§4). Verify `--append-only`
-  support specifically; it is server-side and is part of why borg was chosen.
-  ⚠ Object storage, including iDrive e2 and B2, is out. Proton Drive was already
-  rejected for offering no scoped credentials.
+- ~~**Choose an SSH-based provider.**~~ **Closed 2026-08-08 — BorgBase**, at a
+  950 GB budget (§3). It exposes append-only as a per-key toggle, which was the
+  differentiating property. Object storage, including iDrive e2 and B2, was
+  already out once borg was chosen; Proton Drive was rejected earlier for
+  offering no scoped credentials.
 - **Create the repository in `repokey` mode**, not `keyfile` (§4) — it collapses
   key custody to one secret and is decided once, at creation.
-- **Verify append-only actually works** with borg on the chosen provider
-  (§3). This is the security-relevant one.
+- **Verify append-only actually works** on BorgBase (§3). This is the
+  security-relevant one, and it is now a concrete test rather than a provider
+  question: with Tower's append-only key in place, run `borgmatic prune` and
+  confirm the *server* refuses. Also set up the second, prunable key on the admin
+  machine, since retention cannot run from Tower.
 - **Design key custody** (§5) *before* the first backup runs, not after.
 - **Set the 2027-02 renewal reminder** (§4b) so the iDrive decision is made
   deliberately rather than by the date arriving.
+- **Turn on BorgBase's own inactivity alerting** (§3), as a heartbeat that does
+  not depend on hopper being up — the one gap a self-hosted watcher cannot cover.
 - **Decide pegasus's target** (§4b) — borgmatic now, or iDrive until renewal.
 - **Work out a dump path per database** (§4d) before the first backup runs. A
   file-level copy of a live database is the most common way a backup turns out
@@ -960,8 +1020,33 @@ box, can you get `documents` back? Anything less is rehearsing the easy half.
 - **Wire the three signals** (§3b) — Kuma push monitor for the heartbeat, ntfy
   for the budget thresholds, `RequiresMountsFor=` so an unmounted source cannot
   produce a green empty backup. Plus the quarterly restore-test nag.
+- **Build the bind-mount reconciliation check** (§4c). The declared tier → path
+  list is the *source*; this compares it against what the containers actually
+  mount and shouts when they diverge.
+
+  ```sh
+  # Auditor, not source. Compare to the declared list; alert on either direction.
+  docker ps -a --filter "label=backup.tier" -q \
+  | xargs docker inspect --format \
+    '{{range .Mounts}}{{if eq .Type "bind"}}{{.Source}}
+  {{end}}{{end}}'
+  ```
+
+  ⚠ **Use `docker ps -a`, not `docker ps`.** The whole point is catching the
+  container that is stopped, and the plain form hides exactly those.
+
+  **Both directions matter, for different reasons.** A path mounted but not
+  declared is an unprotected volume — the drift this check exists for. A path
+  declared but no longer mounted is a *stale* entry, which is worse than it
+  looks: borg happily backs up a directory that no longer receives writes, so
+  the repo keeps growing and the heartbeat keeps passing while the real data
+  moved somewhere unwatched. Neither direction is safe to ignore.
+
+  Alert via ntfy (§3b), and treat a divergence as a **prompt to update the Nix
+  declaration**, never as a reason to make the check derive paths at runtime —
+  that would reintroduce the failure mode §4c rejects.
 - ~~**Decide on physical rotation for Tower.**~~ **Closed 2026-08-07** — the
-  500 GB cloud budget makes it unnecessary. Kept in §6 as the fallback if the
+  950 GB cloud budget makes it unnecessary. Kept in §6 as the fallback if the
   Precious tier ever outgrows the budget by more than it is worth paying for.
 - **Survey memory-alpha, hopper and hamilton.** They are blank in §2 because
   nobody has looked, not because they are known to have nothing.

@@ -347,8 +347,9 @@ re-derive why it stopped applying.
   scope, the tool decision, and the key-custody circularity that has to be
   designed before the first backup runs.
 
-  **The tool is borg + borgmatic**, against a 500 GB budget, offsite to an
-  SSH-based provider with verified `--append-only` support. restic was the
+  **The tool is borg + borgmatic**, against a **950 GB budget on BorgBase**
+  (decided 2026-08-08), whose per-key append-only toggle is the property the
+  whole arrangement rests on. restic was the
   recommendation until borgmatic surfaced; the reversal is recorded in
   `docs/BACKUP.md` §4 rather than edited away, because the reasoning that
   produced the first answer was sound and only became wrong when a fact arrived.
