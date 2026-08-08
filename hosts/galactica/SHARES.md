@@ -200,6 +200,10 @@ per-container pass:
 du -sh /mnt/user/appdata/* | sort -h
 ```
 
+⟨On *expressing* the per-container tiers once they are known — Compose labels
+versus declaring them in Nix — see `docs/BACKUP.md` §4c. Do that pass first; the
+mapping has to exist before the schema that carries it.⟩
+
 **Decided: take a full verified copy before touching anything.** Cheap insurance
 — the whole Services pool holds 240 GB, so this is not a case where backing up
 first costs anything meaningful.

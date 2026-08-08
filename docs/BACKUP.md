@@ -518,6 +518,84 @@ than by the date arriving.
 Serenity is under no pressure in any of this: it has three working offsite paths
 and is the best-covered machine in the fleet (§2).
 
+## 4c. Can bind mounts be tagged for backup handling in Compose?
+
+**Evaluated 2026-08-07. Directly: no. Usefully: yes, one indirection away — and
+for most of this fleet there is a better answer than either.**
+
+### The literal answer
+
+**A bind mount is not a Docker object.** It is a path mapping recorded on the
+container, so there is nothing to attach metadata to. `labels:` exists on
+*services* and on *named volumes*, and neither covers `- /host/path:/container/path`.
+
+### The workable pattern: label the service, derive the mounts
+
+Put the intent on the service and let Docker tell you the paths:
+
+```yaml
+services:
+  immich-server:
+    labels:
+      backup.tier: precious
+      backup.stop: "true"      # quiesce before snapshotting a database
+```
+
+```sh
+# tier + host path, one per line, for every labelled container
+docker ps --filter "label=backup.tier" -q \
+| xargs docker inspect --format \
+  '{{$t := index .Config.Labels "backup.tier"}}{{range .Mounts}}{{if eq .Type "bind"}}{{$t}} {{.Source}}
+{{end}}{{end}}'
+```
+
+That feeds straight into `restic --files-from`. Prior art exists rather than
+needing invention — `offen/docker-volume-backup` drives off labels like
+`docker-volume-backup.stop-during-backup`, and `nautical-backup` is the
+Unraid-ecosystem version aimed at exactly this appdata problem.
+
+### ⚠ But it has a failure mode this document already cares about
+
+**Deriving paths from `docker inspect` means a stopped container drops silently
+out of the backup.** That is §3b's third signal all over again: the run succeeds,
+the heartbeat pings, the repo does not grow, and the thing you stopped "just for
+a minute" three weeks ago is quietly unprotected.
+
+Any label-driven scheme needs the path list reconciled against an expected set,
+or it fails open.
+
+### The better answer where Nix owns the Compose file
+
+This fleet renders Compose files from Nix — `traefik.nix`, `dockge.nix` and
+`arcane.nix` all use `pkgs.writeText` and shell out to `docker compose`. Where
+that is true, **round-tripping tier information through Docker labels means
+writing it in Nix, rendering it into a label, and then reading it back out at
+runtime.** Nix already has it.
+
+Declaring the tier in Nix and emitting *both* the Compose file and the restic
+path list from one attribute set is simpler, has a single source of truth, and —
+the part that matters — **does not depend on the container running.** The path
+list is static, so a stopped service cannot silently vanish from the backup.
+
+### So the split is about ownership, not preference
+
+| Who owns the Compose file | Right mechanism |
+|---|---|
+| **Nix** (`modules/nixos/*.nix`, `writeText` + `docker compose`) | Declare the tier in Nix; generate the path list alongside the Compose file |
+| **Dockge / hand-managed** (`homelab-stacks`, Unraid templates) | Labels are the only in-band option — Nix does not own those files |
+
+Tower today is the second case; Tower after the migration is intended to be the
+first. **So labels are the right tool for the transition and the wrong tool for
+the destination**, which is worth knowing before building much on them.
+
+Labels retain one job Nix cannot do: **runtime coordination**, such as "stop this
+container before snapshotting its database" (`hosts/galactica/SHARES.md` §3 on
+`appdata`). Even that can be declared in Nix — but only for services Nix owns.
+
+⟨Revisit once the `appdata` per-container pass has run. That pass produces the
+tier-per-container mapping this section is about *expressing*, and doing it in the
+wrong order means inventing a schema before knowing what it has to carry.⟩
+
 ## 5. ⚠ The key custody problem — design this before trusting anything
 
 Self-managed encryption removes the vendor's ability to lose your key. It also
