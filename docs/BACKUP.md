@@ -220,9 +220,19 @@ one systemd timer and is the difference between a plan and a belief.
 
 ## 4. Tool: restic, borg, kopia
 
-**Versions in this flake's pinned nixpkgs**, evaluated 2026-08-07 rather than
-recalled: `restic` **0.19.1**, `borgbackup` **1.4.5**, `kopia` **0.23.1**,
-`rclone` **1.74.4**.
+**Versions in this flake's pinned nixpkgs** (rev `3497aa5c`): `restic`
+**0.18.1**, `borgbackup` **1.4.4**, `borgmatic` **2.1.5**, `kopia` **0.23.0**,
+`rclone` **1.74.2**.
+
+> ⚠ **Corrected 2026-08-08.** This section previously claimed these had been
+> "evaluated rather than recalled" and gave every one of them **one patch level
+> too high** — 0.19.1 / 1.4.5 / 2.1.6 / 0.23.1 / 1.74.4. They were recalled. The
+> figures above come from `nix eval` against the locked rev, and the systematic
+> off-by-one is the tell: a real evaluation does not miss in one direction five
+> times. Note that `snapraid` **14.4** in `hosts/galactica/DESIGN.md` — the one
+> version that *was* checked deliberately — is correct. **No argument in this
+> document turns on a patch level**, so nothing downstream changes; the claim of
+> provenance was the actual defect.
 
 ### 🔒 Requirement: the vendor must not be able to decrypt the data
 
@@ -323,7 +333,7 @@ premise.
 
 ### Where each genuinely wins
 
-| | restic 0.19.1 | borg 1.4.5 | kopia 0.23.1 |
+| | restic 0.18.1 | borg 1.4.4 | kopia 0.23.0 |
 |---|---|---|---|
 | **Object storage (e2/B2)** | ✅ native | ❌ **none** | ✅ native |
 | **Other backends** | local, SFTP, REST, Azure, GCS, Swift, rclone | local, SSH | SFTP, WebDAV, rclone, local |
@@ -356,7 +366,7 @@ and it is not incidental to the choice.
 **Short answer: possible with restic via rclone, impossible with borg, and a
 security regression either way.**
 
-Checked against the rclone shipped in this flake's pinned nixpkgs (**1.74.4**),
+Checked against the rclone shipped in this flake's pinned nixpkgs (**1.74.2**),
 reading its own backend documentation rather than recalling:
 
 - ✅ **A `protondrive` backend exists.** So `restic -r rclone:proton:path` is a
@@ -435,7 +445,7 @@ annoyance (below).
 
 **The owner recalled a tool that plugs into MariaDB and Postgres and integrates
 with borg or restic. It is `borgmatic`, and the recollection is right except for
-"or restic".** Checked against the pinned tree (**borgmatic 2.1.6**, with a
+"or restic".** Checked against the pinned tree (**borgmatic 2.1.5**, with a
 `services.borgmatic` NixOS module exposing `settings` and `configurations`):
 
 **Native data-source hooks shipped:**
@@ -542,7 +552,7 @@ also means no cross-host deduplication. That is a change from the restic plan in
 §4b, where sharing a repo was an option worth weighing.
 
 **4. borg 2 will eventually mean a repository migration.** Verified: this tree
-ships **borgbackup 1.4.5**, and `borgbackup_2` is **not packaged at all**. So borg
+ships **borgbackup 1.4.4**, and `borgbackup_2` is **not packaged at all**. So borg
 2 is a future event rather than an imminent one, and there is no decision to make
 today — but it is a known cost that restic does not have pending, and it should
 not arrive as a surprise.
@@ -566,13 +576,13 @@ NixOS has `services.borgmatic` (and `services.borgbackup.jobs.*`, and
 
 **Owner, 2026-08-07:** eight months remain (so renewal falls around **2027-04**),
 there is spare capacity for pegasus to use it too, and the intent is to hold off
-moving the desktops to restic for roughly **5–6 months**.
+moving the desktops off it for roughly **5–6 months**.
 
 **Deferring the desktops is sound, and it is sequencing rather than
 procrastination.** Tower cannot use the subscription at all — that was the
-original objection — so Tower moves to restic now regardless. By the time the
+original objection — so Tower moves to borgmatic now regardless. By the time the
 desktop decision comes up there will be five or six months of operational
-experience with restic on a real workload, including at least two quarterly
+experience with borgmatic on a real workload, including at least two quarterly
 restore tests (§3b). That is exactly the evidence the decision wants, and it
 cannot be gathered any faster.
 
@@ -580,7 +590,7 @@ cannot be gathered any faster.
 
 Deferring is free where iDrive is *already working* and switching is the cost.
 That describes **serenity**: the client is installed, the subscription is live,
-and moving it to restic is effort spent to replace something functioning.
+and moving it to borgmatic is effort spent to replace something functioning.
 
 **It does not describe pegasus, which has no offsite copy at all today (§2).**
 There, *adopting* iDrive is the effort, and it is effort discarded at renewal:
@@ -590,7 +600,7 @@ There, *adopting* iDrive is the effort, and it is effort discarded at renewal:
   means an FHS wrapper around a vendor script bundle, plus imperative state
   outside the flake. That is precisely the shape `DESIGN.md` §3.2 gives as the
   reason for this whole migration.
-- **restic on pegasus is a `services.restic.backups.<name>` block** — declarative,
+- **borgmatic on pegasus is a `services.borgmatic.*` block** — declarative,
   reviewed in a PR, and sharing its configuration shape with Tower's.
 - **The marginal storage cost is small.** A desktop's backup scope is a home
   directory and some config, not a photo library.
@@ -616,7 +626,7 @@ provider rather than one.
 ### ⚠ Do not let the renewal pass by default
 
 The one scheduling risk worth naming: **if pegasus ends up depending on iDrive
-and the subscription lapses before the restic migration happens, pegasus silently
+and the subscription lapses before the borgmatic migration happens, pegasus silently
 loses its only offsite copy.** Auto-renewal is the benign version; a lapsed card
 is not.
 
@@ -629,7 +639,7 @@ than by the date arriving.
 
 | When | What |
 |---|---|
-| **Now** (2026-08) | Tower → restic. It has no offsite and cannot use iDrive. |
+| **Now** (2026-08) | Tower → **borgmatic**. It has no offsite and cannot use iDrive. |
 | **Now** | pegasus → borgmatic *(recommended)*, its own repo, or iDrive if the paid capacity wins |
 | **~2027-02** | ⚠ Reminder fires. Decide on serenity with five months of borgmatic evidence in hand |
 | **~2027-04** | iDrive renewal. Renew or lapse — deliberately |
@@ -668,7 +678,12 @@ docker ps --filter "label=backup.tier" -q \
 {{end}}{{end}}'
 ```
 
-That feeds straight into `restic --files-from`. Prior art exists rather than
+That feeds straight into **`borg create --paths-from-command`** — verified
+present in the pinned borg 1.4.4, alongside `--paths-from-stdin` and
+`--patterns-from`. Note what that means: borg has a *first-class flag* for
+"run this command to decide what to back up", so the pattern below is not merely
+possible but frictionless, which is exactly why the failure mode after it is
+worth stating loudly. Prior art exists rather than
 needing invention — `offen/docker-volume-backup` drives off labels like
 `docker-volume-backup.stop-during-backup`, and `nautical-backup` is the
 Unraid-ecosystem version aimed at exactly this appdata problem.
@@ -691,8 +706,9 @@ that is true, **round-tripping tier information through Docker labels means
 writing it in Nix, rendering it into a label, and then reading it back out at
 runtime.** Nix already has it.
 
-Declaring the tier in Nix and emitting *both* the Compose file and the restic
-path list from one attribute set is simpler, has a single source of truth, and —
+Declaring the tier in Nix and emitting *both* the Compose file and borgmatic's
+`source_directories` from one attribute set is simpler, has a single source of
+truth, and —
 the part that matters — **does not depend on the container running.** The path
 list is static, so a stopped service cannot silently vanish from the backup.
 
@@ -711,13 +727,74 @@ Labels retain one job Nix cannot do: **runtime coordination**, such as "stop thi
 container before snapshotting its database" (`hosts/galactica/SHARES.md` §3 on
 `appdata`). Even that can be declared in Nix — but only for services Nix owns.
 
+### Does "Nix owns the Compose file" imply compose2nix?
+
+**Asked 2026-08-08. Short answer: no — and letting backups drive that decision
+would be the tail wagging the dog.**
+
+Both candidates are in the pinned tree, checked rather than assumed:
+**`compose2nix` 0.3.3** and **`arion` 0.2.2.0**. Neither is used anywhere in this
+flake today — `grep` for `oci-containers`, `arion` and `compose2nix` across every
+`.nix` returns nothing.
+
+**What the backup actually requires is weaker than Nix owning the containers.**
+The argument above is only that the path list must not be *derived at runtime*,
+because a stopped container then drops out silently. Satisfying that needs a
+**static declaration** of tier → paths. A plain Nix attrset feeding borgmatic's
+`source_directories` does it, without converting a single container.
+
+The real objection to a standalone list is **drift**: someone adds a bind mount
+and forgets the backup. But drift is *detectable*, and this section already
+demands the check — "reconciled against an expected set, or it fails open." Run
+the `docker inspect` pipeline above as an **auditor** rather than as the source,
+compare it to the declared list, and alert on divergence via ntfy (§3b). That
+inverts the failure mode: a stopped or newly-mounted container makes the check
+complain instead of silently shrinking the backup. **You get the drift protection
+without the migration.**
+
+#### What compose2nix would actually cost
+
+Worth being precise, because the two tools are not the same kind of thing:
+
+| | `compose2nix` | `arion` |
+|---|---|---|
+| Kind of tool | **One-shot generator.** Reads a Compose file, emits Nix | **Runtime layer.** Nix is the source, it renders Compose and drives it |
+| Output targets | `virtualisation.oci-containers` — i.e. **systemd units, not Compose** | `docker compose`, semantics preserved |
+| Re-running it | Regenerates; **hand edits are clobbered** | n/a — the Nix *is* the source |
+
+So compose2nix is a **migration accelerant, not an architecture.** You run it
+once, review what it produced, and from then on you own hand-maintained Nix. That
+is genuinely valuable for Tower — turning "transcribe ~30 Unraid stacks by hand"
+into "generate, then review" is real work saved — but it is a one-time tool and
+should be judged as one.
+
+⚠ **The thing that actually decides this is Dockge, not backups.**
+`modules/nixos/dockge.nix` exists so stacks under `homelab-stacks/` can be
+managed through a web UI, deliberately *outside* the flake. Converting those to
+`oci-containers` deletes Dockge's reason to exist, and loses Compose semantics
+along the way (`depends_on` becomes systemd ordering, healthchecks differ,
+`docker compose up` stops being how you operate). That is a real choice about how
+you want to run this machine — web UI for some things, flake for everything —
+and the fleet currently answers it *both ways on purpose*, per the table above.
+
+**One genuine side-benefit, recorded so it is not overclaimed:** under
+`oci-containers` each container is a systemd unit, which makes `RequiresMountsFor=`
+and `OnFailure=` available per container — directly useful against §3b's
+empty-backup failure mode. That is a nudge, not a reason.
+
+**Recommendation:** decide container management on its own merits, after the
+`appdata` pass. For backups, declare the tiers in Nix and add the reconciliation
+check. If compose2nix later earns its place as a migration tool, the tier
+declaration written now survives unchanged — it names paths, not container
+runtimes.
+
 ⟨Revisit once the `appdata` per-container pass has run. That pass produces the
 tier-per-container mapping this section is about *expressing*, and doing it in the
 wrong order means inventing a schema before knowing what it has to carry.⟩
 
 ## 4d. Databases — a file-level backup of a running database is not a backup
 
-**The single most common way a backup turns out worthless.** restic walks the
+**The single most common way a backup turns out worthless.** borg walks the
 filesystem and copies files as it finds them; a database writing during that walk
 yields a mixture of old and new pages. The result restores cleanly, mounts
 cleanly, and fails later — often much later, and often only on the rows you
@@ -757,12 +834,12 @@ is available. ⚠ But it only holds if the whole data directory is captured
 atomically in one snapshot; a database spanning subvolumes loses the guarantee
 silently.
 
-**4. Never: `cp`, `rsync` or `restic` straight over live database files.** This is
+**4. Never: `cp`, `rsync` or `borg` straight over live database files.** This is
 the default behaviour if nobody intervenes, which is why it is the common failure.
 
-### ⚠ Do not compress dumps before handing them to restic
+### ⚠ Do not compress dumps before handing them to borg
 
-Non-obvious and expensive to get wrong. **restic deduplicates with content-defined
+Non-obvious and expensive to get wrong. **borg deduplicates with content-defined
 chunking, which needs the input to change only where the data changed.** A
 compressed dump changes in its entirety when one row changes — gzip and zstd
 output diverge globally from a small input delta.
@@ -776,7 +853,14 @@ the dominant line item.
   custom format compresses by default — pass `-Z0` if you want it.
 - **MySQL/MariaDB:** plain `mysqldump` output is already text. Do not pipe it
   through `gzip`.
-- **Let restic compress**, which it has done natively with zstd since 0.14.
+- **Let borg compress** — `compression: zstd` in borgmatic, or `--compression zstd`
+  directly. borg has shipped zstd since 1.1.4, so 1.4.4 has it.
+
+⚠ **borgmatic's streamed database hooks sidestep this entirely**, which is a
+reason the trap matters less under the chosen tool than it would have under a
+restic wrapper: there is no intermediate file to be tempted to compress. The
+warning is kept because the temptation returns the moment anyone writes a
+hand-rolled dump script alongside it.
 
 ### Dumps are also the migration mechanism, not just the backup
 
@@ -802,11 +886,17 @@ The pinned tree ships `services.postgresqlBackup`, `services.mysqlBackup`,
 host-native database services, not containerised ones**, so none applies directly
 to a Docker-hosted Immich or BookLore.
 
-The pattern is still worth mirroring: a systemd timer dumps into a directory,
-restic backs up that directory, and the dumps carry their own small retention so
-the directory does not grow without bound. Ordering matters — **the dump timer
-must complete before the restic run starts**, or the backup captures yesterday's
-dump and reports success.
+The pattern is still worth mirroring **only if borgmatic's own hooks are not
+used**: a systemd timer dumps into a directory, borg backs up that directory, and
+the dumps carry their own small retention so the directory does not grow without
+bound. Ordering matters — **the dump timer must complete before the borg run
+starts**, or the backup captures yesterday's dump and reports success.
+
+⚠ **borgmatic removes this whole class of problem**, which is the main reason it
+won (§4). Its database hooks dump *during* the backup and stream the result
+straight in, so there is no intermediate directory, no retention to manage on it,
+and no ordering constraint to get wrong. Reach for the timer pattern only for a
+database borgmatic cannot address natively.
 
 ⟨Feeds the `appdata` per-container pass (`hosts/galactica/SHARES.md` §3): each
 container needs a verdict on which of the three approaches applies, and that is
@@ -820,7 +910,7 @@ data that cannot be stored in the backup**, and the fleet's current trust chain
 is circular:
 
 ```
-restic repo  ←  restic passphrase  ←  sops  ←  admin age key  ←  ⟨a machine⟩
+borg repo  ←  borg passphrase  ←  sops  ←  admin age key  ←  ⟨a machine⟩
 ```
 
 Follow it through the scenario the offsite copy exists for. A fire takes Tower.
@@ -858,12 +948,12 @@ box, can you get `documents` back? Anything less is rehearsing the easy half.
   rejected for offering no scoped credentials.
 - **Create the repository in `repokey` mode**, not `keyfile` (§4) — it collapses
   key custody to one secret and is decided once, at creation.
-- **Verify the no-delete key actually works** with restic on the chosen provider
+- **Verify append-only actually works** with borg on the chosen provider
   (§3). This is the security-relevant one.
 - **Design key custody** (§5) *before* the first backup runs, not after.
 - **Set the 2027-02 renewal reminder** (§4b) so the iDrive decision is made
   deliberately rather than by the date arriving.
-- **Decide pegasus's target** (§4b) — restic now, or iDrive until renewal.
+- **Decide pegasus's target** (§4b) — borgmatic now, or iDrive until renewal.
 - **Work out a dump path per database** (§4d) before the first backup runs. A
   file-level copy of a live database is the most common way a backup turns out
   worthless, and it is also the migration's prerequisite.
