@@ -1017,6 +1017,17 @@ box, can you get `documents` back? Anything less is rehearsing the easy half.
 - **Work out a dump path per database** (§4d) before the first backup runs. A
   file-level copy of a live database is the most common way a backup turns out
   worthless, and it is also the migration's prerequisite.
+- ⭐ **Run the pilot** — `hosts/galactica/DESIGN.md` §6.6. Wire `partdb` for
+  backup, then test-migrate and restore it onto memory-alpha. It proves this
+  document's whole design end to end at a size where being wrong is free: the
+  borgmatic config shape, the native database hook, BorgBase's append-only
+  refusal, the tier → `source_directories` path, and the paired-appdata rule
+  that `partdb` itself generated.
+
+  **This is the item that turns the rest of §6 from a plan into evidence**, and
+  it should run before the first real backup is trusted — a backup that has
+  never been restored is a belief. ⚠ It proves nothing about SnapRAID, mergerfs
+  or the migration's exposure window; those are galactica-specific.
 - **Wire the three signals** (§3b) — Kuma push monitor for the heartbeat, ntfy
   for the budget thresholds, `RequiresMountsFor=` so an unmounted source cannot
   produce a green empty backup. Plus the quarterly restore-test nag.

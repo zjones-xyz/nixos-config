@@ -494,25 +494,89 @@ repaired*, not as proof of fraud.
 Also check the **board assembly and tracer numbers** (`sas2flash -list`, or the
 physical sticker); blank or zeroed fields are a common clone tell.
 
-### Step 4 — the test that actually decides it, and where to run it
+### Step 4 — test it in Tower first, and additively
 
-Identification is cheap; **the return window makes validation the real
-deadline.** A boot-and-see proves nothing about a card that fails under
-sustained load.
+> ⚠ **Corrected 2026-08-08.** An earlier revision said "test it on pegasus, not
+> on Tower", on the assumption that installing it in Tower meant pulling the
+> ASM1166 and disturbing a working array. **That assumption was wrong on both
+> counts**, and the owner's counterpoint is the stronger argument.
 
-⚠ **Test it on pegasus, not on Tower.** Testing in Tower means pulling the
-ASM1166 and disturbing a working array for a card that may go back.
-⟨Confirm pegasus has a free PCIe x8 slot — not verified here.⟩
+**It is not a swap — and as of 2026-08-08 it is not even a coexistence problem.**
+⚠ **The ASM1166 is currently out of the case** (owner, 2026-08-08; it came out to
+be flashed and has not gone back). Combined with §4's measured port map, which
+puts **all four array spinners and both SSDs on onboard SATA**, the consequence
+is worth stating plainly:
 
-**Combine this with the drawer burn-in (§12), because they are the same job.**
-The drawer's twelve untested spinners need burn-in before anything trusts them,
-and the HBA needs eight ports under sustained load. Running both at once tests
-each with the other and costs one setup instead of two. Watch for:
+> **Nothing in Tower currently depends on an add-in storage controller.** The
+> array is running entirely on the PCH. There is no card to remove, no array to
+> disturb, and — with the ASM1166 out and the ASM1064 due to be pulled anyway —
+> effectively two free slots for an x8 card.
+
+This is the **cheapest possible moment to test an HBA in this machine**, and it
+will not recur once the layout is committed.
+
+**And enumeration is board-specific, so pegasus cannot answer the first
+question.** §1 of this document is the proof: the ASM1166 is **completely
+invisible on this board** unless two obscure BIOS settings are right. That is a
+Tower fact, not a card fact — §6e explicitly notes that *"pegasus's slot was
+never the constraint."* If the X9SCM does not enumerate the LSI, every later
+test is wasted effort, so **that is the test to run first and it can only be run
+here.**
+
+**The order that follows:**
+
+1. **Record the current BIOS settings before touching anything** — see the
+   warning below. Then power down, insert the LSI in the free slot, boot Unraid
+   normally.
+2. `lspci -nn -d 1000:` — does it appear at all? Also watch for a **new root
+   port**: §10 notes Supermicro hides root ports with nothing behind them, so
+   one should materialise once the slot is populated.
+3. **If it does not enumerate**, try the §1 remedies (forcing the slot's link
+   generation, `Detect Non-Compliance Device`). If it still does not appear,
+   **stop and return it.** Nothing further is worth doing.
+4. **If it does enumerate**, run steps 1–3 above for firmware and authenticity,
+   then load-test it — still additively, on drawer disks, with the array
+   untouched.
+
+⚠ **Record §1's two BIOS settings before changing anything — the risk is
+deferred, not absent.** Normally those settings are what make the *array*
+controller visible, and losing them presents as the ASM1166 having died. With
+the ASM1166 out of the case they currently protect nothing, so **this is also
+the safest window this machine will ever offer for experimenting with PCIe link
+settings.** The exposure is later: if the LSI fails validation and the ASM1166
+goes back in, those settings have to be right again, and rediscovering them cost
+a day the first time (§1).
+
+⚠ **Option ROM space is a real constraint on a 2011 board.** The SAS2008 carries
+a large boot ROM, and legacy option ROM space is finite — exhausting it causes
+POST hangs or cards silently failing to initialise, which looks exactly like the
+§1 failure and is not. **Disable the LSI's boot support** (it is not a boot
+device here) if anything odd appears at POST. Note this pressure is *lower right
+now* than it will be later, with the ASM1166 out and the ASM1064 still due to be
+pulled — another reason to test before the slots refill.
+
+**Combine the load test with the drawer burn-in (§12), because they are the same
+job.** The drawer's twelve untested spinners need burn-in before anything trusts
+them, and the HBA needs eight ports under sustained load. Running both at once
+tests each with the other and costs one setup instead of two. Watch for:
 
 - disks enumerating individually, with SMART passthrough, no RAID abstraction
 - `dmesg | grep -i mpt3sas` — resets or timeouts under load are disqualifying
 - controller temperature: **SAS2008 expects server airflow and runs hot
-  passively**, which a desktop case will not provide
+  passively**
+
+**pegasus is now the fallback bench, not the primary** — useful only if Tower
+cannot be powered down at all, and explicitly unable to answer step 2.
+
+**If the LSI validates, the cleanest outcome is that the ASM1166 simply never
+goes back in.** That deletes §1's landmine by omission rather than by a swap —
+no CMOS-clear failure mode, no forced link generation, no `Detect Non-Compliance
+Device`. Worth weighing against the return window: the ASM1166 is the card with
+the trap, and it is already out.
+
+⚠ **The return window is still the deadline.** Identification is minutes;
+validation is a sustained load test, and a boot-and-see proves nothing about a
+card that fails hot.
 
 ---
 

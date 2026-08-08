@@ -369,3 +369,35 @@ re-derive why it stopped applying.
 - **Staging capacity.** Three 4 TB disks are available for the migration, which
   is not enough for everything at once; the plan assumes *arr* media is winnowed
   to fit. `DESIGN.md` §6.
+- ⭐ **The pilot — `partdb` on memory-alpha.** `DESIGN.md` §6.6. Wire a small
+  service for backup, then test-migrate and restore it before galactica exists.
+  `partdb` is the right subject rather than an arbitrary one: it is the service
+  that *generated* the paired-appdata rule, so the pilot exercises the exact
+  failure that rule guards against, at a size where being wrong is free. ⚠ It
+  validates the backup design only — nothing about SnapRAID, mergerfs or the
+  migration's exposure window.
+- **CMR disks for the non-SnapRAID tiers.** `DESIGN.md` §6.7. Only one of the
+  three 4 TB drawer disks is CMR, so the photo tier cannot currently be an
+  all-CMR pair. Buying one or two is the smallest sum in this plan that unblocks
+  the most. ⚠ No SnapRAID parity on an EFAX under any outcome.
+- ⚠ **The LSI 9240-8i, and whether the ASM1166 comes back at all.**
+  `DESIGN.md` §6.7 for the case, `PLATFORM.md` §7b for the verification
+  procedure. The vendor claims it is already IT-flashed, which is a claim and not
+  a fact — the firmware personality changes the PCI device ID, so one command
+  settles it (`1000:0073` stock MegaRAID vs `1000:0072` MPT).
+
+  **Two things make this urgent rather than merely open.** The return window is a
+  deadline, and validation is a sustained load test rather than a boot-and-see.
+  And the ASM1166 is *currently out of the case* while the array runs entirely on
+  onboard SATA — so right now there is nothing to disturb and two free slots,
+  which is the cheapest this test will ever be.
+
+  **The prize is not bandwidth.** If the LSI validates, the ASM1166 need never go
+  back in, which deletes `PLATFORM.md` §1's landmine by omission — the one where
+  a CMOS clear or a dead coin cell hides the array controller and presents as
+  hardware failure.
+
+  ⚠ **This gates disk placement.** `DESIGN.md` §5.5's port budget and placement
+  table assume the ASM1166; if the LSI wins they are rewritten. The Gen3 retest
+  is not worth running until this resolves — it would measure a card that may be
+  going back.
