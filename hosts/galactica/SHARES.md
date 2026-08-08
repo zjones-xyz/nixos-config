@@ -8,8 +8,9 @@ storage layout depends on.
 are confirmed dead; the rest of the tiering is still a proposal to argue with.
 Sizes are ⟨TBD⟩ pending a `du -sh /mnt/user/*` pass.
 
-**Triage status: 19 of 34 decided** (1 parked — see §5). Three under owner review:
-`inbox`, `minishare`, `copyparty`.
+**Triage status: 22 of 34 owner-confirmed** (1 parked). The undecided row is
+empty — what remains is **12 proposals awaiting confirmation or correction**, not
+unknowns.
 
 Dates are UTC.
 
@@ -49,7 +50,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `arm` | fastservices | export | — | public | | 🛡 **Protected** — "automatic ripping machine" |
 | ~~`jellyfin_cache`~~ | fastservices | — | — | public | | 🗑 **DROP** — owner-confirmed dead. See §3 |
 | `swap` | fastservices | — | — | public | | ⚙ **Does not migrate** — Unraid furniture, see §5 |
-| `inbox` | cache | export | — | public | | |
+| `inbox` | cache | export | — | public | | 🛡 **Protected** |
 
 ### Array-resident, cached on write (`yes`)
 
@@ -64,7 +65,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `books` | cache | export | — | public | | 🛡 **Protected** |
 | `books_old` | cache | export | — | public | | "top level store for BookLore" — ⚠ **suspected** leftover |
 | `calibre_books` | cache | — | — | private | | ⏸ 🛡 **Protected (parked)** — see §5 |
-| `copyparty` | cache | export | — | public | | File-sharing service |
+| `copyparty` | cache | export | — | public | | ♻ **Regenerable** — file-sharing surface |
 | ~~`manyfold_library`~~ | cache | — | — | public | | 🗑 **DROP** — owner-confirmed dead |
 | `partdb` | cache | — | — | public | | 🛡 **Protected** — parts database. ⚠ paired appdata, §5 |
 | `podcasts_audiobookshelf` | cache | — | — | private | | ✅ **Re-acquirable** |
@@ -84,7 +85,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `isos` | export | — | public | | "ISO images" |
 | `domains` | — | — | public | | "saved VM instances", split level 1 |
 | `public` | export | — | public | | 🛡 **Protected** |
-| `minishare` | export | — | public | | |
+| ~~`minishare`~~ | export | — | public | | 🗑 **DROP** — owner-confirmed junk |
 | ~~`SHARE`~~ | — | — | public | | 🗑 **DROP** — owner-confirmed dead |
 
 ---
@@ -140,6 +141,7 @@ at zero risk to anything live.
 | `SHARE` | array | Also the one that read as an Unraid template |
 | `manyfold_library` | **array** | 3D model library. First drop that reduces the 17.1 TB |
 | `syncthing` | **array** | Second drop with array volume behind it |
+| `minishare` | **array** | |
 
 ⚠ **`manyfold_library` is the first confirmed drop with real volume behind it.**
 The other three are pool-resident or an empty template; this one is array data, so
@@ -273,13 +275,13 @@ contents cannot be inferred from configuration.
 |---|---|---|
 | **Critical** | Everything below, **plus versioning and a tested restore** | **`documents`** |
 | **Precious and Irreplaceable** | Real-time redundancy, checksummed, **+ offsite** | **`immich_photos`**, **`immich_photos_archived`** |
-| **Protected** | Parity. No offsite. | **`music`**, **`books`**, **`bambuddy_library`**, **`partdb`**, **`webdav`**, **`public`**, **`arm`**, **`archived_disks`**, ⏸ **`calibre_books`** *(parked)* |
+| **Protected** | Parity. No offsite. | **`music`**, **`books`**, **`bambuddy_library`**, **`partdb`**, **`webdav`**, **`public`**, **`arm`**, **`archived_disks`**, **`inbox`**, ⏸ **`calibre_books`** *(parked)* |
 | **Painful to rebuild, small** | Redundancy; cheap because tiny | `appdata`, `arr_config`, `ha_backup` |
 | **Re-acquirable** | Snapshot parity, 24 h lag fine | **`podcasts_audiobookshelf`**, `arr_media`, `arr_managed_data`, `jellyfin`, `isos` |
-| **Regenerable** | Parity optional | `domains` ⟨?⟩, `serenity_time_machine` |
+| **Regenerable** | Parity optional | **`copyparty`**, `domains` ⟨?⟩, `serenity_time_machine` |
 | ⚙ **Does not migrate** | n/a — no successor concept | **`swap`**, `system` *(proposed)* |
-| 🗑 **Drop** | n/a — deleted before migrating | **`jellyfin_cache`**, **`ai_models`**, **`SHARE`**, **`manyfold_library`**, **`syncthing`**; `appdata_old` + `books_old` suspected |
-| **⟨?⟩ Undecided** | — | `inbox`, `minishare`, `copyparty` — owner reviewing |
+| 🗑 **Drop** | n/a — deleted before migrating | **`jellyfin_cache`**, **`ai_models`**, **`SHARE`**, **`manyfold_library`**, **`syncthing`**, **`minishare`**; `appdata_old` + `books_old` suspected |
+| **⟨?⟩ Undecided** | — | *(none — every share is now assigned)* |
 
 ### Critical vs. Precious — consequence against grief
 
@@ -391,6 +393,32 @@ is the third member of that group.⟩
 `archived_disks` moves back to undecided on the same reasoning. It was proposed
 as irreplaceable purely because it is `secure` and owner-writable, which says
 something about *access* and nothing about *value*.
+
+### ✅ Every share is now assigned
+
+**As of 2026-08-07 the undecided row is empty.** Twenty-two shares carry an
+owner-confirmed verdict; the remaining twelve carry *my proposals*, which is a
+different and much better problem — they need confirming or correcting, not
+investigating.
+
+Still proposals, not decisions:
+
+| Proposed tier | Shares |
+|---|---|
+| Painful to rebuild, small | `appdata` *(placeholder — see the paired-appdata rule)*, `arr_config`, `ha_backup` |
+| Re-acquirable | `arr_media`, `arr_managed_data`, `jellyfin`, `isos` |
+| Regenerable | `domains`, `serenity_time_machine` |
+| Does not migrate | `system` |
+| Drop *(suspected)* | `appdata_old`, `books_old` |
+
+**Four of the six confirmed drops are array-resident** — `SHARE`,
+`manyfold_library`, `syncthing`, `minishare` — so they come directly off the
+17.1 TB the migration has to carry. `jellyfin_cache` and `ai_models` are pool
+residents and free SSD space instead.
+
+⚠ **`du -sh` those four before deleting.** Their combined size is the migration's
+first real payload reduction, and it feeds the staging arithmetic in `DESIGN.md`
+§6. Measuring after deletion is not an option.
 
 ### ⚠ Services own data in *two* places — classify both together
 
