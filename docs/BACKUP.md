@@ -200,44 +200,118 @@ The Critical tier requires a *tested* restore (§5), and that is the discipline
 that silently never happens. A quarterly ntfy post saying "test a restore" costs
 one systemd timer and is the difference between a plan and a belief.
 
-## 4. Tool: restic, on one constraint
+## 4. Tool: restic, borg, kopia
 
-**The owner's objection to iDrive is specific**: the subscription cannot cover
-Tower. Not vendor sprawl, not tooling. iDrive's own **e2** product is
-S3-compatible object storage and would work — but it is a separate product from
-the iDrive Personal plan Serenity uses, so "one subscription covers everything"
-is not on offer either way.
+**Versions in this flake's pinned nixpkgs**, evaluated 2026-08-07 rather than
+recalled: `restic` **0.19.1**, `borgbackup` **1.4.5**, `kopia` **0.23.1**,
+`rclone` **1.74.4**.
 
-That makes the decision mechanical:
+### The two facts that decide it
 
-> **iDrive e2 is S3. Borg does not speak object storage** — it wants a local
-> filesystem or SSH to a host running `borg serve`.
+Everything else is a feature comparison; these two are structural.
 
-- **Keep e2 on the table → restic.** It talks S3, local disk, SFTP and
-  rclone-anything, so one tool covers the cloud target, the rotated USB drive,
-  and any provider switched to later.
-- **Prefer borg → choose an SSH-based host instead**: rsync.net, BorgBase, or a
-  Hetzner Storage Box. All fine; none of them iDrive.
+**1. Borg does not speak object storage.** It wants a local filesystem or SSH to
+a host running `borg serve`. There is no S3 backend and there will not be one —
+it needs POSIX semantics and locking that object storage does not provide. So
+borg is not "restic with different tradeoffs" here; **it is a different storage
+decision**, and picking it means choosing rsync.net, BorgBase or a Hetzner
+Storage Box instead of iDrive e2.
 
-**Recommendation: restic.** Not because borg is worse — its dedup and compression
-are excellent, and its server-side append-only mode is a genuine ransomware
-defence restic can only approximate with object lock. The deciding argument is
-that one tool across every target means **one restore procedure to test**, and
-restores are where backup plans die. Two procedures doubles the surface you are
-pretending to have verified.
+**2. Kopia has no NixOS module.** Checked directly against the pinned tree:
+`nixos/modules/services/backup/` ships `restic.nix`, `restic-rest-server.nix`,
+`borgbackup.nix` and `borgmatic.nix`, and `services.kopia` does not exist
+anywhere in `nixos/modules`. Kopia is packaged, not integrated.
 
-NixOS has `services.restic.backups.<name>`; nothing in this fleet uses it yet.
+That matters more here than it would elsewhere. `DESIGN.md` §3.2's argument for
+this whole migration is that **the machine becomes reviewable** — configuration
+in the flake, under CI, in a PR. Hand-rolled systemd units wrapping an
+imperatively-configured kopia repository is precisely the shape being migrated
+*away from*. Kopia is a good program; it is the wrong fit for this fleet's
+premise.
 
-### Both tools fix the thing that annoys about iDrive
+### Where each genuinely wins
+
+| | restic 0.19.1 | borg 1.4.5 | kopia 0.23.1 |
+|---|---|---|---|
+| **Object storage (e2/B2)** | ✅ native | ❌ **none** | ✅ native |
+| **Other backends** | local, SFTP, REST, Azure, GCS, Swift, rclone | local, SSH | SFTP, WebDAV, rclone, local |
+| **NixOS module** | ✅ `services.restic.backups.*` | ✅ `services.borgbackup.jobs.*` | ❌ **none** |
+| **Server-side append-only** | via `rest-server --append-only`; on S3 relies on object lock | ✅ `borg serve --append-only` — enforced | repo-server ACLs; on S3 relies on object lock |
+| **Multiple hosts → one repo** | ✅ supported | ⚠ footgun; prefer a repo per host | ✅ designed for it |
+| **Key custody** | **one secret** (the repo password) | repokey = one secret; keyfile = key **and** passphrase | one secret |
+| **GUI** | — | — | ✅ KopiaUI |
+| **Maturity / community** | large, active | oldest and most battle-tested; borg 2 long in beta | newest, thinnest |
+
+**Borg's real advantage is `borg serve --append-only`** — enforced by the storage
+server, not by a cloud IAM policy you have to trust yourself to have written
+correctly. That is a stronger ransomware guarantee than §3's restricted-key
+approximation. If the append-only property mattered more than the provider
+choice, borg plus rsync.net would be the pick.
+
+**Kopia's real advantage is ergonomics** — KopiaUI, automatic maintenance,
+error-correction options. Tower is headless and the fleet wants declarative
+config, so neither lands.
+
+⚠ **Kopia's automatic maintenance actively fights §3's design.** It runs quick and
+full maintenance on its own schedule, which means the backup credential needs
+delete rights routinely. restic separates cleanly: `backup` needs no delete
+rights at all, and `forget`/`prune` run rarely and from elsewhere with a
+privileged key. That separation is what makes the no-delete credential possible,
+and it is not incidental to the choice.
+
+### Key custody favours restic, mildly
+
+§5 requires a copy of the credential that survives losing every machine. restic's
+model is **one secret** — the repository password, which unwraps the master key —
+so the fireproof-box copy is a passphrase written on paper. Borg's *repokey* mode
+is equivalent, but its *keyfile* mode splits custody in two: the key lives in
+`~/.config/borg/keys` and the passphrase protects it, so losing the machine loses
+the key even if you remember the passphrase. Borg ships `borg key export --paper`
+precisely because that failure is real — a good solution to a problem restic does
+not have.
+
+All three rotate credentials cheaply, which is the property that fixes the iDrive
+annoyance (below).
+
+### Recommendation: restic
+
+Ranked, decisive first:
+
+1. **It talks S3**, so iDrive e2 stays a live option and the provider stays
+   swappable later. Borg does not.
+2. **It has a real NixOS module**, so the backup is reviewable configuration
+   rather than hand-rolled units. Kopia does not.
+3. **It separates backup from prune**, which is what makes the restricted
+   no-delete credential in §3 work at all.
+4. **One tool across every target** — cloud now, a local disk or `rest-server`
+   later — means **one restore procedure to test**, and restores are where backup
+   plans die.
+5. **It scales to the rest of the fleet** if memory-alpha or pegasus ever need
+   offsite, without a repo-per-host rule.
+
+The nixpkgs module also ships `createWrapper`, which generates a `restic-<name>`
+command with the repository and credentials preloaded. Small, but it is the
+difference between a documented restore and a remembered one.
+
+⚠ **The honest cost of choosing restic over borg** is the weaker append-only
+story: an IAM policy and object lock you configured, rather than a server that
+refuses deletes by design. §3 says to verify that policy rather than assume it.
+That is the one place this recommendation should be revisited if it does not hold
+up in practice.
+
+### All three fix the thing that annoys about iDrive
 
 The owner's other iDrive friction is key handling. Consumer backup products
 typically bind the data to the key such that **rotating it means re-uploading
 everything**, and degrade their web restore when private-key encryption is on.
 
-restic and borg both avoid this by construction: the repository is encrypted with
-a master key, and your passphrase merely *wraps* that master key. So
-`restic key add` / `restic key remove`, or `borg key change-passphrase`, rotate
-credentials in milliseconds without touching a byte of stored data.
+restic, borg and kopia all avoid this by construction: the repository is
+encrypted with a master key, and the passphrase merely *wraps* it. So
+`restic key add` / `restic key passwd`, or `borg key change-passphrase`, rotate
+credentials in milliseconds without touching a byte of stored data. This is not a
+discriminator between the three — it is a reason all three beat the status quo.
+
+NixOS has `services.restic.backups.<name>`; nothing in this fleet uses it yet.
 
 ## 5. ⚠ The key custody problem — design this before trusting anything
 
