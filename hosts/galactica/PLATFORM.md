@@ -535,6 +535,52 @@ while the sticker still reads perfectly. That inverts what it is for:
 > with a zeroed or default SAS address, this is how you put the right one back.
 > **Photograph it and keep the photograph** before the card goes into service.
 
+### ⚡ The cold pass — steps 1–3 need no drives, no cables, no load, no thermometer
+
+**Clarified 2026-08-08**, because the ordering above can read as one gated
+procedure and it is not. Everything up to and including identification is
+**thermally free** and can happen the moment the card is in hand:
+
+| Needs | Steps 1–3 (identify) | Step 4 (validate) |
+|---|---|---|
+| Drives attached | ❌ | ✅ |
+| SFF-8087 breakout cables | ❌ | ✅ |
+| Sustained load | ❌ | ✅ |
+| IR thermometer | ❌ | ✅ |
+
+**The chip's heat problem is a sustained-load problem.** POST, boot, and reading
+`lspci` is minutes near idle — the regime where a passive SAS2008 is
+uncontroversial. Leave the case open if it makes you happier; do not wait on a
+thermometer for this.
+
+**What the cold pass answers, with nothing attached:**
+
+- **The enumeration question** — the disqualifying one, and the one only this
+  machine can answer (see below).
+- **The firmware question** — `1000:0072` vs `1000:0073`, and IT-vs-IR from
+  `lsiutil` or the absence of `storcli`/`megacli` recognising it.
+- ⭐ **Whether the crossflash wiped the SAS address.** The controller reports its
+  own address with no disks present, so compare what software says against the
+  `500605B0-07E4-1650` sticker (Step 3b). This is the check that turns that
+  sticker from a curiosity into a verdict, and it costs nothing.
+- ⭐ **The slot electrical widths** (`HARDWARE-MAP.md` §4's open gap). The card is
+  going in anyway — read `LnkCap`/`LnkSta` in whichever slot you use, and if you
+  try two slots you have characterised two. Read the ASM1042 and ASM1064 while
+  the case is open and the gap closes entirely.
+
+⚠ **The real risk on this trip is not heat, it is POST.** A SAS2008 option ROM
+runs at power-on and can lengthen POST noticeably or, on a board with limited
+legacy option-ROM space, hang it. It is fully recoverable by pulling the card —
+but **have IPMI serial-over-LAN open before you power on** (§2), so a hang is
+something you can watch rather than guess at. Do not power-cycle impatiently
+during a first POST that is merely slow.
+
+**Capture a `before` `lspci` too.** §10 notes that Supermicro hides root ports
+with nothing behind them, so a *new root port* should appear once the slot is
+populated — a before/after diff makes that unambiguous rather than a memory test.
+
+**Do not, on this trip:** attach array disks, flash anything, or clear CMOS.
+
 ### Step 4 — test it in Tower first, and additively
 
 > ⚠ **Corrected 2026-08-08.** An earlier revision said "test it on pegasus, not
