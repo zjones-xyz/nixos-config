@@ -206,6 +206,56 @@ one systemd timer and is the difference between a plan and a belief.
 recalled: `restic` **0.19.1**, `borgbackup` **1.4.5**, `kopia` **0.23.1**,
 `rclone` **1.74.4**.
 
+### 🔒 Requirement: the vendor must not be able to decrypt the data
+
+**Owner, 2026-08-07.** Stated as a hard requirement, and it is worth recording
+prominently because it looks like it should drive the provider choice and
+actually does the opposite.
+
+**All three candidate tools already satisfy it, by construction.** restic, borg
+and kopia encrypt on the client, before anything leaves the host. The provider
+receives opaque blobs and no key material — not a promise, not a policy, a
+property of where the encryption happens.
+
+**So this requirement is orthogonal to the provider.** Once the payload is
+ciphertext the storage vendor's trustworthiness stops being load-bearing, which
+means the provider can be chosen on price and key-scoping (§3) with no privacy
+compromise at all. **You do not need a privacy-branded vendor, because you are
+not trusting the vendor with privacy.**
+
+⚠ **This is why Proton Drive is the wrong answer to this specific concern**, not
+the right one. Proton's end-to-end encryption is real, but the key is derived
+from your account password and managed inside Proton's own key infrastructure by
+Proton's own client code. With restic you generate a passphrase that never
+leaves your control, and the tool that uses it is open source, pinned by hash in
+this flake, and built from source. **Holding the key yourself is strictly
+stronger than a vendor holding it on your behalf and promising not to look** —
+and it costs the credential-scoping problem in §4's Proton section to get the
+weaker version.
+
+Three honest caveats:
+
+- **Metadata still leaks a little.** The provider sees total volume, upload
+  cadence and when the repository was last touched. It does **not** see filenames,
+  directory structure or individual file sizes — restic stores everything in
+  opaque fixed-ish pack files with random names, which is if anything better
+  metadata hygiene than a vendor that encrypts a *filesystem* and therefore knows
+  its shape. Traffic analysis remains possible and is almost certainly irrelevant
+  to this threat model.
+- **The property depends on holding the key** — which makes §5's key custody
+  problem load-bearing for privacy as well as recovery. They are different axes:
+  losing the key costs you the data, and leaking it costs you the privacy.
+- **restic's construction is conventional**, not novel — AES-256-CTR with a
+  Poly1305-AES MAC, content-addressed. It has had public scrutiny. ⟨If the exact
+  audit history matters to the decision, read it directly rather than taking this
+  sentence's word for it.⟩
+
+**NixOS strengthens the claim** rather than merely permitting it: the binary
+comes from a pinned, hash-verified source built through the flake, not from an
+auto-updating vendor client that could change what it does with your key between
+one release and the next. That is a real difference from every consumer backup
+product, iDrive included.
+
 ### The two facts that decide it
 
 Everything else is a feature comparison; these two are structural.
@@ -414,8 +464,11 @@ box, can you get `documents` back? Anything less is rehearsing the easy half.
 - **Size the Critical and Precious tiers** (§3) — against the 500 GB ceiling
   rather than to choose a mechanism, which is now settled.
 - **Choose the provider** — e2 or B2; restic makes the choice reversible, so this
-  is not a decision to agonise over. Decide on key-scoping support, not price.
-  ⚠ Proton Drive was evaluated and rejected (§4) — no scoped credentials.
+  is not a decision to agonise over. Decide on key-scoping support, not price,
+  and **not on the vendor's privacy claims** — client-side encryption makes those
+  irrelevant (§4). ⚠ Proton Drive was evaluated and rejected (§4): its E2EE is the
+  weaker form of a property restic already provides, and it offers no scoped
+  credentials.
 - **Verify the no-delete key actually works** with restic on the chosen provider
   (§3). This is the security-relevant one.
 - **Design key custody** (§5) *before* the first backup runs, not after.
