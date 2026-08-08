@@ -88,6 +88,13 @@ Two characteristics worth having on record:
 - **PCIe Gen 4 ×4.** On this board's forced Gen2 (§0) that is roughly 2 GB/s
   assuming the adapter and slot both give ×4; about 3.9 GB/s if the Gen3 test in
   `PLATFORM.md` §6e succeeds. Either is several times the Kingston it replaces.
+  **The Gen 4 is dormant** — this platform has no Gen4 anywhere, the CPU tops out
+  at Gen3 and the C204 at Gen2. Not a bad buy (Gen4 is the current market and is
+  backwards compatible), just not a property this machine can use.
+- ⚠ **A PCH slot would cost more than the halved link suggests**, because that
+  traffic then crosses **DMI 2.0** — also ~2 GB/s, and shared with the onboard SATA
+  carrying the array. Prefer a CPU-attached slot; `PLATFORM.md` §7b has the
+  topology test that distinguishes them.
 
 ### Not a disk, but on the bus
 

@@ -827,7 +827,57 @@ card the x8 slot").
 
 **So the NVMe benefits more from a CPU-attached Gen3 slot than the LSI benefits
 from eight lanes.** Give the NVMe the best slot; the LSI can take a lesser one
-without the array noticing. (`HARDWARE-MAP.md` §1 already records the ~3.9 GB/s
+without the array noticing.
+
+⚠ **Revisited 2026-08-08 — "a lesser slot" hides a second variable, and it bites
+the LSI harder than the NVMe.** The table above compares slot *width and
+generation*. It does not account for **where the slot hangs**, and on this board
+that is the larger effect:
+
+| | CPU-attached | PCH-attached |
+|---|---|---|
+| Link | PCIe **3.0** (Gen3-capable) | PCIe **2.0** only |
+| x4 ceiling | ~3.9 GB/s | ~2.0 GB/s |
+| Path to CPU | direct | **across DMI 2.0** |
+
+**DMI 2.0 is itself only ~2 GB/s, and everything on the PCH shares it** — the six
+onboard SATA ports, both NICs, USB, and any PCH-attached slot. `DESIGN.md` §7
+already puts the **4× 12 TB array on onboard SATA2**, i.e. on the PCH. So a
+PCH-attached slot is not merely half-speed; it is half-speed *contending with the
+array's own traffic*.
+
+**That inverts the priority.** Root-filesystem and `/nix` workloads never approach
+2 GB/s — the NVMe's ceiling is largely theoretical on this machine, and its real
+argument for a CPU slot is latency isolation, not throughput. The LSI's 6–8
+spinners at ~1.5–2 GB/s **do** approach it, and during a SnapRAID sync or scrub —
+the one workload that reads every disk at once — LSI traffic plus four onboard
+array disks would both be crossing a single ~2 GB/s uplink.
+
+**Preferred assignment, if two CPU-attached slots exist: NVMe *and* LSI both
+CPU-attached.** The ASM1042 is the natural PCH occupant — it is x1 and USB 3.0
+tops out near 500 MB/s, so it loses nothing there. The cooler takes whatever
+remains. ⟨Contingent on the widths below.⟩
+
+#### How to tell a CPU slot from a PCH slot — and the trap in the obvious method
+
+⚠ **Do not use `LnkCap` speed for this.** The intuitive test — Gen3 means CPU,
+since the C204 is Gen2-only — is **contaminated by §1**, where `PCI Express Port -
+Gen X` is forced to **Gen2** for the ASM1166, and §6e notes that setting almost
+certainly applies globally rather than per-port. A CPU slot will happily report
+Gen2 because BIOS told it to.
+
+**Use the topology instead — it is immune to the forcing:**
+
+```sh
+lspci -tv            # tree; note the bridge each card sits under
+```
+
+On this platform CPU-attached root ports enumerate as **`00:01.x`** (the PEG
+ports) and PCH root ports as **`00:1c.x`**. A card under `00:01.x` is
+CPU-attached, whatever generation it negotiated. That reading costs one command,
+resolves `HARDWARE-MAP.md` §4's unrecorded-widths gap in the part that actually
+matters, and settles whether the assignment above is even available. **Add it to
+the cold pass** — it is the same trip as the `LnkCap`/`LnkSta` reads. (`HARDWARE-MAP.md` §1 already records the ~3.9 GB/s
 Gen3 figure as conditional on both adapter and slot giving x4.)
 
 ⚠ **Two things to check before committing to that order:**
