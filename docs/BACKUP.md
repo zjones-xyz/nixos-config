@@ -126,6 +126,80 @@ specific provider's key-scoping semantics before relying on it — "supports obj
 lock" on a pricing page is not the same as "restic works correctly against a
 no-delete key on this provider".
 
+## 3b. Monitoring — the fleet already has both halves
+
+**Requirement, owner 2026-08-07: be loud when the budget is approached, and loud
+when something has not checked in for a while.**
+
+Both pieces already run, and — importantly — **they run on hopper, not Tower**:
+
+| Piece | Where | Role here |
+|---|---|---|
+| **ntfy** (`modules/nixos/ntfy.nix`) | hopper, `ntfy.hopper.internal` | Alert sink. Existing pattern in `nut.nix`: `curl` to a topic with priority/tags headers |
+| **Uptime Kuma** (`modules/nixos/uptime-kuma.nix`) | hopper, `kuma.hopper.internal` | **Push monitors** — a dead-man's switch primitive |
+
+⚠ **Keep the monitors off Tower.** A watcher hosted on the machine it watches
+goes down with it and reports nothing, which is the failure mode this whole
+section exists to prevent. hopper is already the right home; do not "simplify"
+by moving them later.
+
+### The three signals
+
+**1. Heartbeat — did the backup run at all?**
+
+An Uptime Kuma **push monitor**: Tower `curl`s the push URL *only on success*, and
+Kuma raises an alert if it does not hear within the window.
+
+**This is the one that matters most, because it fails closed.** Machine off,
+service crashed, timer never fired, a rebuild quietly broke the unit, network
+down — all of them produce silence, and silence is the alarm. Contrast with a
+systemd `OnFailure=` handler, which requires the failing thing to be alive and
+healthy enough to report its own failure. Use both, but trust the heartbeat.
+
+⚠ Set the interval with slack — for a nightly job, something like 26–30 hours
+rather than exactly 24, or ordinary jitter and a slow run will cry wolf. A monitor
+that false-alarms is a monitor that gets muted.
+
+**2. Budget — is the repo approaching 500 GB?**
+
+After each run, `restic stats --mode raw-data`, compared against thresholds and
+posted to ntfy with escalating priority — 80% informational, 90% high, 100%
+urgent. Follow the `nut.nix` curl pattern rather than inventing a second one.
+
+**3. ⚠ Did the backup contain anything? — the failure that defeats both above**
+
+If a source path exists but its filesystem is not mounted, restic will happily
+snapshot an empty directory, **exit 0, ping the heartbeat, and not grow the
+repo**. Heartbeat green, budget quiet, backup worthless. On a host whose data
+lives behind mergerfs and LUKS this is a realistic Tuesday, not an exotic edge
+case.
+
+Guards, best first:
+
+- **`RequiresMountsFor=`** on the backup unit. systemd then refuses to start the
+  job at all if the mount is absent. Declarative, fails closed, no scripting.
+- **A canary file** per source tree, verified present in the latest snapshot.
+- **A file-count delta check** against the previous snapshot, alarming on a large
+  drop.
+
+### The two mechanisms cover each other
+
+Worth noticing, because it is the property that makes this robust rather than
+merely present:
+
+- Budget alerts are **pushed from Tower**, so they fail silently if Tower cannot
+  reach hopper.
+- The heartbeat is **absence noticed by hopper**, so it fires *precisely* when
+  Tower cannot reach hopper.
+
+Each one's blind spot is the other's trigger condition.
+
+### Also worth a timer: the restore-test nag
+
+The Critical tier requires a *tested* restore (§5), and that is the discipline
+that silently never happens. A quarterly ntfy post saying "test a restore" costs
+one systemd timer and is the difference between a plan and a belief.
+
 ## 4. Tool: restic, on one constraint
 
 **The owner's objection to iDrive is specific**: the subscription cannot cover
@@ -209,6 +283,9 @@ box, can you get `documents` back? Anything less is rehearsing the easy half.
 - **Verify the no-delete key actually works** with restic on the chosen provider
   (§3). This is the security-relevant one.
 - **Design key custody** (§5) *before* the first backup runs, not after.
+- **Wire the three signals** (§3b) — Kuma push monitor for the heartbeat, ntfy
+  for the budget thresholds, `RequiresMountsFor=` so an unmounted source cannot
+  produce a green empty backup. Plus the quarterly restore-test nag.
 - ~~**Decide on physical rotation for Tower.**~~ **Closed 2026-08-07** — the
   500 GB cloud budget makes it unnecessary. Kept in §6 as the fallback if the
   Precious tier ever outgrows the budget by more than it is worth paying for.
