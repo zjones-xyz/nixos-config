@@ -8,7 +8,7 @@ storage layout depends on.
 are confirmed dead; the rest of the tiering is still a proposal to argue with.
 Sizes are ⟨TBD⟩ pending a `du -sh /mnt/user/*` pass.
 
-**Triage status: 9 of 34 decided.**
+**Triage status: 11 of 34 decided.**
 
 Dates are UTC.
 
@@ -60,7 +60,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `bambuddy_library` | cache | — | **fsid 103** | public | | 3D printing |
 | `immich_photos` | cache | export | — | public | | 💎 **Precious** |
 | `immich_photos_archived` | cache | export | — | private | `z` | 💎 **Precious** |
-| `books` | cache | export | — | public | | |
+| `books` | cache | export | — | public | | 🛡 **Protected** |
 | `books_old` | cache | export | — | public | | "top level store for BookLore" — ⚠ **suspected** leftover |
 | `calibre_books` | cache | — | — | private | | |
 | `copyparty` | cache | export | — | public | | File-sharing service |
@@ -79,7 +79,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `documents` | export | — | private | `z` | 🔴 **Critical** |
 | `archived_disks` | export | — | **secure** | `z` | Images of retired disks? ⟨confirm⟩ |
 | `ha_backup` | export | — | private | `ha` | Home Assistant backups |
-| `music` | export | — | public | | |
+| `music` | export | — | public | | 🛡 **Protected** |
 | `isos` | export | — | public | | "ISO images" |
 | `domains` | — | — | public | | "saved VM instances", split level 1 |
 | `public` | export | — | public | | |
@@ -271,13 +271,13 @@ contents cannot be inferred from configuration.
 |---|---|---|
 | **Critical** | Everything below, **plus versioning and a tested restore** | **`documents`** |
 | **Precious and Irreplaceable** | Real-time redundancy, checksummed, **+ offsite** | **`immich_photos`**, **`immich_photos_archived`** |
-| **Protected** | Parity. No offsite. | ⟨to populate — see below⟩ |
+| **Protected** | Parity. No offsite. | **`music`**, **`books`** |
 | **Painful to rebuild, small** | Redundancy; cheap because tiny | `appdata`, `arr_config`, `ha_backup` |
 | **Re-acquirable** | Snapshot parity, 24 h lag fine | **`podcasts_audiobookshelf`**, `arr_media`, `arr_managed_data`, `jellyfin`, `isos` |
 | **Regenerable** | Parity optional | `domains` ⟨?⟩, `serenity_time_machine` |
 | ⚙ **Does not migrate** | n/a — no successor concept | **`swap`**, `system` *(proposed)* |
 | 🗑 **Drop** | n/a — deleted before migrating | **`jellyfin_cache`**, **`ai_models`**, **`SHARE`**, **`manyfold_library`**; `appdata_old` + `books_old` suspected |
-| **⟨?⟩ Undecided** | — | `music`, `books`, `calibre_books`, `bambuddy_library`, `partdb`, `syncthing`, `copyparty`, `webdav`, `public`, `minishare`, `inbox`, `arm`, `archived_disks` |
+| **⟨?⟩ Undecided** | — | `calibre_books`, `bambuddy_library`, `partdb`, `syncthing`, `copyparty`, `webdav`, `public`, `minishare`, `inbox`, `arm`, `archived_disks` |
 
 ### Critical vs. Precious — consequence against grief
 
@@ -363,10 +363,17 @@ Precious to Protected is one that stops costing money every month, and the
 honest question for each is not "would I be annoyed" but *"would I pay to get
 this back?"*
 
-`music` is the archetype and is exactly what this tier was invented for: ripped
-from discs still owned is Regenerable, twenty years of accumulation from sources
-that no longer exist is unrecoverable — but for most people that is Protected,
-not Precious. The config cannot tell the difference; only you can.
+**`music` and `books` are the first two entries, 2026-08-07**, and `music` landed
+exactly where the tier was invented to catch it. It had been the standing example
+of a share configuration cannot classify — ripped from discs still owned is
+Regenerable, twenty years of accumulation from sources that no longer exist is
+unrecoverable — and the answer turned out to be neither of the labels that existed
+before Protected did.
+
+⟨**`calibre_books` is adjacent to `books` and still undecided.** Same subject
+matter, different share, one of them private. Worth deciding together rather than
+tripping over the second one later — as with the `books_old` suspected drop, which
+is the third member of that group.⟩
 
 `archived_disks` moves back to undecided on the same reasoning. It was proposed
 as irreplaceable purely because it is `secure` and owner-writable, which says
