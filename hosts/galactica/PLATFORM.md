@@ -543,7 +543,7 @@ procedure and it is not. Everything up to and including identification is
 
 | Needs | Steps 1–3 (identify) | Step 4 (validate) |
 |---|---|---|
-| Drives attached | ❌ | ✅ |
+| Drives attached | ❌ *(but see below — one is now worth it)* | ✅ all of them |
 | SFF-8087 breakout cables | ❌ | ✅ |
 | Sustained load | ❌ | ✅ |
 | IR thermometer | ❌ | ✅ |
@@ -580,6 +580,35 @@ with nothing behind them, so a *new root port* should appear once the slot is
 populated — a before/after diff makes that unambiguous rather than a memory test.
 
 **Do not, on this trip:** attach array disks, flash anything, or clear CMOS.
+
+#### The breakouts shipped with the card (2026-08-08) — so add one disk
+
+With cables in hand, **one spare drawer disk fits inside the cold pass** and buys
+the check that `lspci` cannot give you. A single idle-to-lightly-read disk is
+nowhere near the sustained-load thermal regime, so this does not become step 4.
+
+What it adds:
+
+- ⭐ **Behavioural proof of IT mode.** The disk should appear as a plain
+  `/dev/sdX`, and **`smartctl -a /dev/sdX` should work with no `-d megaraid,N`.**
+  The device ID tells you the firmware personality; this tells you the
+  personality *behaves*, which is the thing you actually depend on.
+- **First entries in the `0P1`…`1P4` mapping** (`docs/DISK-LABELLING.md` §3),
+  established empirically as that section requires — and on an HBA it is the only
+  method, since there is no `ataN` column.
+
+⚠ **Confirm the cables are FORWARD breakout, not reverse.** They are physically
+identical and differently wired: forward runs SFF-8087 *host* → 4× SATA *targets*
+(what an HBA needs); reverse runs 4× SATA host ports → an SFF-8087 backplane.
+**A reverse cable presents as "no disks detected"** — which is exactly the
+symptom you would otherwise blame on a dead card, a bad flash, or §1. Cables
+bundled with an HBA are almost always forward, so this is a glance rather than an
+investigation, but know the failure signature before you are debugging it.
+
+⚠ **Do not use the Samsung 2 TB (`h-8742`) for this.** It carries the HD204UI
+firmware defect where a SMART command issued during a write can corrupt data
+(`docs/DISK-DRAWER.md`), and this test is specifically about polling SMART. Any
+other drawer disk is fine — prefer one that needs burn-in anyway.
 
 ### Step 4 — test it in Tower first, and additively
 
