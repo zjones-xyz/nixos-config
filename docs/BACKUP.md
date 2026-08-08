@@ -74,16 +74,57 @@ partial loss wherever a source has since died. **The irreplaceable artifact is t
 consolidation, not the bytes.** That keeps the tier Precious for a softer reason
 than "only copy", and it means an imperfect backup here is worth a great deal.
 
-⚠ **Sizing gates the mechanism, and does so qualitatively.** Run:
+### ✅ Budget: 500 GB of cloud storage — physical rotation is off the table
+
+**Owner, 2026-08-07.** That settles the mechanism question that sizing was gating,
+and it settles it toward the simpler answer: **cloud only, no drive swap, no new
+habit.**
+
+Roughly $3/month at commodity object-storage rates (~$6/TB/month); iDrive e2 and
+Backblaze B2 are both in that neighbourhood, e2 typically cheaper on an annual
+commitment. Against that, a rotation habit costs a dock, two drives, and a ritual
+that has to survive contact with a busy month — see §6 on why Tower's version of
+that habit is harder than Serenity's.
+
+⚠ **Still measure the tiers**, because the budget is a ceiling, not a fit:
 
 ```sh
 du -sh /mnt/user/immich_photos /mnt/user/immich_photos_archived /mnt/user/documents
 ```
 
-- **Photos under ~1 TB** → put the whole Precious tier in object storage for a
-  few dollars a month and skip physical rotation entirely. No new habit.
-- **Photos well over that** → rotation starts earning its keep, and the air-gap
-  becomes a feature rather than a consolation.
+**Expect the stored size to be close to the source size.** restic dedups and
+compresses, but photos are already-compressed JPEG/HEIC and will store at
+roughly 1:1. `documents` may compress well, and it is small either way. So plan
+as though 500 GB of budget buys about 500 GB of photos.
+
+If the Precious tier overflows the budget, the options in preference order are:
+raise the budget (it is single-digit dollars per 500 GB), cloud the newer
+material and leave the deep archive to the scattered-but-extant originals (§3),
+or reintroduce rotation for the overflow only.
+
+### ⚠ Cloud-only loses the air-gap — buy most of it back with a restricted key
+
+Serenity's rotated drives are air-gapped by construction: a compromised machine
+cannot reach a disk sitting in another building. Cloud-only gives that up, and
+the specific scenario is that something with root on Tower deletes the backups
+before anyone notices.
+
+**Do not give Tower a credential that can delete.** Both B2 and e2 support scoped
+keys and object lock / bucket versioning:
+
+- **Tower's key writes and lists, and cannot delete or overwrite.** restic is
+  happy in this mode for `backup`; it only needs delete rights for `prune` and
+  `forget`.
+- **Run `prune` from elsewhere, rarely** — the admin machine, with a separate
+  privileged key that never lives on Tower.
+- **Enable object lock or versioning** on the bucket so that even a mistaken
+  privileged delete is recoverable for a retention window.
+
+That recovers most of the air-gap benefit for none of the logistics, and it is
+the single highest-value configuration choice in this document. ⚠ Verify the
+specific provider's key-scoping semantics before relying on it — "supports object
+lock" on a pricing page is not the same as "restic works correctly against a
+no-delete key on this provider".
 
 ## 4. Tool: restic, on one constraint
 
@@ -161,15 +202,15 @@ box, can you get `documents` back? Anything less is rehearsing the easy half.
 
 ## 6. Open
 
-- **Size the Critical and Precious tiers** (§3). Gates the mechanism.
-- **Choose the provider** once sized — e2, B2, rsync.net, Hetzner all viable;
-  restic makes the choice reversible.
-- **Verify object lock / bucket versioning** on whichever provider, if restic's
-  append-only approximation is wanted.
+- **Size the Critical and Precious tiers** (§3) — against the 500 GB ceiling
+  rather than to choose a mechanism, which is now settled.
+- **Choose the provider** — e2 or B2; restic makes the choice reversible, so this
+  is not a decision to agonise over. Decide on key-scoping support, not price.
+- **Verify the no-delete key actually works** with restic on the chosen provider
+  (§3). This is the security-relevant one.
 - **Design key custody** (§5) *before* the first backup runs, not after.
-- **Decide on physical rotation for Tower.** ⚠ Unlike Serenity's, this habit
-  requires the *drive* to travel, which is materially harder to sustain than
-  "plug in while you're there". A USB3 dock costs nothing from Tower's SATA port
-  budget (full at 12/12) since USB3 comes off the ASM1042 card.
+- ~~**Decide on physical rotation for Tower.**~~ **Closed 2026-08-07** — the
+  500 GB cloud budget makes it unnecessary. Kept in §6 as the fallback if the
+  Precious tier ever outgrows the budget by more than it is worth paying for.
 - **Survey memory-alpha, hopper and hamilton.** They are blank in §2 because
   nobody has looked, not because they are known to have nothing.
