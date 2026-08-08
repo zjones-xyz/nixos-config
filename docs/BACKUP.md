@@ -647,6 +647,53 @@ unwritten — recorded in §6.
 both are hot-only. The split only bites when Tower arrives, which is the right time
 to be thinking about the photo archive anyway.
 
+#### The mobility argument — the real motivation, and it deserves a better answer
+
+Clarified 2026-08-08: the case for per-service repos was never blast radius or
+retention. It was that **a repo per service makes a service easy to move between
+hosts** — point the new host at the same repo and the history continues. The
+analysis above answered a question that had not been asked.
+
+**The concern is legitimate, and it names a real hazard.** With per-host repos, a
+service that moves from Tower to memory-alpha leaves its history in `tower-hot`
+while new archives land in `memory-alpha-hot`. Split history is merely annoying —
+⚠ **but `tower-hot`'s prune policy keeps running, so the pre-move history ages out
+on schedule.** A service moved in January silently loses its 2026 backups in April.
+That failure is quiet, and nothing in the monitoring design would report it.
+
+**But repo-per-service is not what makes a service portable — the config is.**
+What actually has to travel with a service is its *source-path definition*: which
+`appdata` subtree, which data shares, which database and its dump command. Put that
+in **`/etc/borgmatic.d/<service>.yaml`**, one file per service, and moving a service
+becomes: copy one file to the new host, change the `repositories:` line. That is
+portable whether or not the repo is shared, and it is worth doing regardless.
+
+**And a service stays addressable inside a shared repo** via `archive_name_format`.
+Prefix archives with the service rather than the host and
+`borg list --glob-archives 'partdb-*'` recovers exactly that service's timeline out
+of a repo holding a dozen others. Per-service granularity for *restore* does not
+require per-service repos; it requires naming discipline.
+
+**So the recommendation stands, with the gap named rather than waved away:**
+
+| Want | Mechanism |
+|---|---|
+| Move a service between hosts | per-service `/etc/borgmatic.d/<service>.yaml` |
+| Restore one service from a shared repo | `archive_name_format` prefixed with the service |
+| Keep pre-move history | ⚠ **nothing automatic** — see below |
+
+⚠ **The residual risk is real and has no free fix.** When a service moves, decide
+deliberately what happens to its history in the old repo: accept the prune window
+(usually fine — the overlap is months), or suspend prune on the old repo until the
+new one has enough depth to stand alone. **Whichever, decide it at move time**, not
+after the archives are gone. Borg cannot move archives between repositories; the
+old repo stays readable indefinitely if you simply stop pruning it.
+
+**What keeps this from tipping to per-service is the monitoring cost**, not the
+mobility argument, which is sound. Thirty repos is thirty heartbeats, and §3b's
+design fails toward silence — the gap that hurts is the monitor nobody created.
+Two repos and thirty *config files* gives the portability without that.
+
 **4. borg 2 will eventually mean a repository migration.** Verified: this tree
 ships **borgbackup 1.4.4**, and `borgbackup_2` is **not packaged at all**. So borg
 2 is a future event rather than an imminent one, and there is no decision to make
