@@ -879,7 +879,9 @@ supersedes any disk placement implied above.*
 
 - **BD-ROM → external USB3 enclosure**, off SATA entirely. Note this makes the ASM1042
   load-bearing rather than incidental: the C204 is EHCI only, so that card is the machine's
-  *only* USB3.
+  *only* USB3. ⚠ **Parked as of 2026-08-08** — the interim LSI cooling arrangement may pull
+  the ASM1042 for a slot cooler card, leaving no USB3 host at all. Not a slowdown, a stop.
+  See `PLATFORM.md` §7b, which also notes the budget may not force the removal.
 - **Kingston 120GB retired → 1TB NVMe on a PCIe adapter.** The Kingston is a 2012 SandForce
   SF-2281 from the era those controllers were notorious for sudden death, and it currently
   holds the root filesystem. 1TB also gives `/nix` real room, which matters with this many

@@ -731,6 +731,55 @@ Note this also means **a fan-modded LSI and a returning ASM1166 cannot coexist**
 — five positions against four. They are alternatives anyway, so this is
 confirmation rather than a constraint.
 
+#### Interim plan 2026-08-08: a slot cooler card, ASM1042 out
+
+Owner's call — fit a PCIe **slot cooler card** next to the LSI now and run without
+USB3 until the thermometer arrives. The ordering is right: with no way to measure
+yet, over-cooling is the safe direction, and it unblocks the step-4 load test
+instead of holding it ~2 days for a borrowed instrument.
+
+**It also dissolves the clearance objection this section raised**, because a
+cooler card is *not* the device analysed above. The problem was a 40 mm fan
+strapped to the heatsink, protruding from the component side toward the slot
+above — straight at the NVMe under the agreed order. A separate cooler card never
+touches the heatsink, so **the LSI stays physically 1-slot and "NVMe top, LSI
+below" stops conflicting with cooling.** That was the one open objection to the
+slot assignment; it is now moot for this arrangement.
+
+⚠ **Which means the arithmetic no longer forces USB3 out — check before giving it
+up.** With the LSI back to one position: LSI 1 + cooler 1 + NVMe 1 + ASM1042 1 =
+**4 of 4**. It fits. USB3 is only lost if the cooler is physically thicker than
+one position, or needs an empty neighbour to draw air — both common, neither
+certain. **Worth a look at the actual card before pulling the ASM1042**, since the
+cost of pulling it is larger than "USB is slower for a while" (below).
+
+**What losing the ASM1042 actually costs.** The C204 is EHCI-only, so this card
+is the machine's *only* USB3 (`HARDWARE-MAP.md` §4). Two consequences:
+
+- **The BD-ROM plan is parked, not merely slowed.** `DESIGN.md` §5.5 moves the
+  BD-ROM to an external USB3 enclosure and off SATA permanently. With the card
+  out there is no USB3 host for it.
+- **Anything `usb3-` / `usb3adap-` drops to USB2** — roughly 5× slower. Check this
+  against drawer burn-in before it bites: burn-in over the LSI's own ports is
+  unaffected, but a USB dock would be. At 18 TB of staging against 17.1 TB used
+  (§`DISK-DRAWER.md`), burn-in throughput is not a free variable.
+
+⚠ **Take one load run with the cooler unplugged, on the same trip.** Installing it
+before any measurement means a later clean run proves nothing — a quiet `dmesg`
+would be equally consistent with "the fan is essential" and "the fan was never
+needed", and the machine would carry a permanent slot cost for an unmeasured
+benefit. **This costs nothing and needs no thermometer**: the `mpt3sas` signal
+above is in-band and available now, and a slot cooler is trivially unpowered.
+
+That also reframes what the thermometer is for. It stops answering *"is the LSI
+overheating?"* and starts answering *"how much margin does the cooler buy?"* —
+while the cheaper unplugged-`dmesg` run answers the question that actually decides
+the slot: **can the cooler come out and USB3 go back in permanently?**
+
+**The x1 riser above remains the better endgame either way** — it returns USB3
+without touching the slot stack, and it is the one option where the cooler and the
+ASM1042 coexist regardless of how thick the cooler turns out to be.
+
 #### Slot assignment — NVMe in the top slot, LSI below it
 
 **Owner's plan, 2026-08-08, and it is right on bandwidth grounds** — for a reason
@@ -752,11 +801,13 @@ Gen3 figure as conditional on both adapter and slot giving x4.)
 1. **The electrical widths are still unrecorded** (`HARDWARE-MAP.md` §4), and on
    this board an empty slot does not appear in `lspci` at all. The plan assumes
    the top slot is the fast one — likely, since it is CPU-attached, but assumed.
-2. ⚠ **Fan clearance runs the wrong way for this order.** A heatsink-mounted fan
-   protrudes from the card's component side, which in a conventional tower faces
-   the slot *above* — i.e. straight at the NVMe adapter. **Adjacent is the one
-   arrangement a fan-modded LSI cannot have.** Confirm which side the fan would
-   protrude toward on this card in this chassis before finalising.
+2. ⚠ **Fan clearance runs the wrong way for this order** — *but only for a
+   heatsink-strapped fan.* Such a fan protrudes from the card's component side,
+   which in a conventional tower faces the slot *above*, i.e. straight at the NVMe
+   adapter; adjacent is the one arrangement a fan-modded LSI cannot have.
+   **Resolved for the 2026-08-08 interim plan**, which uses a separate slot cooler
+   card instead: nothing mounts to the heatsink, so the order stands. This caution
+   applies again only if the strapped-fan option comes back.
 
 **If the thermal test says no fan is needed, both concerns evaporate** and the
 plan is unconditionally fine — which is one more reason to measure before

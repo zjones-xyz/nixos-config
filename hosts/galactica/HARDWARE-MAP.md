@@ -204,7 +204,7 @@ directly.
 | Onboard Intel C204 | 6 | **2× 6Gb/s + 4× 3Gb/s** | Confirmed 2026-08-07. Not six alike. Silkscreened `I-SATA0`…`I-SATA5`. |
 | ASM1166 (PCIe) | 6 | 6Gb/s all six | Shares one PCIe link — Gen2 x2 ≈ 1.0 GB/s today, ~1.97 GB/s if it trains Gen3 on the new firmware. Flashed to ECS06 (2021-11-08) on 2026-08-07. |
 | ASM1064 (PCIe x1) | 4 | 6Gb/s | ~500 MB/s shared across all four. Slated for removal under the bare-metal layout. |
-| ASM1042 (PCIe **x1**, unmeasured) | — | USB3 | Not storage, but **load-bearing**: the C204 is EHCI only, so this card is the machine's only USB3, and the BD-ROM enclosure wants it. x1 is the chip's spec and is *well matched* — PCIe 2.0 x1 ≈ 500 MB/s against USB 3.0's own ~500 MB/s ceiling, so there is no bandwidth to reclaim. ⟨Confirm `LnkCap`/`LnkSta`; never read on this machine.⟩ |
+| ASM1042 (PCIe **x1**, unmeasured) | — | USB3 | Not storage, but **load-bearing**: the C204 is EHCI only, so this card is the machine's only USB3, and the BD-ROM enclosure wants it. x1 is the chip's spec and is *well matched* — PCIe 2.0 x1 ≈ 500 MB/s against USB 3.0's own ~500 MB/s ceiling, so there is no bandwidth to reclaim. ⚠ **May be pulled 2026-08-08** for a slot cooler beside the LSI; a x1 riser relocates it instead and is the preferred endgame (`PLATFORM.md` §7b). ⟨Confirm `LnkCap`/`LnkSta`; never read on this machine.⟩ |
 
 ### Measured device-to-port mapping (sysfs, 2026-08-07)
 
