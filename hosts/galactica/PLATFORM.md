@@ -858,6 +858,49 @@ CPU-attached.** The ASM1042 is the natural PCH occupant — it is x1 and USB 3.0
 tops out near 500 MB/s, so it loses nothing there. The cooler takes whatever
 remains. ⟨Contingent on the widths below.⟩
 
+#### A 10G NIC offered 2026-08-08 — it fits, but only by evicting something
+
+A friend has offered a 10G card. It reshapes the slot problem rather than adding
+to it, because **the budget was already exactly full**: LSI 1 + cooler 1 + NVMe 1
++ ASM1042 1 = 4 of 4. A fifth card means something leaves. Realistically the
+ASM1042, making the USB3 loss permanent rather than interim — unless the x1 riser
+above works, which is now the difference between losing USB3 and keeping it.
+
+**⚠ Check the far end before spending a slot on it.** Nothing in this fleet has
+10G today — no switch, no second 10G host recorded anywhere. A free card is only
+free if the path exists, and 10G switching is neither cheap nor cool-running.
+Whether it is SFP+ (DAC, cheap, cooler) or 10GBASE-T (Cat6a, hotter, ~13 W on an
+X540) also changes both cost and the thermal picture beside an already-marginal
+LSI.
+
+**⚠ And be clear about what 10G can actually buy on this array: less than it
+looks.** mergerfs does not stripe — a file lives on exactly one disk, so a
+single-stream read comes off **one spinner at ~250 MB/s ≈ 2 Gb/s**. That is a
+fifth of 10G, and 2.5GbE would already cover it. The card pays off on three things
+only: the NVMe and SSD pools, several concurrent clients, and the one-time
+migration staging copy. It will not make a movie file copy off the array faster.
+
+**Where it does change the calculus is DMI, and it sharpens the rule rather than
+muddying it.** The four onboard array disks are on PCH SATA and cannot move, so
+during a sync they already commit ~1 GB/s of DMI *upstream*. Adding traffic:
+
+| Card on PCH | DMI cost | Verdict |
+|---|---|---|
+| **LSI** (6–8 spinners) | +1.5–2 GB/s **upstream**, atop the onboard disks' ~1 GB/s | ❌ blows a ~2 GB/s budget outright |
+| **10G NIC** serving reads | +1.25 GB/s **downstream** | ⚠ opposite direction, so it does not collide — but ~70% of practical DMI |
+| **NVMe** (root, `/nix`) | small random I/O, nowhere near the ceiling | ✅ the safe concession |
+
+**So the assignment resolves cleanly, and the NVMe is the one that yields:**
+CPU slots to the **LSI** and the **10G NIC**; **NVMe to PCH**. The LSI's case is
+now firm rather than preferential — it is the only device whose PCH placement
+breaks the uplink arithmetic on its own.
+
+⚠ **One physical conflict to watch.** The cooler must sit *adjacent* to the LSI,
+and the LSI is now pinned to a CPU slot. If the two CPU slots are neighbours — the
+usual layout — the cooler could land on the second one and evict the 10G card to
+PCH, undoing the plan. **Seat the LSI in whichever CPU slot has a PCH slot on its
+cooler side**, so the fan position costs a slot the plan was spending anyway.
+
 #### How to tell a CPU slot from a PCH slot — and the trap in the obvious method
 
 ⚠ **Do not use `LnkCap` speed for this.** The intuitive test — Gen3 means CPU,
@@ -877,7 +920,13 @@ ports) and PCH root ports as **`00:1c.x`**. A card under `00:01.x` is
 CPU-attached, whatever generation it negotiated. That reading costs one command,
 resolves `HARDWARE-MAP.md` §4's unrecorded-widths gap in the part that actually
 matters, and settles whether the assignment above is even available. **Add it to
-the cold pass** — it is the same trip as the `LnkCap`/`LnkSta` reads. (`HARDWARE-MAP.md` §1 already records the ~3.9 GB/s
+the cold pass** — it is the same trip as the `LnkCap`/`LnkSta` reads.
+
+⭐ **With the 10G card in play this is no longer a preference to confirm but a
+three-way conflict to arbitrate**, and how many CPU-attached slots exist decides
+it. Two means the assignment above; **one means the 10G card and the NVMe both go
+to PCH**, and the NIC's ~70% DMI figure becomes the binding question rather than a
+footnote. Read the topology before accepting the card. (`HARDWARE-MAP.md` §1 already records the ~3.9 GB/s
 Gen3 figure as conditional on both adapter and slot giving x4.)
 
 ⚠ **Two things to check before committing to that order:**
