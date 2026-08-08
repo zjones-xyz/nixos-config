@@ -259,6 +259,67 @@ rights at all, and `forget`/`prune` run rarely and from elsewhere with a
 privileged key. That separation is what makes the no-delete credential possible,
 and it is not incidental to the choice.
 
+### ⚠ Proton Drive — evaluated 2026-08-07, not recommended
+
+**Short answer: possible with restic via rclone, impossible with borg, and a
+security regression either way.**
+
+Checked against the rclone shipped in this flake's pinned nixpkgs (**1.74.4**),
+reading its own backend documentation rather than recalling:
+
+- ✅ **A `protondrive` backend exists.** So `restic -r rclone:proton:path` is a
+  real configuration, not a hypothetical.
+- ❌ **Borg cannot use it at all.** Borg needs a local filesystem or SSH, so the
+  only route is `rclone mount` and pointing borg at the FUSE mount. Borg does
+  heavy random access against its segment files and expects POSIX locking
+  semantics; running it over a FUSE mount of a reverse-engineered cloud API is a
+  repository-corruption machine. **Do not.**
+
+**The disqualifying problem is credentials, not performance.** rclone's
+protondrive backend authenticates with `--protondrive-username` and
+`--protondrive-password` — *your Proton account password* — plus the 2FA code or
+`--protondrive-otp-secret-key`. Session tokens (`client_access_token`,
+`client_refresh_token`, `client_salted_key_pass`) can be supplied afterwards, but
+the bootstrap needs full account credentials and the tokens grant Drive access.
+
+There is **no scoped application key, no no-delete credential, and no object
+lock.** Compare §3, where the single highest-value configuration choice is giving
+Tower a key that can write but not delete. Proton offers no such thing — and the
+blast radius of a compromised Tower is not "the backup bucket" but *the Proton
+account*: mail, calendar, VPN, everything. That is strictly worse than the status
+quo of having no offsite copy at all in one specific sense — it creates a new
+loss scenario that does not currently exist.
+
+Two further caveats from rclone's own docs, both directly hostile to how restic
+writes:
+
+- **Interrupted uploads leave a draft**, and the next upload to that path
+  "will be reported as a conflict". Default behaviour is to fail with *"a draft
+  exist"*. restic writes many pack files per run, so one network blip poisons a
+  path until cleared. The fix is `replace_existing_draft=true`, whose docs say
+  that with concurrent clients **"the behavior is currently unknown"**.
+- **Metadata caching assumes rclone is the only client.** The docs are explicit
+  that Proton's event system "is yet to be implemented, so updates from other
+  clients won't be reflected in the cache" — so the Proton desktop and mobile
+  apps syncing the same account can desynchronise it.
+
+**And the value proposition cancels out.** Proton Drive's selling point is
+end-to-end encryption. restic already encrypts everything before it leaves the
+host, so the payload is ciphertext either way — you would pay a performance and
+reliability tax for a privacy property you already have, delivered over a less
+tested path.
+
+⚠ **Not as the only offsite copy of the Precious tier.** Against roughly $3/month
+for B2 or iDrive e2 — both first-class S3 targets, and note rclone lists **IDrive**
+by name among its S3 providers — Proton buys nothing this design wants and costs
+the credential scoping the design is built around.
+
+**If the storage is already paid for and going unused**, the defensible shape is
+a *secondary* copy of the small Critical tier only, run from a machine that is
+not Tower, so the Proton credential never lives on the fileserver. That preserves
+provider diversity for the data that matters most without handing a fileserver
+the keys to an entire identity. Even then, a second S3 vendor is simpler.
+
 ### Key custody favours restic, mildly
 
 §5 requires a copy of the credential that survives losing every machine. restic's
@@ -354,6 +415,7 @@ box, can you get `documents` back? Anything less is rehearsing the easy half.
   rather than to choose a mechanism, which is now settled.
 - **Choose the provider** — e2 or B2; restic makes the choice reversible, so this
   is not a decision to agonise over. Decide on key-scoping support, not price.
+  ⚠ Proton Drive was evaluated and rejected (§4) — no scoped credentials.
 - **Verify the no-delete key actually works** with restic on the chosen provider
   (§3). This is the security-relevant one.
 - **Design key custody** (§5) *before* the first backup runs, not after.
