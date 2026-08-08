@@ -8,7 +8,8 @@ storage layout depends on.
 are confirmed dead; the rest of the tiering is still a proposal to argue with.
 Sizes are ⟨TBD⟩ pending a `du -sh /mnt/user/*` pass.
 
-**Triage status: 13 of 34 decided** (1 parked — see §5).
+**Triage status: 19 of 34 decided** (1 parked — see §5). Three under owner review:
+`inbox`, `minishare`, `copyparty`.
 
 Dates are UTC.
 
@@ -45,7 +46,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `arr_config` | services | export | — | public | | *arr stack configuration |
 | `appdata_old` | cache *(prefer)* | — | — | private | | "application data" — ⚠ **suspected** leftover, see §3 |
 | ~~`ai_models`~~ | fastservices | — | — | public | | 🗑 **DROP** — owner-confirmed dead |
-| `arm` | fastservices | export | — | public | | "automatic ripping machine" |
+| `arm` | fastservices | export | — | public | | 🛡 **Protected** — "automatic ripping machine" |
 | ~~`jellyfin_cache`~~ | fastservices | — | — | public | | 🗑 **DROP** — owner-confirmed dead. See §3 |
 | `swap` | fastservices | — | — | public | | ⚙ **Does not migrate** — Unraid furniture, see §5 |
 | `inbox` | cache | export | — | public | | |
@@ -57,7 +58,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `arr_media` | cache | export | **fsid 100** | public | | |
 | `arr_managed_data` | cache | export | **fsid 102** | public | | Mounted by memory-alpha |
 | `jellyfin` | **fastservices** | export | **fsid 101** | public | | Mounted by memory-alpha. ⚠ floor, see §3 |
-| `bambuddy_library` | cache | — | **fsid 103** | public | | 3D printing |
+| `bambuddy_library` | cache | — | **fsid 103** | public | | 🛡 **Protected** — 3D printing |
 | `immich_photos` | cache | export | — | public | | 💎 **Precious** |
 | `immich_photos_archived` | cache | export | — | private | `z` | 💎 **Precious** |
 | `books` | cache | export | — | public | | 🛡 **Protected** |
@@ -65,10 +66,10 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `calibre_books` | cache | — | — | private | | ⏸ 🛡 **Protected (parked)** — see §5 |
 | `copyparty` | cache | export | — | public | | File-sharing service |
 | ~~`manyfold_library`~~ | cache | — | — | public | | 🗑 **DROP** — owner-confirmed dead |
-| `partdb` | cache | — | — | public | | Parts database |
+| `partdb` | cache | — | — | public | | 🛡 **Protected** — parts database. ⚠ paired appdata, §5 |
 | `podcasts_audiobookshelf` | cache | — | — | private | | ✅ **Re-acquirable** |
 | ~~`syncthing`~~ | cache | — | — | private | | 🗑 **DROP** — owner-confirmed junk |
-| `webdav` | cache | — | — | public | | |
+| `webdav` | cache | — | — | public | | 🛡 **Protected** |
 | `serenity_time_machine` | cache | export **(TM)** | — | public | | Mac backups, 1 TB volume limit |
 | `system` | services | — | — | public | | "system data", split level 1 |
 
@@ -77,12 +78,12 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | Share | SMB | NFS | Sec. | Write | Comment |
 |---|---|---|---|---|---|
 | `documents` | export | — | private | `z` | 🔴 **Critical** |
-| `archived_disks` | export | — | **secure** | `z` | Images of retired disks? ⟨confirm⟩ |
+| `archived_disks` | export | — | **secure** | `z` | 🛡 **Protected** — images of retired disks? ⟨confirm⟩ |
 | `ha_backup` | export | — | private | `ha` | Home Assistant backups |
 | `music` | export | — | public | | 🛡 **Protected** |
 | `isos` | export | — | public | | "ISO images" |
 | `domains` | — | — | public | | "saved VM instances", split level 1 |
-| `public` | export | — | public | | |
+| `public` | export | — | public | | 🛡 **Protected** |
 | `minishare` | export | — | public | | |
 | ~~`SHARE`~~ | — | — | public | | 🗑 **DROP** — owner-confirmed dead |
 
@@ -272,13 +273,13 @@ contents cannot be inferred from configuration.
 |---|---|---|
 | **Critical** | Everything below, **plus versioning and a tested restore** | **`documents`** |
 | **Precious and Irreplaceable** | Real-time redundancy, checksummed, **+ offsite** | **`immich_photos`**, **`immich_photos_archived`** |
-| **Protected** | Parity. No offsite. | **`music`**, **`books`**, ⏸ **`calibre_books`** *(parked)* |
+| **Protected** | Parity. No offsite. | **`music`**, **`books`**, **`bambuddy_library`**, **`partdb`**, **`webdav`**, **`public`**, **`arm`**, **`archived_disks`**, ⏸ **`calibre_books`** *(parked)* |
 | **Painful to rebuild, small** | Redundancy; cheap because tiny | `appdata`, `arr_config`, `ha_backup` |
 | **Re-acquirable** | Snapshot parity, 24 h lag fine | **`podcasts_audiobookshelf`**, `arr_media`, `arr_managed_data`, `jellyfin`, `isos` |
 | **Regenerable** | Parity optional | `domains` ⟨?⟩, `serenity_time_machine` |
 | ⚙ **Does not migrate** | n/a — no successor concept | **`swap`**, `system` *(proposed)* |
 | 🗑 **Drop** | n/a — deleted before migrating | **`jellyfin_cache`**, **`ai_models`**, **`SHARE`**, **`manyfold_library`**, **`syncthing`**; `appdata_old` + `books_old` suspected |
-| **⟨?⟩ Undecided** | — | `bambuddy_library`, `partdb`, `copyparty`, `webdav`, `public`, `minishare`, `inbox`, `arm`, `archived_disks` |
+| **⟨?⟩ Undecided** | — | `inbox`, `minishare`, `copyparty` — owner reviewing |
 
 ### Critical vs. Precious — consequence against grief
 
@@ -359,6 +360,17 @@ So the ladder resolves to something with real teeth:
 | **Protected** | yes | no | no | no |
 | **Re-acquirable** | yes | no, and it does not matter | no | no |
 
+**The offsite scope is currently three shares** — `documents`, `immich_photos`,
+`immich_photos_archived` — against nine in Protected. That is the shape you want:
+the tier that costs money every month stayed small while the tier that costs a
+one-time slice of parity absorbed most of the inventory.
+
+⚠ **Protected spans both the array and the SSD pools.** `arm` is `only` on
+fastservices and never touches the array, while the rest are array-resident. So
+Protected is a *policy*, not a place, and `DESIGN.md` §5 has to implement it in
+two locations — SnapRAID parity for the array members, and something else
+entirely for the pool ones, since SnapRAID does not cover SSD pools.
+
 **Keeping the top two tiers small is the whole point.** Every share that moves from
 Precious to Protected is one that stops costing money every month, and the
 honest question for each is not "would I be annoyed" but *"would I pay to get
@@ -379,6 +391,32 @@ is the third member of that group.⟩
 `archived_disks` moves back to undecided on the same reasoning. It was proposed
 as irreplaceable purely because it is `secure` and owner-writable, which says
 something about *access* and nothing about *value*.
+
+### ⚠ Services own data in *two* places — classify both together
+
+Several shares are the bulk half of a service whose configuration and database
+live in `appdata`. `partdb` is the clearest case: this share holds attachments
+and uploads, while the database that gives them meaning sits under
+`/mnt/user/appdata/partdb`. The same shape applies to BookLore (`books`),
+Audiobookshelf (`podcasts_audiobookshelf`), Immich (`immich_photos`), and
+`copyparty`.
+
+**Restoring one without the other gives you half a service.** For a media library
+that is recoverable — the files are still files, and a rescan rebuilds the index.
+For something like a parts database it is not: the attachments survive as a heap
+of unlabelled files with nothing left to say what any of them belong to.
+
+> **Rule: a service's `appdata` subtree inherits the highest tier of any data
+> share it indexes.**
+
+This is the other half of the per-container `appdata` pass in §3, and it gives
+that pass its ordering — do the data shares first, then walk `appdata` assigning
+each container the tier its data already earned. It also means `appdata` cannot
+carry a single tier, which is the point §3 makes from the other direction.
+
+⚠ `appdata` is currently proposed as *Painful to rebuild, small*. Under this rule
+it contains at least one Critical-adjacent and one Precious-adjacent subtree, so
+that whole-share tier is a placeholder and not a decision.
 
 ### ⏸ Parked — provisional classifications, deliberately deferred
 
