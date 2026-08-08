@@ -609,21 +609,43 @@ of them*, *not* different sources per repo. Per-service would need separate file
 under `/etc/borgmatic.d/`. That part is clean — it is the operational surface, not
 the mechanism, that costs.
 
-**The split that does pay is churn and retention, not service.** Two repos per host:
+#### ✅ Decision: split by churn and retention — a **hot** and a **cold** repo
+
+Owner's call, 2026-08-08. The boundary is *size and churn*, not service:
 
 | Repo | Contents | Why separate |
 |---|---|---|
-| **hot** | documents, database dumps | Small, high churn, long *versioned* retention, runs nightly |
+| **hot** | documents, database dumps, config | Small, high churn, long *versioned* retention, runs nightly |
 | **cold** | `immich_photos` and friends | Hundreds of GB, near-immutable, needs far fewer versions |
 
 **The operational reason is `check` and `prune`, which walk the whole chunk
 index.** Mixing hundreds of GB of near-immutable photos with nightly dumps drags
-the photo archive through every integrity check and every prune, forever. That is a
-*size and churn* boundary, not a service one — and it happens to fall out of the
-tier work in `SHARES.md` §5 for free, since Critical and Precious already differ in
-exactly these properties.
+the photo archive through every integrity check and every prune, forever. The
+boundary also falls out of the tier work in `SHARES.md` §5 for free, since Critical
+and Precious already differ in exactly these properties.
 
-Two repos per host, three hosts, is six — tractable to monitor. Thirty is not.
+⚠ **It is not "two repos per host" — it is hot everywhere, cold only where a large
+near-immutable tier exists.** On present knowledge that is Tower alone:
+
+| Host | Repos | Note |
+|---|---|---|
+| galactica / Tower | `tower-hot`, `tower-cold` | The immich shares are the only cold tier in the fleet |
+| pegasus | `pegasus-hot` | No large immutable tier known; add cold only if the survey finds one |
+| memory-alpha | `memory-alpha-hot` | ⚠ scope **unsurveyed** — see below |
+
+**Four repos, not six.** Add a cold repo when a host actually grows one, rather
+than provisioning empty ones — an empty repo still needs a heartbeat, and a
+heartbeat on a repo that legitimately never grows is a monitor that can only ever
+cry wolf.
+
+**What this decision now owes:** the two repos exist *to have different retention*,
+so leaving both on one policy would spend the operational cost and buy nothing.
+Concrete `keep-daily`/`keep-weekly`/`keep-monthly` numbers per class are still
+unwritten — recorded in §6.
+
+⚠ **It costs nothing for the memory-alpha and pegasus work starting now**, since
+both are hot-only. The split only bites when Tower arrives, which is the right time
+to be thinking about the photo archive anyway.
 
 **4. borg 2 will eventually mean a repository migration.** Verified: this tree
 ships **borgbackup 1.4.4**, and `borgbackup_2` is **not packaged at all**. So borg
@@ -1064,6 +1086,10 @@ box, can you get `documents` back? Anything less is rehearsing the easy half.
 - **Turn on BorgBase's own inactivity alerting** (§3), as a heartbeat that does
   not depend on hopper being up — the one gap a self-hosted watcher cannot cover.
 - **Decide pegasus's target** (§4b) — borgmatic now, or iDrive until renewal.
+- **Retention numbers for the hot and cold classes** (§4). The hot/cold split was
+  taken on 2026-08-08 *because* the two want different policies; until the numbers
+  differ, the split is cost without benefit. Critical requires versioning, so hot
+  needs real depth; cold is near-immutable and needs far less.
 - **Work out a dump path per database** (§4d) before the first backup runs. A
   file-level copy of a live database is the most common way a backup turns out
   worthless, and it is also the migration's prerequisite.
