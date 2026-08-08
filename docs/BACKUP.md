@@ -674,13 +674,33 @@ Prefix archives with the service rather than the host and
 of a repo holding a dozen others. Per-service granularity for *restore* does not
 require per-service repos; it requires naming discipline.
 
-**So the recommendation stands, with the gap named rather than waved away:**
+#### ✅ Decision: hot/cold repos, **per-service borgmatic configs**
+
+Owner's call, 2026-08-08. The repo layout stays hot/cold; the *unit of
+configuration* is the service.
 
 | Want | Mechanism |
 |---|---|
 | Move a service between hosts | per-service `/etc/borgmatic.d/<service>.yaml` |
 | Restore one service from a shared repo | `archive_name_format` prefixed with the service |
 | Keep pre-move history | ⚠ **nothing automatic** — see below |
+
+⚠ **`archive_name_format` is load-bearing here, not cosmetic — getting it wrong
+deletes data.** Several configs write into one repo and each runs its own prune.
+borgmatic scopes prune and check to the archives matching a config's
+`archive_name_format` (deriving `match_archives` from it), and that is exactly what
+keeps `partdb`'s prune from aging out `immich`'s archives. **So every service needs
+a distinct format** — `partdb-{now:%Y-%m-%dT%H:%M:%S.%f}` rather than borgmatic's
+`{hostname}-…` default, under which every config on a host produces
+identically-shaped names and each prune would consider the others' archives its own.
+
+⚠ **Verify that before trusting it**, rather than on the strength of this
+paragraph: the pinned tree ships **borgmatic 2.1.5**, and how `match_archives` is
+derived has moved across borgmatic versions. The test is cheap and belongs in the
+pilot (§6.6) — write archives from two configs into one repo, run `prune --dry-run`
+on one, confirm the other's archives are not listed for deletion. **This is the
+single highest-consequence unverified assumption in the backup design**, because
+its failure mode is silent deletion of a *different* service's history.
 
 ⚠ **The residual risk is real and has no free fix.** When a service moves, decide
 deliberately what happens to its history in the old repo: accept the prune window
