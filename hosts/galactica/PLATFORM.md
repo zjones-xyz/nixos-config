@@ -678,7 +678,9 @@ them, and the HBA needs eight ports under sustained load. Running both at once
 tests each with the other and costs one setup instead of two. Watch for:
 
 - disks enumerating individually, with SMART passthrough, no RAID abstraction
-- `dmesg | grep -i mpt3sas` — resets or timeouts under load are disqualifying
+- `dmesg | grep -i mpt3sas` — resets or timeouts under load are disqualifying.
+  ⚠ Disqualifying when present; **not reassuring when absent**, and never a
+  temperature reading — see the thermal block below.
 - controller temperature: **SAS2008 expects server airflow and runs hot
   passively**
 
@@ -695,9 +697,34 @@ in *MegaRAID* mode, which is the personality you do not want. So the practical
 signals are indirect and worth stating so nobody hunts for a sensor that is not
 there:
 
-- `dmesg | grep -i mpt3sas` under sustained load — resets, timeouts or bus faults
-  appearing only when hot is the real thermal symptom
-- an IR thermometer or a careful touch on the heatsink after a long run
+- `dmesg | grep -i mpt3sas` under sustained load — IOC faults, diag resets, task
+  aborts. ⚠ **Read the next block before treating this as a thermal test**; it is
+  much weaker than it looks.
+- an IR thermometer, or a careful touch on the heatsink after a long run
+
+⚠ **`dmesg` cannot detect an overheating SAS2008, and it is important not to use
+it as if it could.** Corrected 2026-08-08 after the claim was overstated in this
+section. Two independent problems, and the second is the dangerous one:
+
+- **Not specific.** The driver has no temperature to report on this card. The
+  `MPI2_EVENT_TEMP_THRESHOLD` event that produces real "Temperature Threshold
+  exceeded" lines in `mpt3sas` is a SAS3-era (12 Gb, SAS3008 and later) feature;
+  SAS2008 IT firmware does not raise it. So heat never appears *as heat* — only as
+  IOC faults, diag resets and aborts, which are equally what a marginal PCIe link,
+  a bad SFF-8087 cable, a failing drive or a power problem produce. A fault tells
+  you something is wrong, not that it is hot.
+- **Not symmetric, and this is the trap.** ⚠ **Silence is not evidence of a safe
+  temperature.** These cards run happily at 90–100 °C and fault at none of it. The
+  failure this cooling is meant to prevent is not "resets when hot" — it is
+  cumulative degradation and a card that dies months later, having logged nothing
+  at all. A clean `dmesg` after a load run is close to zero information about
+  thermal margin.
+
+**So an IR thermometer is not a nicety here; it is the only real measurement**,
+and the heatsink touch test is the only free approximation (can't hold a finger on
+it for five seconds ≈ over ~60 °C). Free and worth one attempt on the cold pass:
+check whether `sas2ircu 0 DISPLAY` or `lsiutil` surfaces any temperature field on
+this firmware — expect nothing, but it costs a command.
 
 **If the fan is needed, it makes the card physically 2-slot.** A 40 mm fan
 strapped to the heatsink protrudes into the neighbouring slot's space, so the LSI
@@ -764,17 +791,24 @@ is the machine's *only* USB3 (`HARDWARE-MAP.md` §4). Two consequences:
   unaffected, but a USB dock would be. At 18 TB of staging against 17.1 TB used
   (§`DISK-DRAWER.md`), burn-in throughput is not a free variable.
 
-⚠ **Take one load run with the cooler unplugged, on the same trip.** Installing it
-before any measurement means a later clean run proves nothing — a quiet `dmesg`
-would be equally consistent with "the fan is essential" and "the fan was never
-needed", and the machine would carry a permanent slot cost for an unmeasured
-benefit. **This costs nothing and needs no thermometer**: the `mpt3sas` signal
-above is in-band and available now, and a slot cooler is trivially unpowered.
+**Just leave the cooler in — do not try to measure your way out of it.**
+⚠ Corrected 2026-08-08: an earlier version of this block proposed a load run with
+the cooler unplugged, watching `dmesg`, as a free way to decide whether the fan was
+needed. **That test does not work** — see the asymmetry above. A quiet log would
+have been read as "the fan is unnecessary" when it is equally consistent with a
+card sitting at 95 °C and degrading silently.
 
-That also reframes what the thermometer is for. It stops answering *"is the LSI
-overheating?"* and starts answering *"how much margin does the cooler buy?"* —
-while the cheaper unplugged-`dmesg` run answers the question that actually decides
-the slot: **can the cooler come out and USB3 go back in permanently?**
+The decision is asymmetric in a way that settles it without measurement. The
+cooler costs one slot, and possibly USB3 — recoverable via the x1 riser above.
+Running hot costs the card, discovered late, plausibly taking array availability
+with it. **A cheap, reversible mitigation against an expensive, silent, deferred
+failure is worth keeping even unmeasured.**
+
+That leaves the thermometer a genuinely useful job, just not the one previously
+stated. It should not ask *"can the cooler come out?"* — assume it cannot — but
+**"is the card in a safe range even with the cooler in?"** That question is
+actionable: a heatsink still hot *with* airflow means the case has an airflow
+problem the cooler is not solving, and no amount of slot juggling fixes it.
 
 **The x1 riser above remains the better endgame either way** — it returns USB3
 without touching the slot stack, and it is the one option where the cooler and the
