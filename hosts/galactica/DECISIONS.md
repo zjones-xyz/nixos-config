@@ -219,6 +219,77 @@ wiped — `zpool import -N` for a look first if anything on it is wanted.
 
 ---
 
+## 8. The no-parity window is accepted for media — and measurement made it a priced bet
+
+**Owner, 2026-08-08:** *"For the arr managed media, I'm willing to roll the dice on
+attempting an in-place conversion, understanding that I won't have parity
+protection for a bit."*
+
+That is `DESIGN.md` §6.1's primary path, so it overrides nothing — what it settles
+is the **residual risk** left after §6.3's starred mitigation. The window is steps
+11–13: **~12–24 h with no parity of any kind**, from the first write under NixOS
+until `snapraid sync` completes. It is unavoidable in any in-place conversion,
+because valid parity cannot exist for a layout that does not yet exist.
+
+**What the decision does not cover, and this is the part worth being precise
+about.** The window does not discriminate by share, and the array holds three
+tiers, not one:
+
+| Tier | Exposed? | Covered by |
+|---|---|---|
+| `arr_media`, `arr_managed_data`, `jellyfin`, `podcasts_audiobookshelf`, `copyparty` | yes | **this decision** — genuinely re-acquirable |
+| `documents`, `immich_photos`, `immich_photos_archived` | yes | Phase 0 step 2 — offsite to BorgBase *before* the window opens |
+| `music`, `books`, `partdb`, `webdav`, `bambuddy_library`, `serenity_time_machine`, `public`, `archived_disks` | yes | **the parachute** — Protected has no offsite copy by tier design and is not re-acquirable |
+
+The middle row is why Phase 0 comes first; the bottom row is why a parachute still
+exists at all.
+
+### The measurement that resized everything
+
+**Measured on Tower 2026-08-08**, per-share, splitting array-resident from
+pool-resident bytes — because only array-resident data is exposed by the array
+having no parity:
+
+| | Size |
+|---|---|
+| **Protected, array-resident — the parachute** | **2.1 TiB** |
+| Critical + Precious, all-in — the offsite scope | 215.6 GiB |
+| `appdata`, entirely pool-resident | 76.1 GiB |
+| **All non-media, all-in** | **2.4 TiB** |
+
+**Against 17.1 TB used, the non-media data is 2.4 TiB.** Every version of the
+staging plan before this sized the parachute at the whole array and then argued
+about whether ~18 TB of drawer disks covered 17.1 TB. That argument is retired,
+not resolved — the question was wrong.
+
+Consequences, all of which follow from the one number:
+
+- **The parachute is one disk.** It lands on pegasus's `h-XDAS` (3 TB Toshiba,
+  empty, `hosts/pegasus/HARDWARE-MAP.md`), not on drawer disks. Off-box is
+  strictly better than in-Tower — it survives a PSU or controller event, not only
+  a single-disk failure — and it costs **zero Tower SATA ports**, which matters
+  against a budget with zero headroom.
+- ⚠ **`h-XDAS` must be LUKS before it holds anything.** It is unencrypted today.
+  Tower's data disks are LUKS, so copying the Protected tier onto bare btrfs
+  strips 2.1 TiB back to plaintext at rest. Same shape as the SnapRAID parity trap
+  in `DESIGN.md` §5.5 — a property that held under the old arrangement and silently
+  does not survive the new one. Free to fix while the partition is empty.
+- **The 2 TB drawer disks stay in the drawer**, permanently rather than for now.
+  The port-budget conflict between staging and the step-7 ASM1064 removal never
+  materialises.
+- **The three 4 TB disks are never double-booked**, so the photo tier lands on its
+  own schedule rather than after `snapraid sync`.
+- **"Winnow first" reverts to a pure optimisation** — shorter sync, shorter
+  window. It was promoted to *contingent* only by the 5% margin, which no longer
+  exists. Measuring the four confirmed drops is no longer load-bearing.
+
+⚠ **`h-XDAS` has never been health-tested**, and `DISK-DRAWER.md`'s rule applies
+unchanged: an untested spare is a guess, and the moment you discover it is bad is
+the worst possible one. It is now the single point of failure for the whole
+Protected tier during the window, which raises rather than lowers the bar.
+
+---
+
 ## Carried forward from the VFIO plan
 
 Constraints and findings that were established under the previous design and
@@ -366,9 +437,11 @@ re-derive why it stopped applying.
   the data** — which is what rules out the existing iDrive subscription for this
   purpose.
 
-- **Staging capacity.** Three 4 TB disks are available for the migration, which
-  is not enough for everything at once; the plan assumes *arr* media is winnowed
-  to fit. `DESIGN.md` §6.
+- ~~**Staging capacity.**~~ **Closed 2026-08-08 — the question was wrong.** The
+  plan sized staging against the whole 17.1 TB array; measurement put non-media
+  data at **2.4 TiB**, of which the parachute is **2.1 TiB**. One disk covers it,
+  and the owner's decision to accept the exposure window for media is what makes
+  media not need covering. See §8; the target is pegasus's `h-XDAS`.
 - ⭐ **The pilot — `partdb` on memory-alpha.** `DESIGN.md` §6.6. Wire a small
   service for backup, then test-migrate and restore it before galactica exists.
   `partdb` is the right subject rather than an arbitrary one: it is the service

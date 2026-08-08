@@ -903,9 +903,13 @@ supersedes any disk placement implied above.*
   >    options and their costs are tabulated in `DISK-DRAWER.md`; this is a live decision,
   >    not a settled one. **Whatever else happens, do not put SnapRAID parity on an EFAX**
   >    — scattered parity writes are DM-SMR's worst case.
-  > 2. **Staging capacity is ~20 TB, not 12 TB**, counting the 2 TB disks. That likely
-  >    removes the need to winnow *arr* media before the migration (§6). A staging copy is
-  >    sequential, which SMR handles fine.
+  > 2. ~~**Staging capacity is ~20 TB, not 12 TB**, counting the 2 TB disks.~~
+  >    **Superseded 2026-08-08 — staging capacity is not the constraint and never
+  >    was.** Measurement put non-media array data at 2.4 TiB, so the parachute is
+  >    **2.1 TiB on one off-box disk**, not a multi-disk staging pool (§6.3,
+  >    `DECISIONS.md` §8). **The 2 TB drawer disks stay in the drawer permanently**,
+  >    which is what keeps the port budget below closed rather than colliding with
+  >    the step-7 ASM1064 removal.
   >
   > Also flagged there: the Samsung 2 TB (`h-8742`) has the 2010-era HD204UI firmware
   > defect where a SMART command during a write can corrupt data. Check its firmware
@@ -1154,38 +1158,49 @@ The original three, still valid:
   before migrating. Less data means a shorter initial sync means a shorter window, and it is
   free. This is the honest use of the "re-acquirable" property: not as a reason to skip
   parity, but as a reason to carry less.
-- **The staging disks are your parachute, not your vehicle.** Rather than trying to stage
-  24 TB (impossible), use them to hold **the subset you would most hate to re-acquire** —
-  the stuff with poor retention, hand-curated collections, anything not trivially
-  re-grabbable. Copy it there before step 11 and keep it until step 13 completes. That
-  converts "a disk dies during the window" from a real loss into an inconvenience.
+- **The parachute is 2.1 TiB and lives on another machine.**
 
-  *Updated 2026-08-07, and both halves of the arithmetic moved in the same direction.*
-  The parachute is bigger than this section assumed — three 4 TB and the usable 2 TB
-  disks, not 12 TB (`docs/DISK-DRAWER.md`). And the load is smaller: Unraid's
-  Main tab reports **17.1 TB used of 24 TB**, not the 24 TB the brief implied.
+  > **Rewritten 2026-08-08 from measurement.** Every earlier version of this bullet
+  > sized the parachute against the whole array and then argued about whether ~18 TB
+  > of drawer disks covered 17.1 TB. **That argument is retired rather than
+  > resolved — the question was wrong.** The owner's decision to accept the window
+  > for *arr* media (`DECISIONS.md` §8) means media does not need covering, and
+  > per-share measurement put everything that *does* at 2.4 TiB all-in.
 
-  **So it fits — but revised 2026-08-08, it fits by less than it looked.** The Samsung
-  `h-8742` is now archival and out of the pool (HD204UI firmware defect), which takes
-  staging from ~20 TB to **~18 TB**. Against 17.1 TB that is a **~0.9 TB margin, about
-  5%**, where 20 TB looked like ~17%.
+  The window does not discriminate by share, so what needs a parachute is what is
+  **array-resident, not re-acquirable, and has no offsite copy** — which is exactly
+  the Protected tier. Measured on Tower 2026-08-08:
 
-  **The parachute still covers the whole array rather than a chosen subset**, which is
-  the conclusion that matters. But two things change:
+  | | Size | Covered by |
+  |---|---|---|
+  | **Protected, array-resident** | **2.1 TiB** | **the parachute** |
+  | Critical + Precious, all-in | 215.6 GiB | Phase 0 step 2, offsite |
+  | `appdata` | 76.1 GiB | pool-resident — not exposed at all |
 
-  - ⚠ **The four confirmed drops become load-bearing again**, not merely tidy. `SHARE`,
-    `manyfold_library`, `syncthing` and `minishare` are array-resident, and at a 5%
-    margin their combined size may decide whether staging fits. **`du -sh` them before
-    deleting** — that number now feeds a decision.
-  - **"Winnow first" is contingent rather than optional.** This section previously
-    demoted it from precondition to optimisation on the 20 TB figure. At 18 TB it is
-    neither; measuring the drops resolves which it is.
+  **Target: pegasus's `h-XDAS`** — a 3 TB Toshiba, empty, 2.34 TiB usable on its
+  btrfs partition (`hosts/pegasus/HARDWARE-MAP.md`). That is ~10% headroom, and a
+  400 GB exfat partition is reclaimable if more is wanted. Copy before step 11,
+  keep until step 13 completes.
 
-  ⚠ Two caveats before relying on that. None of the drawer disks has been tested — see
-  the burn-in note in `PLATFORM.md` §12 before trusting one with the only copy of
-  anything. And the fit is 17.1 into ~20, which is comfortable but not generous; it
-  assumes every drawer disk is healthy and usable, including the four shingled ones and
-  the Samsung with the firmware defect.
+  **Off-box is better than in-Tower, not merely equivalent.** A parachute on
+  pegasus survives a PSU or controller failure rather than only a single-disk
+  failure, and it costs **zero Tower SATA ports** — which matters against §5.5's
+  budget, where staging disks would otherwise have collided with the step-7
+  ASM1064 removal.
+
+  ⚠ **LUKS it first.** `h-XDAS` is unencrypted. Tower's data disks are LUKS, so
+  copying the Protected tier onto bare btrfs strips 2.1 TiB back to plaintext at
+  rest on a machine in another room. Same shape as the parity-disk trap in §5.5.
+  Free now, while the partition is empty.
+
+  ⚠ **It has never been health-tested**, and it is now the single point of failure
+  for the whole Protected tier during the window. `smartmontools` is not installed
+  on pegasus; `nix shell nixpkgs#smartmontools -c smartctl -a /dev/sdb` costs
+  nothing. `DISK-DRAWER.md`'s rule stands: an untested spare is a guess.
+
+  **The copy is network-bound**, not SATA-bound — roughly 5–6 h for 2.1 TiB at
+  1 GbE, and it must finish before step 11. A scheduling input, not a blocker.
+  ⟨`ethtool enp42s0` for the real figure.⟩
 
 ### 6.4 If in-place conversion turns out not to be possible
 

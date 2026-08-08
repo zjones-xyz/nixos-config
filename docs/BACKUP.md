@@ -91,19 +91,40 @@ the simpler answer: **cloud only, no drive swap, no new habit.**
 ⟨Take the actual monthly figure from BorgBase's current plan page rather than
 from this document — it is not something to record here and let rot.⟩
 
-⚠ **Still measure the tiers**, because the budget is a ceiling, not a fit:
+### ✅ Measured 2026-08-08 — the tier is 215.6 GiB, and the budget is not tight
 
-```sh
-du -sh /mnt/user/immich_photos /mnt/user/immich_photos_archived /mnt/user/documents
-```
+~~⚠ Still measure the tiers, because the budget is a ceiling, not a fit.~~
+**Done.** Measured on Tower per-share, splitting array-resident from pool-resident
+bytes:
+
+| Scope | Size |
+|---|---|
+| **Critical + Precious** — `documents`, `immich_photos`, `immich_photos_archived` | **215.6 GiB** (≈231 GB) |
+| `appdata`, entirely pool-resident | 76.1 GiB |
+| Both together | ≈292 GiB |
+
+**That is roughly 23% of the 950 GB plan**, or 31% with all of `appdata` folded in.
+The sizing anxiety this section was written under does not survive the
+measurement — but **the budget is not therefore oversized**, for three reasons
+worth stating before anyone downsizes it:
+
+- **Critical gets versioning** (§tiers), so `documents` occupies more than its
+  source size in the repo and grows with every retained version.
+- **pegasus and memory-alpha draw on the same budget** — §8 notes their repos
+  compete with Tower's photos rather than being billed separately.
+- Photos are the tier that grows without anyone deciding to grow it.
 
 **Expect the stored size to be close to the source size.** borg dedups and
 compresses, but photos are already-compressed JPEG/HEIC and will store at roughly
-1:1. `documents` may compress well, and it is small either way. So plan as though
-950 GB of budget buys about 950 GB of photos.
+1:1. `documents` may compress well, and it is small either way.
 
-If the Precious tier overflows the budget, the options in preference order are:
-raise the budget (BorgBase sells larger plans), cloud the newer material and
+**The paired-appdata rule gets cheaper as a result.** `SHARES.md` §5 requires a
+service's `appdata` to travel with the data it indexes; at 76.1 GiB for *all*
+of it, there is no need to carve out per-service subtrees — back up the whole
+share and the rule is satisfied by construction.
+
+If the Precious tier ever overflows the budget, the options in preference order
+are: raise the budget (BorgBase sells larger plans), cloud the newer material and
 leave the deep archive to the scattered-but-extant originals (§3), or reintroduce
 rotation for the overflow only.
 

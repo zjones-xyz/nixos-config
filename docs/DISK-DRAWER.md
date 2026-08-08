@@ -251,28 +251,38 @@ disks stays readable throughout. The operational path is fiddly — `snapraid fi
 targets one mount point, so restoring across several disks means pointing it at a
 mergerfs pool of them — and it is untested.
 
-**This is roughly double what was assumed**, and it moves two things:
+**This is roughly double what was assumed.** It once moved two things; after the
+2026-08-08 measurement it moves one — the photo tier — and the staging bullet
+below is kept struck through rather than deleted, because the reasoning that
+produced it was sound and only became irrelevant when a real number arrived:
 
-- **Staging for the migration.** `hosts/galactica/DESIGN.md` §6 assumes three
-  4 TB disks and therefore that *arr* media must be winnowed to fit 12 TB. With
-  the 2 TB disks that rises substantially before touching the 1 TB class. SMR is
-  not a problem here: a staging copy is one long sequential write.
+- ~~**Staging for the migration.**~~ 🗑 **Retired 2026-08-08 — the drawer has no
+  role in the migration's primary path.** Every earlier revision of this bullet
+  computed aggregate drawer capacity against Tower's 17.1 TB and argued about the
+  margin. **The arithmetic was answering the wrong question.**
 
-  ⚠ **Revised 2026-08-08 — it is 18 TB, not 20 TB**, because `h-8742` is archival
-  and no longer counts (three 4 TB + **three** usable 2 TB). Against Tower's
-  **17.1 TB** used that is a **~0.9 TB margin, about 5%** — where the 20 TB
-  figure looked like ~17%. The conclusion survives but stops being comfortable,
-  and two things follow:
+  Two things settled it. The owner accepted the migration's no-parity window for
+  *arr* media (`hosts/galactica/DECISIONS.md` §8), so media does not need staging.
+  And per-share measurement on 2026-08-08 put everything that *does* — the
+  Protected tier, array-resident, not re-acquirable, no offsite copy — at
+  **2.1 TiB**, with all non-media array data at 2.4 TiB.
 
-  **The four confirmed drops become load-bearing again.** `SHARE`,
-  `manyfold_library`, `syncthing` and `minishare` are array-resident and already
-  queued for deletion; at a 5% margin their combined size may decide whether
-  staging fits at all. ⚠ `du -sh` them **before** deleting — that figure now
-  feeds a decision rather than merely informing one.
+  **One disk covers it, and it is not one of these.** The parachute lands on
+  pegasus's `h-XDAS` (3 TB Toshiba, empty — `hosts/pegasus/HARDWARE-MAP.md`),
+  off-box, costing zero Tower SATA ports. **The 2 TB disks stay in this drawer
+  permanently**, not pending a migration window.
 
-  **And "winnow first" moves back toward the middle.** `DESIGN.md` §6.3 demoted
-  it from precondition to optimisation on the strength of the 20 TB figure. At
-  18 TB it is neither — call it *contingent*, resolved by measuring the drops.
+  ⚠ **One exception, and it is a real one.** `DESIGN.md` §6.4 — the copy-based
+  fallback if in-place conversion proves impossible — genuinely does need bulk
+  scratch, because there you are evacuating and reformatting 12 TB disks one at a
+  time rather than converting them in place. **Aggregate drawer capacity still
+  enables that path**, and the figures below still apply to it. What is retired is
+  the drawer's role in the *primary* path, which copies 2.1 TiB, not 17.1 TB.
+
+  Worth keeping the correction visible rather than deleting it: the 12 → 20 → 18 TB
+  sequence was three careful revisions of a number that never mattered to the path
+  actually being taken. Measuring the real requirement took one command and
+  replaced all of them.
 - **The photo tier.** Two 4 TB disks in btrfs raid1 remains the shape, but the
   recording-technology split above means the pair cannot be all-CMR without
   buying a disk. See the options table.
