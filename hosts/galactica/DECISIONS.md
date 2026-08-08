@@ -267,11 +267,10 @@ re-derive why it stopped applying.
   path; that was inferred from this repo's silence and was simply wrong.
 
   **Tower is the machine with no offsite copy.** Its dual parity protects against
-  disk failure and against nothing else — not deletion, not ransomware, not fire
-  or theft. The Critical and Precious tiers (`documents`, both Immich shares) are
-  the scope that needs one. Blocked on sizing (`du`) and on choosing a mechanism;
-  the owner's stated irritation is that iDrive, which serves Serenity well, has no
-  good path for a Linux fileserver.
+  disk failure and against nothing else. Moved to **`docs/BACKUP.md`**, which now
+  carries the fleet survey (no host runs declarative backup software at all), the
+  scope, the restic-over-borg reasoning, and the key-custody circularity that has
+  to be designed before the first backup runs.
 
 - **Staging capacity.** Three 4 TB disks are available for the migration, which
   is not enough for everything at once; the plan assumes *arr* media is winnowed

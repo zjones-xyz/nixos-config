@@ -542,8 +542,9 @@ acknowledgement that the machine which owns the data is **already** the one
 protecting it, and better than Tower could. Tower's copy is the fast local
 restore tier, which is what a Time Machine target should be.
 
-The real asymmetry runs the other way — see `DESIGN.md` and the backup discussion:
-**Tower backs up Serenity, and nothing backs up Tower.**
+The real asymmetry runs the other way: **Tower backs up Serenity, and nothing
+backs up Tower.** Fleet backup strategy, Tower's offsite scope, the restic
+decision and the key-custody problem now live in **`docs/BACKUP.md`**.
 
 ⚠ **`DESIGN.md` §5's layout assumes two tiers and now has eight.** Revisit it once
 Protected is populated. Two things there need rework: the photo-tier sizing was

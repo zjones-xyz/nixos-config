@@ -22,7 +22,8 @@ staging in `.sops.yaml` — both land together with the config.
 | **`DECISIONS.md`** | *Why it is this way.* Decision → alternatives → rationale, what the previous design got right, and **`## Still open`**. | Before changing something that looks arbitrary. |
 
 Fleet-wide: `docs/DISK-LABELLING.md` (naming and labelling convention),
-`docs/DISK-DRAWER.md` (unassigned disks).
+`docs/DISK-DRAWER.md` (unassigned disks), `docs/BACKUP.md` (who owes what an
+offsite copy, and Tower's lack of one).
 
 ## Naming
 

@@ -21,8 +21,9 @@ documents the repo's structure and patterns.)
 - **`secrets/<host>.yaml`** — sops-encrypted, per host. Policy in `.sops.yaml`.
 - **`docs/<topic>.md`** — fleet-wide documentation that belongs to no single host
   (e.g. `DISK-LABELLING.md`, the physical disk naming and cable-labelling
-  convention; `DISK-DRAWER.md`, unassigned spare disks). Per-host hardware
-  inventories stay in `hosts/<host>/HARDWARE-MAP.md` and reference these.
+  convention; `DISK-DRAWER.md`, unassigned spare disks; `BACKUP.md`, which host
+  owes what an offsite copy). Per-host hardware inventories stay in
+  `hosts/<host>/HARDWARE-MAP.md` and reference these.
 
 ## Style
 
