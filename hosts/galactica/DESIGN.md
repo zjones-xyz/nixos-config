@@ -1312,6 +1312,13 @@ The case *for* it is stronger than it first looks:
   not present raw disks properly. This is well-trodden but is a flashing procedure on a
   card that boots its own option ROM — and `PLATFORM.md` §6 is a standing reminder of how
   a "routine" controller flash on this machine actually goes. ⟨Budget a day, not an hour.⟩
+
+  ⚠ **The vendor states it is already flashed. Verify rather than accept** —
+  `PLATFORM.md` §7b is the procedure. One command settles whether the flash happened at
+  all (the firmware personality changes the PCI device ID: `1000:0073` is stock MegaRAID,
+  `1000:0072` is MPT), and the section separates that from the *authenticity* question,
+  which is a different check with a different answer. Note that `sas2flash` is not
+  packaged in nixpkgs, so plan for it.
 - **Cables.** It needs 2× SFF-8087 → 4× SATA *forward breakout*, usually not included.
   Buying the wrong direction (reverse breakout) is a common and annoying mistake.
 - **Heat.** SAS2008 expects server airflow and runs hot passively. Check it under a

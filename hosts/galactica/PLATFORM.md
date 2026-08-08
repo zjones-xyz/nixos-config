@@ -424,6 +424,98 @@ or hot-plug problems traced to it under load.
 
 ---
 
+## 7b. Verifying an LSI SAS2008 card — "already flashed" is a claim, not a fact
+
+Written 2026-08-08 for the 9240-8i (`DESIGN.md` §6.7), whose vendor states it is
+already crossflashed. **Two independent questions hide inside "is it legit":**
+did the flash happen and to what, and is the hardware genuine. Answer them
+separately — a genuine card can carry the wrong firmware, and a counterfeit can
+carry the right one.
+
+### Step 1 — did the flash happen? One command, zero risk
+
+The firmware personality **changes the PCI device ID**, so this is decisive
+before any tooling is installed. Verified against `pciutils` 3.15.0's `pci.ids`:
+
+| ID | Meaning |
+|---|---|
+| **`1000:0073`** | `MegaRAID SAS 2008 [Falcon]` — **stock 9240 firmware. The claim is false.** |
+| **`1000:0072`** | `SAS2008 PCI-Express Fusion-MPT SAS-2 [Falcon]` — MPT firmware, so it *was* reflashed |
+
+```sh
+lspci -nn -d 1000:          # device ID — 0072 vs 0073 settles it
+lspci -nnk -d 1000:         # driver: mpt3sas = MPT, megaraid_sas = MegaRAID
+```
+
+**Negative test, and both tools are packaged:** `storcli show` or
+`megacli -AdpAllInfo -aALL`. If either enumerates the card, **it is not in IT
+mode**, whatever the listing said.
+
+### Step 2 — IT or IR? `0072` covers both
+
+Within the MPT personality the discriminator is the firmware product ID —
+**`0x2213` = IT, `0x2214` = IR** — normally read with `sas2flash -list`.
+
+⚠ **`sas2flash` is NOT in nixpkgs** (checked). It comes from Broadcom's support
+site as a zip, so plan for an FHS wrapper or a live environment rather than
+expecting `nix shell`. **`lsiutil` 1.72 *is* packaged** and speaks to MPT
+controllers directly, which covers most of the same identification.
+
+Behavioural tells that need no vendor tooling at all:
+
+- **IT firmware cannot create RAID volumes.** If the BIOS-time option ROM or the
+  tooling offers volume creation, it is IR or MegaRAID.
+- **`smartctl -a /dev/sdX` returns real data directly.** Needing
+  `smartctl -d megaraid,N` is itself proof you are not in IT mode.
+
+### Step 3 — authenticity, and what is *not* evidence of a fake
+
+⚠ **A non-LSI subsystem ID is normal, not suspicious.** Most cheap IT-mode
+SAS2008 cards are legitimate OEM rebadges. From the same `pci.ids`, all genuine:
+
+| Subsystem | Card |
+|---|---|
+| `1000:3020` | **LSI 9211-8i** — the usual identity after a 9240 crossflash |
+| `1028:1f1d`–`1f22` | Dell PERC H200 family |
+| `1014:03ca` | IBM 9212-4i4e |
+| `1734:1177` | Fujitsu D2607 |
+| `1bd4:000d`/`000e` | Inspur — note the vendor literally names these `SAS2008IT` / `SAS2008IR` |
+
+**The strongest single authenticity signal is the SAS address.** Genuine cards
+carry a unique address in LSI's OUI range (`500605b…`). Clones and botched
+flashes commonly show all zeros or an obviously duplicated default.
+
+⚠ **A zeroed SAS address does not distinguish "counterfeit" from "the vendor
+flashed it badly" — erasing it is the classic self-inflicted injury of this
+procedure.** Either way it must be fixed before the card is trusted, because a
+zero address causes erratic enumeration. Treat it as *disqualifying until
+repaired*, not as proof of fraud.
+
+Also check the **board assembly and tracer numbers** (`sas2flash -list`, or the
+physical sticker); blank or zeroed fields are a common clone tell.
+
+### Step 4 — the test that actually decides it, and where to run it
+
+Identification is cheap; **the return window makes validation the real
+deadline.** A boot-and-see proves nothing about a card that fails under
+sustained load.
+
+⚠ **Test it on pegasus, not on Tower.** Testing in Tower means pulling the
+ASM1166 and disturbing a working array for a card that may go back.
+⟨Confirm pegasus has a free PCIe x8 slot — not verified here.⟩
+
+**Combine this with the drawer burn-in (§12), because they are the same job.**
+The drawer's twelve untested spinners need burn-in before anything trusts them,
+and the HBA needs eight ports under sustained load. Running both at once tests
+each with the other and costs one setup instead of two. Watch for:
+
+- disks enumerating individually, with SMART passthrough, no RAID abstraction
+- `dmesg | grep -i mpt3sas` — resets or timeouts under load are disqualifying
+- controller temperature: **SAS2008 expects server airflow and runs hot
+  passively**, which a desktop case will not provide
+
+---
+
 ## 8. Bus speeds: what this machine can actually move
 
 The numbers that bound every storage layout. Three separate limits, and they are
