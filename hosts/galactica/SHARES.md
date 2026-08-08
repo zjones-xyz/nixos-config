@@ -8,7 +8,7 @@ storage layout depends on.
 are confirmed dead; the rest of the tiering is still a proposal to argue with.
 Sizes are ⟨TBD⟩ pending a `du -sh /mnt/user/*` pass.
 
-**Triage status: 11 of 34 decided.**
+**Triage status: 13 of 34 decided** (1 parked — see §5).
 
 Dates are UTC.
 
@@ -62,12 +62,12 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `immich_photos_archived` | cache | export | — | private | `z` | 💎 **Precious** |
 | `books` | cache | export | — | public | | 🛡 **Protected** |
 | `books_old` | cache | export | — | public | | "top level store for BookLore" — ⚠ **suspected** leftover |
-| `calibre_books` | cache | — | — | private | | |
+| `calibre_books` | cache | — | — | private | | ⏸ 🛡 **Protected (parked)** — see §5 |
 | `copyparty` | cache | export | — | public | | File-sharing service |
 | ~~`manyfold_library`~~ | cache | — | — | public | | 🗑 **DROP** — owner-confirmed dead |
 | `partdb` | cache | — | — | public | | Parts database |
 | `podcasts_audiobookshelf` | cache | — | — | private | | ✅ **Re-acquirable** |
-| `syncthing` | cache | — | — | private | | |
+| ~~`syncthing`~~ | cache | — | — | private | | 🗑 **DROP** — owner-confirmed junk |
 | `webdav` | cache | — | — | public | | |
 | `serenity_time_machine` | cache | export **(TM)** | — | public | | Mac backups, 1 TB volume limit |
 | `system` | services | — | — | public | | "system data", split level 1 |
@@ -138,6 +138,7 @@ at zero risk to anything live.
 | `ai_models` | fastservices | |
 | `SHARE` | array | Also the one that read as an Unraid template |
 | `manyfold_library` | **array** | 3D model library. First drop that reduces the 17.1 TB |
+| `syncthing` | **array** | Second drop with array volume behind it |
 
 ⚠ **`manyfold_library` is the first confirmed drop with real volume behind it.**
 The other three are pool-resident or an empty template; this one is array data, so
@@ -271,13 +272,13 @@ contents cannot be inferred from configuration.
 |---|---|---|
 | **Critical** | Everything below, **plus versioning and a tested restore** | **`documents`** |
 | **Precious and Irreplaceable** | Real-time redundancy, checksummed, **+ offsite** | **`immich_photos`**, **`immich_photos_archived`** |
-| **Protected** | Parity. No offsite. | **`music`**, **`books`** |
+| **Protected** | Parity. No offsite. | **`music`**, **`books`**, ⏸ **`calibre_books`** *(parked)* |
 | **Painful to rebuild, small** | Redundancy; cheap because tiny | `appdata`, `arr_config`, `ha_backup` |
 | **Re-acquirable** | Snapshot parity, 24 h lag fine | **`podcasts_audiobookshelf`**, `arr_media`, `arr_managed_data`, `jellyfin`, `isos` |
 | **Regenerable** | Parity optional | `domains` ⟨?⟩, `serenity_time_machine` |
 | ⚙ **Does not migrate** | n/a — no successor concept | **`swap`**, `system` *(proposed)* |
-| 🗑 **Drop** | n/a — deleted before migrating | **`jellyfin_cache`**, **`ai_models`**, **`SHARE`**, **`manyfold_library`**; `appdata_old` + `books_old` suspected |
-| **⟨?⟩ Undecided** | — | `calibre_books`, `bambuddy_library`, `partdb`, `syncthing`, `copyparty`, `webdav`, `public`, `minishare`, `inbox`, `arm`, `archived_disks` |
+| 🗑 **Drop** | n/a — deleted before migrating | **`jellyfin_cache`**, **`ai_models`**, **`SHARE`**, **`manyfold_library`**, **`syncthing`**; `appdata_old` + `books_old` suspected |
+| **⟨?⟩ Undecided** | — | `bambuddy_library`, `partdb`, `copyparty`, `webdav`, `public`, `minishare`, `inbox`, `arm`, `archived_disks` |
 
 ### Critical vs. Precious — consequence against grief
 
@@ -378,6 +379,41 @@ is the third member of that group.⟩
 `archived_disks` moves back to undecided on the same reasoning. It was proposed
 as irreplaceable purely because it is `secure` and owner-writable, which says
 something about *access* and nothing about *value*.
+
+### ⏸ Parked — provisional classifications, deliberately deferred
+
+**`calibre_books`, 2026-08-07.** The owner's read is *"probably junk — but I
+don't want to sort that out right now. Let's just make it protected, and come
+back to it later."*
+
+That is a legitimate move and worth naming, because it will recur: **when a share
+is probably droppable but confirming it costs more attention than you want to
+spend, park it in a safe tier rather than blocking the pass.** It is the
+over-classification rule (above) applied to *time* rather than to contents — the
+asymmetry is the same, since parking too high wastes some bytes while deciding
+hastily can delete something wanted.
+
+⚠ **The risk is that parking becomes permanent by forgetting.** A parked share
+looks exactly like a considered one six months later, so the marker has to
+survive:
+
+| Share | Parked at | Suspicion | Revisit trigger |
+|---|---|---|---|
+| `calibre_books` | Protected | Probably junk; overlaps `books` | Before the offsite/backup scope is finalised |
+
+**Rules for parked entries:**
+
+- **Park upward, never downward.** A parked share sits at the highest plausible
+  tier, so being wrong costs storage rather than data.
+- **Carry the `⏸` marker everywhere the tier appears**, so nothing reads as
+  settled that is not.
+- **Revisit before anything expensive is sized off it** — offsite scope,
+  photo-tier capacity, or the initial sync. Parked entries inflate those numbers
+  by construction.
+
+`calibre_books` is also the middle member of the three-share books group —
+`books` (Protected), `books_old` (suspected drop) and this one. When any of the
+three is revisited, revisit all three; they almost certainly overlap in content.
 
 ### Notes on the "gone" tiers
 
