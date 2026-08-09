@@ -212,9 +212,75 @@ is not what would stop it.
   devices is fine, but if it ever wants raid5/6-shaped capacity, btrfs cannot go
   there safely and ZFS can.
 
+### ✅ Reversed for the photo tier only — 2026-08-09
+
+**Decision: the photo tier is a ZFS three-way mirror on LUKS, across the drawer's
+three 1 TB CMR disks** (`h-5N8F`, `h-NYXN`, `h-6D0X`). 1 TB usable, tolerates
+**two** simultaneous disk failures.
+
+⚠ **Scoped to the photo tier. Everything else in this section stands** — btrfs for
+root, app state and the media array; SnapRAID parity still on XFS or ext4, for the
+`chattr +C` reason above, which no change here touches. This is not "ZFS now".
+
+⚠ **Neither documented reversal condition fired**, and that is worth recording
+rather than glossing. The offsite path is still borg reading files, and the photo
+tier did not outgrow a two-disk mirror — it got *smaller*. Both conditions above
+were framed around **capacity**, and the actual driver was **redundancy depth on
+old hardware**:
+
+- **`docs/BACKUP.md` §3 measured the tier at 215.6 GiB.** Against that, every
+  candidate layout is 5–10× oversized, so capacity stopped being the deciding
+  variable entirely — which is exactly what both reversal conditions assumed it
+  would be.
+- **The disks are 2015–2017 and have never been health-tested.** A ZFS three-way
+  mirror survives two failures; btrfs raid1 across three devices survives one.
+  With ample headroom either way, the second failure is worth more than the extra
+  500 GB.
+- ⭐ **They are three different models from three different years**, so unlike
+  `h-QUTK`/`h-0X2T` there is no correlated-batch risk. Independent failure modes
+  are what redundancy assumes and rarely gets.
+
+**So the reversal conditions were badly framed, not wrong.** Both should have had
+a redundancy clause. Noted for whoever writes the next set.
+
+*Costs, accepted knowingly.* Of the three objections above:
+
+| Objection | Status |
+|---|---|
+| `zfs send` goes unused | **Stands.** Offsite is still borg reading files |
+| Snapshot tooling forks | **Stands.** `btrbk` is btrfs-shaped; this pool needs sanoid or equivalent |
+| Native encryption forks the unlock story | ⭐ **Avoided — see below** |
+
+#### ⭐ LUKS underneath, not ZFS native encryption
+
+**`cryptsetup` per disk, `zpool create` over the mappers.** This is what kills the
+third objection: `scripts/luks-unlock-remote.sh` and the `unlock-*` aliases keep
+working, and the fleet keeps one encryption story rather than two.
+
+What it gives up is ZFS **raw send** — which this design was never going to use,
+because the offsite path reads files. **So the objection dissolves at no real
+cost.** The E3-1230 v2 has AES-NI, so the CPU cost is not a factor either.
+
+⟨**Implementation notes, for whoever writes the module:**
+`networking.hostId` is **mandatory** for ZFS on NixOS and its absence fails late
+and confusingly. `ashift=12` — these are 512e drives with 4 K physical sectors.
+Pool import must be ordered *after* the LUKS mappers open; these are data disks,
+not root, so they do not need initrd unlock and should not be given it.
+`services.zfs.autoScrub.enable`, and a snapshot mechanism that is not `btrbk`.⟩
+
+⚠ **Burn-in is now load-bearing, not hygiene.** `docs/DISK-DRAWER.md`'s standing
+rule already covered these; the change is that they would hold the Precious tier.
+**Read power-on hours first** — on drives this age POH decides whether they are
+candidates at all, before any surface test is worth running.
+
+⭐ **Knock-on: the 4 TB disks return to the drawer.** `h-3V35` becomes a genuine
+CMR spare rather than half a compromised mirror, and the two EFAX go back to
+bulk-sequential duty, which `DISK-DRAWER.md` says they are honestly fine for. The
+SMR problem stops being load-bearing anywhere in this design.
+
 *Unrelated leftover, so it is not mistaken for precedent:* the Kingston carries a
 111.3 G `zfs_member` partition from a previous Linux install
-(`HARDWARE-MAP.md` §1). It is the only ZFS on the machine and it is about to be
+(`HARDWARE-MAP.md` §1). It predates this decision entirely and is about to be
 wiped — `zpool import -N` for a look first if anything on it is wanted.
 
 ---
