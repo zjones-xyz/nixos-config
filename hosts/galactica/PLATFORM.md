@@ -806,18 +806,79 @@ but it must be fixed before the card is trusted, because a bogus SAS address
 causes erratic enumeration. The vendor's "already IT-flashed" claim is true; the
 execution was sloppy.
 
-**The repair:**
+#### The repair procedure
+
+**The whole repair is one field.** Firmware is already correct and current — P20
+`20.00.07.00`, IT mode, working. Only the manufacturing area is wrong.
+
+⚠ **Do this on a boot of its own, separate from the §6e ASM1166 test.** That test
+wants the LSI's option ROM *disabled*; `sas2flash.efi` may need the card's UEFI
+driver *present* to find it. If `-listall` reports no controllers, re-enable the
+OPROM before concluding anything about the card.
+
+**Try the Linux binary first — it costs two minutes.** Broadcom ships an x86_64
+Linux `sas2flash` beside the EFI one, and Unraid gives you a root shell already:
 
 ```sh
-sas2flash -o -sasadd 500605b007e41650
+./sas2flash -listall
 ```
 
-⚠ `sas2flash` is still not in nixpkgs (Step 2). Now that §11 confirms this board
-does UEFI, **`sas2flash.efi` from a UEFI shell is the cleaner route** than an FHS
-wrapper around the Linux build, which is widely reported to fail on modern
-kernels. It writes the manufacturing region rather than firmware, so it is a
-smaller operation than §6's flash — but it is still a flashing tool on a card that
-boots its own option ROM, and §6 is the standing reminder about how those go here.
+Expect `Failed to initialize PAL` — the Linux build is widely reported to fail on
+modern kernels, and this host runs 6.18. If it works, the UEFI dance is skipped
+entirely. This is also why Step 2's note that `sas2flash` is not in nixpkgs
+matters less than it looks: an FHS wrapper would not fix a PAL failure.
+
+**Otherwise, the UEFI route.** Available at all only because §11 confirmed this
+board does UEFI. On a **FAT32** USB stick:
+
+1. `sas2flash.efi`, from Broadcom's **P20 UEFI installer** package — the same
+   generation as the firmware already on the card.
+2. ⚠ **A UEFI Shell *v1* binary** at `EFI/BOOT/BOOTX64.EFI`. **Not v2.**
+
+⚠ **Shell v1 versus v2 is the single biggest trap here.** `sas2flash.efi` is built
+against the older EFI shell protocol, and under Shell v2 it typically finds no
+controller at all — which reads as a dead card, a bad flash, or §1, and is none of
+them. It is the most commonly reported cause of a spurious "no controllers found".
+
+```
+fs0:                                       # whichever maps to the stick
+sas2flash.efi -listall                     # confirm the card, read current address
+sas2flash.efi -o -sasadd 500605b007e41650
+sas2flash.efi -listall                     # verify it took
+```
+
+`-o` is advanced mode, which is what exposes `-sasadd`. The argument is the Step 3b
+sticker value with separators stripped: `500605B0-07E4-1650` → `500605b007e41650`.
+
+#### ⚠ Do NOT run the erase step, whatever the guides say
+
+Every crossflash walkthrough opens with `-o -e 6` followed by `-o -f <fw>.bin`.
+**This card is not being crossflashed** — it already carries the firmware you
+want. Running an erase converts a one-field repair into a full reflash of a
+working card.
+
+**That distinction is probably also the origin of the fault.** `-e 6` erases
+firmware while *preserving* the manufacturing area; `-e 7` takes the manufacturing
+area with it. Whoever flashed this card almost certainly used `-e 7` and never
+restored the address afterwards.
+
+Also worth heeding from the community guides: **disconnect or ignore other drives**
+— some SSD controllers can be caught by a mis-targeted flash. With `-sasadd` alone
+the exposure is small, but confirm the controller index from `-listall` before
+issuing anything with `-o`.
+
+⟨**One detail unverified.** Broadcom's own *SAS2Flash Utility Quick Reference
+Guide* was unreachable from the session that wrote this (egress-blocked), and one
+secondary source hinted at a form that splits the high 28 bits into a separate
+parameter. **Run `sas2flash.efi -o -help` and confirm `-sasadd` takes a single
+16-hex-digit argument** before committing. Ten seconds, and it is the only step
+here not corroborated by two sources.⟩
+
+Sources: [TrueNAS — flashing a 9211-8i via EFI shell](https://www.truenas.com/community/threads/how-to-flash-lsi-9211-8i-using-efi-shell.50902/),
+[UEFI Shell v1 and other gotchas](https://totophe.com/2025/09/08/flash_lsi_hba_it_mode_with_header/),
+[SAS2Flash Quick Reference Guide v2.1](https://downloads.sandisk.com/downloads/ess/utilities/sas2flash_referenceguide.pdf),
+[zetterberg123/LSI-92108i-flash](https://github.com/zetterberg123/LSI-92108i-flash),
+[techmattr — SAS HBA crossflashing](https://techmattr.wordpress.com/2013/08/30/sas-hba-crossflashing-or-flashing-to-it-mode/).
 
 ⟨**Open: repair or return.** The card is otherwise excellent and the return window
 is the deadline. "Shipped with an erased SAS address" is a fair as-described
