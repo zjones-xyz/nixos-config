@@ -120,7 +120,18 @@ override took, *then* reset.
 systemd-managed, and until §11 was answered there was no guarantee of efivars to
 set the flag in.
 
-The BMC lives at `192.168.8.191`. Serial-over-LAN is on **COM2 (`ttyS1`) at
+The BMC lives at **`192.168.8.191`**, and as of 2026-08-09 also answers to
+**`towerbmc.internal`** — an AdGuard rewrite provisioned out-of-band, like every
+other `.internal` name in this fleet; nothing in this repo declares it.
+
+⚠ **The commands in this section deliberately keep the raw address.** A BMC is
+what you reach when the machine is unreachable, and DNS is perfectly capable of
+being the broken part — AdGuard is itself a service on this network. A recovery
+document that only works when name resolution works is a recovery document with a
+dependency it cannot afford. Use `towerbmc.internal` interactively (the
+`ipmi-tower-*` shell aliases do); keep the address here.
+
+Serial-over-LAN is on **COM2 (`ttyS1`) at
 115200** by convention on Supermicro X9 boards — but the BIOS setting under
 *Advanced → Serial Port Console Redirection* is authoritative, and a mismatch
 gives you a blank IPMI console indistinguishable from a hung machine. Read it
@@ -129,6 +140,42 @@ out of BIOS rather than assuming.
 `modules/nixos/serial-console.nix` exists to make that value a single overridable
 option rather than a hardcoded `boot.kernelParams` entry, for exactly this
 reason.
+
+### Storing the password — and why FreeIPMI's own default cannot work here
+
+`-P` prompting every time gets old, and `-p SECRET` is worse than it looks: it
+puts the password in the process list. FreeIPMI's answer is a config file —
+`freeipmi.conf(5)` says in as many words that it exists to keep "usernames,
+passwords, and other sensitive information from the `ps(1)` command". Format is
+two lines:
+
+```
+username ADMIN
+password …
+```
+
+⚠ **But the default location is unusable under Nix, so it must be passed
+explicitly with `--config-file`.** The only paths compiled into the binary are
+store-resident:
+
+```
+/nix/store/…-freeipmi-1.6.18/etc/freeipmi//freeipmi.conf     -r--r--r--
+```
+
+Read-only by construction. **And there is no `~/.freeipmi.conf` fallback** —
+checked against the 1.6.18 binary, which contains no home-directory string at
+all. So the advice every guide gives, "drop your credentials in the default
+config file", cannot work on this fleet, and failing to notice that costs a
+confusing half hour: the file you created is simply never read, and the tool
+prompts as though it were not there.
+
+`scripts/ipmi-remote.sh` is the fleet's answer. It tries 1Password first
+(materialising a `0600` file for the life of the command and removing it on
+exit), then `$IPMI_REMOTE_CONFIG` or `~/.config/freeipmi/<host>.conf`, then falls
+back to prompting — and passes `--config-file` in every case.
+
+⚠ Whichever route, **never combine it with `-p`** — see the parser collision
+above.
 
 ## 3. The BMC's clock cannot be set — measured 2026-08-09, not merely unset
 
