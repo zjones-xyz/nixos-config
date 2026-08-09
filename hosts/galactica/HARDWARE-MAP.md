@@ -168,10 +168,18 @@ Worth stating because it decides where documentation comes from.
 ⚠ **SMBIOS reports the chassis as `Supermicro / Type: Desktop`, and that is
 wrong.** It is board-supplied default data — the same defaulting that leaves the
 chassis *Version* and *Serial* fields reading `0123456789`. **The case is a
-Chenbro.** Front-panel branding agrees with SMBIOS and is equally misleading;
-Chenbro do extensive ODM work, so a rebadged front is unremarkable. This cost a
-search for a `CSE-` sticker that does not exist — **trust the printed part number
-over both.**
+Chenbro.** That mistake cost a search for a `CSE-` sticker which does not exist;
+**trust the printed part number over SMBIOS.**
+
+⟨A Supermicro logo on the front panel was reported and then doubted by the same
+observer within the hour, so it is recorded as *not evidence* in either direction
+rather than quietly dropped. It has no bearing on the identification, which rests
+on the part number and the bay count below.⟩
+
+**Corroborated physically, which is what settles it.** The SR209 specification
+lists **three external 5.25" bays**, and this chassis has three. Combined with the
+four hot-swap 3.5" bays, that is two independent structural matches against the
+part number — evidence that does not depend on anyone's recollection of a badge.
 
 ⚠ **The Seneca product number is a dead end.** Seneca Data was acquired by Arrow
 Electronics in 2014 and has since exited that line; `pro499926` returns nothing.
