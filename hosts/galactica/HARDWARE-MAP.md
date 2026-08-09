@@ -186,8 +186,25 @@ Electronics in 2014 and has since exited that line; `pro499926` returns nothing.
 It is an integrator SKU, not a chassis model.
 
 **`SR20969` is the useful identifier**, and it is the confident part — it matched
-a real Chenbro family on the first search, which a misread would not have. The
-SR209 family is documented and its user manual is still available.
+a real Chenbro family on the first search, which a misread would not have.
+
+**Chenbro is still trading and hosts its own archive**, which beats the manual
+scraper sites:
+
+| | |
+|---|---|
+| SR209 user manual | `chenbro.com/en-US/DownloadFile/download/987` |
+| SR209 **Plus** manual | `chenbro.com/en-US/DownloadFile/download/1645` |
+| Download centre | `chenbro.com/en-US/Support/download_center/Page/1?p_cat_sn=234&p_sn=271&cat_sn=1126` |
+
+⟨**Links unverified.** The session that found them could not open `chenbro.com`
+— egress-blocked — so these come from search results rather than from reading the
+documents. Confirm the bay counts on the first page before trusting anything
+inside.⟩
+
+⚠ **SR209 and SR209 *Plus* are separate products.** This chassis is `SR20969`
+with no `+`, and listings pair `SR20969-C0` with the base SR209 series while
+`SR20969+` is the Plus — so the base manual is the likely match.
 
 ⚠ **The suffix is the uncertain part** — read as `-01`, last character not
 confidently. It denotes the drive configuration, and the family ships several
