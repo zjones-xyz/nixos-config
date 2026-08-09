@@ -38,8 +38,34 @@
       options = [ "fmask=0077" "dmask=0077" ];
     };
 
+  # ── Swap ────────────────────────────────────────────────────────────────────
+  # Hand-edited, deliberately, despite the generated-file banner above.
+  #
+  # nixos-generate-config wrote this as the mapper that happened to be open at
+  # install time — /dev/mapper/luks-60b43e2c-… — but it only emits
+  # boot.initrd.luks.devices for containers needed to reach *root*, so nothing
+  # ever opened this one. The swap unit has been waiting on a device node that is
+  # never created, silently, since install.
+  #
+  # Confirmed on the running host 2026-08-08 rather than inferred: `swapon --show`
+  # printed nothing, `free -h` reported `Swap: 0B` against 31 GiB of RAM, and
+  # `lsblk` showed nvme0n1p3 as bare `crypto_LUKS` with no `crypt` child while
+  # nvme0n1p2 showed its own. See hosts/memory-alpha/HARDWARE-MAP.md §2.
+  #
+  # randomEncryption keys the swap afresh from /dev/urandom on every boot, so it
+  # needs no passphrase and no keyfile. That matters specifically here: this host
+  # unlocks remotely over initrd SSH and the whole design assumes a single prompt,
+  # which declaring a second LUKS container in initrd would have broken. The cost
+  # is hibernation, which a headless server does not use.
+  #
+  # ⚠ This points at the RAW partition, not the old mapper. The stale LUKS header
+  # is overwritten on first activation — free, since swap contents are worthless
+  # by definition — but it does mean the path must be right. by-id is stable
+  # across reboots and recabling in a way /dev/nvme0n1p3 is not.
   swapDevices =
-    [ { device = "/dev/mapper/luks-60b43e2c-62be-4e50-b590-190241219796"; }
+    [ { device = "/dev/disk/by-id/nvme-PNY_CS2130_1TB_SSD_PNY21232106090100590-part3";
+        randomEncryption.enable = true;
+      }
     ];
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
