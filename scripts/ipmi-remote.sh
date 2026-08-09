@@ -3,33 +3,66 @@
 # typed at a prompt every time.
 #
 # Generic across BMCs — see the per-host `home.shellAliases` bindings
-# (`ipmi-tower-open-tty`, `ipmi-tower-set-bios-next-boot`) rather than
-# duplicating this file per machine. Same shape, and the same 1Password
+# (`ipmi-tower`, `ipmi-tower-open-tty`, `ipmi-tower-set-bios-next-boot`) rather
+# than duplicating this file per machine. Same shape, and the same 1Password
 # fallback contract, as scripts/luks-unlock-remote.sh.
 #
 # ⚠ FreeIPMI, not ipmitool — Tower's BMC needs FreeIPMI's quirks handling.
 # hosts/galactica/PLATFORM.md §2 carries the rationale and the argument-parsing
 # traps, each of which reads as a broken BMC rather than as a usage error.
 #
-# Usage: ipmi-remote.sh <action> <bmc-host> <op://vault/item/field> [username]
+# Usage: ipmi-remote.sh <action> <bmc-host> <op://vault/item/field> [args…]
 #
 #   console          Serial-over-LAN console. Escape sequence is `&.`; `&?`
 #                    lists the rest. Worth knowing before you are in there.
 #   bios-next-boot   One-shot boot override into BIOS setup. Sets the flag
 #                    only — it deliberately does not reboot. See below.
+#   run <tool> […]   Run any FreeIPMI tool against this BMC with credentials
+#                    and -h supplied. The reason this exists: FreeIPMI has **no
+#                    password environment variable** — checked against 1.6.18,
+#                    there is no IPMI_PASSWORD string in the binaries or libs
+#                    and freeipmi.conf(5) documents no environment at all. So
+#                    the only alternatives to a config file are `-p` on the
+#                    command line, which leaks into ps(1), or typing the
+#                    password on every ad-hoc invocation.
+#
+# Username comes from $IPMI_REMOTE_USER, default ADMIN. It is an environment
+# variable rather than a positional so that `run` can pass its remaining
+# arguments straight through without an ambiguous slot in the middle.
 set -euo pipefail
 
-USAGE="Usage: ipmi-remote.sh <console|bios-next-boot> <bmc-host> <op://vault/item/field> [username]"
+USAGE="Usage: ipmi-remote.sh <console|bios-next-boot|run> <bmc-host> <op://vault/item/field> [args…]"
 
 ACTION="${1:?$USAGE}"
 BMC_HOST="${2:?$USAGE}"
 OP_REF="${3:?$USAGE}"
-BMC_USER="${4:-ADMIN}"
+BMC_USER="${IPMI_REMOTE_USER:-ADMIN}"
+shift 3 || true
 
 # Validate the action before touching 1Password: a typo should not cost a
 # biometric prompt, and `op read` on a Mac raises one.
 case "$ACTION" in
   console | bios-next-boot) ;;
+  run)
+    RUN_TOOL="${1:?run needs a tool, e.g. ipmi-remote.sh run <host> <op-ref> ipmi-sensors}"
+    shift
+    # Only the tools freeipmi.conf(5) lists as reading the config file. Anything
+    # else would be handed --config-file and -h and fail confusingly, so reject
+    # it with a clear message instead. This is not a security boundary — the
+    # caller could run the command directly — it is about error quality.
+    case "$RUN_TOOL" in
+      bmc-device | bmc-info | bmc-watchdog | ipmi-chassis | ipmi-config | \
+      ipmi-fru | ipmi-oem | ipmi-pet | ipmi-raw | ipmi-sel | ipmi-sensors | \
+      ipmiconsole | ipmipower) ;;
+      *)
+        echo "Not a FreeIPMI tool that accepts --config-file: $RUN_TOOL" >&2
+        echo "Accepted: bmc-device bmc-info bmc-watchdog ipmi-chassis ipmi-config" >&2
+        echo "          ipmi-fru ipmi-oem ipmi-pet ipmi-raw ipmi-sel ipmi-sensors" >&2
+        echo "          ipmiconsole ipmipower" >&2
+        exit 2
+        ;;
+    esac
+    ;;
   *)
     echo "Unknown action: $ACTION" >&2
     echo "$USAGE" >&2
@@ -140,5 +173,29 @@ strand the machine in setup.
 
      ipmipower -h $BMC_HOST -u $BMC_USER -P --reset
 EOF
+    ;;
+
+  run)
+    # ⚠ One targeted guard, earned by an actual near-miss on 2026-08-09: a
+    # two-line paste ran `ipmipower --reset` against a live Unraid server with a
+    # mounted array, which is an unclean shutdown and a parity check rather than
+    # the reboot it looks like. Everything else passes through untouched; this
+    # one gets a visible warning first, because it is the only command here that
+    # can cost hours.
+    if [ "$RUN_TOOL" = "ipmipower" ]; then
+      for arg in "$@"; do
+        case "$arg" in
+          --reset | --cycle | --off)
+            echo "⚠ $arg is a HARD power operation, not a clean shutdown." >&2
+            echo "  On a running server with a mounted array that means an unclean" >&2
+            echo "  shutdown and a parity check on the next boot." >&2
+            ;;
+        esac
+      done
+    fi
+
+    # Not exec'd, same reason as console: the EXIT trap must fire to remove the
+    # credentials file.
+    "$RUN_TOOL" -h "$BMC_HOST" "${AUTH[@]}" "$@"
     ;;
 esac
