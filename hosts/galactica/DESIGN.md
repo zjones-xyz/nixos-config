@@ -1202,43 +1202,67 @@ The original three, still valid:
   **The copy is network-bound**, not SATA-bound — roughly 5–6 h for 2.1 TiB at
   1 GbE, and it must finish before step 11. A scheduling input, not a blocker.
 
-  #### ⭐ Revised 2026-08-09 — two parachutes, and the in-box one gets unplugged
+  #### ⭐ Revised 2026-08-09 — an SMR disk carries it, then leaves the building
 
-  **Both, not either.** `h-3V35` (WD Red Plus WD40EFPX, 4 TB, CMR, 2022) goes into
-  the spare slot of the printed bracket and takes a copy over SATA; `h-XDAS` keeps
-  its off-box copy on pegasus over the network. Cheap, because neither disk has
-  another job during the window.
+  ⟨Second revision this session. An intermediate plan had `h-3V35` take the copy
+  in-chassis and stay there unplugged; that covered operator error and disk death
+  but not chassis-level loss, and it tied up the one CMR 4 TB for the duration.
+  Superseded — this is better on both counts.⟩
 
-  ⚠ **The in-box copy is disconnected before any destructive step** — power and
-  data both, physically. This is the whole point of it, so it is a step and not a
-  nicety:
+  **Two copies, and they share no failure mode:**
 
-  1. Copy 2.1 TiB to `h-3V35` over SATA — faster than 1 GbE
-  2. Verify
-  3. **Unplug it**
-  4. Only reconnect if it is needed
-
-  **Why unplugged, and why this is not paranoia.** The likeliest failure in a
-  migration that shuffles disks is not a drive dying — it is **wiping the wrong
-  device**. A parachute on the same controller, in the same `lsblk`, one typo from
-  the shell doing the work, is exactly the disk that gets `mkfs`'d at 2am. The
-  off-box requirement was never mainly about fire; it was about the operator. An
-  air-gapped disk inside the chassis restores that property.
-
-  **What each copy covers:**
-
-  | | Operator error | Disk death | Chassis-level loss |
+  | | Disk | Route | Ends up |
   |---|---|---|---|
-  | `h-3V35`, in-box, unplugged | ✅ | ✅ | ❌ |
-  | `h-XDAS`, on pegasus | ✅ | ✅ | ✅ |
+  | **Primary** | one 4 TB **SMR** (`h-CJE9-smr` or `h-CY72-smr`) | in-chassis over SATA | **removed and relocated to another room** |
+  | **Second** | `h-XDAS` (Toshiba 3 TB, on pegasus) | network | stays on pegasus |
 
-  So the off-box copy earns its keep on the last column alone — and `h-3V35` is
-  the far better *disk*, being a 2022 CMR drive against a ~13-year-old untested
-  one. Neither replaces the other.
+  ⚠ **The relocation is a step, not a tidy-up.** The copy runs in-chassis because
+  that is convenient; the disk then comes *out* of the case before any destructive
+  step and goes to another room. Skipping that leaves a parachute one typo away
+  from the shell doing the migration — **the likeliest failure here is wiping the
+  wrong device, not a drive dying.**
 
-  ⚠ **LUKS both**, per the warning above. `h-3V35` is set up fresh for this, so it
-  costs nothing — and the container is kept afterwards for the role below rather
-  than being torn down.
+  1. Copy 2.1 TiB to the SMR disk over SATA
+  2. Verify
+  3. **Power down, physically remove it, put it in another room**
+  4. Proceed
+
+  ⭐ **This is the job SMR is genuinely good at**, and the only role in this design
+  where those disks are the *right* tool rather than a tolerated one — see
+  `docs/DISK-DRAWER.md`: *"SMR is fine for bulk sequential storage and for staging.
+  A migration copy is one long sequential write."* One big sequential write, then
+  the disk sits powered off. Nothing about that touches DM-SMR's weaknesses.
+
+  ⚠ **Do not expect the in-chassis copy to be dramatically faster.** DM-SMR
+  sustained sequential write runs roughly 100–150 MB/s and 1 GbE is ~110 MB/s
+  practical, so both routes land near 5 hours for 2.1 TiB. **The drive is the
+  bottleneck, not the interface.** In-chassis is still preferable — no dependency
+  on pegasus being up, no saturating the network all evening — just not for speed.
+
+  ⚠ **Why the second copy is not optional here.** `smartctl` raises a
+  data-recovery warning on this drive family (`DISK-DRAWER.md`), and a parachute's
+  entire job is *being readable once everything else has gone wrong*. That is the
+  one role where poor recoverability is least acceptable. `h-XDAS` answers it by
+  being **uncorrelated** rather than merely additional:
+
+  | | 4 TB SMR | `h-XDAS` |
+  |---|---|---|
+  | Vendor | WD | Toshiba |
+  | Age | 2023 | ~2012 |
+  | Recording | SMR | CMR |
+
+  Different manufacturer, decade and recording technology — close to nothing that
+  could fail them together.
+
+  ⚠ **Do not use the two 4 TB SMRs as the pair.** Both are dated `2023-07-03` with
+  sequential serials, so they are one batch — `DISK-DRAWER.md` flags the same
+  pattern for `h-QUTK`/`h-0X2T`. For correlated-failure purposes two disks from
+  one batch are close to one disk.
+
+  ⚠ **LUKS both**, per the warning above.
+
+  ⭐ **`h-3V35` is freed entirely.** It carries no parachute duty and goes straight
+  into the bracket for the role below, from day one.
 
   #### `h-3V35` after the window — qBittorrent's incomplete directory
 
@@ -1277,17 +1301,19 @@ The original three, still valid:
   while leaving the data in the incomplete directory, without complaining. The
   symptom appears months later as an inexplicably full `h-3V35`.
 
-  #### The remaining ~3.5 TB — and a sequencing trap
+  #### The remaining ~3.5 TB
 
-  ⚠ **Decide the partition layout *before* the parachute copy, not after.** The
-  parachute lands 2.1 TiB on this disk; carving a 500 GB qBittorrent partition
-  afterwards means moving all of it first. Partition up front and the copy lands
-  where it belongs.
+  ✅ **The sequencing trap that used to live here is gone.** An earlier revision
+  had the parachute landing 2.1 TiB on this disk, which meant the partition layout
+  had to be settled before the copy or 2.1 TiB would need moving to carve the
+  qBittorrent partition out afterwards. **The parachute is no longer on this disk**,
+  so it can be partitioned freely, from day one, with nothing to work around.
 
-  ⭐ **Do not wipe the parachute the moment the migration ends.** 2.1 TiB + 500 GB
-  fits inside 3.6 TiB with room to spare, so the parachute can simply stay as a
-  point-in-time copy through the shakedown period and be reclaimed once the new
-  layout has earned trust. The disk has nothing else to do, so this costs nothing.
+  ⭐ **Do not wipe the parachute disks when the migration ends** — meaning the
+  relocated SMR drive and `h-XDAS`, not this one. Both are otherwise idle, so
+  keeping the point-in-time copy through the shakedown period costs nothing and
+  buys a fallback for exactly the window where the new layout is least proven.
+  Reclaim them once it has earned trust.
 
   ⟨**A local backup of the Precious tier here was considered and is probably
   redundant.** It would fit easily — 215.6 GiB against 3.5 TB — but the photo tier
