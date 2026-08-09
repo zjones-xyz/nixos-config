@@ -482,11 +482,31 @@ re-derive why it stopped applying.
   is lost" until it was corrected the same day. It is not a fallback. Needing the
   Gen2 pin is the disqualifying property, because that pin is §1's landmine.
 
-  ⚠ **Consequence nobody had stated: both cards can fail.** If the LSI does not
-  validate *and* the ASM1166 will not train at Gen3, this machine is down to six
-  onboard ports against §5.5's twelve-device budget. That is a port-count problem
-  rather than an array problem — the array is on onboard SATA today and §5.5 puts
-  it there deliberately — but it does mean the add-in ports need a third answer,
-  and the honest options at that point are keeping the ASM1064, keeping the
-  ASM1166 at Gen2 after all, or buying something else. Worth knowing before the
-  return windows close, not after.
+  #### ✅ Resolved the same day — and the rule fires in the card's favour
+
+  **The ASM1166 trains at Gen3**: `LnkSta: Speed 8GT/s, Width x2`, full
+  capability, no downgrade marker, in a slot whose `LnkCap` is `8GT/s x8`.
+  `PLATFORM.md` §6e carries the three-way measurement. **By the owner's own rule,
+  the card stays.**
+
+  ⚠ **The reasoning underneath the rule was wrong, which matters more than the
+  outcome.** It held that needing the Gen2 pin was itself disqualifying, because
+  that pin *is* §1's landmine. Both halves fail:
+
+  1. **The pin was never about Gen2.** `Auto` is the fault; an explicit `Gen3`
+     works as well and costs nothing — better, since it doubles both the ASM1166's
+     budget and a future NVMe root's ceiling.
+  2. **The pin is not the ASM1166's to remove.** The ASM1042 vanishes at `Auto`
+     too, and *its* root port caps at Gen2 in hardware, so link speed cannot be the
+     mechanism there. Returning the ASM1166 would have left the landmine untouched
+     while losing a working card — and taken all USB3 with it if the ASM1042 ever
+     followed.
+
+  So the "both cards can fail" worry recorded above — the machine falling back to
+  six onboard ports against §5.5's twelve-device budget — **does not arise.** It
+  was a consequence of a premise that did not hold.
+
+  ⚠ **The landmine itself is untouched and still needs owning.** `Gen3` is exactly
+  as non-default as `Gen2` was, so a CMOS clear still hides both ASMedia cards,
+  now including every USB3 port. What changed is that the pin costs nothing — not
+  that it went away.

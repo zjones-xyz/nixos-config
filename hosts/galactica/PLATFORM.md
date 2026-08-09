@@ -41,35 +41,47 @@ ASMedia add-in cards are **completely invisible** — no POST banner, absent fro
 
 | Setting | Value |
 |---|---|
-| `PCI Express Port - Gen X` | **Gen2** — explicitly, not `Auto` |
+| `PCI Express Port - Gen X` | **`Gen3`** — the point is that it is *explicit*. Anything but `Auto` |
 | `Detect Non-Compliance Device` | **Enabled** |
 
 ### What was measured, 2026-08-09
 
-Same machine, same boot session, nothing physically moved, `Detect Non-Compliance
+Same machine, one boot session, nothing physically moved, `Detect Non-Compliance
 Device` **Enabled throughout**, LSI option ROM disabled. The only variable was
 `PCI Express Port - Gen X`:
 
 | `Gen X` | `lspci -nn -d 1b21:` |
 |---|---|
 | `Auto` | `04:00.0` ASM1064 **only** |
-| `Gen2` | `01:00.0` ASM1166, `03:00.0` ASM1042, `04:00.0` ASM1064 |
+| `Gen2` | ASM1166 `01:00.0`, ASM1042 `03:00.0`, ASM1064 `04:00.0` |
+| **`Gen3`** | **all three, and the ASM1166 links at `8GT/s x2`** |
 
 **Two cards vanish at `Auto`, not one** — the ASM1166 *and* the ASM1042 USB3
-controller. Only the ASM1064, which sits on a PCH port rather than a CPU one,
+controller. Only the ASM1064, which hangs off a PCH port rather than a CPU one,
 survives either way.
 
-⚠ **And the tidy explanation does not survive contact with that.** The story used
-to be "the slot is Gen3-capable and the card cannot train at Gen3". But the
-ASM1042 sits behind root port `00:06.0`, whose own `LnkCap` is **`Speed 5GT/s`** —
-Gen2 is that port's hardware ceiling, so nothing was ever asking that card to
-train at Gen3, and it disappeared anyway. Whatever this setting actually does to
-the root complex, it is **not** simply link-speed negotiation. Treat the table
-above as the reliable part and the mechanism as unexplained.
+⚠ **`Auto` is the fault. The generation is not.** The long-standing explanation
+was "the slot is Gen3-capable and the card cannot train at Gen3" — and it is
+wrong twice over:
 
-⚠ **`Detect Non-Compliance Device` was not isolated.** It was `Enabled` in both
-runs, so this experiment shows `Gen X = Gen2` is *necessary* and says nothing
-about whether the second setting is. Do not conclude it is redundant.
+- **The ASM1166 trains at Gen3 happily** when told to explicitly, at full width
+  and with no downgrade marker (§6e).
+- **The ASM1042 has no Gen3 to fail at.** Its root port `00:06.0` reports
+  `LnkCap: Speed 5GT/s`, so Gen2 is that port's hardware ceiling and nothing ever
+  asked it to train higher. It disappears at `Auto` anyway.
+
+So whatever this setting does to the root complex, it is **not** link-speed
+negotiation, and "Gen2" was never the operative value — *explicitness* was.
+⟨Mechanism unexplained; the table is the reliable part.⟩
+
+**Prefer `Gen3`**, since it is no less explicit and costs nothing: at `Gen2` the
+ASM1166 is held to ~1.0 GB/s and a future NVMe root to ~2 GB/s, both of which
+double at `Gen3` (§6e). The LSI is a Gen2 part and is unaffected either way.
+
+⚠ **`Detect Non-Compliance Device` was never isolated.** It was `Enabled` in all
+three runs, so these results show an explicit `Gen X` is *necessary* and say
+nothing at all about whether the second setting is. Do not read the table as
+evidence it is redundant.
 
 **A CMOS clear or a dead coin-cell resets both settings and makes the cards
 vanish.** It looks exactly like hardware failure — check this before suspecting a
@@ -586,50 +598,63 @@ constraint.
 at `Auto` while it is removed does not run it — that only sets the state the test
 starts from.
 
-#### ❌ 2026-08-09 — it does not enumerate at `Auto`. Controlled, and reproducible.
+#### ✅ ANSWERED 2026-08-09 — it trains at Gen3. `Auto` was the broken setting.
 
-> ⟨**One test still outstanding: explicit `Gen3` rather than `Auto`.** This
-> section, and §1, have always assumed those are the same request. That
-> assumption is now doubtful — see §1's measurement, where the ASM1042 vanished
-> at `Auto` despite sitting behind a root port whose `LnkCap` caps at Gen2 in
-> hardware, so link speed cannot have been what removed it. If the ASM1166 comes
-> up at explicit `Gen3`, the conclusion below inverts: the card trains fine and
-> `Auto` was the broken setting all along. **Do not act on this section until
-> that runs.**⟩
+**Three runs, one session, nothing physically moved**, `Detect Non-Compliance
+Device` `Enabled` throughout, LSI slot option ROM `Disabled`. The only variable
+was `PCI Express Port - Gen X`. An earlier run without those controls was
+discarded rather than trusted.
 
-**Run properly, with both confounds removed:** `Detect Non-Compliance Device`
-**Enabled**, LSI slot option ROM **Disabled**, nothing physically moved between
-boots. A first attempt without those controls was discarded rather than trusted.
+| `Gen X` | ASM1166 | Its link |
+|---|---|---|
+| `Auto` | **absent** | root port `00:01.0` sits at `Width x0` |
+| `Gen2` | present | `5GT/s (downgraded), Width x2` |
+| **`Gen3`** | **present** | **`8GT/s, Width x2` — no downgrade marker** |
 
-| `Gen X` | Result |
-|---|---|
-| `Auto` | ASM1166 **absent** from `lspci`; root port `00:01.0` shows `Width x0` |
-| `Gen2` | ASM1166 present at `01:00.0`, `LnkSta: 5GT/s (downgraded), Width x2` |
+⭐ **The card trains at Gen3 and runs at full capability.** The *absent*
+`(downgraded)` annotation is the tell: `LnkSta` equals `LnkCap`, so this is the
+ASM1166 at its own ceiling rather than a negotiated compromise.
 
-**The negative was controlled**, which is what makes it a verdict rather than a
-guess: flipping back to `Gen2` brought the card straight back, so it is alive,
-seated, and in a working slot. It simply does not come up when the BIOS is left
-at `Auto`.
+> ⚠ **So this section's founding premise was wrong, and had been since it was
+> written.** It said `Auto` fails "because the card could not train at Gen3". It
+> trains at Gen3 fine. **What it cannot survive is `Auto` specifically** — and
+> §1's ASM1042 evidence points the same way, since that card's root port caps at
+> Gen2 in hardware and it vanishes at `Auto` regardless. The failing variable is
+> the *absence of an explicit setting*, not the generation being asked for.
 
-**And the slot was not the limitation.** The ASM1166 sits behind root port
-`00:01.0`, whose `LnkCap` is `Speed 8GT/s, Width x8` — Gen3 was genuinely on
-offer and genuinely refused. `Width x2` confirms the width this section's
-bandwidth table assumes.
+⟨Mechanism still unexplained — something about how this BIOS configures the root
+complex under `Auto` stops these devices being enumerated at all. Recorded as an
+observation, not a theory.⟩
 
-**So the Gen2 pin stays.** The ~1.0 GB/s figure above is the operating reality,
-not a starting point, and the ~1.97 GB/s column is off the table.
+**Consequences, all of them good:**
 
-⚠ **What this does NOT establish, and the distinction now carries a hardware
-decision.** §1's landmine survives regardless of what happens to this card,
-because the **ASM1042 disappears at `Auto` too** — and its root port caps at
-Gen2 in hardware, so link speed cannot be the mechanism there. Removing the
-ASM1166 does not remove the pin; the machine's only USB3 host needs it as well.
-Anything in this repo that treats "retire the ASM1166" as equivalent to "delete
-the landmine" is wrong, `DESIGN.md` §6.7 included. See §1.
+| | `Gen2` pin (the old plan) | **`Gen3` pin (now available)** |
+|---|---|---|
+| ASM1166, six ports | ~1.0 GB/s shared | **~1.97 GB/s** |
+| Four spinners streaming at once | ≈1.0 GB/s — a live constraint | comfortable headroom |
+| NVMe root on an x4 adapter | ~2 GB/s | **~4 GB/s** |
+| LSI SAS2008 | `5GT/s x8` — already its ceiling | unchanged; it is a Gen2 part |
 
-⚠ **The remaining cost of the pin is the NVMe root**, not the array — Gen2 x4 is
-~2 GB/s against Gen3's ~4. That is a ceiling on a root disk, not a constraint on
-anything measured here.
+**Set `Gen X = Gen3` explicitly.** It strictly dominates `Gen2` — every device on
+this board either improves or is unaffected, and none regress.
+
+⚠ **This resolves the return question in the ASM1166's favour.** `DECISIONS.md`
+carries the rule that the card goes back if it does not work at Gen3. It works at
+Gen3, at full width, with no downgrade.
+
+⚠ **The landmine is untouched, though — and earlier drafts of this section
+implied otherwise.** `Gen3` is exactly as non-default as `Gen2` was. A CMOS clear
+still drops to `Auto` and still hides both ASMedia cards. What changed is the
+*cost* of the pin, which is now zero; not its existence. Anything treating
+"retire the ASM1166" as equivalent to "delete the landmine" is still wrong
+(`DESIGN.md` §6.7), because the ASM1042 triggers it independently.
+
+⟨**Trained is not the same as stable, and that gap is untested.** This is a 2011
+board driving Gen3 to an inexpensive controller — precisely where marginal signal
+integrity shows up under sustained load rather than at POST. Before trusting it
+with array disks, run a long read across all six ports and watch
+`dmesg | grep -i aer` for correctable-error storms. A link that trains at 8 GT/s
+and then logs AER corrections all day is worse than one honestly pinned at Gen2.⟩
 
 **Run this before finalising any disk placement.**
 

@@ -1322,15 +1322,18 @@ simply open, and it should be decided on bare-metal merits.
 
 The case *for* it is stronger than it first looks:
 
-- **It deletes `PLATFORM.md` §1's landmine permanently.** The ASM1166 is invisible unless
-  the BIOS carries `PCI Express Port - Gen X = Gen2` *and* `Detect Non-Compliance Device =
-  Enabled`. **A CMOS clear or a dead battery makes the array controller vanish and look
-  like hardware failure.** That trap does not exist with an LSI card, and §5 of PLATFORM
-  already flags the CMOS battery as aging.
-- **Bandwidth stops being a design constraint.** The 9240-8i is PCIe **2.0 x8** —
-  roughly 4 GB/s, against the ASM1166's shared ~1.0 GB/s at Gen2. Four spinners at
-  ~250 MB/s is 1.0 GB/s, i.e. *the entire* ASM1166 Gen2 budget and a quarter of the LSI's.
-  It also makes the §6e Gen3 retest irrelevant to the array.
+- ~~**It deletes `PLATFORM.md` §1's landmine permanently.**~~ ⚠ **False — measured
+  2026-08-09, and this was the strongest argument in the list.** The landmine is a
+  property of the *board*, not of the ASM1166: the **ASM1042 USB3 controller disappears
+  at `Auto` too**, and it is the machine's only USB3 host (§5.5). Retiring the ASM1166
+  leaves the BIOS pin exactly where it was, so a CMOS clear still hides hardware — just
+  USB3 instead of SATA. `PLATFORM.md` §1 carries the three-way measurement.
+- **Bandwidth is still a real argument, but a weaker one than written.** The 9240-8i is
+  PCIe **2.0 x8**, roughly 4 GB/s. The ASM1166 was compared against it at ~1.0 GB/s —
+  its **Gen2** figure. It trains at **Gen3** (`8GT/s x2`, no downgrade), which is
+  ~1.97 GB/s, so four spinners at ~250 MB/s now sit at roughly half its budget rather
+  than consuming all of it. The LSI still has more headroom; it is no longer the
+  difference between "saturated" and "fine".
 - **Eight ports instead of six**, which restores the headroom §5.5 currently does not have.
 - **SAS2008 is a genuinely well-supported HBA** — `mpt3sas` is in-tree and maintained,
   SMART passes through cleanly, and it is the standard recommendation for exactly this job.
