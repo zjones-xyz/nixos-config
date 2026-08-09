@@ -1194,8 +1194,9 @@ The original three, still valid:
   Free now, while the partition is empty.
 
   ⚠ **It has never been health-tested**, and it is now the single point of failure
-  for the whole Protected tier during the window. `smartmontools` is not installed
-  on pegasus; `nix shell nixpkgs#smartmontools -c smartctl -a /dev/sdb` costs
+  for the whole Protected tier during the window. `smartmontools` reached pegasus's
+  closure in #44, so `smartctl -a /dev/sdb` works there once the host is rebuilt;
+  before then `nix shell nixpkgs#smartmontools -c smartctl -a /dev/sdb` costs
   nothing. `DISK-DRAWER.md`'s rule stands: an untested spare is a guess.
 
   **The copy is network-bound**, not SATA-bound — roughly 5–6 h for 2.1 TiB at

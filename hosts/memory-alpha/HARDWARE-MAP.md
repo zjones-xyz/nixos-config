@@ -8,8 +8,8 @@ Unassigned spare disks live in `docs/DISK-DRAWER.md`.
 **This is a short file, and honestly so.** memory-alpha is single-NVMe: one disk,
 three partitions, nothing to trace and nothing to label. It exists for the same
 reason `hosts/pegasus/HARDWARE-MAP.md` does — so "what is in this machine" has an
-answer that does not require SSHing into it — and because §2 records a live
-configuration defect that `lsblk` made visible.
+answer that does not require SSHing into it — and because §2 records a
+configuration defect that `lsblk` made visible, and how it was fixed.
 
 Dates are UTC.
 
@@ -42,7 +42,7 @@ space on the one root filesystem, and nobody has checked how much there is.
 
 ---
 
-## 2. ⚠ Encrypted swap is declared but never opened
+## 2. ⚠ Encrypted swap was declared but never opened — fixed, not yet deployed
 
 **`swapDevices` points at a device mapper node that nothing creates.**
 
@@ -94,17 +94,30 @@ than a slow build. It is also the borgmatic pilot's restore target (§1).
 | **Random-key encrypted swap** on the raw partition | `randomEncryption.enable = true` — fresh key each boot, no passphrase, no key management. ⚠ Breaks hibernation, which is irrelevant on a headless server. Discards the existing LUKS header, which costs nothing since swap contents are worthless by definition |
 | zram instead, drop the partition | Matches pegasus and Tower (`SHARES.md` §5 notes Tower runs `zram1` at 15.7 G). Compressed in-RAM swap. ⚠ Does not help the case that matters here — under emulation-driven memory pressure, zram competes for the same RAM |
 
-⚠ **This is a `.nix` change, so it takes a feature branch and a PR**
-(`CLAUDE.md` §Workflow) — deliberately not fixed in the same pass that wrote this
-file, which is documentation only.
+**Fixed in #43**, merged 2026-08-09 — the middle option above. `swapDevices` now
+points at the raw partition with `randomEncryption.enable = true`. The device path
+was derived from the disk's model and serial, so it was checked against the host
+before merge rather than trusted: `/dev/disk/by-id/nvme-PNY_CS2130_1TB_SSD_PNY21232106090100590-part3`
+resolves to `nvme0n1p3`, the same partition this section caught sitting idle.
+
+⚠ **Merged is not deployed.** The config is on `main`; this host still has no
+active swap until someone rebuilds it, because every `switch` happens on the
+target host (`CLAUDE.md` §Workflow). First activation `mkswap`s the partition,
+overwriting the stale `60b43e2c` LUKS header — free, since swap contents are
+worthless by definition. Confirm with the same command that exposed the defect:
+
+```sh
+swapon --show && free -h
+```
 
 ---
 
 ## 3. Encryption
 
 **The whole disk is encrypted apart from the ESP**, which cannot be. Root, `/home`
-and `/nix` are btrfs subvolumes inside LUKS `21aed1d9-…`; the swap partition is a
-second LUKS container that is currently inert (§2).
+and `/nix` are btrfs subvolumes inside LUKS `21aed1d9-…`; the swap partition holds
+a stale second LUKS container, superseded by random-key encrypted swap in #43 and
+rekeyed from `/dev/urandom` on every boot once this host is rebuilt (§2).
 
 **LUKS unlock is available pre-boot over SSH.** A tiny SSH server runs in the
 initrd before the root is decrypted, over MAC-pinned interface names so the

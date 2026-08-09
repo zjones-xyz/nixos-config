@@ -74,9 +74,19 @@ entirely. That is method 1 of the two in `DISK-LABELLING.md` §1 — a model-num
 lookup — so it means "not on any SMR list I checked", not "measured".
 
 ⚠ **Never health-tested.** This is a ~13-year-old drive with no SMART reading on
-record, and `smartmontools` is not installed on pegasus. `DISK-DRAWER.md`'s
-standing rule applies: *an untested spare is a guess, and the moment you discover
-it is bad is the worst possible one.* One-off, no config change:
+record. `DISK-DRAWER.md`'s standing rule applies: *an untested spare is a guess,
+and the moment you discover it is bad is the worst possible one.*
+
+`smartmontools` entered this host's closure in #44 (merged 2026-08-09), which also
+turns on `smartd` here — so once pegasus is rebuilt, `smartctl` is on `$PATH` and
+the daemon logs attributes on a timer:
+
+```sh
+sudo smartctl -a /dev/sdb
+```
+
+⚠ **Merged is not deployed** — every `switch` happens on the target host. Until
+pegasus is rebuilt, use the one-off form, which needs no config change:
 
 ```sh
 nix shell nixpkgs#smartmontools -c smartctl -a /dev/sdb
@@ -234,7 +244,7 @@ inventory has to learn to filter it back out.
 
 | Item | Source | Blocks |
 |---|---|---|
-| ⚠ **SMART health on `h-XDAS`** | `nix shell nixpkgs#smartmontools` | Trusting it with the parachute |
+| ⚠ **SMART health on `h-XDAS`** | `smartctl -a /dev/sdb` — see §1 for the pre-rebuild form | Trusting it with the parachute |
 | ⚠ **LUKS `sdb1` before any copy** | A decision, then `cryptsetup` | Protected-tier data leaving Tower unencrypted |
 | **Reclaim `sdb2`?** | A decision | Only if 10% headroom is judged too thin |
 | **NIC link speed** | `ethtool enp42s0` | Parachute copy-time estimate |
@@ -242,7 +252,9 @@ inventory has to learn to filter it back out.
 | Contents of `h-P2NJ` ("Spinner") | Mount and look | Whether it is a third reusable disk |
 | Board model, SATA port mapping | Case open / board manual | §4, and any cable labels |
 | Whether bay identifiers are warranted at all | A decision | §3 |
-| `smartmontools` absent from the closure | A `.nix` change → branch + PR | Any routine health checking on this host |
+
+✅ **Closed 2026-08-09:** *`smartmontools` absent from the closure* — fixed fleet-wide
+in #44, which also enables `smartd` on this host. Takes effect on the next rebuild.
 
 The first two gate the parachute and are worth doing in that order — there is no
 point encrypting a disk that is about to fail its health check.
