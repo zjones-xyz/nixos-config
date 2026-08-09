@@ -19,10 +19,24 @@
   # session; nobody had tested an interactive login until now. The
   # shell-agnostic option applies to whichever shell is actually running.
   programs.bash.enable = true;
+  #
+  # The ipmi_tower_* pair binds onto scripts/ipmi-remote.sh. ⚠ Kept identical
+  # to hosts/serenity/home.nix on purpose: `PLATFORM.md` §2 has both machines
+  # carrying the FreeIPMI toolset deliberately, "so neither one being down
+  # blocks recovering the other". Duplicated aliases are the cost of that, and
+  # are cheaper than a shared module that would make the pair co-dependent.
+  # Note the repo path differs between the two (~/nixos-config here,
+  # ~/Code/nixos-config on the Mac), so the strings cannot be shared verbatim
+  # anyway.
+  #
+  # ⚠ A raw IP because the BMC has no DNS entry — §2 records only
+  # 192.168.8.191. If one is ever added, change it in both files.
   home.shellAliases = {
     nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#pegasus";
     nrt = "sudo nixos-rebuild test --flake ~/nixos-config#pegasus";
     npull = "git -C ~/nixos-config pull";
+    ipmi_tower_open_tty = ''~/nixos-config/scripts/ipmi-remote.sh console 192.168.8.191 "op://System Keys/tower ipmi/password"'';
+    ipmi_tower_set_bios_next_boot = ''~/nixos-config/scripts/ipmi-remote.sh bios-next-boot 192.168.8.191 "op://System Keys/tower ipmi/password"'';
   };
 
   # ── Desktop apps ────────────────────────────────────────────────────────────
