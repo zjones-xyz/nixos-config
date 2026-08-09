@@ -1201,6 +1201,66 @@ The original three, still valid:
 
   **The copy is network-bound**, not SATA-bound — roughly 5–6 h for 2.1 TiB at
   1 GbE, and it must finish before step 11. A scheduling input, not a blocker.
+
+  #### ⭐ Revised 2026-08-09 — two parachutes, and the in-box one gets unplugged
+
+  **Both, not either.** `h-3V35` (WD Red Plus WD40EFPX, 4 TB, CMR, 2022) goes into
+  the spare slot of the printed bracket and takes a copy over SATA; `h-XDAS` keeps
+  its off-box copy on pegasus over the network. Cheap, because neither disk has
+  another job during the window.
+
+  ⚠ **The in-box copy is disconnected before any destructive step** — power and
+  data both, physically. This is the whole point of it, so it is a step and not a
+  nicety:
+
+  1. Copy 2.1 TiB to `h-3V35` over SATA — faster than 1 GbE
+  2. Verify
+  3. **Unplug it**
+  4. Only reconnect if it is needed
+
+  **Why unplugged, and why this is not paranoia.** The likeliest failure in a
+  migration that shuffles disks is not a drive dying — it is **wiping the wrong
+  device**. A parachute on the same controller, in the same `lsblk`, one typo from
+  the shell doing the work, is exactly the disk that gets `mkfs`'d at 2am. The
+  off-box requirement was never mainly about fire; it was about the operator. An
+  air-gapped disk inside the chassis restores that property.
+
+  **What each copy covers:**
+
+  | | Operator error | Disk death | Chassis-level loss |
+  |---|---|---|---|
+  | `h-3V35`, in-box, unplugged | ✅ | ✅ | ❌ |
+  | `h-XDAS`, on pegasus | ✅ | ✅ | ✅ |
+
+  So the off-box copy earns its keep on the last column alone — and `h-3V35` is
+  the far better *disk*, being a 2022 CMR drive against a ~13-year-old untested
+  one. Neither replaces the other.
+
+  ⚠ **LUKS both**, per the warning above. `h-3V35` is set up fresh for this, so it
+  costs nothing — and the container is kept afterwards for the role below rather
+  than being torn down.
+
+  #### `h-3V35` after the window — qBittorrent's incomplete directory
+
+  **1.2 TB designated for in-progress torrents**, deliberately *off* the array.
+
+  **The reason is SnapRAID's model.** Parity assumes mostly-static data. A torrent
+  being written is the pathological opposite: every sync sees a changed file, and
+  the parity work is spent on data that is about to change again. Keeping
+  incomplete downloads off-array means SnapRAID never sees a file until it is
+  finished and immutable — which is the state its whole design assumes.
+
+  ⚠ **Move completed files *onto* the pool, not away from it, or hardlinks
+  break.** §6.2 step 14 already carries "verify hardlink behaviour inside the *arr
+  containers" as an acceptance test, and this is the change most likely to break
+  it: hardlinks cannot cross filesystems, so a completed file must land on the
+  same filesystem as the library for the *arr apps to link rather than copy. The
+  split that works is **incomplete on `h-3V35`, completed onto the mergerfs pool**
+  — partial files need no hardlinks, finished ones do.
+
+  ⟨Two things undecided: what the remaining ~2.8 TB does, and whether seeding
+  continues from the pool or from this disk. Seeding from the pool is read-only
+  and costs SnapRAID nothing, which argues for it.⟩
   ⟨`ethtool enp42s0` for the real figure.⟩
 
 ### 6.4 If in-place conversion turns out not to be possible
