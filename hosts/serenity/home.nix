@@ -109,11 +109,11 @@
   # inherits the same fallback contract — no 1Password item, no problem, it
   # drops to a local config file and then to an interactive prompt.
   #
-  # towerbmc.internal, like pegasus.internal above, needs an AdGuard DNS
-  # rewrite that this repo does not declare. Until that exists, swap the
-  # hostname for the BMC's raw address — `PLATFORM.md` §2 records it as
-  # 192.168.8.191. Changing it means changing both files (here and
-  # hosts/pegasus/home.nix).
+  # towerbmc.internal resolves through an AdGuard DNS rewrite that this repo
+  # does not declare — provisioned out-of-band 2026-08-09, exactly like
+  # pegasus.internal above. If it ever stops resolving, the BMC's raw address
+  # is 192.168.8.191 (`PLATFORM.md` §2), and swapping it means editing both
+  # files (here and hosts/pegasus/home.nix).
   #
   # ⚠ These are deliberately run from *here*, not from Tower. §2: "Run these
   # from a machine that is not Tower" — the whole point of a BMC is reaching a

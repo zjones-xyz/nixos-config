@@ -29,10 +29,10 @@
   # ~/Code/nixos-config on the Mac), so the strings cannot be shared verbatim
   # anyway.
   #
-  # towerbmc.internal needs an AdGuard DNS rewrite this repo does not declare —
-  # same situation as serenity's unlock-pegasus alias. Until it resolves, swap
-  # in the BMC's raw address, which §2 records as 192.168.8.191. Changing it
-  # means changing both files.
+  # towerbmc.internal resolves through an AdGuard DNS rewrite this repo does
+  # not declare — provisioned out-of-band 2026-08-09, same situation as
+  # serenity's unlock-pegasus alias. If it ever stops resolving, the BMC's raw
+  # address is 192.168.8.191 (§2), and swapping it means editing both files.
   home.shellAliases = {
     nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#pegasus";
     nrt = "sudo nixos-rebuild test --flake ~/nixos-config#pegasus";
