@@ -3,7 +3,7 @@
 # typed at a prompt every time.
 #
 # Generic across BMCs — see the per-host `home.shellAliases` bindings
-# (`ipmi_tower_open_tty`, `ipmi_tower_set_bios_next_boot`) rather than
+# (`ipmi-tower-open-tty`, `ipmi-tower-set-bios-next-boot`) rather than
 # duplicating this file per machine. Same shape, and the same 1Password
 # fallback contract, as scripts/luks-unlock-remote.sh.
 #
