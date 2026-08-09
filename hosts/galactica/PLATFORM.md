@@ -500,11 +500,38 @@ day, but it is a holding action, not a resolution.
 A Gen3 result removes the §1 landmine for good and removes the link as a design
 constraint.
 
-⚠ **The test needs the card in the case.** The ASM1166 is currently out (§7b
-step 4), so parking `PCI Express Port - Gen X` at `Auto` while it is removed is
-not running this test — it only sets the state the test will start from. See
-`DECISIONS.md`, which holds the retest until the LSI question resolves, on the
-grounds that it would otherwise measure a card that may be going back.
+⚠ **The test needs the card in the case**, so parking `PCI Express Port - Gen X`
+at `Auto` while it is removed does not run it — that only sets the state the test
+starts from.
+
+#### ⚠ Attempt 2026-08-09 — ran, and the result is CONFOUNDED. Do not act on it.
+
+The ASM1166 was reinstalled alongside the LSI with Gen X at `Auto`. **It did not
+enumerate** — `lspci -nn -d 1b21:` returned only the ASM1064, and root ports
+`00:01.0` and `00:06.0` both showed `Width x0` (`HARDWARE-MAP.md` §4).
+
+**That is not a Gen3 failure, because two other things could produce it:**
+
+1. **`Detect Non-Compliance Device` was left at its default**, and §1 requires it
+   **Enabled** for this card *in addition to* the Gen X setting. If the default is
+   Disabled, the card was never going to appear regardless of link speed.
+2. **Option ROM pressure.** The SAS2008's large boot ROM was loading in the same
+   machine, and Step 4 records that exhausting legacy option ROM space makes cards
+   silently fail to initialise — a failure that looks exactly like §1's.
+
+⚠ **Returning the card on this result would be a mistake**, and `DECISIONS.md`'s
+return rule should not be applied to it. **The clean test is:**
+`Detect Non-Compliance Device = Enabled`, Gen X = `Auto`, **LSI slot OPROM
+Disabled** (per-slot toggles live under *Advanced → PCIe/PCI/PnP Configuration*;
+the LSI is not a boot device here). Only then does absence mean anything.
+
+⚠ **And note what a pass would actually buy**, because the sentence above about
+removing the landmine "for good" is optimistic. §1's landmine is **two** non-default
+settings — Gen2 *and* `Detect Non-Compliance Device`. A Gen3 pass retires the
+first only; the second remains a pin a CMOS clear still knocks out. Under the
+reasoning behind the return rule — that depending on a pin is itself the defect —
+that is the same fault at half strength. **The sharper test is optimized defaults
+plus LSI OPROM off**, adding settings back one at a time only if it fails.
 
 **Run this before finalising any disk placement.**
 
@@ -732,6 +759,70 @@ entirely**, so it is not a candidate here or anywhere — the HD204UI firmware
 defect (a SMART command during a write can corrupt data) made it a poor fit for a
 fleet that polls SMART constantly. Use any other drawer disk; prefer one that
 needs burn-in anyway. See `docs/DISK-DRAWER.md`.
+
+### ✅ Cold pass result — run 2026-08-09
+
+Run on Tower with a WD40EFAX drawer disk attached to the card. **The vendor's
+claim is true: the crossflash happened, and the card works.** One defect, below.
+
+| Check | Result |
+|---|---|
+| Device ID (Step 1) | **`1000:0072`** — MPT firmware, not `0073` stock MegaRAID ✅ |
+| Driver (Step 1) | `mpt3sas` ✅ |
+| Firmware | **`20.00.07.00`** — P20, the recommended terminal IT release ✅ |
+| IT-mode behaviour (⭐) | `smartctl -a /dev/sda` returns full SMART with **no `-d megaraid,N`** ✅ |
+| Disk passthrough | `sda` enumerates as a plain block device on `host0` ✅ |
+| Link | `LnkCap`/`LnkSta` both **Gen2 x8** — full width, no downgrade ✅ |
+| Subsystem | `1734:1177` Fujitsu D2607 — on Step 3's list of genuine OEM rebadges ✅ |
+| **SAS address** | ❌ **`0x4433221100000000` — the unprogrammed placeholder.** See below |
+| `storcli` / `megacli` negative test | ⚠ **Not performed.** Neither is packaged in Unraid, so `command not found` proves nothing either way |
+
+⚠ **Two naming traps that cost time here, in case they cost it again:**
+
+- **`mpt3sas` is the module; SAS2 hardware registers as `mpt2sas_cm0`.** So
+  `dmesg | grep mpt3sas` returns only the version banner and an ASPM warning, and
+  looks exactly like a controller that never initialised. It had. Grep for
+  `LSISAS|sas_address|mpt2sas` as well, or the card looks broken when it is fine.
+- The subsystem being **Fujitsu** rather than the `1000:3020` LSI 9211-8i identity
+  Step 3 lists as "the usual identity after a 9240 crossflash" simply means
+  whoever flashed it used a D2607 image. It does not conflict with Step 3b's
+  Lenovo `FRU 03T6739` board identification — the subsystem ID follows the
+  *firmware*, the FRU follows the *board*.
+
+#### ❌ The SAS address was erased — disqualifying until repaired
+
+```
+mpt2sas_cm0: handle(0x9) sas_address(0x4433221103000000) port_type(0x1)
+```
+
+`0x4433221100000000` is LSI's **unprogrammed placeholder** — the literal byte
+pattern `44 33 22 11`, with the final byte indexing the phy. A real address is
+NAA-form and starts `0x5`. This card's, from the Step 3b sticker, should be
+**`0x500605b007e41650`**.
+
+**This is the outcome Step 3 predicted, and its ruling applies unchanged:** it is
+*not* evidence of a counterfeit — everything else here says genuine OEM channel —
+but it must be fixed before the card is trusted, because a bogus SAS address
+causes erratic enumeration. The vendor's "already IT-flashed" claim is true; the
+execution was sloppy.
+
+**The repair:**
+
+```sh
+sas2flash -o -sasadd 500605b007e41650
+```
+
+⚠ `sas2flash` is still not in nixpkgs (Step 2). Now that §11 confirms this board
+does UEFI, **`sas2flash.efi` from a UEFI shell is the cleaner route** than an FHS
+wrapper around the Linux build, which is widely reported to fail on modern
+kernels. It writes the manufacturing region rather than firmware, so it is a
+smaller operation than §6's flash — but it is still a flashing tool on a card that
+boots its own option ROM, and §6 is the standing reminder about how those go here.
+
+⟨**Open: repair or return.** The card is otherwise excellent and the return window
+is the deadline. "Shipped with an erased SAS address" is a fair as-described
+complaint if the flashing is not wanted; repairing is one command once the tool is
+in hand. Not decided as of 2026-08-09.⟩
 
 ### Step 4 — test it in Tower first, and additively
 

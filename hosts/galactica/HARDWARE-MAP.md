@@ -236,6 +236,38 @@ The ASM1064 sits behind PCH root port `00:1c.0` at `02:00.0`. Note the address
 differs from what earlier VFIO-era notes recorded — **which is the documented
 reason the fleet binds PCI devices by vendor:device ID rather than by address.**
 
+> ⭐ **That reasoning got a second, cleaner demonstration on 2026-08-09.** Adding
+> the LSI to a slot renumbered the ASM1064 from `02:00.0` to **`04:00.0`**, because
+> the LSI took `02:00.0`. Nothing about the ASM1064 changed — a card was added
+> somewhere else in the machine. **And every `sdX` letter shifted by one** as the
+> LSI's disk claimed `sda`: the cache SSD moved `sdb`→`sdc`, parity-2 `sdd`→`sde`,
+> and so on down the table above. Identities were re-confirmed by serial, and the
+> mapping otherwise holds exactly. Bind by ID, never by address or by letter.
+
+### Slot electrical widths — measured 2026-08-09
+
+`lspci -vv` `LnkCap`/`LnkSta` during the §7b cold pass, which closes the gap this
+section previously flagged as never read on this machine.
+
+| Root port | Electrical | Max speed | Occupant, 2026-08-09 |
+|---|---|---|---|
+| `00:01.0` | **x8** | 8 GT/s (Gen3) | untrained — `Width x0` |
+| `00:01.1` | **x8** | 8 GT/s (Gen3) | **LSI SAS2008**, negotiated **Gen2 x8** |
+| `00:06.0` | **x4** | 5 GT/s (Gen2) | untrained — `Width x0` |
+| `00:1c.0` | x1 (PCH) | 5 GT/s | **ASM1064**, Gen2 x1 (`LnkCap` 8 GT/s, capped by the port) |
+| `00:1c.4` | x1 (PCH) | 5 GT/s | onboard 82574L NIC, 2.5 GT/s x1 |
+
+**The two x8 slots come off the CPU and are Gen3-capable**; `00:06.0` is a Gen2 x4.
+So the LSI is in the right kind of slot and is not slot-limited — a SAS2008 is a
+Gen2 part, so `Gen2 x8` is its ceiling, not a downgrade.
+
+⚠ **`00:01.0` and `00:06.0` reporting `Width x0` is a signal, not just an empty
+slot.** `PLATFORM.md` §10 records that this board hides root ports with nothing
+behind them, so a port that is *visible but untrained* suggests a card present and
+failing to link — which is the ASM1166's §1 signature. It was in a slot for this
+run and did not enumerate. See `PLATFORM.md` §6e; that result is confounded and
+is not yet a verdict on the card.
+
 ### ✅ The current cabling is already the bare-metal optimum — do not re-run it
 
 `ata1`/`ata2` are the C204's two **6 Gb/s** ports and `ata3`–`ata6` its four

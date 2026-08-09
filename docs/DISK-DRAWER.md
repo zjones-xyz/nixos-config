@@ -72,6 +72,33 @@ Confirm against WD's own product brief before this drives a purchase decision.
 3. **SMR is fine for bulk sequential storage and for staging.** A migration copy
    is one long sequential write. These disks are perfectly good for that.
 
+⚠ **A fourth concern, and it is not about performance — added 2026-08-09.**
+`smartctl` 7.5 raises this unprompted on `h-CY72-smr`, read during the LSI cold
+pass (`PLATFORM.md` §7b):
+
+> ```
+> Model Family: Western Digital Red (SMR)
+> ==> WARNING: Data recovery specialists reported serious problems with
+>     older WD SMR HDDs: https://www.heise.de/-10800960.html
+> ```
+
+**Everything above is a workload-fit argument; this one is a recoverability
+argument**, and it cuts differently. The three points above say *where* to put an
+EFAX. This says that when one fails, getting data back off it is reportedly worse
+than for a conventional drive — which is an argument about **what you are willing
+to have only one copy of**, not about write patterns.
+
+It does not change point 3: staging is still fine, because staging data exists
+elsewhere by definition. It does sharpen the photo-tier table below — an
+EFAX-containing mirror is worse than its rebuild characteristics alone suggest,
+because the degraded case is also the harder-to-recover case. Treat it as
+strengthening the "buy one CMR 4 TB" row rather than as new information about
+`h-3V35`, which is unaffected.
+
+⟨The `smartmontools` database flags this by model family, not by measurement on
+this specific disk. It is a class warning, not a health reading — the burn-in
+still has to happen.⟩
+
 **Consequence for the photo tier.** `hosts/galactica/DESIGN.md` §5 proposes two
 4 TB disks in btrfs raid1 for photos. **There is only one CMR 4 TB disk here**, so
 that pair cannot be all-CMR. The options, none of them chosen:
