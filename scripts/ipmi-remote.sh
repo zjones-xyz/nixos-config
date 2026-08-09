@@ -176,12 +176,17 @@ EOF
     ;;
 
   run)
-    # ⚠ One targeted guard, earned by an actual near-miss on 2026-08-09: a
-    # two-line paste ran `ipmipower --reset` against a live Unraid server with a
-    # mounted array, which is an unclean shutdown and a parity check rather than
-    # the reboot it looks like. Everything else passes through untouched; this
-    # one gets a visible warning first, because it is the only command here that
-    # can cost hours.
+    # ⚠ One targeted guard, earned by a near-miss on 2026-08-09. A chained paste
+    # invoked `ipmipower --reset` against a live Unraid server with a mounted
+    # array *after the preceding command had already failed*. It got as far as
+    # its password prompt and was interrupted there, so nothing happened — the
+    # only thing between that array and an unclean shutdown was the operator
+    # noticing the first command's error and stopping.
+    #
+    # That is what this guard automates. The warning prints *before* the tool
+    # runs, so it lands at the same moment as the password prompt rather than
+    # after the fact. Everything else passes through untouched; this is the only
+    # command here that can cost hours.
     if [ "$RUN_TOOL" = "ipmipower" ]; then
       for arg in "$@"; do
         case "$arg" in
