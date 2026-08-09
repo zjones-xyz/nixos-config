@@ -60,8 +60,16 @@
   #
   # ⚠ This points at the RAW partition, not the old mapper. The stale LUKS header
   # is overwritten on first activation — free, since swap contents are worthless
-  # by definition — but it does mean the path must be right. by-id is stable
-  # across reboots and recabling in a way /dev/nvme0n1p3 is not.
+  # by definition — but it does mean the path must be right. Verified on the host
+  # 2026-08-09 rather than trusted: `ls -l /dev/disk/by-id/` resolves this link to
+  # nvme0n1p3, the same partition HARDWARE-MAP.md §2 caught sitting idle. by-id is
+  # stable across reboots and recabling in a way /dev/nvme0n1p3 is not.
+  #
+  # udev also emits a duplicate `…_PNY21232106090100590_1-part3` alias for this
+  # partition — a known NVMe by-id name collision it disambiguates with a suffix.
+  # Harmless here because there is one disk, so both names land on nvme0n1p3. It
+  # would matter on a machine holding two disks that share a model and serial,
+  # where the suffix separates different hardware and the assignment can flip.
   swapDevices =
     [ { device = "/dev/disk/by-id/nvme-PNY_CS2130_1TB_SSD_PNY21232106090100590-part3";
         randomEncryption.enable = true;
