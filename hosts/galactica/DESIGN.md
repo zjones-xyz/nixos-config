@@ -1242,7 +1242,10 @@ The original three, still valid:
 
   #### `h-3V35` after the window — qBittorrent's incomplete directory
 
-  **1.2 TB designated for in-progress torrents**, deliberately *off* the array.
+  **500 GB designated for in-progress torrents**, deliberately *off* the array.
+  Sized against an expected working set of ≤300 GB, so roughly 40% headroom —
+  which matters more than it sounds, because stalled torrents that never complete
+  accumulate here rather than draining.
 
   **The reason is SnapRAID's model.** Parity assumes mostly-static data. A torrent
   being written is the pathological opposite: every sync sees a changed file, and
@@ -1258,9 +1261,40 @@ The original three, still valid:
   split that works is **incomplete on `h-3V35`, completed onto the mergerfs pool**
   — partial files need no hardlinks, finished ones do.
 
-  ⟨Two things undecided: what the remaining ~2.8 TB does, and whether seeding
-  continues from the pool or from this disk. Seeding from the pool is read-only
-  and costs SnapRAID nothing, which argues for it.⟩
+  **✅ Seeding runs from the pool.** Completed torrents move onto mergerfs and are
+  seeded from there, which is not a compromise but the point:
+
+  - **Seeding is read-only**, so a completed torrent is static from that moment —
+    exactly the state SnapRAID's model assumes, and it costs parity nothing.
+  - **It is what makes the \*arr hardlink free.** The import happens *after*
+    qBittorrent's move, so the sequence is `h-3V35` → pool (cross-filesystem copy)
+    → pool library (hardlink). That second hop is free only because both ends are
+    inside the pool. Seeding from `h-3V35` instead would make the import a real
+    copy, store every file twice, and leave the seeding copy outside parity.
+
+  ⚠ **Watch for silent move failures on first setup.** If the destination is
+  unavailable or permissions are wrong, qBittorrent can mark a torrent complete
+  while leaving the data in the incomplete directory, without complaining. The
+  symptom appears months later as an inexplicably full `h-3V35`.
+
+  #### The remaining ~3.5 TB — and a sequencing trap
+
+  ⚠ **Decide the partition layout *before* the parachute copy, not after.** The
+  parachute lands 2.1 TiB on this disk; carving a 500 GB qBittorrent partition
+  afterwards means moving all of it first. Partition up front and the copy lands
+  where it belongs.
+
+  ⭐ **Do not wipe the parachute the moment the migration ends.** 2.1 TiB + 500 GB
+  fits inside 3.6 TiB with room to spare, so the parachute can simply stay as a
+  point-in-time copy through the shakedown period and be reclaimed once the new
+  layout has earned trust. The disk has nothing else to do, so this costs nothing.
+
+  ⟨**A local backup of the Precious tier here was considered and is probably
+  redundant.** It would fit easily — 215.6 GiB against 3.5 TB — but the photo tier
+  is now ZFS with snapshots, which covers logical loss better than a second copy
+  on the same machine, and borg covers the offsite case. A third copy that is
+  always mounted in the same chassis protects against little that is not already
+  covered. Not ruled out; just not obviously worth a role.⟩
   ⟨`ethtool enp42s0` for the real figure.⟩
 
 ### 6.4 If in-place conversion turns out not to be possible
