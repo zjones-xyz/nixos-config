@@ -151,6 +151,36 @@ regardless.
 
 ## 3. Cages
 
+### System identity — read 2026-08-09, `dmidecode`
+
+**This is an integrator build, not a Supermicro barebones and not a whitebox.**
+Worth stating because it decides where documentation comes from.
+
+| Field | Value |
+|---|---|
+| System manufacturer | **Seneca** (Seneca Data, a US integrator) |
+| System product | **`pro499926`** |
+| System serial | `1212363` |
+| Baseboard | Supermicro **X9SCL/X9SCM**, version `1.11A`, serial `ZM148S009088` |
+| Chassis manufacturer | Supermicro, `Type: Desktop` |
+
+⚠ **The Seneca product number is a dead end.** Seneca Data was acquired by Arrow
+Electronics in 2014 and has since exited that line; `pro499926` returns nothing
+searchable. It is an integrator SKU, not a chassis model, so no manual sits behind
+it.
+
+**The chassis is genuinely Supermicro** — confirmed by front-panel branding as
+well as SMBIOS — so **Supermicro's own chassis manual is the document to want**,
+and they keep manuals for `CSE-7xx`-era towers online indefinitely. ⟨The `CSE-`
+model number is still unrecorded. It is on a sticker — rear panel near the PSU is
+the usual position, sometimes inside a side panel. That number unblocks the cage
+and 2.5"-bracket documentation below.⟩
+
+⚠ Do not trust the chassis *Version* and *Serial* fields: both read `0123456789`,
+i.e. never programmed. Only the manufacturer and type are meaningful.
+
+---
+
 **Tower has more than one cage.** Bay numbers are therefore namespaced by a
 per-cage letter (`docs/DISK-LABELLING.md` §3), so a bay is `A1`, `B2` and a cable
 label reads `I-SATA2→A1`.
