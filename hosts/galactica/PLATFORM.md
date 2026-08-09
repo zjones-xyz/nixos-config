@@ -75,7 +75,50 @@ Three argument-parsing traps, each of which reads as a broken BMC:
 - **`ipmi-config` whole-file commits fail** on this BMC. Use minimal
   section-only files.
 - **`--section` does not scope `--commit`.** Naming a section does not restrict
-  what a commit writes.
+  what a commit writes. ⚠ It *does* scope `--checkout` correctly — the trap is
+  specific to commit, and treating checkout as equally unsafe costs you the one
+  safe way to read current state.
+
+### Rebooting into BIOS remotely — and the tool that does *not* do it
+
+**`ipmi-chassis` has no boot-device option.** Its entire option set is
+`--get-chassis-capabilities`, `--get-chassis-status`, `--chassis-control`,
+`--chassis-identify`, `--get-system-restart-cause` and
+`--get-power-on-hours-counter`. Reaching for it and getting `unrecognized option`
+looks like a version mismatch or a BMC quirk; it is neither. The boot override
+lives in `ipmi-config` under the `chassis` category:
+
+```sh
+# read current state first — -S scopes checkout, per the trap above
+ipmi-config -h 192.168.8.191 -u ADMIN -P -g chassis -o -S Chassis_Boot_Flags
+
+# then set the override, then reset as a SEPARATE command
+ipmi-config -h 192.168.8.191 -u ADMIN -P -g chassis \
+  -c -e "Chassis_Boot_Flags:Boot_Device=BIOS-SETUP"
+ipmipower   -h 192.168.8.191 -u ADMIN -P --reset
+```
+
+⭐ **Use `-e`, not `-n`, and this is the point of the whole block.** A key-pair
+commit writes exactly one key with no file involved, which routes around *both*
+`ipmi-config` traps above rather than working within them. It is strictly better
+than the "minimal section-only file" advice those traps otherwise leave you with.
+
+**The override is one-shot** — it applies to the next boot only, so it cannot
+strand the machine in setup. Values verified against FreeIPMI 1.6.18's binary
+rather than recalled: `NO-OVERRIDE`, `PXE`, `HARD-DRIVE`, `HARD-DRIVE-SAFE-MODE`,
+`DIAGNOSTIC-PARTITION`, `CD-DVD`, `BIOS-SETUP`, `FLOPPY`, `PRIMARY-REMOTE-MEDIA`,
+`REMOTE-CD-DVD`, `REMOTE-FLOPPY`, `REMOTE-HARD-DRIVE`. `HARD-DRIVE` is the one
+§11's boot-order fallback needs.
+
+⚠ **Keep the reset on its own line, and know what it does.** `ipmipower --reset`
+is a hard reset, not a shutdown — on a running Unraid server with the array
+mounted that is an unclean shutdown and a parity check on next boot. Pasting it
+on the line after a command that might fail means it runs anyway. Confirm the
+override took, *then* reset.
+
+`systemctl reboot --firmware-setup` is not an alternative here: Unraid is not
+systemd-managed, and until §11 was answered there was no guarantee of efivars to
+set the flag in.
 
 The BMC lives at `192.168.8.191`. Serial-over-LAN is on **COM2 (`ttyS1`) at
 115200** by convention on Supermicro X9 boards — but the BIOS setting under
@@ -1091,17 +1134,31 @@ visually confirmed identical**: two CPU-attached, one PCH-attached, one free.
 
 ---
 
-## 11. Bootloader: UEFI or legacy
+## 11. Bootloader: Dual — answered 2026-08-09
 
-The X9SCM's UEFI support depends on its BIOS revision, which has not been checked
-on this board.
+**The BIOS offers UEFI *and* legacy boot options.** Read out of the BIOS by the
+owner during the LSI cold pass, rather than inferred from the board's age — which
+is what this section previously had to do, since X9SCM UEFI support varies by BIOS
+revision and this board's had never been checked.
 
-- **If it supports Dual, use it.** NixOS boots UEFI from its own root disk while
-  the Unraid flash keeps booting legacy exactly as it does today — the least
-  disruptive option, and the one that keeps the fallback trivial.
-- **If it must stay legacy-only**, the host needs GRUB rather than systemd-boot.
-  Provision a 1MB BIOS boot partition at install time regardless — it is 1MB of
-  insurance against discovering this after partitioning, and it costs nothing.
+**So take the Dual path.** NixOS boots UEFI from its own root disk under
+systemd-boot, while the Unraid flash keeps booting legacy exactly as it does
+today — the least disruptive option, and the one that keeps the fallback trivial.
+~~If it must stay legacy-only, the host needs GRUB rather than systemd-boot.~~
+That branch is dead; **the host does not need GRUB.**
+
+The 1 MB BIOS boot partition is now belt-and-braces rather than insurance against
+a live risk. Still 1 MB, still worth provisioning if the partitioning is scripted
+anyway, but nothing depends on it.
+
+⚠ **This does not answer whether the NVMe is bootable — that is a separate
+question** (`DESIGN.md` §5.5, still open). UEFI support and an NVMe DXE driver in
+firmware are independent: a 2011 board can offer UEFI and still not enumerate an
+NVMe namespace as a boot target, because the standard postdates the firmware. So
+§5.5's workaround stands until tested with the adapter physically installed —
+**ESP on a SATA device, root and `/nix` on the NVMe.** It costs no port, and
+systemd-boot only needs firmware to reach the ESP; the initrd loads `nvme` and
+pivots.
 
 **The fallback that matters: the Unraid flash still boots this machine bare
 metal.** Nothing in any NixOS install touches the flash or its boot entry. Keep
