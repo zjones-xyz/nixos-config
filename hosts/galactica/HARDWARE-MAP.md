@@ -162,22 +162,50 @@ Worth stating because it decides where documentation comes from.
 | System product | **`pro499926`** |
 | System serial | `1212363` |
 | Baseboard | Supermicro **X9SCL/X9SCM**, version `1.11A`, serial `ZM148S009088` |
-| Chassis manufacturer | Supermicro, `Type: Desktop` |
+| Chassis, **actual** | **Chenbro `SR20969`** — SR209-series ATX tower. Suffix read as `-01`, ⚠ last character uncertain |
+| Originally sold as | A **Windows Storage Server 2012 Workgroup** appliance |
+
+⚠ **SMBIOS reports the chassis as `Supermicro / Type: Desktop`, and that is
+wrong.** It is board-supplied default data — the same defaulting that leaves the
+chassis *Version* and *Serial* fields reading `0123456789`. **The case is a
+Chenbro.** Front-panel branding agrees with SMBIOS and is equally misleading;
+Chenbro do extensive ODM work, so a rebadged front is unremarkable. This cost a
+search for a `CSE-` sticker that does not exist — **trust the printed part number
+over both.**
 
 ⚠ **The Seneca product number is a dead end.** Seneca Data was acquired by Arrow
-Electronics in 2014 and has since exited that line; `pro499926` returns nothing
-searchable. It is an integrator SKU, not a chassis model, so no manual sits behind
-it.
+Electronics in 2014 and has since exited that line; `pro499926` returns nothing.
+It is an integrator SKU, not a chassis model.
 
-**The chassis is genuinely Supermicro** — confirmed by front-panel branding as
-well as SMBIOS — so **Supermicro's own chassis manual is the document to want**,
-and they keep manuals for `CSE-7xx`-era towers online indefinitely. ⟨The `CSE-`
-model number is still unrecorded. It is on a sticker — rear panel near the PSU is
-the usual position, sometimes inside a side panel. That number unblocks the cage
-and 2.5"-bracket documentation below.⟩
+**`SR20969` is the useful identifier**, and it is the confident part — it matched
+a real Chenbro family on the first search, which a misread would not have. The
+SR209 family is documented and its user manual is still available.
 
-⚠ Do not trust the chassis *Version* and *Serial* fields: both read `0123456789`,
-i.e. never programmed. Only the manufacturer and type are meaningful.
+⚠ **The suffix is the uncertain part** — read as `-01`, last character not
+confidently. It denotes the drive configuration, and the family ships several
+(`-C0`, `-C4+`, Plus). **Do not resolve this from a listing for a sibling SKU.**
+
+**And it barely matters**, because the layout has already been observed directly:
+four hot-swap 3.5" bays (cage A) plus five 2.5" positions in the floor. Counting
+what is physically bolted in beats a SKU lookup, and the manual is wanted for
+*how the mounts work*, not for how many there are.
+
+**Original licence ceiling explains the build.** WSS 2012 Workgroup permits one
+socket, 32 GB RAM and six disks — and this machine reports exactly one physical
+CPU and exactly 32768 MB. It was specced to the licence, not generously.
+⚠ It now carries **eleven** SATA disks, so most of what is installed today sits
+outside anything the original configuration accounted for. That is the likely
+reason §3's cages resisted enumeration: past the stock bays, placement was
+improvised.
+
+### 2.5" mounting
+
+**The chassis floor carries five 2.5" mounting positions** — owner-observed
+2026-08-09, tabs positioned for 2.5" drives.
+
+⚠ **They are not currently in use.** The SSDs sit in an **owner-printed cage**,
+not stock mounting. Worth knowing before anyone plans around either: the printed
+cage is not in any manual, and the five stock positions are free.
 
 ---
 
