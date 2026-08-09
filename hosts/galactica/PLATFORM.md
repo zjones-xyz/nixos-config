@@ -27,9 +27,15 @@ unassigned disks in `docs/DISK-DRAWER.md`.
 
 ---
 
-## 1. The ASM1166 disappearing act — read this before touching the BIOS
+## 1. The ASMedia disappearing act — read this before touching the BIOS
 
-The ASM1166 SATA card is **completely invisible** — no POST banner, absent from
+> ⚠ **Scope corrected 2026-08-09.** This section was titled "the ASM1166
+> disappearing act" and written as a fact about that one card. **It is a fact
+> about the board, and it takes every ASMedia add-in card with it** — measured,
+> see below. The old title was actively misleading: it implied swapping the
+> ASM1166 out would remove the problem.
+
+ASMedia add-in cards are **completely invisible** — no POST banner, absent from
 `lspci` entirely — unless **both** of these are set under
 *Advanced → Integrated IO Configuration*:
 
@@ -38,22 +44,51 @@ The ASM1166 SATA card is **completely invisible** — no POST banner, absent fro
 | `PCI Express Port - Gen X` | **Gen2** — explicitly, not `Auto` |
 | `Detect Non-Compliance Device` | **Enabled** |
 
-`Auto` fails because the slot is Gen3-capable and the card, on its **original**
-firmware, could not train at Gen3. Whether that is still true after the ECS06
-flash is untested — see §6e, which is the single cheapest experiment left on
-this machine.
+### What was measured, 2026-08-09
 
-**A CMOS clear or a dead coin-cell resets both and makes the card vanish.** It
-looks exactly like hardware failure — check this before suspecting the card, the
-cables, or the drives. This board is from 2011, so the coin cell is a live risk
-rather than a hypothetical; §5 covers replacing it.
+Same machine, same boot session, nothing physically moved, `Detect Non-Compliance
+Device` **Enabled throughout**, LSI option ROM disabled. The only variable was
+`PCI Express Port - Gen X`:
 
-**How bad that is depends on what the card is carrying at the time.** As of
-2026-08-07 the array is on onboard SATA and the ASM1166 holds nothing, so the
-fault would present merely as a card missing from `lspci`. Once disks move onto
-it, the same fault presents as *the array disappeared and the controller looks
-dead* — which is a much worse thing to be diagnosing at 3am. Do not treat "the
-array is fine" as evidence the BIOS settings survived.
+| `Gen X` | `lspci -nn -d 1b21:` |
+|---|---|
+| `Auto` | `04:00.0` ASM1064 **only** |
+| `Gen2` | `01:00.0` ASM1166, `03:00.0` ASM1042, `04:00.0` ASM1064 |
+
+**Two cards vanish at `Auto`, not one** — the ASM1166 *and* the ASM1042 USB3
+controller. Only the ASM1064, which sits on a PCH port rather than a CPU one,
+survives either way.
+
+⚠ **And the tidy explanation does not survive contact with that.** The story used
+to be "the slot is Gen3-capable and the card cannot train at Gen3". But the
+ASM1042 sits behind root port `00:06.0`, whose own `LnkCap` is **`Speed 5GT/s`** —
+Gen2 is that port's hardware ceiling, so nothing was ever asking that card to
+train at Gen3, and it disappeared anyway. Whatever this setting actually does to
+the root complex, it is **not** simply link-speed negotiation. Treat the table
+above as the reliable part and the mechanism as unexplained.
+
+⚠ **`Detect Non-Compliance Device` was not isolated.** It was `Enabled` in both
+runs, so this experiment shows `Gen X = Gen2` is *necessary* and says nothing
+about whether the second setting is. Do not conclude it is redundant.
+
+**A CMOS clear or a dead coin-cell resets both settings and makes the cards
+vanish.** It looks exactly like hardware failure — check this before suspecting a
+card, the cables, or the drives. This board is from 2011; §5 covers the coin
+cell, which was replaced 2026-08-09 and whose `VBAT` now reads a healthy 3.20 V.
+
+**How bad that is depends on what the cards are carrying at the time.** As of
+2026-08-09 the array is on onboard SATA and the ASM1166 holds nothing, so the
+fault presents merely as cards missing from `lspci`. Two ways that gets worse:
+
+- **Once disks move onto the ASM1166**, the same fault presents as *the array
+  disappeared and the controller looks dead* — a much worse thing to be
+  diagnosing at 3am. Do not treat "the array is fine" as evidence the BIOS
+  settings survived; today it is evidence of nothing, because the array does not
+  depend on them.
+- **The ASM1042 going with it takes all USB3** — the C204 is EHCI-only
+  (`DESIGN.md` §5.5), so that card is the machine's only USB 3.0 host. A CMOS
+  clear silently demotes every USB3 port to USB2, which is the kind of fault that
+  gets blamed on a cable for a week.
 
 ---
 
@@ -551,34 +586,50 @@ constraint.
 at `Auto` while it is removed does not run it — that only sets the state the test
 starts from.
 
-#### ⚠ Attempt 2026-08-09 — ran, and the result is CONFOUNDED. Do not act on it.
+#### ❌ 2026-08-09 — it does not enumerate at `Auto`. Controlled, and reproducible.
 
-The ASM1166 was reinstalled alongside the LSI with Gen X at `Auto`. **It did not
-enumerate** — `lspci -nn -d 1b21:` returned only the ASM1064, and root ports
-`00:01.0` and `00:06.0` both showed `Width x0` (`HARDWARE-MAP.md` §4).
+> ⟨**One test still outstanding: explicit `Gen3` rather than `Auto`.** This
+> section, and §1, have always assumed those are the same request. That
+> assumption is now doubtful — see §1's measurement, where the ASM1042 vanished
+> at `Auto` despite sitting behind a root port whose `LnkCap` caps at Gen2 in
+> hardware, so link speed cannot have been what removed it. If the ASM1166 comes
+> up at explicit `Gen3`, the conclusion below inverts: the card trains fine and
+> `Auto` was the broken setting all along. **Do not act on this section until
+> that runs.**⟩
 
-**That is not a Gen3 failure, because two other things could produce it:**
+**Run properly, with both confounds removed:** `Detect Non-Compliance Device`
+**Enabled**, LSI slot option ROM **Disabled**, nothing physically moved between
+boots. A first attempt without those controls was discarded rather than trusted.
 
-1. **`Detect Non-Compliance Device` was left at its default**, and §1 requires it
-   **Enabled** for this card *in addition to* the Gen X setting. If the default is
-   Disabled, the card was never going to appear regardless of link speed.
-2. **Option ROM pressure.** The SAS2008's large boot ROM was loading in the same
-   machine, and Step 4 records that exhausting legacy option ROM space makes cards
-   silently fail to initialise — a failure that looks exactly like §1's.
+| `Gen X` | Result |
+|---|---|
+| `Auto` | ASM1166 **absent** from `lspci`; root port `00:01.0` shows `Width x0` |
+| `Gen2` | ASM1166 present at `01:00.0`, `LnkSta: 5GT/s (downgraded), Width x2` |
 
-⚠ **Returning the card on this result would be a mistake**, and `DECISIONS.md`'s
-return rule should not be applied to it. **The clean test is:**
-`Detect Non-Compliance Device = Enabled`, Gen X = `Auto`, **LSI slot OPROM
-Disabled** (per-slot toggles live under *Advanced → PCIe/PCI/PnP Configuration*;
-the LSI is not a boot device here). Only then does absence mean anything.
+**The negative was controlled**, which is what makes it a verdict rather than a
+guess: flipping back to `Gen2` brought the card straight back, so it is alive,
+seated, and in a working slot. It simply does not come up when the BIOS is left
+at `Auto`.
 
-⚠ **And note what a pass would actually buy**, because the sentence above about
-removing the landmine "for good" is optimistic. §1's landmine is **two** non-default
-settings — Gen2 *and* `Detect Non-Compliance Device`. A Gen3 pass retires the
-first only; the second remains a pin a CMOS clear still knocks out. Under the
-reasoning behind the return rule — that depending on a pin is itself the defect —
-that is the same fault at half strength. **The sharper test is optimized defaults
-plus LSI OPROM off**, adding settings back one at a time only if it fails.
+**And the slot was not the limitation.** The ASM1166 sits behind root port
+`00:01.0`, whose `LnkCap` is `Speed 8GT/s, Width x8` — Gen3 was genuinely on
+offer and genuinely refused. `Width x2` confirms the width this section's
+bandwidth table assumes.
+
+**So the Gen2 pin stays.** The ~1.0 GB/s figure above is the operating reality,
+not a starting point, and the ~1.97 GB/s column is off the table.
+
+⚠ **What this does NOT establish, and the distinction now carries a hardware
+decision.** §1's landmine survives regardless of what happens to this card,
+because the **ASM1042 disappears at `Auto` too** — and its root port caps at
+Gen2 in hardware, so link speed cannot be the mechanism there. Removing the
+ASM1166 does not remove the pin; the machine's only USB3 host needs it as well.
+Anything in this repo that treats "retire the ASM1166" as equivalent to "delete
+the landmine" is wrong, `DESIGN.md` §6.7 included. See §1.
+
+⚠ **The remaining cost of the pin is the NVMe root**, not the array — Gen2 x4 is
+~2 GB/s against Gen3's ~4. That is a ceiling on a root disk, not a constraint on
+anything measured here.
 
 **Run this before finalising any disk placement.**
 
