@@ -1069,6 +1069,33 @@ device here) if anything odd appears at POST. Note this pressure is *lower right
 now* than it will be later, with the ASM1166 out and the ASM1064 still due to be
 pulled — another reason to test before the slots refill.
 
+#### The two OPROM controls, and which one to reach for
+
+Confirmed on the board 2026-08-09: **this BIOS has both**, and they stack.
+
+| Control | Where | Scope |
+|---|---|---|
+| `Launch Storage OpROM Policy` | *Advanced → CSM Configuration* | **Global.** Picks the *flavour*: `Do not launch` / `UEFI only` / `Legacy only` / `Legacy first` / `UEFI first` |
+| Per-slot OPROM enable/disable | *Advanced → PCIe/PCI/PnP Configuration* | **One slot.** Whether that slot's ROM launches at all |
+
+**Reach for the per-slot switch.** It is the surgical one — the 2026-08-09 §6e run
+disabled the LSI's slot OPROM and left everything else untouched, which is what
+made that a controlled experiment rather than a second variable.
+
+**A controller with no option ROM still works fine under Linux.** The ROM only
+provides boot-time access; `mpt3sas` and `ahci` do not need it. That is why
+disabling the LSI's was free — it is not a boot device here, since Unraid boots
+the USB flash.
+
+⚠ **Do not solve ROM pressure by setting the global policy to `Do not launch` or
+`Legacy only`.** `DESIGN.md` §5.5's NixOS plan puts the **ESP on a SATA device**
+with root and `/nix` on the NVMe, and booting that ESP needs a **UEFI** storage
+OpROM from the onboard AHCI controller. Get this wrong and the ESP simply never
+appears in the boot menu — which reads as a broken install, not a CSM setting.
+`UEFI first` is the likely landing spot once the NVMe work starts (§11 confirmed
+this board does Dual). Unraid's USB-flash boot goes through a different path and
+is not affected either way.
+
 **Combine the load test with the drawer burn-in (§12), because they are the same
 job.** The drawer's twelve untested spinners need burn-in before anything trusts
 them, and the HBA needs eight ports under sustained load. Running both at once
