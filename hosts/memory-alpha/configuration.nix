@@ -274,5 +274,9 @@ in
 
   homelab.letsencryptStaging = false;
 
+  # Real NVMe behind a real controller, so smartd has something to poll
+  # (modules/nixos/smart.nix). `smartctl` itself ships fleet-wide regardless.
+  homelab.smart.monitor = true;
+
   system.stateVersion = "26.05";
 }

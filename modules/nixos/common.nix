@@ -4,6 +4,7 @@
   imports = [
     ./letsencrypt.nix
     ./motd.nix
+    ./smart.nix
   ];
 
   nix = {
