@@ -897,8 +897,22 @@ claim is true: the crossflash happened, and the card works.** One defect, below.
 | Disk passthrough | `sda` enumerates as a plain block device on `host0` ✅ |
 | Link | `LnkCap`/`LnkSta` both **Gen2 x8** — full width, no downgrade ✅ |
 | Subsystem | `1734:1177` Fujitsu D2607 — on Step 3's list of genuine OEM rebadges ✅ |
-| **SAS address** | ❌ **`0x4433221100000000` — the unprogrammed placeholder.** See below |
-| `storcli` / `megacli` negative test | ⚠ **Not performed.** Neither is packaged in Unraid, so `command not found` proves nothing either way |
+| **SAS address** | **`500605B0:07E41650`** — matches the Step 3b sticker exactly ✅ |
+| Adapter identity | Firmware reports **`SAS9211-8i`**, `NVDATA 14.01.00.08` ✅ |
+| Firmware mode, stated | **`20.00.07.00-IT`** — the option ROM says `-IT` outright ⭐ |
+| `storcli` / `megacli` negative test | ⚠ **Not performed.** Neither is packaged in Unraid, so `command not found` proves nothing either way — and it is moot now the firmware names its own mode |
+
+**Verdict: the card passes.** Genuine, correctly crossflashed, correct SAS
+address, current firmware, full link width, clean SATA passthrough. Nothing
+outstanding.
+
+**Read the last three rows from the card's own option ROM** — *Avago Technologies
+Config Utility*, reached with `Ctrl-C` at POST. It states adapter model, SAS
+address, firmware revision *with the `-IT` suffix*, and NVDATA version on one
+screen, which is more direct evidence than any amount of `lspci` inference. ⚠ It
+needs the card's option ROM enabled to appear, so it is unavailable in exactly the
+configuration §6e's test wants (OPROM off) — a reason to read it *before*
+disabling, not after.
 
 ⚠ **Two naming traps that cost time here, in case they cost it again:**
 
@@ -912,32 +926,41 @@ claim is true: the crossflash happened, and the card works.** One defect, below.
   Lenovo `FRU 03T6739` board identification — the subsystem ID follows the
   *firmware*, the FRU follows the *board*.
 
-#### ❌ The SAS address was erased — disqualifying until repaired
+#### ⚠ `4433221100000000` in `dmesg` is NOT the controller — a false alarm, recorded
+
+This line was read as a wiped SAS address on 2026-08-09. A full repair procedure
+was written up before the card's own option ROM disproved it:
 
 ```
 mpt2sas_cm0: handle(0x9) sas_address(0x4433221103000000) port_type(0x1)
 ```
 
-`0x4433221100000000` is LSI's **unprogrammed placeholder** — the literal byte
-pattern `44 33 22 11`, with the final byte indexing the phy. A real address is
-NAA-form and starts `0x5`. This card's, from the Step 3b sticker, should be
-**`0x500605b007e41650`**.
+**It is a *device* line, not the controller's**, and `handle()` is the giveaway.
+`0x4433221100000000` plus a phy index is what LSI firmware **synthesises for a
+direct-attached SATA drive**, which has no SAS address of its own. `sda` is a SATA
+disk on phy 3 — hence `…03000000`. The controller's real address never appeared in
+that output at all, and its absence was mistaken for a defect.
 
-**This is the outcome Step 3 predicted, and its ruling applies unchanged:** it is
-*not* evidence of a counterfeit — everything else here says genuine OEM channel —
-but it must be fixed before the card is trusted, because a bogus SAS address
-causes erratic enumeration. The vendor's "already IT-flashed" claim is true; the
-execution was sloppy.
+| To learn | Look at |
+|---|---|
+| The **controller's** SAS address | The option ROM's *Adapter Properties* (`Ctrl-C` at POST) |
+| Whether a **SATA** disk is attached | A `4433221100000000`-family address — normal, expected, not a fault |
 
-#### The repair procedure
+⚠ **Step 3's warning about zeroed or default SAS addresses is still correct in
+general** — botched crossflashes really do erase them, and a bogus address really
+does cause erratic enumeration. It simply is not what happened here. **Never
+diagnose a wiped address from a `handle(…)` line**; read the option ROM, which
+states it unambiguously.
 
-**The whole repair is one field.** Firmware is already correct and current — P20
-`20.00.07.00`, IT mode, working. Only the manufacturing area is wrong.
+#### Reference — restoring a SAS address, if one is ever genuinely wiped
 
-⚠ **Do this on a boot of its own, separate from the §6e ASM1166 test.** That test
-wants the LSI's option ROM *disabled*; `sas2flash.efi` may need the card's UEFI
-driver *present* to find it. If `-listall` reports no controllers, re-enable the
-OPROM before concluding anything about the card.
+⚠ **Not needed for this card.** Kept because the procedure is correct, its traps
+are expensive to rediscover, and this fleet may yet crossflash another SAS2008.
+The 2026-08-09 card's address was never wiped — see the false alarm above.
+
+⚠ **It would want a boot of its own**, separate from §6e's ASM1166 test: that test
+wants the LSI's option ROM *disabled*, while `sas2flash.efi` may need the card's
+UEFI driver *present* to find it at all.
 
 **Try the Linux binary first — it costs two minutes.** Broadcom ships an x86_64
 Linux `sas2flash` beside the EFI one, and Unraid gives you a root shell already:
@@ -980,10 +1003,11 @@ Every crossflash walkthrough opens with `-o -e 6` followed by `-o -f <fw>.bin`.
 want. Running an erase converts a one-field repair into a full reflash of a
 working card.
 
-**That distinction is probably also the origin of the fault.** `-e 6` erases
-firmware while *preserving* the manufacturing area; `-e 7` takes the manufacturing
-area with it. Whoever flashed this card almost certainly used `-e 7` and never
-restored the address afterwards.
+**The distinction that matters:** `-e 6` erases firmware while *preserving* the
+manufacturing area; `-e 7` takes the manufacturing area with it. That is how SAS
+addresses get lost in the first place. ⟨An earlier revision asserted this card's
+vendor had used `-e 7` — wrong, and it was inference dressed as history. Its
+address was intact all along.⟩
 
 Also worth heeding from the community guides: **disconnect or ignore other drives**
 — some SSD controllers can be caught by a mis-targeted flash. With `-sasadd` alone
@@ -1003,10 +1027,11 @@ Sources: [TrueNAS — flashing a 9211-8i via EFI shell](https://www.truenas.com/
 [zetterberg123/LSI-92108i-flash](https://github.com/zetterberg123/LSI-92108i-flash),
 [techmattr — SAS HBA crossflashing](https://techmattr.wordpress.com/2013/08/30/sas-hba-crossflashing-or-flashing-to-it-mode/).
 
-⟨**Open: repair or return.** The card is otherwise excellent and the return window
-is the deadline. "Shipped with an erased SAS address" is a fair as-described
-complaint if the flashing is not wanted; repairing is one command once the tool is
-in hand. Not decided as of 2026-08-09.⟩
+✅ **Closed 2026-08-09 — there was nothing to repair and nothing to return.** The
+"erased SAS address" was a misread `dmesg` line, disproved by the card's own
+option ROM within the hour. The vendor's listing was accurate: genuine OEM board,
+correctly crossflashed to P20 IT, SAS address intact. **The only work still owed
+on this card is thermal** (Step 4), not firmware.
 
 ### Step 4 — test it in Tower first, and additively
 
