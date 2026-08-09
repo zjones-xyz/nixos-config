@@ -199,13 +199,26 @@ So it does not need a service window of its own — do it in one where the case 
 already open, and prefer a window where the §1 settings have to be re-entered and
 verified anyway.
 
-⚠ `VBAT = 3.04 V` from `ipmi-sensors` **is not evidence the cell is healthy.**
-The reading is taken on standby, when the cell carries nothing, and 3.04 V is
-exactly what a 3.3 V standby rail reads through a Schottky drop (`VSB` reads
-3.33 V on the same list). The cheap check, once the case is open: pull the cell
-with standby still applied and re-read VBAT. If it still reads ~3.04 V with an
-empty holder, the sensor was reading standby all along. A multimeter across the
-removed cell settles it either way.
+✅ **Resolved 2026-08-09 — the sensor reads the cell, and `VBAT` is a usable
+signal.** This block previously warned that `VBAT = 3.04 V` was *not* evidence
+about the cell: the reading is taken on standby when the cell carries nothing, and
+3.04 V is exactly what a 3.3 V standby rail reads through a Schottky drop (`VSB`
+reads 3.33 V on the same list). Plausible, and wrong.
+
+**The replacement settled it by moving the number.** With a fresh CR2032 seated,
+`ipmi-sensors` reports **`VBAT = 3.20 V`**, against the 3.04 V it had reported for
+the original cell. A sensor wired to the standby rail could not have moved, so it
+is reading the battery.
+
+Two consequences, and the second is the useful one:
+
+- **3.04 V was a real reading of a worn cell.** A CR2032 sits at ~3.2–3.3 V fresh,
+  and 3.04 V open-circuit is a decade of self-discharge showing. The replacement
+  was mildly overdue rather than purely preventive — the opposite of what the top
+  of this section assumed.
+- ⭐ **`VBAT` is worth monitoring.** It tracked a real change, so it is a working
+  early warning for exactly the failure this section exists to prevent, and it
+  costs nothing to sample. **Baseline for a fresh cell on this board: 3.20 V.**
 
 ⚠ **Replacing the battery clears CMOS**, so everything below has to be set again
 afterwards:
