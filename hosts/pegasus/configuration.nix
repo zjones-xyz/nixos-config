@@ -268,6 +268,17 @@ in
     users.z = import ./home.nix;
   };
 
+  # Four real disks — three SATA plus the NVMe root — so smartd has plenty to
+  # poll (modules/nixos/smart.nix). This is also the host that needs it most
+  # right now: h-XDAS, the 3 TB Toshiba earmarked as galactica's migration
+  # parachute, has never been health-tested and is a ~13-year-old drive.
+  # See hosts/pegasus/HARDWARE-MAP.md §1.
+  #
+  # ⚠ smartd will autodetect the NanoKVM's emulated mass-storage device too and
+  # find nothing to report on it. Harmless, but do not read its silence as a
+  # disk being healthy — it is not a disk.
+  homelab.smart.monitor = true;
+
   # Internet-facing? No — LAN/tailnet only. Traefik/LE machinery lives on
   # memory-alpha; pegasus does not import it.
   system.stateVersion = "26.05";
