@@ -130,9 +130,9 @@ out of BIOS rather than assuming.
 option rather than a hardcoded `boot.kernelParams` entry, for exactly this
 reason.
 
-## 3. The BMC's clock has never been set
+## 3. The BMC's clock cannot be set — measured 2026-08-09, not merely unset
 
-Every SEL entry is timestamped `Feb-07-2106 02:29:xx` — the 32-bit `time_t`
+Every SEL entry was timestamped `Feb-07-2106 02:29:xx` — the 32-bit `time_t`
 rollover, i.e. uninitialised. `Last Power Event` reads `unknown`.
 
 **So the SEL carries no usable timeline.** For any before/after comparison, use
@@ -140,25 +140,55 @@ event *IDs*, which are sequential, and ignore the timestamps entirely. This is
 also the reason not to treat any BMC power-bookkeeping field as evidence of
 anything — see §4.
 
-**It is one command to fix, and nobody had written down which one:**
+> ⚠ **Corrected 2026-08-09.** An earlier revision of this section said *"it is one
+> command to fix, and nobody had written down which one"* and gave
+> `bmc-device --set-sel-time=now`. That was written from the tool's help text
+> rather than from a run against this BMC. **It does not work here.** Everything
+> below was measured.
 
-```sh
-bmc-device -h 192.168.8.191 -u ADMIN -P --get-sel-time      # confirm the 2106 readout
-bmc-device -h 192.168.8.191 -u ADMIN -P --set-sel-time=now
-bmc-device -h 192.168.8.191 -u ADMIN -P --set-sel-time-utc-offset=0
-```
+### What this BMC actually does
 
-Format is `"MM/DD/YYYY - HH:MM:SS"` or `now`, verified against FreeIPMI 1.6.18.
-Setting the offset to `0` keeps SEL stamps in UTC, matching this document.
+| Command | Result |
+|---|---|
+| `--get-sel-time` | works |
+| `--set-sel-time=now` | accepted with no error, **silently ignored** |
+| `--set-sel-time="MM/DD/YYYY - HH:MM:SS"` (absolute UTC) | accepted with no error, **silently ignored** |
+| `--get-sel-time-utc-offset` | `privilege level insufficient` |
+| `--set-sel-time-utc-offset` | same, at default privilege *and* `-l ADMIN` |
 
-⚠ **It does not retroactively fix existing entries** — everything already logged
-keeps its `Feb-07-2106` stamp, so the event-ID rule above still governs any
-comparison spanning the fix. What it buys is that *future* entries are readable,
-which is worth doing before the migration starts generating events worth reading.
+**The clock free-runs at the correct rate.** Two `--get-sel-time` reads taken two
+minutes apart returned `12/31/2008 - 20:40:06` and `12/31/2008 - 20:42:06`. This
+is not a stopped clock — it ticks correctly from an epoch nothing can move.
 
-⚠ **This is not the same kind of write as §4's power-restore field.** That one is
-a behaviour policy that currently works and should be left alone. This is a clock
-that has never been set and affects nothing but timestamps.
+⚠ **`privilege level insufficient` is a misleading completion code here**, not a
+permissions problem. *Reading* the UTC offset fails identically to writing it, and
+a BMC that could report an offset but refuse to set one would be strange. The
+feature is absent — 2011-era BMCs commonly reject unimplemented optional IPMI 2.0
+commands this way. Do not spend a fourth command discovering that again.
+
+### ⭐ The coin cell backs the BMC's RTC, not just CMOS
+
+**The readout moved from `Feb-07-2106` to `12/31/2008` across the CR2032
+replacement (§5).** No IPMI write achieved that, because none of them took. So the
+cell that holds CMOS also holds the BMC's clock, and pulling it reset the BMC to a
+firmware default epoch.
+
+Worth knowing beyond curiosity: §5's battery is load-bearing for BMC timekeeping
+as well as BIOS settings — and it explains why this clock has "never been set" in
+any durable sense, since anything ever set would have been lost at the next cell
+change regardless.
+
+### What has not been tried
+
+**The BMC's own web UI**, at `https://192.168.8.191` → *Configuration → Date and
+Time*, which on Supermicro X9 carries NTP server fields and a timezone selector.
+That is the vendor's intended path and does not route through the IPMI command
+being ignored. The BIOS also has an **IPMI** tab, visible on the Main tab
+screenshot, worth a look while in setup. ⟨Both untested — if either works, this
+section gets much shorter.⟩
+
+**Until one of them does, the event-ID rule is permanent rather than pending.**
+That is the practically important sentence in this section.
 
 ## 4. Power-restore: closed, and it was never a real problem
 
