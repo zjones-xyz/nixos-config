@@ -140,6 +140,26 @@ event *IDs*, which are sequential, and ignore the timestamps entirely. This is
 also the reason not to treat any BMC power-bookkeeping field as evidence of
 anything — see §4.
 
+**It is one command to fix, and nobody had written down which one:**
+
+```sh
+bmc-device -h 192.168.8.191 -u ADMIN -P --get-sel-time      # confirm the 2106 readout
+bmc-device -h 192.168.8.191 -u ADMIN -P --set-sel-time=now
+bmc-device -h 192.168.8.191 -u ADMIN -P --set-sel-time-utc-offset=0
+```
+
+Format is `"MM/DD/YYYY - HH:MM:SS"` or `now`, verified against FreeIPMI 1.6.18.
+Setting the offset to `0` keeps SEL stamps in UTC, matching this document.
+
+⚠ **It does not retroactively fix existing entries** — everything already logged
+keeps its `Feb-07-2106` stamp, so the event-ID rule above still governs any
+comparison spanning the fix. What it buys is that *future* entries are readable,
+which is worth doing before the migration starts generating events worth reading.
+
+⚠ **This is not the same kind of write as §4's power-restore field.** That one is
+a behaviour policy that currently works and should be left alone. This is a clock
+that has never been set and affects nothing but timestamps.
+
 ## 4. Power-restore: closed, and it was never a real problem
 
 `ipmi-chassis --get-chassis-status` reports `Power restore policy : Always off`,
@@ -1156,6 +1176,24 @@ visually confirmed identical**: two CPU-attached, one PCH-attached, one free.
 owner during the LSI cold pass, rather than inferred from the board's age — which
 is what this section previously had to do, since X9SCM UEFI support varies by BIOS
 revision and this board's had never been checked.
+
+**The revision, now checked: `2.3a`, build date `2021-01-06`** (Main tab, reported
+`Supermicro X9SCL(+)/X9SCM` — the BIOS image is shared across that family, so it
+does not print the `-F` suffix; the BMC is what identifies this as the `-F`).
+
+⚠ **Do not record `2.15.1234` as the BIOS revision.** That is the AMI Aptio setup
+utility's own core version, rendered along the bottom of every screen
+(`Version 2.15.1234. Copyright (C) 2012 American Megatrends, Inc.`), and it is
+identical across thousands of unrelated boards from that era. It caught us on
+2026-08-09. The revision this section means is on the **Main** tab, next to
+*Build Date*.
+
+⚠ **A 2021 build on a 2011 board is almost certainly the last revision Supermicro
+shipped**, which matters beyond bookkeeping: **"flash a newer BIOS" is not a
+remaining lever.** If the ASM1166 will not train at Gen3 on `2.3a` (§6e), there is
+no firmware upgrade left to rescue it, and the return rule in `DECISIONS.md`
+applies with nothing further to try. ⟨Confirm against Supermicro's download page
+before treating this as settled.⟩
 
 **So take the Dual path.** NixOS boots UEFI from its own root disk under
 systemd-boot, while the Unraid flash keeps booting legacy exactly as it does
