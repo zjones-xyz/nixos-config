@@ -19,10 +19,26 @@
   # session; nobody had tested an interactive login until now. The
   # shell-agnostic option applies to whichever shell is actually running.
   programs.bash.enable = true;
+  #
+  # The ipmi-tower-* pair binds onto scripts/ipmi-remote.sh. ⚠ Kept identical
+  # to hosts/serenity/home.nix on purpose: `PLATFORM.md` §2 has both machines
+  # carrying the FreeIPMI toolset deliberately, "so neither one being down
+  # blocks recovering the other". Duplicated aliases are the cost of that, and
+  # are cheaper than a shared module that would make the pair co-dependent.
+  # Note the repo path differs between the two (~/nixos-config here,
+  # ~/Code/nixos-config on the Mac), so the strings cannot be shared verbatim
+  # anyway.
+  #
+  # towerbmc.internal resolves through an AdGuard DNS rewrite this repo does
+  # not declare — provisioned out-of-band 2026-08-09, same situation as
+  # serenity's unlock-pegasus alias. If it ever stops resolving, the BMC's raw
+  # address is 192.168.8.191 (§2), and swapping it means editing both files.
   home.shellAliases = {
     nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#pegasus";
     nrt = "sudo nixos-rebuild test --flake ~/nixos-config#pegasus";
     npull = "git -C ~/nixos-config pull";
+    ipmi-tower-open-tty = ''~/nixos-config/scripts/ipmi-remote.sh console towerbmc.internal "op://System Keys/tower ipmi/password"'';
+    ipmi-tower-set-bios-next-boot = ''~/nixos-config/scripts/ipmi-remote.sh bios-next-boot towerbmc.internal "op://System Keys/tower ipmi/password"'';
   };
 
   # ── Desktop apps ────────────────────────────────────────────────────────────

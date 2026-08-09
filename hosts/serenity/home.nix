@@ -105,11 +105,27 @@
   # IP. The op:// reference is safe to leave even if that 1Password item
   # doesn't exist yet — luks-unlock-remote.sh falls back to an interactive
   # passphrase prompt when the lookup fails.
+  # The ipmi-tower-* pair binds onto scripts/ipmi-remote.sh the same way, and
+  # inherits the same fallback contract — no 1Password item, no problem, it
+  # drops to a local config file and then to an interactive prompt.
+  #
+  # towerbmc.internal resolves through an AdGuard DNS rewrite that this repo
+  # does not declare — provisioned out-of-band 2026-08-09, exactly like
+  # pegasus.internal above. If it ever stops resolving, the BMC's raw address
+  # is 192.168.8.191 (`PLATFORM.md` §2), and swapping it means editing both
+  # files (here and hosts/pegasus/home.nix).
+  #
+  # ⚠ These are deliberately run from *here*, not from Tower. §2: "Run these
+  # from a machine that is not Tower" — the whole point of a BMC is reaching a
+  # box that is wedged. pegasus carries the same two aliases so neither machine
+  # being down blocks recovering the other.
   home.shellAliases = {
     drs = "sudo darwin-rebuild switch --flake ~/Code/nixos-config#serenity";
     npull = "git -C ~/Code/nixos-config pull";
     unlock-memory-alpha = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh memory-alpha.internal "op://System Keys/memory-alpha luks/password"'';
     unlock-pegasus = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh pegasus.internal "op://System Keys/pegasus luks/password"'';
+    ipmi-tower-open-tty = ''~/Code/nixos-config/scripts/ipmi-remote.sh console towerbmc.internal "op://System Keys/tower ipmi/password"'';
+    ipmi-tower-set-bios-next-boot = ''~/Code/nixos-config/scripts/ipmi-remote.sh bios-next-boot towerbmc.internal "op://System Keys/tower ipmi/password"'';
   };
 
   home.stateVersion = "26.05";
