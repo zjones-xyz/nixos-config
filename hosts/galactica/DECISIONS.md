@@ -474,3 +474,19 @@ re-derive why it stopped applying.
   table assume the ASM1166; if the LSI wins they are rewritten. The Gen3 retest
   is not worth running until this resolves — it would measure a card that may be
   going back.
+
+  **Decision rule — owner, 2026-08-09: the ASM1166 is returned if it does not
+  work at Gen3.** Recorded because it had been stated more than once without ever
+  being written down, which is how it ended up contradicted by the document that
+  should have carried it: `PLATFORM.md` §6e read "set it back to Gen2 and nothing
+  is lost" until it was corrected the same day. It is not a fallback. Needing the
+  Gen2 pin is the disqualifying property, because that pin is §1's landmine.
+
+  ⚠ **Consequence nobody had stated: both cards can fail.** If the LSI does not
+  validate *and* the ASM1166 will not train at Gen3, this machine is down to six
+  onboard ports against §5.5's twelve-device budget. That is a port-count problem
+  rather than an array problem — the array is on onboard SATA today and §5.5 puts
+  it there deliberately — but it does mean the add-in ports need a third answer,
+  and the honest options at that point are keeping the ASM1064, keeping the
+  ASM1166 at Gen2 after all, or buying something else. Worth knowing before the
+  return windows close, not after.

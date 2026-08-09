@@ -423,9 +423,25 @@ Gen X` almost certainly governs the slots globally rather than per-port**:
 | Four spinners streaming at once | ≈1.0 GB/s — the link is a live constraint | comfortable headroom |
 | A PCIe NVMe root on an x4 adapter | ~2 GB/s | ~4 GB/s |
 
-**The failure mode is benign and immediately visible:** if the card does not
-appear at `Auto`, set it back to Gen2 and nothing is lost. A Gen3 result removes
-the §1 landmine for good and removes the link as a design constraint.
+**The failure mode is immediately visible, but it is not neutral** — corrected
+2026-08-09, having previously read "set it back to Gen2 and nothing is lost".
+
+⚠ **The owner's rule is that the ASM1166 is returned if it does not work at
+Gen3.** Needing the Gen2 pin is itself the disqualifying property, because that
+pin *is* §1's landmine: a card that only appears while the BIOS is held in a
+non-default state is one CMOS clear or one dead coin cell away from presenting as
+dead hardware. **So read this test as pass/return, not pass/fall-back-to-Gen2.**
+Setting Gen2 again restores today's working state and is the right move on the
+day, but it is a holding action, not a resolution.
+
+A Gen3 result removes the §1 landmine for good and removes the link as a design
+constraint.
+
+⚠ **The test needs the card in the case.** The ASM1166 is currently out (§7b
+step 4), so parking `PCI Express Port - Gen X` at `Auto` while it is removed is
+not running this test — it only sets the state the test will start from. See
+`DECISIONS.md`, which holds the retest until the LSI question resolves, on the
+grounds that it would otherwise measure a card that may be going back.
 
 **Run this before finalising any disk placement.**
 
