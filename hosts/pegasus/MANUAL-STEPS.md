@@ -172,9 +172,12 @@ Added 2026-07-11, mirroring memory-alpha's setup. Before the next
    adding explicitly — done via `lib.mkAfter` in
    `hosts/pegasus/configuration.nix`. If a future kernel/hardware change
    ever breaks this again, `readlink -f /sys/class/net/<iface>/device/driver`
-   while booted normally is the fast way to re-identify the driver (no
-   `lspci`/`pciutils` in the base package set — `nix run nixpkgs#pciutils`
-   works too if you want the fuller picture).
+   while booted normally is the fast way to re-identify the driver.
+   ⚠ **`r8169` does not tell you which NIC it is** — that driver binds RTL8111
+   (1 GbE) and RTL8125 (2.5 GbE) alike. `lspci -nn` is what identifies the part,
+   and `pciutils` **is** in this host's closure (`configuration.nix`), so it is on
+   `$PATH` — this step used to say otherwise and was wrong. See
+   `HARDWARE-MAP.md` §4 for what the parts actually are.
 4. Once confirmed, unlock from serenity with `unlock-pegasus` (needs
    `pegasus.internal` to resolve — add an AdGuard DNS rewrite for it if it
    doesn't yet, same as the other `.internal` hosts; substitute the raw LAN

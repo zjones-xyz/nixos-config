@@ -1199,8 +1199,25 @@ The original three, still valid:
   before then `nix shell nixpkgs#smartmontools -c smartctl -a /dev/sdb` costs
   nothing. `DISK-DRAWER.md`'s rule stands: an untested spare is a guess.
 
-  **The copy is network-bound**, not SATA-bound — roughly 5–6 h for 2.1 TiB at
-  1 GbE, and it must finish before step 11. A scheduling input, not a blocker.
+  **⭐ Revised 2026-08-10 — pegasus is 2.5 GbE, so this is now disk-bound.** The
+  NIC was read as an RTL8125 (`hosts/pegasus/HARDWARE-MAP.md` §4), not the 1 GbE
+  part its DMI table claims. That moves the bottleneck off the network and onto
+  the receiving spindle:
+
+  | Link | Net ceiling | `h-XDAS` sequential | Binds on | 2.1 TiB |
+  |---|---|---|---|---|
+  | 1 GbE | ~118 MB/s | ~150–190 MB/s | network | 5–6 h *(the old figure)* |
+  | **2.5 GbE** | ~310 MB/s | ~150–190 MB/s | **the disk** | **~3.5–4.5 h** |
+
+  ⚠ **A third off, not half.** `h-XDAS` is a 2012-era 7200 rpm drive and will
+  trend to the low end as it fills inner tracks. Past 2.5 GbE a faster link buys
+  nothing here — worth knowing before anyone spends on the network for this copy.
+
+  ⚠ **2.5 GbE is the controller, not the negotiated link** — into a gigabit switch
+  it runs at 1000 and the old 5–6 h stands. `cat /sys/class/net/enp42s0/speed` on
+  pegasus settles it; unread as of 2026-08-10.
+
+  It must finish before step 11. A scheduling input, not a blocker.
 
   #### ⭐ Revised 2026-08-09 — an SMR disk carries it, then leaves the building
 
@@ -1321,7 +1338,6 @@ The original three, still valid:
   on the same machine, and borg covers the offsite case. A third copy that is
   always mounted in the same chassis protects against little that is not already
   covered. Not ruled out; just not obviously worth a role.⟩
-  ⟨`ethtool enp42s0` for the real figure.⟩
 
 ### 6.4 If in-place conversion turns out not to be possible
 
