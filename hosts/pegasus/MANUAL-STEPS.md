@@ -451,3 +451,66 @@ session had nothing left to lose). **Lesson for future switches on this
 host:** check `loginctl list-sessions` for an active graphical session
 before switching, not just whether *you* are physically at the console —
 this one had been sitting logged in for two days.
+
+## 16. DankMaterialShell — verify on first login, then hand-wire config
+
+Added 2026-08-11 (`programs.dank-material-shell` in
+`modules/nixos/desktop-niri.nix`), layered on the bare Niri session from
+§15. `systemd.enable = true` means `dms.service` should start automatically
+once Niri activates `graphical-session.target` — no manual step needed just
+to get the shell's bar/UI to appear. Not yet tested on real hardware
+(added after the §15 session ended). On first login:
+
+1. Confirm `dms.service` actually came up:
+   `systemctl --user status dms.service` should be active, and DMS's bar
+   should be visible without doing anything else.
+2. **Wire up keybinds by hand** — deliberately not done declaratively (see
+   DECISIONS.md for why: DMS's `homeModules.niri` needs niri-flake, which
+   this host doesn't use). Edit `~/.config/niri/config.kdl` and add a
+   `binds { ... }` block; these lines are taken directly from DMS's own
+   `distro/nix/niri.nix` so they match its documented defaults:
+   ```kdl
+   binds {
+       Mod+Space { spawn "dms" "ipc" "spotlight" "toggle"; }
+       Mod+N { spawn "dms" "ipc" "notifications" "toggle"; }
+       Mod+Comma { spawn "dms" "ipc" "settings" "toggle"; }
+       Mod+P { spawn "dms" "ipc" "notepad" "toggle"; }
+       Super+Alt+L { spawn "dms" "ipc" "lock" "lock"; }
+       Mod+X { spawn "dms" "ipc" "powermenu" "toggle"; }
+       Mod+V { spawn "dms" "ipc" "clipboard" "toggle"; }
+       Mod+Alt+N { spawn "dms" "ipc" "night" "toggle"; }
+   }
+   ```
+   (Volume/brightness media-key binds and `Mod+M` for the process list are
+   in the upstream module too if wanted — omitted here since they're less
+   central.) Restart niri or just save the file — niri live-reloads
+   `config.kdl` on change, no logout needed.
+3. **Magic Trackpad, while editing that same file anyway:** bluetooth on
+   pegasus is already on and paired-and-ready (`Powered: yes`,
+   `Pairable: yes`, confirmed 2026-08-11), but nothing is currently
+   paired — the trackpad itself still needs a one-time pairing, which is
+   OS-level and identical regardless of which session is active:
+   ```
+   bluetoothctl
+   scan on
+   # wait for the Magic Trackpad to show up, note its MAC
+   pair <MAC>
+   trust <MAC>
+   connect <MAC>
+   ```
+   Once paired, confirm niri actually sees it as a touchpad (Apple's
+   trackpad goes through the `hid-magicmouse` kernel driver over
+   Bluetooth — should classify correctly, but hasn't been checked on this
+   host): `libinput list-devices` should list it, or check
+   `/proc/bus/input/devices`. niri's tap-to-click/natural-scroll defaults
+   may not match Apple's conventions out of the box — add an
+   `input { touchpad { tap; natural-scroll; } }` block to the same
+   `config.kdl` if needed (Apple's own convention is natural-scroll on;
+   niri's default may differ — check rather than assume). This is
+   independent of whatever Plasma/Dragonized has configured for the same
+   device — niri's input config doesn't read from KDE's settings.
+4. Not yet checked: any of DMS's optional features that assume dependencies
+   this host may not have wired up the same way as a typical DMS install
+   (VPN widget via NetworkManager — already present; dynamic theming via
+   matugen; audio wavelength via cava; calendar via khal — all pulled in
+   automatically by the module's defaults, but none exercised hands-on yet).

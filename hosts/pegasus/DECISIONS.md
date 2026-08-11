@@ -301,6 +301,61 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   ships as its own flake, no nixpkgs package at all) — same shape as the
   `claude-desktop-debian` input already in this repo, deferred until a shell
   is actually chosen.
+- **DankMaterialShell chosen over Noctalia, 2026-08-11, once bare Niri was
+  confirmed solid on real hardware.** Both are Quickshell-based, both ~13
+  months old at decision time. Checked actual community signal rather than
+  guessing: GitHub activity (Noctalia: 9,423 stars/683 forks/222 open
+  issues ≈2.4% of stars; DMS: 7,553 stars/471 forks/427 open issues ≈5.7%
+  of stars — Noctalia has more traction and a lower issue ratio, though DMS
+  has more surface area by design: bar, launcher, notification center,
+  control center, lock screen, plugin system, Go backend, vs Noctalia's
+  deliberately minimal "quiet by design" scope); a [HN
+  thread](https://news.ycombinator.com/item?id=46841741) ("DMS... works
+  better on NixOS out of the box... Noctalia [suits] slimmer builds");
+  and a [hands-on comparison](https://www.logctl.com/posts/why-i-chose-niri-dms/)
+  where the author ran Noctalia on a simple single-monitor laptop
+  successfully but had it "not work out as smoothly as expected" on a
+  complex multi-monitor desktop, where DMS "came together surprisingly
+  smoothly" instead. Deciding factor: pegasus is going multi-monitor soon,
+  which is Noctalia's one concretely documented weak spot in everything
+  checked.
+  *Implementation, `modules/nixos/desktop-niri.nix`:* added
+  `dank-material-shell` as a flake input (`git+https://` for the same
+  sandboxed-GitHub-access reason as `claude-desktop-debian`; unlike that
+  precedent, DMS's transitive `github:` inputs — `dank-qml-common`,
+  `flake-compat` — resolved fine from here, no follow-up lock needed on
+  pegasus itself), `inputs.nixpkgs.follows = "nixpkgs"`. Used DMS's
+  **`nixosModules.dank-material-shell`**, not its home-manager module — it
+  matches how every other `desktop-*.nix` on this host is wired
+  (Plasma/COSMIC/Dragonized are all NixOS-level), and it avoids needing a
+  `programs.quickshell` home-manager option this repo doesn't otherwise
+  pull in (the NixOS module just does `environment.systemPackages` +
+  `systemd.user.services.dms` directly). Quickshell itself (the QML engine
+  DMS runs on) is already in nixpkgs 26.05 at exactly 0.3.0 — DMS's own
+  stated minimum — so no separate quickshell flake input was needed,
+  confirmed by checking the actual `version` in nixpkgs'
+  `pkgs/by-name/qu/quickshell/package.nix` on the `release-26.05` branch
+  rather than assuming from an out-of-date `dms doctor` report (0.2.1) seen
+  during research.
+  *Deliberately skipped: DMS's `homeModules.niri` keybind-injection layer*
+  (would bind `Mod+Space` → launcher, `Mod+N` → notifications, etc.). That
+  module writes into `programs.niri.settings`, an option that only exists
+  under **niri-flake**'s home-manager module — this host deliberately uses
+  plain nixpkgs' `programs.niri` instead (see the earlier bare-Niri entry
+  above), so adopting it would mean pulling in niri-flake just to get
+  keybinds, a bigger architectural change than "add a shell." This repo
+  already has a precedent for not fighting declarative keybind config for
+  a shell layer — see the `programs.plasma.hotkeys.commands is broken`
+  entry below, where Dragonized's shortcuts ended up configured live
+  instead of declaratively. Same call here: DMS's keybinds get hand-added
+  to `~/.config/niri/config.kdl` after first login — see MANUAL-STEPS.md
+  §16 for the exact lines (sourced directly from DMS's own `niri.nix`
+  module so they match what it would have generated).
+  *Not verified — needs a real x86_64-linux build on pegasus:* the
+  `dms-shell` package is a Go build with a pinned `vendorHash`; `nix flake
+  check`/forced `drvPath` eval both pass clean from this Mac (no Linux
+  builder here), but a vendorHash mismatch only surfaces at actual build
+  time, same caveat as Olla's packaging in this repo.
 - **Two general "additive session" gotchas found during Niri's first
   real-hardware test, 2026-08-10 — relevant to COSMIC and any future
   session too, not Niri-specific:**

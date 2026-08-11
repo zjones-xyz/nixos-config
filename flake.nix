@@ -52,9 +52,20 @@
       url = "git+https://github.com/aaddrick/claude-desktop-debian.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # DankMaterialShell (used on pegasus, layered on Niri) — a Quickshell-based
+    # desktop shell, not in nixpkgs. Quickshell itself IS in nixpkgs 26.05
+    # (0.3.0, meets DMS's stated minimum) so no separate quickshell input is
+    # needed — only DMS's own flake, for its NixOS module and package build.
+    # git+https rather than github: for the same sandboxed-GitHub-access
+    # reason as claude-desktop-debian above.
+    dank-material-shell = {
+      url = "git+https://github.com/AvengeMedia/DankMaterialShell.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, ... }:
   {
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
@@ -77,6 +88,7 @@
           ./hosts/pegasus/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
+          dank-material-shell.nixosModules.dank-material-shell
           {
             # Make plasma-manager's HM options available to hosts/pegasus/home.nix.
             home-manager.sharedModules = [ plasma-manager.homeModules.plasma-manager ];
