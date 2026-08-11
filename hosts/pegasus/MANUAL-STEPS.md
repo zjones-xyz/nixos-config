@@ -485,30 +485,25 @@ to get the shell's bar/UI to appear. Not yet tested on real hardware
    in the upstream module too if wanted — omitted here since they're less
    central.) Restart niri or just save the file — niri live-reloads
    `config.kdl` on change, no logout needed.
-3. **Magic Trackpad, while editing that same file anyway:** bluetooth on
-   pegasus is already on and paired-and-ready (`Powered: yes`,
-   `Pairable: yes`, confirmed 2026-08-11), but nothing is currently
-   paired — the trackpad itself still needs a one-time pairing, which is
-   OS-level and identical regardless of which session is active:
-   ```
-   bluetoothctl
-   scan on
-   # wait for the Magic Trackpad to show up, note its MAC
-   pair <MAC>
-   trust <MAC>
-   connect <MAC>
-   ```
-   Once paired, confirm niri actually sees it as a touchpad (Apple's
-   trackpad goes through the `hid-magicmouse` kernel driver over
-   Bluetooth — should classify correctly, but hasn't been checked on this
-   host): `libinput list-devices` should list it, or check
-   `/proc/bus/input/devices`. niri's tap-to-click/natural-scroll defaults
-   may not match Apple's conventions out of the box — add an
-   `input { touchpad { tap; natural-scroll; } }` block to the same
-   `config.kdl` if needed (Apple's own convention is natural-scroll on;
-   niri's default may differ — check rather than assume). This is
-   independent of whatever Plasma/Dragonized has configured for the same
-   device — niri's input config doesn't read from KDE's settings.
+3. **Magic Trackpad, while editing that same file anyway:** it's the
+   Lightning-generation Magic Trackpad, run wired through a USB KVM switch
+   — no Bluetooth pairing needed. Unlike Magic Mouse, Magic Trackpad
+   genuinely supports wired USB HID mode, not just charging over that
+   port; Linux's in-tree `hid-magicmouse` driver explicitly supports it
+   "over USB and Bluetooth," and this is the exact generation that driver
+   targets (the 2024 USB-C model needed newer, separate driver work — not
+   relevant here). Plugged in via USB, it's genuine wired HID data, so the
+   KVM switches it like any other wired peripheral, following whichever
+   machine the KVM is currently pointed at — no per-host pairing step at
+   all. Confirm it's recognized once plugged in: `libinput list-devices`
+   should list it, or check `lsusb` / `/proc/bus/input/devices`. niri's
+   tap-to-click/natural-scroll defaults may not match Apple's conventions
+   out of the box — add an `input { touchpad { tap; natural-scroll; } }`
+   block to the same `config.kdl` if needed (Apple's own convention is
+   natural-scroll on; niri's default may differ — check rather than
+   assume). This is independent of whatever Plasma/Dragonized has
+   configured for the same device — niri's input config doesn't read from
+   KDE's settings.
 4. Not yet checked: any of DMS's optional features that assume dependencies
    this host may not have wired up the same way as a typical DMS install
    (VPN widget via NetworkManager — already present; dynamic theming via
