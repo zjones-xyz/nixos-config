@@ -280,15 +280,19 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   Xwayland — it auto-integrates xwayland-satellite once the binary is on
   PATH; needed for the X11-only apps already in daily use here — Discord,
   some Steam titles, Bambu Studio/OpenSCAD).
-  *NVIDIA fit, not yet verified on real hardware:* explicit sync (fixes
+  *NVIDIA fit, confirmed on real hardware 2026-08-10:* explicit sync (fixes
   flicker/stutter on NVIDIA Wayland) needs driver >=555 and kernel >=6.8 —
   both already satisfied by this host's existing `nvidia.nix`/kernel choice,
   made for Plasma/COSMIC/Dragonized, so no changes needed there. Niri uses
   smithay, not wlroots, so none of the wlroots-specific NVIDIA env-var
-  workarounds apply. One known cosmetic quirk flagged upstream: the driver
-  doesn't release VRAM properly under Niri (idles near ~1 GiB instead of
-  ~100 MiB) — not addressed here, see niri-wm/niri wiki's Nvidia page if it
-  becomes a real problem.
+  workarounds apply. First login confirmed clean rendering (1920x1080@60Hz,
+  no EGL/DRM errors) and `xwayland-satellite` working (Discord spawned and
+  tiled normally). The known cosmetic quirk flagged upstream — driver
+  doesn't release VRAM properly under Niri, idles near ~1 GiB instead of
+  ~100 MiB — was NOT hit in its severe form here (idle baseline measured at
+  392 MiB); worth re-checking after extended real use. Full verification
+  log in MANUAL-STEPS.md §15, including how the physical console's black
+  screen from the switch below was diagnosed and fixed.
   *Deliberately deferred:* no shell (DankMaterialShell or Noctalia) layered
   on top yet — bare Niri first, to confirm the compositor+NVIDIA session is
   solid on real hardware before adding Quickshell's dependency footprint.
@@ -297,6 +301,38 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   ships as its own flake, no nixpkgs package at all) — same shape as the
   `claude-desktop-debian` input already in this repo, deferred until a shell
   is actually chosen.
+- **Two general "additive session" gotchas found during Niri's first
+  real-hardware test, 2026-08-10 — relevant to COSMIC and any future
+  session too, not Niri-specific:**
+  1. **`nixos-rebuild switch` can crash an already-logged-in graphical
+     session on this host**, not just fail to affect it. A Dragonized
+     session had been logged in since Aug 8 (two days) when the switch
+     that added Niri ran; activation's user-unit reload
+     ("restarting the following user units: nixos-activation.service...")
+     crashed it outright (`sddm-helper... crashed exit code 1`), and no
+     new greeter re-spawned afterward — full black screen on the physical
+     KVM feed, `display-manager.service` itself never restarted so it
+     looked "fine" from a pure systemd-status check. Fixed with
+     `sudo systemctl restart display-manager` (no reboot needed — nothing
+     salvageable was left running). *Takeaway: before switching, check
+     `loginctl list-sessions` for an active graphical session, not just
+     whether whoever's driving the switch is physically at the console* —
+     asking "are you logged in locally right now" isn't sufficient, a
+     stale session from days earlier is invisible unless you actually look.
+  2. **Long-lived, D-Bus-activated user services don't pick up a new
+     session's environment just because you switched sessions live.**
+     `xdg-desktop-portal.service` had been running since that same Aug-8
+     Dragonized login and never restarted when Niri started, so its own
+     process environment (confirmed via `/proc/<pid>/environ`) was still
+     `XDG_CURRENT_DESKTOP=KDE` even though `systemctl --user
+     show-environment` correctly showed the session-wide value as `niri`
+     — portal calls from Niri apps would have been routed against a
+     desktop that was no longer active. Fixed with
+     `systemctl --user restart xdg-desktop-portal.service`, confirmed via
+     `busctl --user call ... Screenshot`. Same mechanism would affect any
+     other long-lived `--user` service that reads `XDG_CURRENT_DESKTOP`
+     once at startup — worth checking for on the next live session switch
+     (COSMIC or otherwise), not just after a fresh reboot.
 - **Remote desktop → xrdp + xorgxrdp (Plasma-over-X11, independent session
   per connection), tailscale0-gated, added 2026-07-16/17.** *Real motivation
   surfaced mid-implementation:* this is meant to eventually replace the

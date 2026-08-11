@@ -385,37 +385,69 @@ No firewall changes needed — `tailscale0` is already a trusted interface
 (`openFirewall` is left `false`), so port 3389 is reachable over the
 tailnet the moment `xrdp.service` is up, and nowhere else.
 
-## 15. Niri — verify on first login
+## 15. Niri — verified 2026-08-10
 
-Added 2026-08-10 as a fourth SDDM session (`modules/nixos/desktop-niri.nix`),
-bare — no shell (waybar/DMS/Noctalia/etc.) layered on yet, just the
-compositor. Nothing here was verified beyond forced-eval from the authoring
-session:
+Added as a fourth SDDM session (`modules/nixos/desktop-niri.nix`), bare — no
+shell (waybar/DMS/Noctalia/etc.) layered on yet, just the compositor. First
+real-hardware test done 2026-08-10, over SSH + the NanoKVM (no local keyboard
+— see the IPC note below). Results:
 
-1. At the SDDM greeter, switch the session to "Niri" before logging in
-   (`defaultSession` is unchanged — it's still Dragonized — so this has to
-   be picked manually each time until/unless that changes).
-2. Confirm `nvidia-smi` shows GPU usage and `echo $XDG_SESSION_TYPE` is
-   `wayland`, same checks as §3's Plasma validation.
-3. **Watch for the NVIDIA VRAM quirk**: if `nvidia-smi` shows Niri idling
-   near ~1 GiB instead of ~100 MiB, that's the known driver bug (doesn't
-   release VRAM properly), not a misconfiguration — see
-   https://github.com/niri-wm/niri/wiki/Nvidia for the
-   `GLVidHeapReuseRatio` application-profile workaround if it's bad enough
-   to matter.
-4. **Launch an X11-only app** (Discord is the easiest one already installed)
-   and confirm it appears at all — this is `xwayland-satellite` actually
-   working, not assumed.
-5. **Screen share/screenshot check**: the portal config pulls in
-   `xdg-desktop-portal-gnome` per upstream's recommendation — confirm a
-   screenshot (niri has a built-in screenshot UI, `Mod+Print` by default)
-   and a screen-share prompt (e.g. from Discord or a browser) both actually
-   work, since this is the one part of the module's defaults that's a
-   little unusual (pulls in a GNOME portal backend + Nautilus as a dbus
-   service, even though nothing else GNOME is installed on this host).
-6. No config changes needed for Steam/gamescope or xrdp — both are already
-   independent of whatever's running on the physical seat (see §4 and §14),
-   so they're expected to be unaffected. Worth a quick sanity check anyway
-   the first time: launch a Proton title from within a Niri session, and
-   separately confirm xrdp still gives you Plasma-X11 while a Niri session
-   is live on the physical console.
+1. **Login works.** Picked "Niri" at the SDDM greeter (`defaultSession` is
+   still `plasma-dragonized`, unchanged — has to be picked manually each
+   time). niri auto-generated a default `~/.config/niri/config.kdl` on this
+   first-ever launch and briefly showed its built-in keybind cheat-sheet —
+   expected first-run behaviour, not an error.
+2. **NVIDIA rendering confirmed clean.** `journalctl --user -u niri` shows
+   it finding the render node, binding EGL, and picking up `HDMI-A-1` at
+   1920x1080@60Hz with no errors. Two harmless `WARN`s (niri's
+   screensaver/keyboard-monitor D-Bus names already held by a leftover KDE
+   service) and one informational vblank-throttle warning that's very
+   likely an artifact of watching this through the NanoKVM's HDMI capture
+   path rather than the real monitor's timing — not investigated further.
+3. **VRAM quirk: not hit, at least not the severe form.** Idle baseline
+   (niri running, zero windows open) measured at **392 MiB**, not the ~100
+   MiB the wiki calls ideal, but nowhere near the ~1 GiB "known bug"
+   threshold either. Worth re-checking after extended real use rather than
+   a fresh login; not addressed further here.
+4. **`xwayland-satellite` confirmed working.** Spawned Discord (an X11
+   app) via `niri msg action spawn -- discord` — `xwayland-satellite`
+   auto-started on demand (no manual step, matches upstream's claim) and
+   Discord appeared as a normal tiled window (`App ID: discord`).
+5. **Portal confirmed working — but only after fixing a live-session
+   gotcha.** `xdg-desktop-portal.service` had been running continuously
+   since the *previous* (Dragonized) session logged in on Aug 8 and never
+   restarted when Niri started, so it was still carrying
+   `XDG_CURRENT_DESKTOP=KDE` in its own process environment (confirmed via
+   `/proc/<pid>/environ`) even though the systemd --user manager's global
+   environment had correctly updated to `niri`. **This generalizes beyond
+   Niri** — see the new DECISIONS.md entry. Fix used here:
+   `systemctl --user restart xdg-desktop-portal.service`. After that, a
+   real `org.freedesktop.portal.Desktop.Screenshot` D-Bus call was
+   accepted and correctly activated `xdg-desktop-portal-gnome.service` —
+   confirms the module's portal config (gnome + gtk + Nautilus backend) is
+   wired correctly.
+6. **Driving the session without a keyboard.** The NanoKVM's virtual
+   keyboard couldn't reliably send Super/Mod, which blocks every default
+   niri keybinding. Niri's own IPC (`niri msg`) doesn't need it — used
+   `niri msg action spawn -- <cmd>`, `niri msg windows`, and
+   `niri msg action close-window --id <id>` over the existing SSH session
+   to open/close apps and verify window state directly. Socket path is
+   `/run/user/1000/niri.wayland-<pid>.sock` (find the pid via
+   `pgrep -a niri`); `NIRI_SOCKET` must be exported for `niri msg` to find
+   it from an SSH shell (it's not inherited there the way it is inside the
+   graphical session).
+7. Not yet tested: Steam/gamescope and xrdp coexistence with a live Niri
+   session (§4 and §14's independence claims are architectural, not yet
+   hands-on confirmed under Niri specifically).
+
+**Also hit and fixed during this test, unrelated to Niri's own config:**
+the `nixos-rebuild switch` that installed this module ran while an
+already-logged-in Dragonized session (since Aug 8) was still active on the
+physical console — activation's user-unit reload crashed that session
+(`sddm-helper... crashed exit code 1` in the journal) and nothing
+re-spawned a greeter afterward, producing a fully black KVM feed. Fixed
+with `sudo systemctl restart display-manager` (no reboot needed — the dead
+session had nothing left to lose). **Lesson for future switches on this
+host:** check `loginctl list-sessions` for an active graphical session
+before switching, not just whether *you* are physically at the console —
+this one had been sitting logged in for two days.
