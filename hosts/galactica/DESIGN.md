@@ -1196,11 +1196,23 @@ The original three, still valid:
   rest on a machine in another room. Same shape as the parity-disk trap in §5.5.
   Free now, while the partition is empty.
 
-  ⚠ **It has never been health-tested**, and it is now the single point of failure
-  for the whole Protected tier during the window. `smartmontools` reached pegasus's
-  closure in #44, so `smartctl -a /dev/sdb` works there once the host is rebuilt;
-  before then `nix shell nixpkgs#smartmontools -c smartctl -a /dev/sdb` costs
-  nothing. `DISK-DRAWER.md`'s rule stands: an untested spare is a guess.
+  ✅ **Health-verified 2026-08-10** — this used to read *"it has never been
+  health-tested"*, and it was the single point of failure for the whole Protected
+  tier during the window. Both readings now pass: passive attributes clean (0
+  reallocated, 0 pending, 0 CRC, `PASSED`) **and** a full 366-minute extended
+  surface scan `Completed without error` with no first-error LBA. Details in
+  `hosts/pegasus/HARDWARE-MAP.md` §1.
+
+  ⭐ **The scan is the part that counts**, and it is worth knowing why for the
+  other disks in this plan. `h-XDAS` was empty, so its passive counters described
+  a platter nothing had read in years — clean-because-healthy and
+  clean-because-untouched look identical. Only the surface scan distinguishes
+  them. `DISK-DRAWER.md`'s rule — *an untested spare is a guess* — is satisfied by
+  the long test, not by `smartctl -a`.
+
+  ⚠ **Health was never the only gate.** `sdb1` is still plaintext; see the LUKS
+  warning above, which is now the one thing left before this disk can take the
+  role.
 
   **⭐ Revised 2026-08-10 — pegasus is 2.5 GbE, so this is now disk-bound.** The
   NIC was read as an RTL8125 (`hosts/pegasus/HARDWARE-MAP.md` §4), not the 1 GbE
