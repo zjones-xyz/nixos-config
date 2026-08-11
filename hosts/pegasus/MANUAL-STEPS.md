@@ -384,3 +384,38 @@ session:
 No firewall changes needed — `tailscale0` is already a trusted interface
 (`openFirewall` is left `false`), so port 3389 is reachable over the
 tailnet the moment `xrdp.service` is up, and nowhere else.
+
+## 15. Niri — verify on first login
+
+Added 2026-08-10 as a fourth SDDM session (`modules/nixos/desktop-niri.nix`),
+bare — no shell (waybar/DMS/Noctalia/etc.) layered on yet, just the
+compositor. Nothing here was verified beyond forced-eval from the authoring
+session:
+
+1. At the SDDM greeter, switch the session to "Niri" before logging in
+   (`defaultSession` is unchanged — it's still Dragonized — so this has to
+   be picked manually each time until/unless that changes).
+2. Confirm `nvidia-smi` shows GPU usage and `echo $XDG_SESSION_TYPE` is
+   `wayland`, same checks as §3's Plasma validation.
+3. **Watch for the NVIDIA VRAM quirk**: if `nvidia-smi` shows Niri idling
+   near ~1 GiB instead of ~100 MiB, that's the known driver bug (doesn't
+   release VRAM properly), not a misconfiguration — see
+   https://github.com/niri-wm/niri/wiki/Nvidia for the
+   `GLVidHeapReuseRatio` application-profile workaround if it's bad enough
+   to matter.
+4. **Launch an X11-only app** (Discord is the easiest one already installed)
+   and confirm it appears at all — this is `xwayland-satellite` actually
+   working, not assumed.
+5. **Screen share/screenshot check**: the portal config pulls in
+   `xdg-desktop-portal-gnome` per upstream's recommendation — confirm a
+   screenshot (niri has a built-in screenshot UI, `Mod+Print` by default)
+   and a screen-share prompt (e.g. from Discord or a browser) both actually
+   work, since this is the one part of the module's defaults that's a
+   little unusual (pulls in a GNOME portal backend + Nautilus as a dbus
+   service, even though nothing else GNOME is installed on this host).
+6. No config changes needed for Steam/gamescope or xrdp — both are already
+   independent of whatever's running on the physical seat (see §4 and §14),
+   so they're expected to be unaffected. Worth a quick sanity check anyway
+   the first time: launch a Proton title from within a Niri session, and
+   separately confirm xrdp still gives you Plasma-X11 while a Niri session
+   is live on the physical console.

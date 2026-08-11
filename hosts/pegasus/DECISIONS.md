@@ -263,6 +263,40 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   before assuming a fix didn't work — and remember the isolated profile is
   wiped every login, which defeats any "first-run only" assumption KDE's
   own subsystems make.
+- **Niri, added 2026-08-10 as a fourth selectable SDDM session (bare, no
+  shell layered on yet).** Same additive pattern as COSMIC — SDDM stays the
+  sole display manager, `defaultSession` stays "plasma-dragonized", Niri just
+  gains an entry in the session picker. Used nixpkgs' own `programs.niri`
+  module (`nixos/modules/programs/wayland/niri.nix`, confirmed against the
+  `release-26.05` branch, not niri-flake) — Niri is packaged directly in
+  nixpkgs, no third-party flake input needed, unlike Dragonized's fetchGit
+  sources or Claude Desktop's flake input. The module already registers its
+  own session file (via `services.displayManager.sessionPackages`) and wires
+  up the upstream-recommended portal config (xdg-desktop-portal-gnome +
+  gnome-keyring + a Nautilus dbus-service backend for the FileChooser
+  portal), so `modules/nixos/desktop-niri.nix` only needed two lines:
+  `programs.niri.enable = true;` and `xwayland-satellite` in
+  `environment.systemPackages` (Niri, unlike KWin/Mutter, has no built-in
+  Xwayland — it auto-integrates xwayland-satellite once the binary is on
+  PATH; needed for the X11-only apps already in daily use here — Discord,
+  some Steam titles, Bambu Studio/OpenSCAD).
+  *NVIDIA fit, not yet verified on real hardware:* explicit sync (fixes
+  flicker/stutter on NVIDIA Wayland) needs driver >=555 and kernel >=6.8 —
+  both already satisfied by this host's existing `nvidia.nix`/kernel choice,
+  made for Plasma/COSMIC/Dragonized, so no changes needed there. Niri uses
+  smithay, not wlroots, so none of the wlroots-specific NVIDIA env-var
+  workarounds apply. One known cosmetic quirk flagged upstream: the driver
+  doesn't release VRAM properly under Niri (idles near ~1 GiB instead of
+  ~100 MiB) — not addressed here, see niri-wm/niri wiki's Nvidia page if it
+  becomes a real problem.
+  *Deliberately deferred:* no shell (DankMaterialShell or Noctalia) layered
+  on top yet — bare Niri first, to confirm the compositor+NVIDIA session is
+  solid on real hardware before adding Quickshell's dependency footprint.
+  Both candidate shells need extra flake inputs to reach on this repo's
+  pinned `nixos-26.05` (Noctalia's nixpkgs package is unstable-only; DMS
+  ships as its own flake, no nixpkgs package at all) — same shape as the
+  `claude-desktop-debian` input already in this repo, deferred until a shell
+  is actually chosen.
 - **Remote desktop → xrdp + xorgxrdp (Plasma-over-X11, independent session
   per connection), tailscale0-gated, added 2026-07-16/17.** *Real motivation
   surfaced mid-implementation:* this is meant to eventually replace the
