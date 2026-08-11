@@ -16,6 +16,7 @@ in
     ../../modules/nixos/desktop-cosmic.nix
     ../../modules/nixos/desktop-dragonized.nix
     ../../modules/nixos/desktop-niri.nix
+    ../../modules/nixos/dankcalendar.nix
     ../../modules/nixos/gaming.nix
     ../../modules/nixos/performance.nix
     ../../modules/nixos/btrfs-snapshots.nix
