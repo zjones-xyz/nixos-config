@@ -29,6 +29,39 @@
   programs.niri.package = pkgs.niri;
 
   programs.niri.settings = {
+    # ── Session environment ────────────────────────────────────────────────
+    # Recommended directly by DMS's own niri setup docs. Only the variables
+    # that are safe or beneficial even if they leak into other sessions —
+    # see the note below, this host's systemd --user manager is shared and
+    # persistent across session switches (same root cause as the
+    # XDG_CURRENT_DESKTOP bug in DECISIONS.md), and niri-session's own
+    # script (`systemctl --user import-environment`) confirms it injects
+    # into that shared manager, only explicitly cleaning up 5 unrelated
+    # vars (WAYLAND_DISPLAY etc.) on exit — nothing we set here.
+    #
+    # QT_QPA_PLATFORM=wayland and the Electron Ozone hints are harmless (at
+    # worst) or actively beneficial (at best) if they leak into Plasma/
+    # COSMIC/Dragonized, since every session on this host is already
+    # Wayland — matters for the Electron apps already installed (Discord,
+    # VSCode, Obsidian, Ferdium, TickTick, Claude Desktop, ProtonMail
+    # Desktop, Teams-for-linux — see home.nix), which otherwise fall back
+    # to XWayland under niri.
+    #
+    # Deliberately NOT setting QT_QPA_PLATFORMTHEME=gtk3 (also in DMS's
+    # docs) — that one is a real regression risk if it leaks: it would
+    # override Plasma's native Qt/Breeze theming with GTK-styled dialogs
+    # in the Plasma/Dragonized sessions, unlike the platform/Ozone vars
+    # above which are session-agnostic.
+    environment = {
+      QT_QPA_PLATFORM = "wayland";
+      # nixpkgs' own Electron wrapper checks for this specifically —
+      # covers every Electron app above except Claude Desktop, which
+      # comes via its own flake (claude-desktop-debian), not nixpkgs'
+      # wrapper — hence also setting the generic upstream flag below.
+      NIXOS_OZONE_WL = "1";
+      ELECTRON_OZONE_PLATFORM_HINT = "auto";
+    };
+
     input = {
       keyboard.numlock = true;
 
