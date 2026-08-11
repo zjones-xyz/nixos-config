@@ -388,6 +388,91 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
      other long-lived `--user` service that reads `XDG_CURRENT_DESKTOP`
      once at startup — worth checking for on the next live session switch
      (COSMIC or otherwise), not just after a fresh reboot.
+- **niri-flake adopted for declarative config, 2026-08-11 — but only its
+  `homeModules.config`, not the full `nixosModules.niri`.** Motivation: the
+  hand-edited `~/.config/niri/config.kdl` (natural-scroll disabled by hand,
+  DMS's keybinds still not wired in) was unmanaged, unversioned state
+  sitting only on pegasus's disk — real drift/loss risk if the disk is ever
+  wiped or reinstalled. Checked what adopting niri-flake would actually
+  cost before doing it (see `sodiboo/niri-flake`'s actual source, not just
+  its reputation):
+  - `nixosModules.niri` is a **hard replacement**, not an addition — it
+    literally sets `disabledModules = [ "programs/wayland/niri.nix" ]`,
+    turning off nixpkgs' module and installing niri-flake's own
+    from-source build instead. Rejected: its "stable" track is pinned to
+    `v25.08`, while nixpkgs 26.05's niri self-reports as version **26.04**
+    — nixpkgs is currently *ahead*, so this would be a downgrade, not the
+    usual "niri-flake tracks upstream faster" benefit. It would also mean
+    either compiling niri from source or opting into a third-party binary
+    cache (`niri.cachix.org`, run by the flake's maintainer) — a new trust
+    boundary this repo hasn't taken on anywhere else — and it runs its own
+    polkit agent alongside whatever Plasma already runs, untested here.
+  - `homeModules.config` (used instead) is genuinely additive per its own
+    README: "won't install niri by itself, but it does set the package
+    version used for build-time validation." It only adds
+    `programs.niri.settings` (declarative, KDL-validated at build time)
+    and `config.lib.niri.actions`. `programs.niri.enable` from nixpkgs
+    (above in `desktop-niri.nix`) is completely unchanged — set
+    `programs.niri.package = pkgs.niri;` so niri-flake validates against
+    the niri actually installed, not its own build.
+  - ⚠ **Divergence risk, explicitly asked to be tracked**: niri-flake's own
+    README states `programs.niri.settings`'s schema "is not guaranteed to
+    be compatible with niri versions other than the two [niri-flake]
+    provides," and that nixpkgs' niri is fine "unless running old versions
+    2+ releases behind." True today (nixpkgs is ahead, not behind), but if
+    that flips — nixpkgs lags, or niri-flake's schema changes out from
+    under an unbumped input — expect either an eval error naming an
+    unknown niri action, or worse, a config that builds but silently
+    doesn't do what's declared. See the divergence-risk comment at the top
+    of `hosts/pegasus/niri-settings.nix` for the full note kept next to
+    the actual settings.
+  - Concretely hit and fixed migrating the hand-tuned binds: **4 of the
+    ~90 action names used aren't in niri-flake's `config.lib.niri.actions`
+    cache** (`screenshot`, `screenshot-screen`, `screenshot-window`,
+    `move-column-to-workspace` — all take optional properties or a
+    non-trivial argument type the cache's generator apparently skips),
+    caught as Nix eval errors (`undefined variable`) and fixed by using
+    the documented `action.<name> = value` attrset form for just those
+    four instead of the `with config.lib.niri.actions;` bare-name form
+    used everywhere else. Also: `hotkey-overlay.title` doesn't accept
+    `null` for hiding a bind from the overlay — that's
+    `hotkey-overlay.hidden = true;` instead. All caught by `nix flake
+    check`/forced eval before ever reaching pegasus — see
+    `hosts/pegasus/niri-settings.nix`.
+  - **Not using DMS's own `homeModules.niri`** (which would auto-generate
+    DMS's keybinds) — that module needs DMS's `homeModules.dank-material-
+    shell` also imported at the home-manager level for its `cfg.enable`
+    reference to resolve, which reintroduces the exact `programs.
+    quickshell` HM-option exposure avoided by using DMS's NixOS module
+    (see the earlier DMS entry above). DMS's ~8 keybinds are hand-
+    transcribed into `niri-settings.nix` instead, matching upstream's own
+    bind list. Doing this surfaced **3 real key conflicts** between niri's
+    own suggested defaults and what DMS wanted the same key for:
+    `Mod+Comma` (niri: consume-window-into-column; DMS: settings panel —
+    niri's moved to `Mod+Shift+Comma`), `Mod+V` (niri: toggle-window-
+    floating; DMS: clipboard manager — niri's moved to `Mod+Ctrl+V`,
+    paired with the existing `Mod+Shift+V`), and the six volume/brightness
+    media keys (niri's raw `wpctl`/`brightnessctl` calls replaced with
+    DMS's own `dms ipc audio/brightness ...` so DMS's on-screen indicators
+    actually fire — media *transport* keys like play/pause have no DMS
+    equivalent and were left as niri's original `playerctl` bindings).
+  - **Not verified on real hardware.** `nix flake check` and a forced
+    `system.build.toplevel.drvPath` eval both pass clean, but niri-flake's
+    own build-time KDL validation (`validated-config-for`, which actually
+    runs niri's validator against the generated config) only executes
+    during a real derivation *build*, which this Mac can't do for
+    x86_64-linux. The Nix-level checks catch wrong option names/types
+    (as they did, four times, above) but not e.g. a syntactically-valid-
+    to-Nix KDL value that niri itself would still reject. First real
+    `nixos-rebuild switch` on pegasus is the actual test.
+  - Also: the pre-existing hand-edited `~/.config/niri/config.kdl` isn't
+    home-manager-owned, so it collides with home-manager now declaring
+    that same path — added `home-manager.backupFileExtension =
+    "pre-declarative-niri-config";` for pegasus (matching the pattern
+    already used for serenity's pre-existing dotfiles) so activation
+    renames rather than aborts on it. The old file will sit there
+    afterward as `config.kdl.pre-declarative-niri-config` — home-manager
+    doesn't clean these up on its own.
 - **Remote desktop → xrdp + xorgxrdp (Plasma-over-X11, independent session
   per connection), tailscale0-gated, added 2026-07-16/17.** *Real motivation
   surfaced mid-implementation:* this is meant to eventually replace the

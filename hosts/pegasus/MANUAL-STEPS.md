@@ -452,7 +452,7 @@ host:** check `loginctl list-sessions` for an active graphical session
 before switching, not just whether *you* are physically at the console —
 this one had been sitting logged in for two days.
 
-## 16. DankMaterialShell — verify on first login, then hand-wire config
+## 16. DankMaterialShell — verify on first login
 
 Added 2026-08-11 (`programs.dank-material-shell` in
 `modules/nixos/desktop-niri.nix`), layered on the bare Niri session from
@@ -464,50 +464,73 @@ to get the shell's bar/UI to appear. Not yet tested on real hardware
 1. Confirm `dms.service` actually came up:
    `systemctl --user status dms.service` should be active, and DMS's bar
    should be visible without doing anything else.
-2. **Wire up keybinds by hand** — deliberately not done declaratively (see
-   DECISIONS.md for why: DMS's `homeModules.niri` needs niri-flake, which
-   this host doesn't use). Edit `~/.config/niri/config.kdl` and add a
-   `binds { ... }` block; these lines are taken directly from DMS's own
-   `distro/nix/niri.nix` so they match its documented defaults:
-   ```kdl
-   binds {
-       Mod+Space { spawn "dms" "ipc" "spotlight" "toggle"; }
-       Mod+N { spawn "dms" "ipc" "notifications" "toggle"; }
-       Mod+Comma { spawn "dms" "ipc" "settings" "toggle"; }
-       Mod+P { spawn "dms" "ipc" "notepad" "toggle"; }
-       Super+Alt+L { spawn "dms" "ipc" "lock" "lock"; }
-       Mod+X { spawn "dms" "ipc" "powermenu" "toggle"; }
-       Mod+V { spawn "dms" "ipc" "clipboard" "toggle"; }
-       Mod+Alt+N { spawn "dms" "ipc" "night" "toggle"; }
-   }
-   ```
-   (Volume/brightness media-key binds and `Mod+M` for the process list are
-   in the upstream module too if wanted — omitted here since they're less
-   central.) Restart niri or just save the file — niri live-reloads
-   `config.kdl` on change, no logout needed.
-3. **Magic Trackpad, while editing that same file anyway:** it's the
-   Lightning-generation Magic Trackpad, run wired through a USB KVM switch
-   — no Bluetooth pairing needed. Unlike Magic Mouse, Magic Trackpad
-   genuinely supports wired USB HID mode, not just charging over that
-   port; Linux's in-tree `hid-magicmouse` driver explicitly supports it
-   "over USB and Bluetooth," and this is the exact generation that driver
-   targets (the 2024 USB-C model needed newer, separate driver work — not
-   relevant here). Plugged in via USB, it's genuine wired HID data, so the
-   KVM switches it like any other wired peripheral, following whichever
-   machine the KVM is currently pointed at — no per-host pairing step at
-   all. Confirm it's recognized once plugged in: `libinput list-devices`
-   should list it, or check `lsusb` / `/proc/bus/input/devices`.
-   **Checked 2026-08-11: no config change needed.** The live
-   `~/.config/niri/config.kdl` (niri's own auto-generated default,
-   confirmed untouched) already ships with `tap` and `natural-scroll`
-   uncommented in its `input { touchpad { ... } }` block — matches
-   Apple's own convention already, nothing to add. (This is independent
-   of whatever Plasma/Dragonized has configured for the same device —
-   niri's input config doesn't read from KDE's settings — it's just a
-   coincidence that niri's stock default already agrees with Apple's
-   convention here.)
+2. Keybinds are now declarative — see §17, this superseded the original
+   hand-edit-`config.kdl` plan from earlier the same day.
+3. **Magic Trackpad:** Lightning-generation, run wired through a USB KVM
+   switch — no Bluetooth pairing needed (see chat history 2026-08-11 for
+   why: Magic Trackpad, unlike Magic Mouse, genuinely supports wired USB
+   HID, confirmed via Linux's in-tree `hid-magicmouse` driver). Confirm
+   it's recognized once plugged in: `libinput list-devices` should list
+   it, or check `lsusb` / `/proc/bus/input/devices`. Tap-to-click and
+   scroll direction are now declared in `hosts/pegasus/niri-settings.nix`
+   (`tap = true; natural-scroll = false;`) rather than left to niri's own
+   auto-generated default — see §17.
 4. Not yet checked: any of DMS's optional features that assume dependencies
    this host may not have wired up the same way as a typical DMS install
    (VPN widget via NetworkManager — already present; dynamic theming via
    matugen; audio wavelength via cava; calendar via khal — all pulled in
    automatically by the module's defaults, but none exercised hands-on yet).
+
+## 17. Declarative niri config (niri-flake) — verify on next switch
+
+Added 2026-08-11, migrating the hand-edited `~/.config/niri/config.kdl`
+from §15/§16 into `hosts/pegasus/niri-settings.nix` via niri-flake's
+`homeModules.config` — see DECISIONS.md for the full reasoning (why
+`homeModules.config` and not the full `nixosModules.niri`, the divergence
+risk, the key conflicts found between niri's own defaults and DMS's
+wanted keybinds). `nix flake check` and a forced `drvPath` eval both pass,
+but **none of this has been tested with a real build or real login yet**
+— the next `nixos-rebuild switch` on pegasus is the actual first test.
+
+1. **The file-collision handling needs verifying first.** The existing
+   `~/.config/niri/config.kdl` is a plain file, not home-manager-owned.
+   `home-manager.backupFileExtension = "pre-declarative-niri-config";`
+   (added in `flake.nix`) should make activation rename it to
+   `config.kdl.pre-declarative-niri-config` rather than aborting — confirm
+   this actually happens rather than assuming; if activation aborts with
+   a "existing file is in the way" collision error instead, the backup
+   extension isn't taking effect and the old file needs moving aside by
+   hand before retrying.
+2. **niri-flake's own build-time KDL validation only runs during a real
+   build** (`validated-config-for` actually invokes niri's validator
+   against the generated config) — this Mac can't do that for
+   x86_64-linux, so the four action-name fixes and the
+   `hotkey-overlay.title` fix (see DECISIONS.md) are the only things that
+   have been checked. A KDL-valid-to-niri-flake-but-rejected-by-niri
+   config would only surface here, at the real switch. If the switch
+   fails at a `niri-config` build step (not at the usual nixos-rebuild
+   activation step), that's what's happening — check the error against
+   `hosts/pegasus/niri-settings.nix`.
+3. **Test the conflict-resolved keybinds specifically** — these are the
+   parts most likely to have a transcription mistake that Nix's type
+   system wouldn't catch (a right-shaped-but-wrong KDL value):
+   - `Mod+Comma` → DMS settings panel (was niri's `consume-window-into-
+     column`, moved to `Mod+Shift+Comma`)
+   - `Mod+V` → DMS clipboard manager (was niri's `toggle-window-
+     floating`, moved to `Mod+Ctrl+V`)
+   - `Super+Alt+L` → DMS lock screen (was niri's suggested `swaylock`,
+     which was never actually installed)
+   - The six volume/brightness media keys → should trigger DMS's own
+     on-screen indicators, not just change volume/brightness silently
+     (if they still work but no OSD appears, the `dms ipc audio/
+     brightness` calls may not be reaching DMS correctly)
+   - `Mod+Escape` → toggle-keyboard-shortcuts-inhibit — worth confirming
+     this still works given it's the escape hatch for exactly the
+     KVM-input situation this has all been tested under
+4. Confirm the trackpad's `tap`/`natural-scroll` behavior still matches
+   what was live-tested in §16 (should be identical — same values,
+   declared instead of hand-edited).
+5. The old config file, once renamed to
+   `config.kdl.pre-declarative-niri-config`, isn't cleaned up
+   automatically — safe to delete once the declarative version is
+   confirmed working, or keep around for reference/diffing.

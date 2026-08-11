@@ -67,17 +67,26 @@
     # trimmed, nothing here conflicts with anything else on this host.
   };
 
-  # Deliberately NOT using DMS's `homeModules.niri` keybind-injection layer
-  # (Mod+Space for the launcher, Mod+N for notifications, etc.) — that module
-  # assumes niri-flake's `programs.niri.settings` Nix-language config API,
-  # which this host doesn't use (see the plain-nixpkgs-module rationale
-  # above in this file). Adopting niri-flake just to get DMS's keybinds
-  # would be a bigger architectural change than "add a shell", and this
-  # repo already has a precedent for not fighting declarative keybind
-  # wiring for a shell layer — see DECISIONS.md's
-  # `programs.plasma.hotkeys.commands is broken` entry, where Dragonized's
-  # shortcuts ended up configured live instead. Same call here: wire DMS's
-  # keybinds by hand into ~/.config/niri/config.kdl after first login — see
-  # MANUAL-STEPS.md for the exact bind lines DMS's own niri.nix module would
-  # otherwise have generated.
+  # ── Declarative niri config.kdl, added 2026-08-11 ──────────────────────────
+  # hosts/pegasus/niri-settings.nix (imported via home.nix) declares
+  # programs.niri.settings, using niri-flake's homeModules.config — but
+  # deliberately ONLY that module, not niri-flake's nixosModules.niri (which
+  # would disable the programs.niri.enable line above and install
+  # niri-flake's own from-source niri build instead of nixpkgs'). See
+  # flake.nix's niri-flake input comment and DECISIONS.md for the full
+  # reasoning, including a real divergence risk niri-flake's own README
+  # flags for this exact combination (nixpkgs' niri + niri-flake's config
+  # schema) — the short version is: check niri-flake's changelog before
+  # assuming a build failure here is a mistake in niri-settings.nix.
+  #
+  # Also deliberately NOT using DMS's own `homeModules.niri` keybind-
+  # injection module — despite niri-flake now being in use, that module
+  # additionally needs DMS's `homeModules.dank-material-shell` imported at
+  # the home-manager level too (for its own `cfg.enable` reference to
+  # resolve), which would reintroduce the `programs.quickshell` HM-option
+  # exposure this file avoids by using DMS's NixOS module above. DMS's
+  # keybinds are hand-transcribed directly into niri-settings.nix's `binds`
+  # instead — see that file for the full list and the handful of key
+  # conflicts (Mod+Comma, Mod+V, the media keys) that had to be resolved
+  # between niri's own suggested defaults and what DMS wanted.
 }
