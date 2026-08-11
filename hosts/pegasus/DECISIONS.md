@@ -612,3 +612,57 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   started. Package name reference if picked up later: `idriveforlinux`,
   main binary `/opt/IDriveForLinux/idriveforlinux %U`, icon
   `idriveforlinux`, `StartupWMClass=IDriveForLinux`.
+- **dankcalendar added 2026-08-11, chosen over sticking with khal+vdirsyncer
+  alone.** Standalone calendar app (Local/Google/Microsoft/CalDAV/iCloud)
+  from the same "Dank" suite as DMS — not a khal replacement, a genuinely
+  separate app with its own daemon, tray icon, and native OAuth. Compared
+  against khal directly before deciding: khal is already the lower-effort
+  path (in nixpkgs, already wired as the backend for DMS's own calendar
+  widget via `enableCalendarEvents`), but was still inert on this host —
+  nothing had configured `vdirsyncer` to actually sync a real calendar into
+  it. dankcalendar's native OAuth (no manual CalDAV URL/auth wrangling) and
+  broader account support (iCloud, which khal+vdirsyncer doesn't cover as
+  cleanly) won out, accepting that it runs *alongside* khal rather than
+  replacing it — DMS's own widget still reads from khal, dankcalendar is a
+  separate surface.
+  *Packaging, `modules/nixos/dankcalendar.nix`:* no upstream Nix packaging
+  exists (Flatpak/AUR/source-only at time of writing) — packaged from
+  scratch, `buildGoModule` + the quickshell UI tree baked in via
+  `go:embed`, following the exact shape of DMS's own package build.
+  Pinned to master HEAD (`a57a8790`, no tagged release exists yet).
+  Genuinely nontrivial part: replicating `core/Makefile`'s `sync-shell`
+  target (copies `quickshell/` into `internal/shellembed/dist`, the
+  `go:embed` target for the `withshell` build tag) — including resolving
+  the `DankCommon` submodule symlink to `dank-qml-common`'s real content,
+  since `go:embed` rejects symlinks (same reason the Makefile dereferences
+  it via `tar -h`). Wrapped with the same Qt/QML plugin paths DMS's own
+  package uses (`kirigami`, `sonnet`, `qtmultimedia`, `qtimageformats`,
+  `kimageformats`) since both apps share the `dank-qml-common` widget
+  library, plus an explicit `quickshell` on `PATH` rather than relying on
+  it already being there system-wide via DMS's module.
+  *All three hashes (dankcalendar source, dank-qml-common source, Go
+  `vendorHash`) were resolved locally on this Mac* rather than round-
+  tripping to pegasus for each — fetching and Go module vendoring are both
+  architecture-independent operations (no actual compilation happens),
+  confirmed by forcing each fixed-output derivation to build against
+  `aarch64-darwin`'s own nixpkgs with `lib.fakeHash` and reading the real
+  hash out of the resulting mismatch error. Only the final compile (`go
+  build -tags withshell`) genuinely needed x86_64-linux.
+  **First real build, 2026-08-11: succeeded on the first attempt** — no
+  vendorHash mismatch, no embed-step failure, no compile error. Confirmed
+  working end-to-end: `dcal version` reports the correct ldflags-injected
+  version string, `dcal.service` starts clean and correctly spawns
+  `quickshell` as a subprocess against the runtime-unpacked embedded UI
+  (`/run/user/1000/dankcal-shell/...`), IPC socket comes up. One benign
+  warning in the log (`Failed to register with host portal... Connection
+  already associated with an application ID`) — same class of harmless
+  D-Bus name-registration warning already seen from niri's own screensaver/
+  keyboard-monitor services; service stayed active, not a crash.
+  Same `graphical-session.target`-already-active gotcha as `dms.service`
+  applied here too (see the niri-flake switch entry above) — needed a
+  direct `systemctl --user start dcal.service`, didn't auto-start on its
+  own.
+  **Not yet done:** actually adding a calendar account (`dcal account`) —
+  needs an interactive login (Google/Microsoft OAuth, or a CalDAV/iCloud
+  app-password flow), can't be driven from this SSH session. See
+  MANUAL-STEPS.md §18.

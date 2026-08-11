@@ -532,3 +532,32 @@ input):
   physical trackpad interaction (confirmed only that the generated KDL
   matches what was live-tested by hand in §16 — same values, now
   declared instead of hand-edited).
+
+## 18. dankcalendar — add an account (needs interactive login)
+
+Added and confirmed running 2026-08-11 (`modules/nixos/dankcalendar.nix`)
+— see DECISIONS.md for the packaging writeup. `dcal.service` is active
+and healthy, but it's an empty calendar until an account is actually
+added, which needs a real login flow this SSH session can't drive:
+
+1. At the physical console (or wherever you're actually using pegasus),
+   open the calendar: `dcal show`, or trigger it from wherever DMS/niri
+   ends up launching it (no keybind wired for this yet — see below).
+2. Add an account: `dcal account add` (or through the UI's account
+   settings) — Google and Microsoft go through a real OAuth browser
+   flow; CalDAV/iCloud need the server URL + an app-specific password
+   (both Google and iCloud require generating one of these separately in
+   the account's own security settings, not your normal login password).
+3. Confirm sync: `dcal sync`, then `dcal events` or `dcal reminders`
+   should show real data.
+4. **No niri keybind wired for dankcalendar** — unlike DMS's own
+   features, `niri-settings.nix` doesn't bind anything to
+   `dcal toggle`/`dcal show`. Add one if you want a shortcut; wasn't
+   done here since it wasn't asked for and there's no obvious key that
+   doesn't collide with something already in use (see the cheat sheet
+   artifact for what's taken).
+5. Worth knowing: DMS's own calendar widget (Mod+N notifications area)
+   is still backed by khal, not dankcalendar — the two aren't linked.
+   Adding an account to dankcalendar does not populate DMS's widget, and
+   vice versa. See DECISIONS.md for why they were kept separate rather
+   than trying to unify them.
