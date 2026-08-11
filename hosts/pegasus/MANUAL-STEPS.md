@@ -496,14 +496,16 @@ to get the shell's bar/UI to appear. Not yet tested on real hardware
    KVM switches it like any other wired peripheral, following whichever
    machine the KVM is currently pointed at — no per-host pairing step at
    all. Confirm it's recognized once plugged in: `libinput list-devices`
-   should list it, or check `lsusb` / `/proc/bus/input/devices`. niri's
-   tap-to-click/natural-scroll defaults may not match Apple's conventions
-   out of the box — add an `input { touchpad { tap; natural-scroll; } }`
-   block to the same `config.kdl` if needed (Apple's own convention is
-   natural-scroll on; niri's default may differ — check rather than
-   assume). This is independent of whatever Plasma/Dragonized has
-   configured for the same device — niri's input config doesn't read from
-   KDE's settings.
+   should list it, or check `lsusb` / `/proc/bus/input/devices`.
+   **Checked 2026-08-11: no config change needed.** The live
+   `~/.config/niri/config.kdl` (niri's own auto-generated default,
+   confirmed untouched) already ships with `tap` and `natural-scroll`
+   uncommented in its `input { touchpad { ... } }` block — matches
+   Apple's own convention already, nothing to add. (This is independent
+   of whatever Plasma/Dragonized has configured for the same device —
+   niri's input config doesn't read from KDE's settings — it's just a
+   coincidence that niri's stock default already agrees with Apple's
+   convention here.)
 4. Not yet checked: any of DMS's optional features that assume dependencies
    this host may not have wired up the same way as a typical DMS install
    (VPN widget via NetworkManager — already present; dynamic theming via
