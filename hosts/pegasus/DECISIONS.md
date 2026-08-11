@@ -473,6 +473,21 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
     renames rather than aborts on it. The old file will sit there
     afterward as `config.kdl.pre-declarative-niri-config` — home-manager
     doesn't clean these up on its own.
+  - **First real `nixos-rebuild switch` attempt, 2026-08-11: niri-flake's
+    KDL build-time validation passed clean** — `config.kdl.drv` built with
+    no error, meaning every one of the ~90 transcribed binds (plus the
+    touchpad settings and window-rule) validated against real niri. The
+    switch still failed, but on something unrelated to niri or this
+    file: DMS's Go build (`dms-shell`) needs Go ≥1.26.4, and this repo's
+    then-pinned `nixpkgs` (2026-06-11) only had 1.26.3. Not a DMS commit
+    problem — checked, `go.mod` had required 1.26.4 for a while already —
+    just a stale lock; the `nixos-26.05` branch tip already had 1.26.5.
+    **Fixed by bumping `nixpkgs` forward within the same `nixos-26.05`
+    branch** (2026-06-11 → 2026-08-09; cascades to every `.follows`-linked
+    input: home-manager, sops-nix, nix-darwin, plasma-manager,
+    claude-desktop-debian, dank-material-shell, niri-flake). `nix flake
+    check` re-run clean across all five hosts after the bump before
+    retrying on pegasus.
 - **Remote desktop → xrdp + xorgxrdp (Plasma-over-X11, independent session
   per connection), tailscale0-gated, added 2026-07-16/17.** *Real motivation
   surfaced mid-implementation:* this is meant to eventually replace the
