@@ -481,56 +481,54 @@ to get the shell's bar/UI to appear. Not yet tested on real hardware
    matugen; audio wavelength via cava; calendar via khal — all pulled in
    automatically by the module's defaults, but none exercised hands-on yet).
 
-## 17. Declarative niri config (niri-flake) — verify on next switch
+## 17. Declarative niri config (niri-flake) — switched 2026-08-11, verified
 
-Added 2026-08-11, migrating the hand-edited `~/.config/niri/config.kdl`
-from §15/§16 into `hosts/pegasus/niri-settings.nix` via niri-flake's
-`homeModules.config` — see DECISIONS.md for the full reasoning (why
-`homeModules.config` and not the full `nixosModules.niri`, the divergence
-risk, the key conflicts found between niri's own defaults and DMS's
-wanted keybinds). `nix flake check` and a forced `drvPath` eval both pass,
-but **none of this has been tested with a real build or real login yet**
-— the next `nixos-rebuild switch` on pegasus is the actual first test.
+Migrated the hand-edited `~/.config/niri/config.kdl` from §15/§16 into
+`hosts/pegasus/niri-settings.nix` via niri-flake's `homeModules.config` —
+see DECISIONS.md for the full reasoning (why `homeModules.config` and not
+the full `nixosModules.niri`, the divergence risk, the key conflicts
+found between niri's own defaults and DMS's wanted keybinds) and for the
+blow-by-blow of getting this switch to actually succeed (a stale-nixpkgs
+Go version blocker, unrelated to niri).
 
-1. **The file-collision handling needs verifying first.** The existing
-   `~/.config/niri/config.kdl` is a plain file, not home-manager-owned.
-   `home-manager.backupFileExtension = "pre-declarative-niri-config";`
-   (added in `flake.nix`) should make activation rename it to
-   `config.kdl.pre-declarative-niri-config` rather than aborting — confirm
-   this actually happens rather than assuming; if activation aborts with
-   a "existing file is in the way" collision error instead, the backup
-   extension isn't taking effect and the old file needs moving aside by
-   hand before retrying.
-2. **niri-flake's own build-time KDL validation only runs during a real
-   build** (`validated-config-for` actually invokes niri's validator
-   against the generated config) — this Mac can't do that for
-   x86_64-linux, so the four action-name fixes and the
-   `hotkey-overlay.title` fix (see DECISIONS.md) are the only things that
-   have been checked. A KDL-valid-to-niri-flake-but-rejected-by-niri
-   config would only surface here, at the real switch. If the switch
-   fails at a `niri-config` build step (not at the usual nixos-rebuild
-   activation step), that's what's happening — check the error against
-   `hosts/pegasus/niri-settings.nix`.
-3. **Test the conflict-resolved keybinds specifically** — these are the
-   parts most likely to have a transcription mistake that Nix's type
-   system wouldn't catch (a right-shaped-but-wrong KDL value):
-   - `Mod+Comma` → DMS settings panel (was niri's `consume-window-into-
-     column`, moved to `Mod+Shift+Comma`)
-   - `Mod+V` → DMS clipboard manager (was niri's `toggle-window-
-     floating`, moved to `Mod+Ctrl+V`)
-   - `Super+Alt+L` → DMS lock screen (was niri's suggested `swaylock`,
-     which was never actually installed)
-   - The six volume/brightness media keys → should trigger DMS's own
-     on-screen indicators, not just change volume/brightness silently
-     (if they still work but no OSD appears, the `dms ipc audio/
-     brightness` calls may not be reaching DMS correctly)
-   - `Mod+Escape` → toggle-keyboard-shortcuts-inhibit — worth confirming
-     this still works given it's the escape hatch for exactly the
-     KVM-input situation this has all been tested under
-4. Confirm the trackpad's `tap`/`natural-scroll` behavior still matches
-   what was live-tested in §16 (should be identical — same values,
-   declared instead of hand-edited).
-5. The old config file, once renamed to
-   `config.kdl.pre-declarative-niri-config`, isn't cleaned up
-   automatically — safe to delete once the declarative version is
-   confirmed working, or keep around for reference/diffing.
+**Confirmed working, real hardware, 2026-08-11:**
+
+1. **File-collision handling worked as designed.** The old plain
+   `config.kdl` got renamed to `config.kdl.pre-declarative-niri-config`
+   (not cleaned up automatically — safe to delete once you're confident
+   in the new setup, or keep for reference/diffing); the new path is a
+   symlink into the Nix store, home-manager-owned.
+2. **niri-flake's build-time KDL validation passed clean** — confirms all
+   ~90 transcribed binds, the touchpad settings, and the window-rule are
+   genuinely valid to real niri, not just Nix-type-checked.
+3. **Niri did NOT pick up the new config automatically** — the symlink
+   swap doesn't trigger niri's file-watcher the way an in-place edit
+   does (see DECISIONS.md). Needed `systemctl --user restart niri.service`
+   to force a reload — this restarts the whole compositor (closes
+   windows), so plan around that on future switches, it isn't automatic.
+   After the restart: `loaded config from "/home/z/.config/niri/config.kdl"`
+   in the journal, zero errors, same clean rendering as every prior test.
+4. **`dms.service` did not auto-start**, even after the niri restart —
+   different root cause (see DECISIONS.md: `graphical-session.target` had
+   been continuously active since the original login, so a brand-new
+   `WantedBy` unit never got an automatic start trigger). Needed a direct
+   `systemctl --user start dms.service` — came up clean once triggered.
+   **General lesson for future switches:** don't assume a new
+   `graphical-session.target`-bound unit auto-starts in an already-logged-
+   in session — check and start it manually if needed.
+
+**Still not checked hands-on** (nobody's actually pressed these keys yet
+— everything above was verified via journal/IPC over SSH, not physical
+input):
+- The conflict-resolved keybinds specifically: `Mod+Comma` (DMS settings,
+  displaced niri's `consume-window-into-column` to `Mod+Shift+Comma`),
+  `Mod+V` (DMS clipboard, displaced niri's `toggle-window-floating` to
+  `Mod+Ctrl+V`), `Super+Alt+L` (DMS lock screen), the six volume/
+  brightness media keys (should trigger DMS's on-screen indicators, not
+  just silently change volume), and `Mod+Escape` (keyboard-shortcuts
+  inhibitor toggle — the escape hatch for exactly the KVM-input situation
+  this has all been tested under).
+- The trackpad's `tap`/`natural-scroll` behavior through an actual
+  physical trackpad interaction (confirmed only that the generated KDL
+  matches what was live-tested by hand in §16 — same values, now
+  declared instead of hand-edited).

@@ -488,6 +488,51 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
     claude-desktop-debian, dank-material-shell, niri-flake). `nix flake
     check` re-run clean across all five hosts after the bump before
     retrying on pegasus.
+  - **Second switch attempt, same day, succeeded** — `Done.`, new
+    generation activated. Notably `niri.service` was NOT restarted as
+    part of activation (this switch didn't touch niri's own package),
+    which is exactly why the already-logged-in Niri session on the
+    physical console survived intact this time — contrast with the
+    Niri-install switch in the entry above, which crashed the
+    then-running Dragonized session.
+  - **But two things still needed manual intervention post-switch, both
+    now confirmed fixed and worth remembering for next time:**
+    1. **Niri didn't live-reload the new config** — home-manager
+       activation swaps `~/.config/niri/config.kdl`'s *symlink target*
+       atomically (unlink + new symlink), not an in-place file edit.
+       Niri's config file-watcher apparently doesn't pick this up the
+       same way it does an in-place edit (confirmed: zero niri journal
+       activity after the switch, versus a clear `loaded config from
+       ...` log line during earlier hand-edit testing). Fixed with
+       `systemctl --user restart niri.service` — this DOES restart the
+       compositor (closes windows, black screen briefly), so only do
+       this when nothing valuable is open, or expect users logged in
+       physically to lose their session. After restart, journal showed
+       `loaded config from "/home/z/.config/niri/config.kdl"` with no
+       errors, confirming the full ~90-bind config validated at runtime
+       too, not just at build time.
+    2. **`dms.service` never auto-started, even after the niri restart
+       above** — root cause is different from #1: `dms.service` is
+       `WantedBy=graphical-session.target`, but that target had been
+       continuously active since the *original* Niri login (Aug 10) and
+       never itself stopped/restarted — restarting a sibling unit
+       (`niri.service`) doesn't restart the target it belongs to, so a
+       brand-new unit `WantedBy` an already-active target never gets an
+       automatic start trigger. This is a generic systemd gotcha for any
+       unit newly introduced by a switch into an already-running
+       session's target graph, not niri- or DMS-specific. Fixed with a
+       direct `systemctl --user start dms.service` — came up clean,
+       quickshell + the Go backend both initialized without error
+       (bluetooth/network/clipboard managers all fine). One harmless
+       warning: `Failed to watch config directory: no such file or
+       directory` — `~/.config/DankMaterialShell/` doesn't exist since
+       `programs.dank-material-shell.settings` was never set; DMS just
+       runs on its own defaults until/unless that's configured.
+    **Takeaway for any future switch that adds a new `WantedBy=graphical-
+    session.target` unit to an already-logged-in session: don't assume
+    it auto-starts. Check `systemctl --user status <unit>` after
+    switching, and `systemctl --user start` it directly if it's sitting
+    `inactive (dead)`.**
 - **Remote desktop → xrdp + xorgxrdp (Plasma-over-X11, independent session
   per connection), tailscale0-gated, added 2026-07-16/17.** *Real motivation
   surfaced mid-implementation:* this is meant to eventually replace the
