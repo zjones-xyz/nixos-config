@@ -38,7 +38,9 @@ that moves out of them is one that stops costing money every month.
 
 ⚠ `partdb` is **not** here. It is Protected — no offsite — and the fact that
 `DESIGN.md` §6.6 uses it for the pilot does not put it in scope. The pilot's
-config is a rehearsal, written separately and thrown away.
+config is a rehearsal, written separately and thrown away: `pilot-partdb.yaml`,
+writing to its own disposable `tower-pilot-partdb` repo rather than tower-hot
+or tower-cold.
 
 ## ⚠ Immich is split across both repos, and that is a constraint
 
@@ -67,12 +69,21 @@ shares is gone at reboot, so borgmatic's own state lives on a share:
 
 ```
 /mnt/user/appdata/borgmatic/
-├── passphrase            # 0600. See key custody below.
-├── ssh/id_ed25519        # the BorgBase key — append-only
+├── passphrase                          # 0600. See key custody below.
+├── ssh/id_ed25519                      # the BorgBase key — append-only
 ├── ssh/known_hosts
-└── borg-cache/           # losing this is slow, not wrong: full re-read to
-                          # rebuild the chunk index on the next run
+├── borg-cache/                         # losing this is slow, not wrong: full
+│                                       #   re-read to rebuild the chunk index
+├── credentials/
+│   └── grimmory-mariadb-password       # BookLore's mariadb_databases password
+├── config/                             # *.yaml synced from this directory,
+│                                       #   bind-mounted to /etc/borgmatic.d
+└── scripts/
+    └── canary-check.sh                 # synced from ./scripts/
 ```
+
+Deployment commands for all of the above:
+`homelab_stacks`' `tower/borgmatic/README.md`.
 
 ⚠ That directory is **excluded** in `appdata.yaml`, because it sits inside the
 share it backs up and otherwise the repository passphrase would be stored inside
@@ -133,16 +144,18 @@ history. **Test it in the pilot**: write from two configs into one repo, run
 
 ## Order of operations
 
-1. **BorgBase account, two repos**, `tower-hot` and `tower-cold`. Append-only key
-   for Tower; a second, prunable key that never touches Tower.
+1. **BorgBase account, three repos** — `tower-hot`, `tower-cold`, and the
+   disposable `tower-pilot-partdb` (deleted after step 4). Append-only key
+   for Tower per repo; a second, prunable key that never touches Tower.
 2. ⚠ **Verify append-only actually refuses.** Run `borgmatic prune` from Tower
    and confirm the *server* says no. A toggle in a web UI is a claim; this is the
    property the whole §3 design rests on, and the test is cheap.
 3. **Key custody**, before anything is trusted.
-4. **Run the pilot** (`DESIGN.md` §6.6) — `partdb` onto memory-alpha. It proves
-   the config shape, the native database hook, the append-only refusal, the
-   paired-appdata rule, and `archive_name_format`'s prune scoping, at a size
-   where being wrong is free.
+4. **Run the pilot** (`DESIGN.md` §6.6, `pilot-partdb.yaml`) — `partdb` onto
+   memory-alpha. It proves the config shape, the native database hook, the
+   append-only refusal, the paired-appdata rule, and `archive_name_format`'s
+   prune scoping, at a size where being wrong is free. Delete the pilot repo
+   and its key afterward — it's a rehearsal, not scope.
 5. **Seed `tower-hot` first.** Small, so the Critical tier is genuinely protected
    within the hour.
 6. **Then start `tower-cold` and leave it.** ~200 GiB is roughly half a day at
@@ -161,19 +174,68 @@ green-but-empty backup, and it is a systemd feature we do not have on Unraid.
 most of it — with shfs down, `/mnt/user/<share>` does not exist and borgmatic
 errors rather than archiving nothing and firing the success hook. **It does not
 cover mounted-but-empty**, so the canary file per source tree is the other half
-and stops being optional. ⟨Not yet written.⟩
+and stops being optional.
 
-## Still `REPLACE`
+✅ **The mechanism is written** — `scripts/canary-check.sh`, wired into
+`documents.yaml`, `appdata.yaml`, and `immich-photos.yaml` as a `commands:`
+hook that aborts the run if a canary is missing or empty. ⟨The canary files
+themselves still need to be created on Tower, by hand, once — see the still-
+`REPLACE` list below and `homelab_stacks`' `tower/borgmatic/README.md`.⟩
 
-- BorgBase repo URLs (both), and the SSH key.
-- Uptime Kuma push URLs — one per repo.
-- Immich's Postgres container name. `docker ps --format '{{.Names}}\t{{.Image}}'`.
-- Every other database — the `mariadb_databases` and `sqlite_databases` stubs are
-  commented out rather than guessed, because a hook naming a container that does
-  not exist fails the run, and one naming the *wrong* container succeeds while
-  backing up nothing you meant. They need the per-container `appdata` pass
-  (`SHARES.md` §3), which has not run.
+## Database hooks — cross-referenced against `homelab_stacks`, one verdict each
 
-⚠ **Until that pass finishes, `appdata.yaml` copies undumped databases as
-files.** They are in the archive and they are not restorable — which is worse
-than absent, because it looks like protection.
+✅ **Immich's Postgres container** — filled in. `container: immich_postgres`,
+verified against `tower/immich/compose.yaml`'s `container_name:` directly.
+
+✅ **BookLore's MariaDB** — filled in, but ⚠ **not verified the same way.**
+`tower/grimmory/compose.yaml`'s `mariadb` service sets no `container_name:`,
+so `container: grimmory-mariadb-1` is *derived* from Compose's default
+naming, not read off an explicit setting. Confirm with
+`docker ps --format '{{.Names}}\t{{.Image}}'` before trusting it — a hook
+naming the wrong container succeeds while backing up nothing you meant.
+
+✅ **PartDB** — filled in, and ⚠ **the assumption in `docs/BACKUP.md` §4d and
+`DESIGN.md` §6.6 was wrong.** Both describe it as MySQL/MariaDB; the compose
+file (`tower/inventory/compose.yaml`) shows SQLite
+(`DATABASE_URL: sqlite:///...`). It's hooked under `sqlite_databases`, not
+`mariadb_databases`. Both docs are corrected in place.
+
+✅ **The *arr stack and Audiobookshelf** — verdict is **no hook, and that's
+final, not pending.** Their data isn't in `appdata` at all: the *arr stack's
+config lives under `arr_config`, and Audiobookshelf's share is
+`podcasts_audiobookshelf` — both "Painful to rebuild, small" or
+"Re-acquirable" in `SHARES.md` §5, neither in the offsite scope this file
+covers. ⟨Audiobookshelf's container wasn't found anywhere in `homelab_stacks`
+either — it may run as a native Unraid Docker template outside Dockge. Worth
+a `docker ps` pass if it's ever brought into scope.⟩
+
+⟨**Homebox and Spoolman** (`tower/inventory/compose.yaml`, same stack as
+PartDB) are also SQLite, also under `appdata`, and still uncovered — they
+weren't named in `BACKUP.md` §4d's original inventory and the per-container
+`appdata` pass that would properly scope them (`SHARES.md` §3) hasn't run.⟩
+
+## Still `REPLACE` — needs a human, not guessable from a repo
+
+- **The BorgBase account, the three repos** (`tower-hot`, `tower-cold`, and
+  the disposable `tower-pilot-partdb`), **and their keys** — an append-only
+  key for Tower per repo, a separate prunable key on the admin machine.
+- BorgBase repo URLs (all three), once the repos above exist.
+- Uptime Kuma push URLs — one per repo (`documents.yaml`, `appdata.yaml`,
+  `immich-photos.yaml`; the pilot deliberately has none — see its own header).
+- **The canary files** — `scripts/canary-check.sh` and the `commands:` hooks
+  calling it are written and wired into all three in-scope configs, but the
+  canary files themselves (`.backup-canary` in each source tree) don't exist
+  yet. One-time, by hand, on Tower — see `homelab_stacks`'
+  `tower/borgmatic/README.md` for the exact commands. They must be created
+  once and never touched by automation; a canary regenerated by the backup
+  job itself can't catch the failure it exists to catch.
+- **`grimmory-mariadb-password`** — the credential file the BookLore hook
+  reads via `{credential file ...}`. The password itself is in
+  `tower/grimmory/secrets.env` (not in git); copy it to
+  `/mnt/user/appdata/borgmatic/credentials/grimmory-mariadb-password` on
+  Tower.
+- **Confirm `docker`/`sqlite3` are present inside the borgmatic image.** The
+  database hooks need both, and the official image documents `container:`
+  support (implying they're bundled) but this wasn't confirmed by pulling the
+  image — no Docker daemon was available from where these configs were
+  written. `docker exec borgmatic which docker sqlite3` on Tower settles it.
