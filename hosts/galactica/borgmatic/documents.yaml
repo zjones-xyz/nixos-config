@@ -124,14 +124,16 @@ checks:
 # silently when Tower cannot reach hopper. The Kuma push monitor is *absence
 # noticed by hopper*, so it fires precisely in that case. Each one's blind spot
 # is the other's trigger.
-uptime_kuma:
-      # ⟨Replace with the real push URL — Kuma generates it when you create the
-      # push monitor. No query string: no "?" and nothing after it.⟩
-    push_url: https://kuma.hopper.internal/api/push/REPLACE
-    states:
-        - start
-        - finish
-        - fail
+# ⟨Commented out for now — the Kuma push monitor doesn't exist yet, so this
+# would just be a dead REPLACE. Re-enable once it's created (see README.md's
+# still-REPLACE list); no query string in the real push_url, i.e. no "?" and
+# nothing after it.⟩
+# uptime_kuma:
+#     push_url: https://kuma.hopper.internal/api/push/REPLACE
+#     states:
+#         - start
+#         - finish
+#         - fail
 
 ntfy:
     topic: tower-backup

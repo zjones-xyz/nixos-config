@@ -92,15 +92,16 @@ checks:
       only_run_on:
           - weekend
 
-uptime_kuma:
-      # ⟨Own push monitor — NOT shared with the hot repo. A monitor that was
-      # never created is a gap nothing reports, which is exactly how a repo goes
-      # quietly unbacked for months.⟩
-    push_url: https://kuma.hopper.internal/api/push/REPLACE
-    states:
-        - start
-        - finish
-        - fail
+# ⟨Commented out for now — no Kuma push monitor exists yet. When it's
+# created, this one must be its OWN push monitor, NOT shared with the hot
+# repo's — a monitor that was never created is a gap nothing reports, which
+# is exactly how a repo goes quietly unbacked for months.⟩
+# uptime_kuma:
+#     push_url: https://kuma.hopper.internal/api/push/REPLACE
+#     states:
+#         - start
+#         - finish
+#         - fail
 
 ntfy:
     topic: tower-backup

@@ -239,12 +239,14 @@ checks:
     - name: archives
       frequency: 1 month
 
-uptime_kuma:
-    push_url: https://kuma.hopper.internal/api/push/REPLACE
-    states:
-        - start
-        - finish
-        - fail
+# ⟨Commented out for now — same reason as documents.yaml: no Kuma push
+# monitor exists yet. Re-enable once it's created.⟩
+# uptime_kuma:
+#     push_url: https://kuma.hopper.internal/api/push/REPLACE
+#     states:
+#         - start
+#         - finish
+#         - fail
 
 ntfy:
     topic: tower-backup
