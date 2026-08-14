@@ -48,6 +48,19 @@ exclude_caches: true
 exclude_if_present:
     - .nobackup
 
+# ── Canary — BACKUP.md §3b signal 3 ────────────────────────────────────────────
+# See appdata.yaml's identical block and hosts/galactica/borgmatic/scripts/
+# canary-check.sh for the full rationale. One canary per source tree — both
+# checked in a single hook invocation.
+# ⚠ Neither canary file is created yet (`touch
+# /mnt/user/immich_photos/.backup-canary` and the `_archived` twin) — a
+# one-time manual step, tracked in README.md.
+commands:
+    - before: action
+      when: [create]
+      run:
+          - /mnt/user/appdata/borgmatic/scripts/canary-check.sh /mnt/user/immich_photos/.backup-canary /mnt/user/immich_photos_archived/.backup-canary
+
 # ── Retention — shallow, because the data barely changes ──────────────────────
 #
 # ⚠ CONSTRAINT, and it is not in BACKUP.md yet. Immich's Postgres lives in

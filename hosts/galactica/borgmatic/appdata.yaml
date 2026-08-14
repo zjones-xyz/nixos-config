@@ -78,6 +78,11 @@ exclude_patterns:
     - '*/Cache/*'
     - '*/log/*.log'
 
+      # PartDB's live SQLite file — the sqlite_databases hook below dumps it
+      # properly; a file-level copy alongside that dump would be redundant at
+      # best and a torn copy at worst.
+    - /mnt/user/appdata/partdb/db
+
 # ── Databases — BACKUP.md §4d ─────────────────────────────────────────────────
 #
 # ⭐ borgmatic 2.1.5 can `docker exec` into a container directly — the `container:`
@@ -90,13 +95,18 @@ exclude_patterns:
 # dump-then-backup ordering constraint, no retention to manage on dump files.
 # This is most of why borgmatic won over a restic wrapper.
 #
-# ⚠ Container names below are PLACEHOLDERS. Read the real ones off the box:
+# ⚠ Container names below were cross-referenced against `homelab_stacks`
+# (verified where an explicit `container_name:` exists, derived where it
+# doesn't — see the per-service notes). Confirm on the box before trusting:
 #     docker ps --format '{{.Names}}\t{{.Image}}'
 
 postgresql_databases:
       # Immich. Precious-adjacent by the paired-appdata rule.
+      #
+      # ✅ Verified against homelab_stacks' tower/immich/compose.yaml
+      # (`container_name: immich_postgres`), not recalled.
     - name: all
-      container: REPLACE_immich_postgres
+      container: immich_postgres
       username: postgres
 
       # ⚠⚠ THE COMPRESSION FOOTGUN, AND borgmatic's DEFAULT WALKS INTO IT.
@@ -129,35 +139,87 @@ postgresql_databases:
       # pg_dumpall recipe, and test the restore before relying on it. It is
       # Precious-adjacent data; it deserves the extra care.
 
-# ⟨Stubs — fill in from the per-container pass. Left commented rather than
-# guessed, because a hook naming a container that does not exist fails the whole
-# run, and a hook naming the WRONG container succeeds while backing up nothing
-# you meant.⟩
+# ⚠ Four database groups were named in `docs/BACKUP.md` §4d and each got a
+# verdict by cross-referencing `homelab_stacks`, not by guessing:
 #
-# mariadb_databases:
-#       # BookLore and PartDB (SHARES.md §5). mariadb-dump output is already
-#       # plain text and borgmatic offers no compression option for it, so the
-#       # PostgreSQL trap above does not apply here.
-#     - name: all
-#       container: REPLACE_booklore_db
-#       username: root
-#       password: "{credential file /run/…}"
-#     - name: all
-#       container: REPLACE_partdb_db
-#       username: root
-#
-# sqlite_databases:
-#       # *arr stack and Audiobookshelf. ⭐ SQLite's online backup is consistent
-#       # WITHOUT stopping the application, so these need no downtime at all —
-#       # which removes most of the reason to stop containers for this job.
-#       # ⚠ Takes a `path:`, not a `container:` — the file must be readable at
-#       # this path from inside the borgmatic container.
-#       # ⚠ A read-only /mnt/user bind may block this: SQLite generally needs to
-#       # touch -wal/-shm to read a live database. Test it in the pilot; if it
-#       # fails, mount appdata read-write and rely on BorgBase's append-only key
-#       # for the safety property instead.
-#     - name: sonarr
-#       path: /mnt/user/appdata/REPLACE/sonarr.db
+# 1. Immich / PostgreSQL — hook above, container name verified.
+# 2. The *arr stack and Audiobookshelf / SQLite — ⭐ NO HOOK HERE, and that is
+#    the verdict, not an oversight. Their data does not live in `appdata` at
+#    all: the *arr stack's config/state is under `arr_config`
+#    (`tower/arr/compose.yaml` — `/mnt/user/arr_config/<service>`), and
+#    `arr_config` is classified "Painful to rebuild, small" in `SHARES.md` §5 —
+#    a tier that gets redundancy, not offsite. `podcasts_audiobookshelf` is
+#    "Re-acquirable", same story. Neither share is in this file's scope (see
+#    README.md's "whole offsite scope" table), so there is nothing to hook here.
+#    ⟨Audiobookshelf's container was not found anywhere in `homelab_stacks`
+#    either, despite the `podcasts_audiobookshelf` share existing on Tower —
+#    it may run as a native Unraid Docker template outside Dockge. Worth an
+#    `docker ps` pass if it's ever brought into scope, but out of scope now.⟩
+# 3. BookLore / MariaDB — hook below. ⚠ Container name is DERIVED, not
+#    verified: `tower/grimmory/compose.yaml`'s `mariadb` service sets no
+#    `container_name`, so Compose falls back to its default
+#    `<project>-<service>-<index>` naming. The project name defaults to the
+#    compose file's directory, `grimmory` (no `name:` override in that file,
+#    no `COMPOSE_PROJECT_NAME` in its `config.env`). That gives
+#    `grimmory-mariadb-1` — plausible, not confirmed. **Run
+#    `docker ps --format '{{.Names}}\t{{.Image}}'` on Tower before trusting
+#    this**, per the standing warning that a wrong container name succeeds
+#    while backing up nothing you meant. (BookLore itself runs under the
+#    container name `grimmory`, not "booklore" — `BOOKLORE_PORT` in its
+#    `config.env` and the tailscale hostname `books` confirm it's the same
+#    app under a different image/container name.)
+# 4. PartDB / ⚠ **SQLite, not MariaDB.** `docs/BACKUP.md` §4d and
+#    `DESIGN.md` §6.6 both assumed MySQL/MariaDB for PartDB. That's wrong:
+#    `tower/inventory/compose.yaml`'s `partdb` service sets
+#    `DATABASE_URL: sqlite:///%kernel.project_dir%/var/db/app.db`, and its
+#    only volume onto `appdata` is `/mnt/user/appdata/partdb/db`. Verified
+#    from the compose file directly — see the same correction filed against
+#    `docs/BACKUP.md` §4d. Hook is under sqlite_databases below, not here.
+
+mariadb_databases:
+      # BookLore, container `grimmory-mariadb-1` — see the derivation note
+      # above. Username/database both "grimmory" per
+      # `tower/grimmory/config.env` (`MYSQL_USER`, `MYSQL_DATABASE`); password
+      # is generated at deploy time and not in git. mariadb-dump output is
+      # already plain text and borgmatic offers no compression option for it,
+      # so the PostgreSQL trap above does not apply here.
+    - name: all
+      container: grimmory-mariadb-1
+      username: grimmory
+      password: "{credential file /mnt/user/appdata/borgmatic/credentials/grimmory-mariadb-password}"
+
+sqlite_databases:
+      # PartDB. ⭐ SQLite's online `.backup` is consistent WITHOUT stopping the
+      # application — no downtime needed for this hook.
+      # ⚠ Takes a `path:`, not a `container:` — read directly off the /mnt/user
+      # bind, which is why source_directories excludes the raw db file below
+      # (a file-level copy sitting next to the hook's own dump would be
+      # redundant at best and a torn copy at worst).
+      # ⚠ A read-only /mnt/user bind may block this: SQLite generally needs to
+      # touch -wal/-shm to read a live database. Test it in the pilot
+      # (pilot-partdb.yaml); if it fails, mount appdata read-write and rely on
+      # BorgBase's append-only key for the safety property instead.
+    - name: partdb
+      path: /mnt/user/appdata/partdb/db/app.db
+
+# ⟨Homebox and Spoolman (`tower/inventory/compose.yaml`) are also SQLite and
+# also under `appdata`, and are NOT hooked above — they weren't named in
+# BACKUP.md §4d's inventory and the per-container appdata pass (SHARES.md §3)
+# that would properly scope them hasn't run. Same "in the archive but not
+# trusted" caveat as the rest of appdata applies to them meanwhile.⟩
+
+# ── Canary — BACKUP.md §3b signal 3 ───────────────────────────────────────────
+# Mandatory on Unraid, not optional: `source_directories_must_exist` catches an
+# unmounted share, not a mounted-but-empty one. See scripts/canary-check.sh.
+# ⚠ The canary file itself is not yet created — that's a one-time manual step
+# on Tower (`touch /mnt/user/appdata/.backup-canary`), listed in README.md's
+# still-REPLACE section alongside deploying this script to
+# /mnt/user/appdata/borgmatic/scripts/.
+commands:
+    - before: action
+      when: [create]
+      run:
+          - /mnt/user/appdata/borgmatic/scripts/canary-check.sh /mnt/user/appdata/.backup-canary
 
 # ── Retention ─────────────────────────────────────────────────────────────────
 #

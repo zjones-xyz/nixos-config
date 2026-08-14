@@ -75,6 +75,19 @@ exclude_caches: true
 exclude_if_present:
     - .nobackup
 
+# ── Canary — BACKUP.md §3b signal 3 ────────────────────────────────────────────
+# See appdata.yaml's identical block and hosts/galactica/borgmatic/scripts/
+# canary-check.sh for the full rationale. Mandatory on Unraid:
+# source_directories_must_exist catches an unmounted share, not a
+# mounted-but-empty one.
+# ⚠ The canary file itself (`touch /mnt/user/documents/.backup-canary`) is not
+# yet created — a one-time manual step, tracked in README.md.
+commands:
+    - before: action
+      when: [create]
+      run:
+          - /mnt/user/appdata/borgmatic/scripts/canary-check.sh /mnt/user/documents/.backup-canary
+
 # ── Retention — Critical earns real depth ─────────────────────────────────────
 #
 # BACKUP.md §6 carries "retention numbers for the hot and cold classes" as open,
