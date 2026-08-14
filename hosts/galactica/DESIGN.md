@@ -1065,7 +1065,10 @@ Two things to verify on the machine before committing `[unverified]`:
    noise, and no later step restores them.
 2. **Stand up borgmatic → BorgBase and get the Precious tier offsite, from Unraid.**
    borgmatic runs as a container today; nothing here waits on NixOS, on the layout
-   decision, or on any disk moving. ⟨Confirm the current container image.⟩
+   decision, or on any disk moving. ✅ Container image confirmed:
+   `ghcr.io/borgmatic-collective/borgmatic:2.1.5`, pinned to match the borgmatic
+   version these configs were validated against (`homelab_stacks`'
+   `tower/borgmatic/compose.yaml`).
    Scope: `documents`, `immich_photos`, `immich_photos_archived`, plus Immich's
    database via borgmatic's native hook.
 3. **Run the pilot (§6.6) before trusting step 2.** A backup that has never been
@@ -1391,10 +1394,16 @@ attempted at high stakes.
 
 **`partdb` is the best possible choice, not an arbitrary one.** It is the case that
 *generated* the paired-appdata rule (`SHARES.md` §5): attachments live in
-`/mnt/user/partdb`, and the MariaDB database that gives them meaning lives in
+`/mnt/user/partdb`, and the database that gives them meaning lives in
 `/mnt/user/appdata/partdb`. Restore one without the other and you have a heap of
 unlabelled files. So the pilot exercises the exact failure the rule exists to prevent,
 at a size where getting it wrong costs nothing.
+
+⚠ **Corrected — that database is SQLite, not MariaDB** as an earlier revision of
+this section assumed. Verified against `homelab_stacks`'
+`tower/inventory/compose.yaml` (`DATABASE_URL: sqlite:///...`), same correction
+as `docs/BACKUP.md` §4d. `hosts/galactica/borgmatic/pilot-partdb.yaml` hooks it
+under `sqlite_databases` accordingly.
 
 What it proves, concretely:
 
