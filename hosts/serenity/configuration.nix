@@ -11,6 +11,7 @@
   imports = [
     ../../modules/darwin/homebrew.nix
     ../../modules/darwin/nfs-mounts.nix
+    ./borgmatic.nix
   ];
 
   networking.hostName = "Serenity";
