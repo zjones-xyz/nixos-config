@@ -561,3 +561,57 @@ added, which needs a real login flow this SSH session can't drive:
    Adding an account to dankcalendar does not populate DMS's widget, and
    vice versa. See DECISIONS.md for why they were kept separate rather
    than trying to unify them.
+
+## 19. Keyring — verify after the next switch
+
+`modules/nixos/keyring.nix` makes gnome-keyring the single Secret Service
+provider and stops KWallet auto-unlocking (see DECISIONS.md for why). Nothing
+here was verified on hardware — the reasoning came from evaluating the closure
+and reading the packaging, not from a real login.
+
+1. **A full logout is required, not just a switch.** Both the PAM change and
+   the daemon that owns `org.freedesktop.secrets` are established at login,
+   and this host's `systemd --user` manager and `graphical-session.target`
+   survive session switches — the same trap `dms.service` and `dcal.service`
+   both hit. A `nixos-rebuild switch` alone will leave the *old* owner running
+   and make it look as though nothing changed. Log out fully (or reboot).
+
+2. **Confirm who owns the bus name**, from a terminal in the Niri session:
+   ```
+   busctl --user list | grep -iE 'secrets|kwallet'
+   ```
+   Expected: `org.freedesktop.secrets` owned by `gnome-keyring-daemon`, and no
+   `ksecretd`. If KWallet still holds it, something started `kwalletd6` before
+   gnome-keyring came up — check `systemctl --user status app-gnome\\x2dkeyring*`
+   and whether the XDG autostart entries ran at all.
+
+3. **Confirm the store actually works** — write and read a secret without
+   involving a browser:
+   ```
+   secret-tool store --label=probe test probe   # prompts for a value
+   secret-tool lookup test probe
+   ```
+   (`secret-tool` is in `pkgs.libsecret`; `nix run nixpkgs#libsecret -- …` if
+   it isn't installed.) Then `secret-tool clear test probe` to clean up.
+
+4. **If a password prompt appears at first use instead of unlocking silently**,
+   an old `login` keyring exists whose password isn't z's account password
+   (likely created interactively before this was declarative). Either enter the
+   old password once and change it to match, or delete
+   `~/.local/share/keyrings/login.keyring` and log out/in to have
+   `pam_gnome_keyring` recreate it — **deleting it destroys whatever it holds**,
+   so check with `secret-tool search --all` first.
+
+5. **Anything already stored in KWallet does not migrate.** If Chrome/Vivaldi
+   or an Electron app lost a saved login after this change, that secret is in
+   `~/.local/share/kwalletd/kdewallet.kwl` and needs re-entering (or exporting
+   via `kwallet-query` first, with `pam_kwallet` temporarily re-enabled to open
+   it). Expected to be near-empty in practice — gnome-keyring appears to have
+   been the winner already under Niri — but confirm before assuming.
+
+6. **Dragonized session caveat**, if you still use it: it redirects
+   `XDG_DATA_HOME` to `~/.local/share-dragonized` and wipes it on every login
+   (`modules/nixos/desktop-dragonized.nix`), which is also where keyrings live.
+   Whether that session gets an empty keyring each login or inherits the
+   already-running daemon from the shared user manager wasn't determined —
+   check with step 2 from inside that session if it matters.
