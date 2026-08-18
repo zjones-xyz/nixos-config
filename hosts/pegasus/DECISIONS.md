@@ -699,3 +699,32 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   `mkForce` lines in `modules/nixos/keyring.nix` plus disabling gnome-keyring.
   **Not verified on hardware** — the switch, and which daemon ends up owning
   the bus name afterward, still needs a real login. See MANUAL-STEPS.md §19.
+- **Dual-head bring-up, 2026-08-18 — the pre-existing DP KVM abandoned for
+  now, and a QuickShell crash found and traced along the way.** Root cause
+  and current state are in `HARDWARE-MAP.md` §8 (a ~10 ft passive DisplayPort
+  run from the GPU to the KVM, exceeding what passive DP can carry for 4K60
+  once the switch's own mux and the second cable segment are counted in the
+  same channel); logged here because of what it says about the
+  DankMaterialShell decision above, not for the cabling itself.
+  *The QuickShell crash:* toggling the KVM's input to test the diagnosis
+  repeatedly hotplugged a display, and each hotplug also makes the GPU's
+  DisplayPort-embedded audio sink (an IEC958/S-PDIF-style device) appear and
+  disappear. One of those churns crashed Quickshell — `systemd-coredump`
+  caught a `QAudioContext` thread, stack trace bottoming out in
+  `libpipewire-module-protocol-native`'s event demarshalling, immediately
+  after a `spaVisitChoice: parse error` on that sink's `Spa:Enum:ParamId:
+  EnumFormat`. DMS's `systemd --user` service restarted it within a couple of
+  seconds without help.
+  *Why this doesn't reverse the decision above, but does qualify it:* the
+  crash is in Qt Multimedia's PipeWire audio path, not in DMS's own
+  screen-hotplug handling — `ShellCore`'s surface-recovery logging (`Screen
+  reconnect detected`, `Surface recovery triggered by: screen-reconnect`)
+  ran correctly through the same events and never dropped a bar. So the
+  multi-monitor case DMS was chosen for is still solid; what's now known is
+  that *any* DP hotplug on this host — a KVM switch, unplugging a monitor,
+  eventually a capture card or a different KVM — can take Quickshell down as
+  a side effect, via audio, not video. Expect it, don't chase it: DMS's own
+  restart is the recovery, `systemctl --user restart dms.service` if it
+  doesn't come back on its own. Not root-caused past "PipeWire's protocol
+  parser doesn't like something about this sink's format announcement" —
+  could be Qt Multimedia, Quickshell, or PipeWire itself; not filed upstream.
