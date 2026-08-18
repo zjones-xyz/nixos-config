@@ -79,6 +79,70 @@
       };
     };
 
+    # ── Outputs ────────────────────────────────────────────────────────────
+    # Added 2026-08-18, when this host actually went dual-head (the move
+    # DECISIONS.md had been anticipating since the DMS-over-Noctalia choice).
+    # Before this, niri auto-picked mode/scale/position, which is fine until
+    # it isn't: on first bring-up the LG came up at 1920x1080 on a 4K panel
+    # while the Dell took its preferred mode, and the two ended up at
+    # different scales — so windows changed size crossing between them.
+    #
+    # ⚠ Keyed on EDID identity ("Make Model Serial"), NOT the connector name
+    # (DP-1/DP-2/DP-3). niri accepts either. Connector names track which
+    # physical port a cable happens to be in, and during this host's dual-head
+    # bring-up the same monitor appeared as DP-2 and then DP-3 across a
+    # recabling — anything keyed on the connector would have silently stopped
+    # applying. The serials here are from `niri msg outputs`; if a panel is
+    # ever replaced, the key must be updated to match.
+    #
+    # ⚠ DMS also drives outputs, via wlr-output-management (its log reports
+    # "wlr-output-management capability detected", and it keeps its own
+    # DisplayConfigState profiles). This block is meant to be the single
+    # source of truth — clear DMS's saved display profile if the two ever
+    # disagree, rather than editing both.
+    #
+    # Scale 1.25 on both is deliberate and is what makes the pair coherent:
+    # 3840x2160 / 1.25 = a logical 3072x1728 each, so the two have identical
+    # logical heights and sit flush side by side. The panels differ physically
+    # (LG 31.5" ≈ 140 PPI, Dell 27" ≈ 163 PPI), so 1.25 is a compromise that
+    # keeps text within ~15% between them rather than matching either exactly.
+    #
+    # VRR left off. The Dell reports "supported, disabled" and the LG doesn't
+    # support it at all; enabling it is a behavioural change worth making on
+    # purpose, with the NVIDIA-Wayland caveats checked, not as a side effect
+    # of declaring the layout.
+    outputs = {
+      # Left.
+      "LG Electronics LG HDR 4K 111NTEP7X460" = {
+        mode = {
+          width = 3840;
+          height = 2160;
+          refresh = 59.997;
+        };
+        scale = 1.25;
+        position = {
+          x = 0;
+          y = 0;
+        };
+      };
+
+      # Right. x = 3072 is the LG's *logical* width (3840 / 1.25), not its
+      # pixel width — niri positions outputs in logical coordinates, so using
+      # 3840 here would leave a 768px dead gap the cursor cannot cross.
+      "Dell Inc. DELL S2721QS 44B9513" = {
+        mode = {
+          width = 3840;
+          height = 2160;
+          refresh = 59.997;
+        };
+        scale = 1.25;
+        position = {
+          x = 3072;
+          y = 0;
+        };
+      };
+    };
+
     # layout {}, animations {}, hotkey-overlay {}, and screenshot-path were
     # all left at niri-flake's schema defaults — cross-checked against the
     # original auto-generated config.kdl and, as far as could be confirmed
