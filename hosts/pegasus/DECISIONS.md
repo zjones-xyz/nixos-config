@@ -666,3 +666,36 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   needs an interactive login (Google/Microsoft OAuth, or a CalDAV/iCloud
   app-password flow), can't be driven from this SSH session. See
   MANUAL-STEPS.md §18.
+
+- **Keyring (Secret Service) → gnome-keyring, declared; KWallet's PAM unlock
+  turned off.** *alt:* KWallet as the single provider, or leave both as-is.
+  *Why:* nothing in the config named a keyring, yet three modules each pulled
+  one in — `desktop-plasma.nix` (Plasma 6's kwalletd6 + ksecretd, with
+  `pam_kwallet` wired into the `login` stack by nixpkgs' plasma6 module, which
+  SDDM substacks), `desktop-cosmic.nix` and `desktop-niri.nix` (both
+  `services.gnome.gnome-keyring.enable = lib.mkDefault true`, the latter also
+  pinning `xdg.portal.config.niri."org.freedesktop.impl.portal.Secret"` to
+  gnome-keyring). Evaluating the pre-change closure confirmed **both** were
+  enabled and both auto-unlocked at every graphical login. Only one can own
+  `org.freedesktop.secrets`, so which store the browsers and every Electron
+  app actually wrote to was decided by startup order.
+  That is sharper on this host than it sounds, because the `systemd --user`
+  manager and `graphical-session.target` persist across session switches (the
+  same property behind the `dms.service`/`dcal.service` auto-start gotcha
+  above): the winner holds the bus name until a full logout or reboot, so
+  secrets stored under one owner silently vanish under the other — presenting
+  as "the browser forgot my logins", not as a keyring fault.
+  gnome-keyring was picked because Niri is the daily-driver session and both
+  it and COSMIC already default to it, niri's Secret portal is already pinned
+  to it, and it is the only one of the two that needs no per-session glue in
+  all four sessions. KWallet outside Plasma would need two pieces Plasma
+  supplies for free: `ksecretd` started by hand (its D-Bus activation name is
+  `org.kde.secretservicecompat`, never the `org.freedesktop.secrets` that apps
+  request) and `plasma-kwallet-pam.service` given a `WantedBy` (it ships with
+  `PartOf=graphical-session.target` and nothing else).
+  Cost accepted: a KDE app in the Plasma/Dragonized sessions that genuinely
+  wants the wallet now prompts rather than opening silently. Nothing on this
+  host does — wired ethernet, no KDE PIM. Reversing the decision is the two
+  `mkForce` lines in `modules/nixos/keyring.nix` plus disabling gnome-keyring.
+  **Not verified on hardware** — the switch, and which daemon ends up owning
+  the bus name afterward, still needs a real login. See MANUAL-STEPS.md §19.
