@@ -149,9 +149,10 @@
     winetricks
     yad
 
-    # GPU-accelerated terminal emulators.
+    # GPU-accelerated terminal emulators. kitty is NOT here — it needs
+    # configuring (see programs.kitty below), and programs.kitty.enable
+    # installs the package itself.
     ghostty
-    kitty
 
     # Doxie Q2 (DX320) scan management — the scanner itself needs no driver
     # (mounts as plain USB mass storage; Wi-Fi direct-to-cloud setup is the
@@ -210,6 +211,33 @@
     # (they shell out to npx/uvx/etc. expecting a standard FHS layout).
     claudeDesktop
   ];
+
+  # ── kitty ───────────────────────────────────────────────────────────────────
+  # Exists only to pin the shell. The fleet convention (modules/nixos/common.nix
+  # → users.users.z.shell = pkgs.bash, plus modules/home/interactive-zsh.nix via
+  # home-manager.sharedModules) is: bash is the *login* shell so non-interactive
+  # invocations — `ssh z@pegasus cmd` above all — keep predictable bash
+  # semantics, and interactive bash sessions `exec` straight into zsh from
+  # .bashrc before reaching a prompt.
+  #
+  # That exec is load-bearing but not airtight: observed 2026-08-18, the FIRST
+  # kitty window opened after login lands in bash and stays there, while every
+  # later window is zsh as intended. Not root-caused — the likely mechanism is
+  # that kitty inherits $SHELL from the freshly-started session (still
+  # /run/current-system/sw/bin/bash, straight out of /etc/passwd) and launches
+  # it as a *login* shell, which reads .bash_profile/.profile and never sources
+  # the .bashrc holding the exec. Later windows see a session environment that
+  # has since changed.
+  #
+  # Rather than chase that, remove the dependency: a terminal emulator is always
+  # interactive, so it has no reason to route through bash at all. This does not
+  # weaken the convention — the login shell stays bash, and the bash→zsh exec
+  # stays in place for SSH — it just skips a hop for the one case that can never
+  # be non-interactive.
+  programs.kitty = {
+    enable = true;
+    settings.shell = "${pkgs.zsh}/bin/zsh";
+  };
 
   # ── Declarative Plasma 6 (plasma-manager) ───────────────────────────────────
   # plasma-manager's HM module is wired in via home-manager.sharedModules in
