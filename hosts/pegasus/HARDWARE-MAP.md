@@ -12,10 +12,14 @@ and would otherwise be recorded nowhere.
 
 ⚠ **Created 2026-08-08 from a single `lsblk` reading.** Every disk row below is
 sound, because serials and sizes came from the drives' own controllers over
-native SATA/NVMe with no USB bridge in the path (`DISK-LABELLING.md` §1). Almost
-everything *else* — controllers, port mapping, physical bays, SMART health — is
-unrecorded and marked as such. This file exists because `h-XDAS` is about to take
-a fleet role, and the convention says that is the moment to write the row.
+native SATA/NVMe with no USB bridge in the path (`DISK-LABELLING.md` §1). This
+file exists because `h-XDAS` is about to take a fleet role, and the convention
+says that is the moment to write the row.
+
+**Extended 2026-08-10** with the board, firmware, SATA port map, M.2 topology and
+the corrected NIC (§4) — all read remotely over SSH. **Physical bays (§3) and SMART
+health (§7) remain unrecorded** and are marked as such; both need someone at the
+machine, which nothing here did.
 
 Dates are UTC.
 
@@ -180,20 +184,90 @@ bar. Revisit if it does.
 
 ## 4. Controllers and ports
 
-⟨Unrecorded.⟩ Onboard AM4 chipset SATA for all four SATA devices, one M.2 socket
-populated. Neither the board model nor the port mapping has been read.
+**Read 2026-08-10** from `dmidecode -t baseboard -t bios`, `lspci -nn` and
+`/dev/disk/by-path`, over SSH — no case opening was needed. This closes what §7
+listed as *"Board model, SATA port mapping"*.
 
-**A second M.2 slot is free** — vacated 2026-07-11 when the CachyOS drive was
-pulled at install time (`DECISIONS.md`). Most AM4 boards have two, so this is very
-likely the only spare. Recorded because it is the cheapest expansion path pegasus
-has, and because the Windows-on-SATA decision was taken partly on the basis that
-both M.2 slots were occupied — a premise that no longer holds and is flagged in
-`DECISIONS.md` as not revisited.
+### The board
 
-The onboard NIC is `enp42s0`, Realtek, driver `r8169` — in
-`boot.initrd.availableKernelModules` because initrd SSH needs it. One NIC, no bond.
-⚠ **Link speed unread**, and it sets the parachute copy time: 2.1 TiB is roughly
-5–6 h at 1 GbE. `ethtool enp42s0 | grep -i speed` settles it.
+**MSI MAG B550 TOMAHAWK MAX WIFI (MS-7C91)**, board rev 1.0.
+**B550 chipset**, socket AM4 — consistent with the `kvm-amd` / AMD-microcode
+wiring in `hardware-configuration.nix`.
+
+| | |
+|---|---|
+| Firmware | American Megatrends, **version 2.50, dated 2023-07-03** |
+| ROM | 32 MiB, socketed; UEFI, upgradeable |
+| Onboard audio | Realtek ALC1200 @ `0000:2d:00.4` |
+
+⚠ **The firmware is not current** — 2.50 is from mid-2023 and MSI has shipped
+later AGESA builds for this board. Nothing on this host is known to need them;
+recorded so a future session comparing against a fix list starts from the right
+baseline rather than assuming latest.
+
+### Storage ports
+
+All three SATA devices hang off the B550 chipset controller at `0000:02:00.1`.
+**Mapped by serial via `/dev/disk/by-path`, 2026-08-10:**
+
+| Port | `sdX` | Disk | Role |
+|---|---|---|---|
+| `ata-1` | `sda` | `s-636E` — Samsung 860 QVO | Windows |
+| `ata-2` | `sdc` | `h-P2NJ` — WDC WD10EZEX | data ("Spinner") |
+| `ata-3` | `sdb` | `h-XDAS` — Toshiba DT01ACA300 | parachute (earmarked) |
+
+⚠ **`sdX` is still not stable** (§1) — this table is anchored on the port, and
+the disk column is the serial-backed ID. Re-read `by-path` after any recabling.
+
+**The root NVMe `m2-0257` is at `0000:01:00.0`** — a low bus number, i.e. the
+**CPU-attached M.2 slot**, PCIe 4.0 x4 on B550.
+
+**The free M.2 slot is therefore the chipset-attached one** — the second slot on
+this board runs **PCIe 3.0 x4**, not 4.0. This supersedes the earlier
+"most AM4 boards have two, so this is very likely the only spare", which was an
+inference; two slots is now the board's own spec. The slot was vacated 2026-07-11
+when the CachyOS drive was pulled (`DECISIONS.md`).
+
+⚠ **It is the slower slot, and that is new information for a decision already
+taken.** The Windows-on-SATA choice was made partly on the belief that both M.2
+slots were occupied — a premise `DECISIONS.md` flags as not revisited. Anyone
+revisiting it should know the spare is PCIe 3.0, and should check the board manual
+for SATA-port sharing before populating it: on many B550 designs the chipset M.2
+disables SATA ports when occupied, which here would mean evicting a disk.
+⟨Sharing behaviour unverified — the manual settles it.⟩
+
+### Network
+
+**Realtek RTL8125 — 2.5 GbE** `[10ec:8125]` rev 05, at `0000:2a:00.0` → `enp42s0`,
+driver `r8169`. In `boot.initrd.availableKernelModules` because initrd SSH needs
+it. One wired NIC, no bond.
+
+**Onboard WiFi is present**: MediaTek MT7921K (RZ608) Wi-Fi 6E at `0000:29:00.0`.
+It enumerates but nothing in the closure configures it, and no `wlp*` interface is
+on record. Noted for inventory completeness — it is a radio on a host otherwise
+reached over the tailnet.
+
+> ⚠ **Do not trust this board's DMI onboard-device strings.** `dmidecode -t 41`
+> reports `RTL8111E Giga LAN` at `0000:29:00.0` — **wrong on both counts**. That
+> address is the *WiFi* card, and the Ethernet part is an RTL8125 (2.5 GbE), not
+> an RTL8111E (1 GbE). MSI appears to have carried a stale reference designation
+> forward from a template BIOS. `lspci -nn` is the authority; DMI is not.
+>
+> `r8169` does not disambiguate either — that driver binds RTL8125 and RTL8111
+> alike, so the driver name recorded in `DECISIONS.md` was never evidence of link
+> speed. This is a general trap: a Realtek NIC on `r8169` can be anything from
+> 100 Mb to 2.5 Gb.
+
+⚠ **The 2.5 GbE figure is the *controller*, not the negotiated link.** A 2.5 GbE
+NIC in a gigabit switch runs at 1000. `ethtool` is **not in this host's closure**,
+so read it from sysfs, which needs no package:
+
+```sh
+cat /sys/class/net/enp42s0/speed
+```
+
+⟨Negotiated speed still unread as of 2026-08-10.⟩ See §7 — it sets the parachute
+copy time.
 
 ---
 
@@ -215,7 +289,22 @@ about to acquire a role that a future session will need to find by name.
 
 ### Cable and bay labels
 
-Blocked on §3 and §4 — there is no port map and no bay scheme to reference yet.
+**§4 is no longer the blocker** — there is now a port map, so SATA cables can be
+labelled at the board end:
+
+```
+ata-1 → s-636E
+ata-2 → h-P2NJ
+ata-3 → sdb / h-XDAS
+```
+
+⚠ **`ata-N` is the kernel's port numbering, not silkscreen.** It is stable across
+reboots (unlike `sdX`), which is what makes it labellable, but it does not
+necessarily match the `SATA1`–`SATA6` printed on the board. Reconcile with the
+silkscreen before printing, with the case open — otherwise the label points at a
+port the next person cannot find.
+
+Bay labels remain blocked on §3, which is a decision rather than a reading.
 
 ---
 
@@ -247,14 +336,30 @@ inventory has to learn to filter it back out.
 | ⚠ **SMART health on `h-XDAS`** | `smartctl -a /dev/sdb` — see §1 for the pre-rebuild form | Trusting it with the parachute |
 | ⚠ **LUKS `sdb1` before any copy** | A decision, then `cryptsetup` | Protected-tier data leaving Tower unencrypted |
 | **Reclaim `sdb2`?** | A decision | Only if 10% headroom is judged too thin |
-| **NIC link speed** | `ethtool enp42s0` | Parachute copy-time estimate |
+| **NIC *negotiated* link speed** | `cat /sys/class/net/enp42s0/speed` (§4) | Parachute copy-time estimate |
 | **Where is the pulled CachyOS NVMe?** | Ask | It is in neither this file nor `docs/DISK-DRAWER.md` |
 | Contents of `h-P2NJ` ("Spinner") | Mount and look | Whether it is a third reusable disk |
-| Board model, SATA port mapping | Case open / board manual | §4, and any cable labels |
+| M.2/SATA port sharing on the free slot | Board manual | Whether populating it evicts a disk (§4) |
+| SATA silkscreen ↔ `ata-N` reconciliation | Case open | Printing cable labels (§5) |
 | Whether bay identifiers are warranted at all | A decision | §3 |
+
+✅ **Closed 2026-08-10:** *Board model and SATA port mapping* — read over SSH via
+`dmidecode`/`lspci`/`by-path`, no case opening needed. §4 now carries the board,
+firmware version, port map and M.2 topology.
+
+✅ **Closed 2026-08-10:** *NIC part and generation* — RTL8125, **2.5 GbE**, not the
+1 GbE the DMI table claims. The remaining question is only what it negotiates,
+which is why the row above survives in narrowed form.
 
 ✅ **Closed 2026-08-09:** *`smartmontools` absent from the closure* — fixed fleet-wide
 in #44, which also enables `smartd` on this host. Takes effect on the next rebuild.
+
+⚠ **`ethtool` is absent from this host's closure**, and two documents used to
+direct a future session to run it. Both now use the sysfs read instead. This is
+the same shape as the `smartmontools` gap #44 closed — a doc naming a tool the
+host does not have. Adding `ethtool` fleet-wide is a reasonable follow-up, but it
+is a `.nix` change and therefore a PR, so it has deliberately not been bundled
+into this documentation commit.
 
 The first two gate the parachute and are worth doing in that order — there is no
 point encrypting a disk that is about to fail its health check.

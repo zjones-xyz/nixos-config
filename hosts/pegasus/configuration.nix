@@ -16,6 +16,11 @@ in
     ../../modules/nixos/desktop-plasma.nix
     ../../modules/nixos/desktop-cosmic.nix
     ../../modules/nixos/desktop-dragonized.nix
+    ../../modules/nixos/desktop-niri.nix
+    ../../modules/nixos/dankcalendar.nix
+    # Settles which of the two Secret Service providers the desktop modules
+    # above each drag in silently is the one that actually runs.
+    ../../modules/nixos/keyring.nix
     ../../modules/nixos/gaming.nix
     ../../modules/nixos/performance.nix
     ../../modules/nixos/btrfs-snapshots.nix

@@ -37,7 +37,7 @@ SMR section, which is the most consequential thing in this file.
 | ~~`h-8742`~~ | **Samsung Spinpoint F4EG** HD204UI | 2 TB | `S2H7JD2ZB08742` | 2010-11 | CMR | 📦 **ARCHIVAL — out of service, 2026-08-08.** Firmware defect, see below. Rev. A. Red `RAPTOR` case sticker. |
 | `h-5N8F` | **WD Black** WD1003FZEX-00MK2A0 | 1 TB | `WCC3F0VZ5N8F` | 2016-02-27 | CMR | 7200 rpm, 64 MB |
 | `h-NYXN` | **WD Blue** WD10EZEX-00BN5A0 | 1 TB | `WCC3F2NRNYXN` | 2015-05-01 | CMR | 7200 class |
-| `h-6D0X` | **WD Blue** WD10EZRZ-00HTKB0 | 1 TB | `WCC4J6NP6D0X` | 2017-03-19 | CMR | 5400 class. ⚠ serial char, see below |
+| `h-6D0X` | **WD Blue** WD10EZRZ-00HTKB0 | 1 TB | `WCC4J6NP6D0X` | 2017-03-19 | CMR | 5400 class. Serial char **confirmed 2026-08-10** — digit zero |
 | `h-AFYJ` | **Seagate Barracuda ES** ST3500630NS | 500 GB | `9QG9AFYJ` | 2008 (date code `08396`) | CMR | Still sealed in an antistatic bag. Firmware `3.AQN`, P/N `9BL146-038`. |
 | `h25-P4TH` | **Hitachi Travelstar 5K250** HTS542560K9SA00 | ⚠ 40 GB? | `WAG0P4TH` | 2009 (date code `4907`) | CMR | **2.5"**, hence `h25-`. Carries a `Microsoft P/N` field. ⚠ capacity, see below |
 
@@ -136,15 +136,15 @@ exception from SMART polling to be safe.
 burn-in material. Anywhere this document or `hosts/galactica/` counts drawer
 capacity, `h-8742` does not count.
 
-#### Two label readings to confirm at attach time
+#### Label readings to confirm at attach time — one of two now closed
 
 Per `DISK-LABELLING.md`, a character that cannot be read confidently gets flagged
 rather than guessed — a confidently wrong suffix is worse than a missing one.
 
-- **`h-6D0X`** — the full serial reads `WCC4J6NP6D0X`, but the third-from-last
-  glyph is a `0`/`O` judgement call at this resolution. **The four-char suffix is
-  affected**, so confirm it before printing a caddy label. Nothing else in the
-  fleet is close enough for a collision either way.
+- ~~**`h-6D0X`**~~ ✅ **Confirmed 2026-08-10 by the owner, holding the drive: the
+  glyph is a digit zero.** The full serial is `WCC4J6NP6D0X` and the identifier
+  `h-6D0X` stands as written — no reprint, no rename, and the caddy label is
+  clear to print. Resolved at attach time exactly as this section intended.
 - **`h25-P4TH`** — the label reads **40 GB**, but the model number
   `HTS542560K9SA00` is Hitachi's 5K250 **60 GB** part. One of the two is being
   misread, or this is a capacity-limited OEM unit — the `Microsoft P/N` field on

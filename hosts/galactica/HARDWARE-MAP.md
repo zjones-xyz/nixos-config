@@ -468,7 +468,7 @@ s-3255,ssd25,,3255,244964803255,WD Blue SA510,500GB,internal,cache,,yes
 s-9545,ssd25,,9545,19013024009545,SATA SSD,223.6GB,internal,fastservices,,yes
 s-768C,ssd25,,768C,2422E8B6768C,Crucial BX500,480GB,internal,pool,,yes
 s-8162,ssd25,,8162,2506E9A58162,Crucial BX500,480GB,internal,pool,,yes
-s-3100,ssd25,,3100,15090EE23100,Crucial MX100,512GB,internal,pool,,yes
+s-3100,ssd25,,3100,15090EE23100,Crucial MX100,512GB,internal,unassigned,,yes
 s-5509,ssd25,,5509,50026B7239015509,Kingston SH103S3120G,120GB,internal,retiring,,no
 m2-140B,m2-nvme,,140B,23049339-090140B,Silicon Power UD90 2230,1TB,pcie-adapter,root,,no
 ```
@@ -495,7 +495,7 @@ drawer is, so the answer is currently no on both counts.
 | ~~MX100 / `btrfs device remove missing` state~~ | ~~Unraid~~ | **Closed 2026-08-07** — completed; disk unassigned |
 | **Enumerate the non-primary cages** | Case open | Six installed disks recorded only as "internal" |
 | **Port-to-bay mapping for cage A** | Hotswap insertion + sysfs | Printing cable labels |
-| `s-3100` actual state after the `/mnt/services` btrfs removal | Unraid, `btrfs filesystem show` | Whether it is available for reuse |
+| ~~`s-3100` actual state after the `/mnt/services` btrfs removal~~ | ~~Unraid, `btrfs filesystem show`~~ | **Closed 2026-08-07** — duplicate of the row above; §1 and §2 both carry the answer (unassigned, NTFS, unmounted) |
 | Enumerate the other cages — letters, arrangement, type | Eyes | Bay identifiers and cable labels for six of ten disks |
 | Port-to-bay mapping | Measure it — hotswap insertion + sysfs, see §3 | All cable labels |
 | Which two onboard ports are 6Gb/s | Board manual or silkscreen | Final disk placement |
