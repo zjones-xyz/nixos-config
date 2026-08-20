@@ -172,9 +172,12 @@ Added 2026-07-11, mirroring memory-alpha's setup. Before the next
    adding explicitly — done via `lib.mkAfter` in
    `hosts/pegasus/configuration.nix`. If a future kernel/hardware change
    ever breaks this again, `readlink -f /sys/class/net/<iface>/device/driver`
-   while booted normally is the fast way to re-identify the driver (no
-   `lspci`/`pciutils` in the base package set — `nix run nixpkgs#pciutils`
-   works too if you want the fuller picture).
+   while booted normally is the fast way to re-identify the driver.
+   ⚠ **`r8169` does not tell you which NIC it is** — that driver binds RTL8111
+   (1 GbE) and RTL8125 (2.5 GbE) alike. `lspci -nn` is what identifies the part,
+   and `pciutils` **is** in this host's closure (`configuration.nix`), so it is on
+   `$PATH` — this step used to say otherwise and was wrong. See
+   `HARDWARE-MAP.md` §4 for what the parts actually are.
 4. Once confirmed, unlock from serenity with `unlock-pegasus` (needs
    `pegasus.internal` to resolve — add an AdGuard DNS rewrite for it if it
    doesn't yet, same as the other `.internal` hosts; substitute the raw LAN
@@ -381,3 +384,234 @@ session:
 No firewall changes needed — `tailscale0` is already a trusted interface
 (`openFirewall` is left `false`), so port 3389 is reachable over the
 tailnet the moment `xrdp.service` is up, and nowhere else.
+
+## 15. Niri — verified 2026-08-10
+
+Added as a fourth SDDM session (`modules/nixos/desktop-niri.nix`), bare — no
+shell (waybar/DMS/Noctalia/etc.) layered on yet, just the compositor. First
+real-hardware test done 2026-08-10, over SSH + the NanoKVM (no local keyboard
+— see the IPC note below). Results:
+
+1. **Login works.** Picked "Niri" at the SDDM greeter (`defaultSession` is
+   still `plasma-dragonized`, unchanged — has to be picked manually each
+   time). niri auto-generated a default `~/.config/niri/config.kdl` on this
+   first-ever launch and briefly showed its built-in keybind cheat-sheet —
+   expected first-run behaviour, not an error.
+2. **NVIDIA rendering confirmed clean.** `journalctl --user -u niri` shows
+   it finding the render node, binding EGL, and picking up `HDMI-A-1` at
+   1920x1080@60Hz with no errors. Two harmless `WARN`s (niri's
+   screensaver/keyboard-monitor D-Bus names already held by a leftover KDE
+   service) and one informational vblank-throttle warning that's very
+   likely an artifact of watching this through the NanoKVM's HDMI capture
+   path rather than the real monitor's timing — not investigated further.
+3. **VRAM quirk: not hit, at least not the severe form.** Idle baseline
+   (niri running, zero windows open) measured at **392 MiB**, not the ~100
+   MiB the wiki calls ideal, but nowhere near the ~1 GiB "known bug"
+   threshold either. Worth re-checking after extended real use rather than
+   a fresh login; not addressed further here.
+4. **`xwayland-satellite` confirmed working.** Spawned Discord (an X11
+   app) via `niri msg action spawn -- discord` — `xwayland-satellite`
+   auto-started on demand (no manual step, matches upstream's claim) and
+   Discord appeared as a normal tiled window (`App ID: discord`).
+5. **Portal confirmed working — but only after fixing a live-session
+   gotcha.** `xdg-desktop-portal.service` had been running continuously
+   since the *previous* (Dragonized) session logged in on Aug 8 and never
+   restarted when Niri started, so it was still carrying
+   `XDG_CURRENT_DESKTOP=KDE` in its own process environment (confirmed via
+   `/proc/<pid>/environ`) even though the systemd --user manager's global
+   environment had correctly updated to `niri`. **This generalizes beyond
+   Niri** — see the new DECISIONS.md entry. Fix used here:
+   `systemctl --user restart xdg-desktop-portal.service`. After that, a
+   real `org.freedesktop.portal.Desktop.Screenshot` D-Bus call was
+   accepted and correctly activated `xdg-desktop-portal-gnome.service` —
+   confirms the module's portal config (gnome + gtk + Nautilus backend) is
+   wired correctly.
+6. **Driving the session without a keyboard.** The NanoKVM's virtual
+   keyboard couldn't reliably send Super/Mod, which blocks every default
+   niri keybinding. Niri's own IPC (`niri msg`) doesn't need it — used
+   `niri msg action spawn -- <cmd>`, `niri msg windows`, and
+   `niri msg action close-window --id <id>` over the existing SSH session
+   to open/close apps and verify window state directly. Socket path is
+   `/run/user/1000/niri.wayland-<pid>.sock` (find the pid via
+   `pgrep -a niri`); `NIRI_SOCKET` must be exported for `niri msg` to find
+   it from an SSH shell (it's not inherited there the way it is inside the
+   graphical session).
+7. Not yet tested: Steam/gamescope and xrdp coexistence with a live Niri
+   session (§4 and §14's independence claims are architectural, not yet
+   hands-on confirmed under Niri specifically).
+
+**Also hit and fixed during this test, unrelated to Niri's own config:**
+the `nixos-rebuild switch` that installed this module ran while an
+already-logged-in Dragonized session (since Aug 8) was still active on the
+physical console — activation's user-unit reload crashed that session
+(`sddm-helper... crashed exit code 1` in the journal) and nothing
+re-spawned a greeter afterward, producing a fully black KVM feed. Fixed
+with `sudo systemctl restart display-manager` (no reboot needed — the dead
+session had nothing left to lose). **Lesson for future switches on this
+host:** check `loginctl list-sessions` for an active graphical session
+before switching, not just whether *you* are physically at the console —
+this one had been sitting logged in for two days.
+
+## 16. DankMaterialShell — verify on first login
+
+Added 2026-08-11 (`programs.dank-material-shell` in
+`modules/nixos/desktop-niri.nix`), layered on the bare Niri session from
+§15. `systemd.enable = true` means `dms.service` should start automatically
+once Niri activates `graphical-session.target` — no manual step needed just
+to get the shell's bar/UI to appear. Not yet tested on real hardware
+(added after the §15 session ended). On first login:
+
+1. Confirm `dms.service` actually came up:
+   `systemctl --user status dms.service` should be active, and DMS's bar
+   should be visible without doing anything else.
+2. Keybinds are now declarative — see §17, this superseded the original
+   hand-edit-`config.kdl` plan from earlier the same day.
+3. **Magic Trackpad:** Lightning-generation, run wired through a USB KVM
+   switch — no Bluetooth pairing needed (see chat history 2026-08-11 for
+   why: Magic Trackpad, unlike Magic Mouse, genuinely supports wired USB
+   HID, confirmed via Linux's in-tree `hid-magicmouse` driver). Confirm
+   it's recognized once plugged in: `libinput list-devices` should list
+   it, or check `lsusb` / `/proc/bus/input/devices`. Tap-to-click and
+   scroll direction are now declared in `hosts/pegasus/niri-settings.nix`
+   (`tap = true; natural-scroll = false;`) rather than left to niri's own
+   auto-generated default — see §17.
+4. Not yet checked: any of DMS's optional features that assume dependencies
+   this host may not have wired up the same way as a typical DMS install
+   (VPN widget via NetworkManager — already present; dynamic theming via
+   matugen; audio wavelength via cava; calendar via khal — all pulled in
+   automatically by the module's defaults, but none exercised hands-on yet).
+
+## 17. Declarative niri config (niri-flake) — switched 2026-08-11, verified
+
+Migrated the hand-edited `~/.config/niri/config.kdl` from §15/§16 into
+`hosts/pegasus/niri-settings.nix` via niri-flake's `homeModules.config` —
+see DECISIONS.md for the full reasoning (why `homeModules.config` and not
+the full `nixosModules.niri`, the divergence risk, the key conflicts
+found between niri's own defaults and DMS's wanted keybinds) and for the
+blow-by-blow of getting this switch to actually succeed (a stale-nixpkgs
+Go version blocker, unrelated to niri).
+
+**Confirmed working, real hardware, 2026-08-11:**
+
+1. **File-collision handling worked as designed.** The old plain
+   `config.kdl` got renamed to `config.kdl.pre-declarative-niri-config`
+   (not cleaned up automatically — safe to delete once you're confident
+   in the new setup, or keep for reference/diffing); the new path is a
+   symlink into the Nix store, home-manager-owned.
+2. **niri-flake's build-time KDL validation passed clean** — confirms all
+   ~90 transcribed binds, the touchpad settings, and the window-rule are
+   genuinely valid to real niri, not just Nix-type-checked.
+3. **Niri did NOT pick up the new config automatically** — the symlink
+   swap doesn't trigger niri's file-watcher the way an in-place edit
+   does (see DECISIONS.md). Needed `systemctl --user restart niri.service`
+   to force a reload — this restarts the whole compositor (closes
+   windows), so plan around that on future switches, it isn't automatic.
+   After the restart: `loaded config from "/home/z/.config/niri/config.kdl"`
+   in the journal, zero errors, same clean rendering as every prior test.
+4. **`dms.service` did not auto-start**, even after the niri restart —
+   different root cause (see DECISIONS.md: `graphical-session.target` had
+   been continuously active since the original login, so a brand-new
+   `WantedBy` unit never got an automatic start trigger). Needed a direct
+   `systemctl --user start dms.service` — came up clean once triggered.
+   **General lesson for future switches:** don't assume a new
+   `graphical-session.target`-bound unit auto-starts in an already-logged-
+   in session — check and start it manually if needed.
+
+**Still not checked hands-on** (nobody's actually pressed these keys yet
+— everything above was verified via journal/IPC over SSH, not physical
+input):
+- The conflict-resolved keybinds specifically: `Mod+Comma` (DMS settings,
+  displaced niri's `consume-window-into-column` to `Mod+Shift+Comma`),
+  `Mod+V` (DMS clipboard, displaced niri's `toggle-window-floating` to
+  `Mod+Ctrl+V`), `Super+Alt+L` (DMS lock screen), the six volume/
+  brightness media keys (should trigger DMS's on-screen indicators, not
+  just silently change volume), and `Mod+Escape` (keyboard-shortcuts
+  inhibitor toggle — the escape hatch for exactly the KVM-input situation
+  this has all been tested under).
+- The trackpad's `tap`/`natural-scroll` behavior through an actual
+  physical trackpad interaction (confirmed only that the generated KDL
+  matches what was live-tested by hand in §16 — same values, now
+  declared instead of hand-edited).
+
+## 18. dankcalendar — add an account (needs interactive login)
+
+Added and confirmed running 2026-08-11 (`modules/nixos/dankcalendar.nix`)
+— see DECISIONS.md for the packaging writeup. `dcal.service` is active
+and healthy, but it's an empty calendar until an account is actually
+added, which needs a real login flow this SSH session can't drive:
+
+1. At the physical console (or wherever you're actually using pegasus),
+   open the calendar: `dcal show`, or trigger it from wherever DMS/niri
+   ends up launching it (no keybind wired for this yet — see below).
+2. Add an account: `dcal account add` (or through the UI's account
+   settings) — Google and Microsoft go through a real OAuth browser
+   flow; CalDAV/iCloud need the server URL + an app-specific password
+   (both Google and iCloud require generating one of these separately in
+   the account's own security settings, not your normal login password).
+3. Confirm sync: `dcal sync`, then `dcal events` or `dcal reminders`
+   should show real data.
+4. **No niri keybind wired for dankcalendar** — unlike DMS's own
+   features, `niri-settings.nix` doesn't bind anything to
+   `dcal toggle`/`dcal show`. Add one if you want a shortcut; wasn't
+   done here since it wasn't asked for and there's no obvious key that
+   doesn't collide with something already in use (see the cheat sheet
+   artifact for what's taken).
+5. Worth knowing: DMS's own calendar widget (Mod+N notifications area)
+   is still backed by khal, not dankcalendar — the two aren't linked.
+   Adding an account to dankcalendar does not populate DMS's widget, and
+   vice versa. See DECISIONS.md for why they were kept separate rather
+   than trying to unify them.
+
+## 19. Keyring — verify after the next switch
+
+`modules/nixos/keyring.nix` makes gnome-keyring the single Secret Service
+provider and stops KWallet auto-unlocking (see DECISIONS.md for why). Nothing
+here was verified on hardware — the reasoning came from evaluating the closure
+and reading the packaging, not from a real login.
+
+1. **A full logout is required, not just a switch.** Both the PAM change and
+   the daemon that owns `org.freedesktop.secrets` are established at login,
+   and this host's `systemd --user` manager and `graphical-session.target`
+   survive session switches — the same trap `dms.service` and `dcal.service`
+   both hit. A `nixos-rebuild switch` alone will leave the *old* owner running
+   and make it look as though nothing changed. Log out fully (or reboot).
+
+2. **Confirm who owns the bus name**, from a terminal in the Niri session:
+   ```
+   busctl --user list | grep -iE 'secrets|kwallet'
+   ```
+   Expected: `org.freedesktop.secrets` owned by `gnome-keyring-daemon`, and no
+   `ksecretd`. If KWallet still holds it, something started `kwalletd6` before
+   gnome-keyring came up — check `systemctl --user status app-gnome\\x2dkeyring*`
+   and whether the XDG autostart entries ran at all.
+
+3. **Confirm the store actually works** — write and read a secret without
+   involving a browser:
+   ```
+   secret-tool store --label=probe test probe   # prompts for a value
+   secret-tool lookup test probe
+   ```
+   (`secret-tool` is in `pkgs.libsecret`; `nix run nixpkgs#libsecret -- …` if
+   it isn't installed.) Then `secret-tool clear test probe` to clean up.
+
+4. **If a password prompt appears at first use instead of unlocking silently**,
+   an old `login` keyring exists whose password isn't z's account password
+   (likely created interactively before this was declarative). Either enter the
+   old password once and change it to match, or delete
+   `~/.local/share/keyrings/login.keyring` and log out/in to have
+   `pam_gnome_keyring` recreate it — **deleting it destroys whatever it holds**,
+   so check with `secret-tool search --all` first.
+
+5. **Anything already stored in KWallet does not migrate.** If Chrome/Vivaldi
+   or an Electron app lost a saved login after this change, that secret is in
+   `~/.local/share/kwalletd/kdewallet.kwl` and needs re-entering (or exporting
+   via `kwallet-query` first, with `pam_kwallet` temporarily re-enabled to open
+   it). Expected to be near-empty in practice — gnome-keyring appears to have
+   been the winner already under Niri — but confirm before assuming.
+
+6. **Dragonized session caveat**, if you still use it: it redirects
+   `XDG_DATA_HOME` to `~/.local/share-dragonized` and wipes it on every login
+   (`modules/nixos/desktop-dragonized.nix`), which is also where keyrings live.
+   Whether that session gets an empty keyring each login or inherits the
+   already-running daemon from the shared user manager wasn't determined —
+   check with step 2 from inside that session if it matters.

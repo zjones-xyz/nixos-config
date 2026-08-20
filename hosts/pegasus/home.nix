@@ -3,6 +3,7 @@
 {
   imports = [
     ../../modules/home/common.nix
+    ./niri-settings.nix
   ];
 
   home.username = "z";
