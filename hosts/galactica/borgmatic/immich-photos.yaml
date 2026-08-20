@@ -1,0 +1,105 @@
+# ── tower / immich photos → tower-cold ────────────────────────────────────────
+#
+# 💎 Precious and Irreplaceable (`hosts/galactica/SHARES.md` §5) — measured in
+# grief, not consequence. Nothing breaks when it is lost; you simply cannot ever
+# get it back.
+#
+# ⚠ The irreplaceable artifact is the CONSOLIDATION, not the bytes. Originals
+# have generally not been deleted from their sources, so total loss is weeks of
+# archaeology across phones, old laptops, SD cards and cloud accounts — plus
+# silent partial loss wherever a source has since died (`docs/BACKUP.md` §3).
+# That keeps the tier Precious for a softer reason than "only copy", and it means
+# an imperfect backup here is still worth a great deal.
+#
+# Lands in tower-COLD: ~200 GiB, near-immutable, append-mostly, far fewer
+# versions. The split exists so `check` and `prune` — which walk the whole chunk
+# index — do not drag hundreds of GB of photos through every nightly run.
+
+source_directories:
+    - /mnt/user/immich_photos
+    - /mnt/user/immich_photos_archived
+
+# See documents.yaml — standing in for `RequiresMountsFor=`, which Unraid does
+# not give us. Catches "shfs is down"; does NOT catch mounted-but-empty.
+source_directories_must_exist: true
+
+repositories:
+      # ⟨Replace with the real BorgBase repo URL once the account exists.⟩
+    - path: ssh://REPLACE@REPLACE.repo.borgbase.com/./tower-cold
+      label: tower-cold
+      encryption: repokey-blake2
+
+# ⚠ Distinct from every other config writing to a shared repo — see the long
+# note in documents.yaml. tower-cold currently has one writer, but that is not a
+# reason to leave the default in place: the moment a second cold source appears
+# the default would make each prune consider the other's archives its own.
+archive_name_format: 'tower-immich-photos-{now:%Y-%m-%dT%H:%M:%S.%f}'
+
+encryption_passcommand: cat /mnt/user/appdata/borgmatic/passphrase
+
+ssh_command: ssh -i /mnt/user/appdata/borgmatic/ssh/id_ed25519 -o UserKnownHostsFile=/mnt/user/appdata/borgmatic/ssh/known_hosts -o StrictHostKeyChecking=yes
+
+# ⚠ Expect roughly 1:1 stored-to-source here, unlike the hot repo. JPEG and HEIC
+# are already compressed, so borg's dedup and compression have almost nothing to
+# find. zstd still costs nothing and helps the sidecars and metadata.
+compression: zstd
+
+exclude_caches: true
+exclude_if_present:
+    - .nobackup
+
+# ── Retention — shallow, because the data barely changes ──────────────────────
+#
+# ⚠ CONSTRAINT, and it is not in BACKUP.md yet. Immich's Postgres lives in
+# appdata.yaml → tower-HOT while its photos live here in tower-COLD, so a restore
+# of Immich touches BOTH repos. The paired-appdata rule (SHARES.md §5) says they
+# must be restored together — which means:
+#
+#     hot's retention must reach back AT LEAST as far as cold's,
+#
+# or there is a depth at which you can recover photos with no database to give
+# them meaning. appdata.yaml is set to 24 monthly / 3 yearly against cold's 12/3
+# below, so the constraint holds with margin. Do not shorten appdata's retention
+# without revisiting this.
+keep_daily: 7
+keep_weekly: 4
+keep_monthly: 12
+keep_yearly: 3
+
+# ── Consistency checks — deliberately rare ────────────────────────────────────
+# This is the reason the hot/cold split exists at all. A `data` check reads every
+# byte in the repository; at ~200 GiB against a remote over a home upstream that
+# is a multi-day operation, so it is not scheduled here. Run it by hand, on the
+# admin machine, when you actually want the assurance.
+checks:
+    - name: repository
+      frequency: 1 month
+    - name: archives
+      frequency: 3 months
+      only_run_on:
+          - weekend
+
+uptime_kuma:
+      # ⟨Own push monitor — NOT shared with the hot repo. A monitor that was
+      # never created is a gap nothing reports, which is exactly how a repo goes
+      # quietly unbacked for months.⟩
+    push_url: https://kuma.hopper.internal/api/push/REPLACE
+    states:
+        - start
+        - finish
+        - fail
+
+ntfy:
+    topic: tower-backup
+    server: https://ntfy.hopper.internal
+    fail:
+        title: tower-cold / immich photos FAILED
+        message: The Precious tier did not back up. See journalctl on Tower.
+        priority: urgent
+
+# ⚠ The initial seed is the long pole in this whole project: ~215.6 GiB for the
+# Critical + Precious tiers together, of which this is the bulk. At ~40 Mbps
+# upstream that is roughly half a day; at ~10 Mbps it is a couple of days. It
+# runs unattended — but do not schedule a hardware maintenance window on the
+# assumption that it finished. Start it first, let it grind, and check `borg
+# info` before believing the photos are protected.
