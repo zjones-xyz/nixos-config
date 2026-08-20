@@ -121,7 +121,7 @@
   # being down blocks recovering the other.
   home.shellAliases = {
     drs = "sudo darwin-rebuild switch --flake ~/Code/nixos-config#serenity";
-    npull = "git -C ~/Code/nixos-config pull";
+    npull = "~/Code/nixos-config/scripts/npull.sh";
     unlock-memory-alpha = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh memory-alpha.internal "op://System Keys/memory-alpha luks/password"'';
     unlock-pegasus = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh pegasus.internal "op://System Keys/pegasus luks/password"'';
     ipmi-tower-open-tty = ''~/Code/nixos-config/scripts/ipmi-remote.sh console towerbmc.internal "op://System Keys/tower ipmi/password"'';
