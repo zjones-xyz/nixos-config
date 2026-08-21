@@ -81,6 +81,12 @@
     # rather than pulling in GTK.
     libreoffice-qt6
 
+    # Lightweight spreadsheet alternative to Calc above — faster startup,
+    # weaker .xlsx fidelity on complex files. Added 2026-08-20 per Zoe's
+    # request; not a duplicate, Calc stays installed for anything Gnumeric
+    # can't handle.
+    gnumeric
+
     # Elgato Stream Deck control — needs the udev rule in
     # hosts/pegasus/configuration.nix for non-root USB access.
     streamdeck-ui
