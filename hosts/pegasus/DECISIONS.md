@@ -699,3 +699,33 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   `mkForce` lines in `modules/nixos/keyring.nix` plus disabling gnome-keyring.
   **Not verified on hardware** — the switch, and which daemon ends up owning
   the bus name afterward, still needs a real login. See MANUAL-STEPS.md §19.
+
+- **DMS settings.json → snapshot/restore script, not a Home-Manager symlink**
+  (2026-08-21). *alt:* `config.lib.file.mkOutOfStoreSymlink` pointing
+  `~/.config/DankMaterialShell/settings.json` at a repo-tracked file, for
+  live GUI edits to land directly in the git working tree. *Why rejected:*
+  DMS persists settings via Quickshell's `FileView { atomicWrites: true }`
+  (`Common/SettingsData.qml`), which writes a temp file and `rename()`s it
+  over the target path. `rename()` onto a symlinked path replaces the
+  symlink itself rather than following it to the target — so the first
+  setting toggled through the DMS GUI would silently detach
+  `settings.json` from the repo and turn it back into an ordinary file, with
+  no error surfaced. `home.file`'s in-store form has the same problem plus
+  it's read-only to begin with (DMS does detect that case — `onSaveFailed`
+  sets an internal read-only flag — but that only means it fails safe, not
+  that edits reach git).
+  Went with `scripts/dms-settings.sh snapshot|restore` instead: `snapshot`
+  copies the live file to `hosts/pegasus/dms-settings.json` for manual
+  review/commit, `restore` copies it back (refuses to clobber an existing
+  live file unless `FORCE=1`). `home.nix`'s `seedDmsSettings` activation
+  script additionally seeds a *fresh* host (no live file yet) from that
+  checkpoint, so a rebuild-from-scratch starts from the last-known-good
+  config rather than DMS's defaults — it never touches an already-existing
+  live file, so it can't clobber an in-progress GUI experiment.
+  Checked the settings schema for anything that shouldn't be committed in
+  plaintext: nothing secret (one unrelated `lockScreenShowPasswordField`
+  bool); it does capture `weatherLocation`/`weatherCoordinates` if those get
+  set, worth knowing before committing.
+  **No checkpoint committed yet** — `hosts/pegasus/dms-settings.json` only
+  exists after `dms-settings-snapshot` is run on real hardware with a DMS
+  config worth keeping; nothing here fabricates one.
