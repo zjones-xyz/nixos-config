@@ -150,6 +150,11 @@ desktop. **The NanoKVM is what covers that gap** — including the one case this
 host will actually hit, a boot that needs the firmware menu. Do not treat it as
 spare hardware to be reclaimed.
 
+⚠ **Physically removed 2026-08-18**, deliberately, to rule it out while
+diagnosing the DP KVM fault in §8 — `HDMI-A-1` reading `disconnected` for the
+duration is expected and is this, not a regression. **Reconnect it** once the
+display troubleshooting in §8 is done; the paragraph above is not hyperbole.
+
 ---
 
 ## 2. Encryption
@@ -342,6 +347,8 @@ inventory has to learn to filter it back out.
 | M.2/SATA port sharing on the free slot | Board manual | Whether populating it evicts a disk (§4) |
 | SATA silkscreen ↔ `ata-N` reconciliation | Case open | Printing cable labels (§5) |
 | Whether bay identifiers are warranted at all | A decision | §3 |
+| ⚠ **DP KVM: cable-run length vs. link training** | Dissecting the 10 ft GPU→KVM run (§8) | Reintroducing the KVM for either monitor |
+| **Reconnect the NanoKVM** | Physical | Firmware/BIOS/panic-screen access (§1) |
 
 ✅ **Closed 2026-08-10:** *Board model and SATA port mapping* — read over SSH via
 `dmidecode`/`lspci`/`by-path`, no case opening needed. §4 now carries the board,
@@ -368,3 +375,96 @@ point encrypting a disk that is about to fail its health check.
 machine on 2026-07-11 and belongs either in a host map or in `docs/DISK-DRAWER.md`;
 it is in neither, which means the fleet has lost track of a working NVMe. One
 question to the owner closes it.
+
+---
+
+## 8. Displays, the GPU's outputs, and the KVM
+
+**No integrated graphics.** `lspci -nnk`, 2026-08-18, shows exactly one display
+controller on this host:
+
+```
+2b:00.0 VGA compatible controller [0300]: NVIDIA Corporation AD104 [GeForce RTX 4070] [10de:2786] (rev a1)
+	Kernel driver in use: nvidia
+```
+
+This is an AM4 socket with no APU installed (§4 already has the board as a plain
+B550 desktop chipset, not an APU platform) — the 4070 is the *only* possible
+source of a display signal on this machine. ⟨Whether this board's rear I/O
+carries its own DP/HDMI headers at all was never checked — moot either way,
+since nothing would be driving them. Flagging so a future session doesn't
+spend time chasing a "motherboard video port" that was never confirmed to
+exist and couldn't do anything if it did.⟩
+
+The 4070 itself exposes four outputs: `DP-1`, `DP-2`, `DP-3`, `HDMI-A-1`
+(`/sys/class/drm/card1-*`) — the standard Ada desktop-card layout, 3×DP 1.4a +
+1×HDMI 2.1.
+
+### Current displays
+
+Two identical-resolution, differently-sized 4K panels, both `3840x2160`,
+confirmed via `niri msg outputs` (EDID-sourced make/model/serial — see
+`hosts/pegasus/niri-settings.nix` for the declarative layout, added the same
+day):
+
+| Panel | Serial | Size | Native mode |
+|---|---|---|---|
+| LG Electronics LG HDR 4K | `111NTEP7X460` | 31.5″ | `3840x2160@59.997` (preferred) |
+| Dell S2721QS | `44B9513` | 27″ | `3840x2160@59.997` (preferred) |
+
+Both are wired **directly to the GPU** as of 2026-08-18, bypassing a
+DisplayPort KVM switch that had been in the LG's path. Which two of `DP-1`/
+`DP-2`/`DP-3` each currently occupies is not recorded here on purpose — see
+§1's warning about `sdX` for the same reasoning applied to connectors: it
+tracks whatever port a cable happens to be in today, not a durable fact about
+the machine. `niri-settings.nix` keys on the serials above rather than the
+connector name for exactly this reason.
+
+### The KVM: symptom, diagnosis, and where it stands
+
+**Symptom, 2026-08-18:** with the LG routed through the KVM, the working head
+capped at `3840x2160@30` instead of its preferred `@59.997`, and a second
+monitor added to the KVM's other output never came up at all —
+`/sys/class/drm/card1-*/status` reported it `disconnected`, agreeing with
+`niri msg outputs` seeing only one screen.
+
+**Ruled out before blaming the cable:** compositor and shell were checked
+first, not last, since a display "not appearing" is at least as often a niri/
+DMS state problem as a wiring one. Neither was — `niri msg outputs` and
+`journalctl --user -u dms.service` both showed correct behaviour throughout
+(DMS's `ShellCore` even recovered its bar surfaces cleanly on a screen
+reconnect: `Surface recovery triggered by: screen-reconnect`). `/sys/class/
+drm/.../status` reading `disconnected` is a kernel statement about the
+physical link — no amount of compositor or shell configuration produces that
+reading; only the absence of the link does.
+
+**Isolated to the KVM path, not the monitor or the ports:** moving the same
+monitor and the same cable straight into the GPU (bypassing the KVM entirely)
+produced a clean `3840x2160@59.997` immediately, on a connector that had read
+`disconnected` seconds earlier through the switch.
+
+**Root cause, narrowed but not yet confirmed:** the GPU→KVM run measures
+**10 feet (~3 m)** of passive DisplayPort. Passive DP is reliably good for
+roughly 2 m at the link rate 4K60 8-bit needs (HBR2×4, ≈17.3 Gb/s of payload
+against a ≈12.8 Gb/s requirement) — a KVM is not a repeater, so its own
+internal mux and the extra pair of connector transitions add to that budget
+rather than resetting it, and the monitor-side cable segment is *also* part
+of the same electrical channel. A channel this length training down to 4K30
+(consistent with falling back to HBR×4 or HBR2×2, both of which land at
+almost exactly the 4K30 payload) fits. A degraded AUX channel — the sideband
+that carries EDID and link training, and which degrades on a long run the
+same way the main lanes do — would explain the second head never being read
+at all, independent of bandwidth.
+
+⚠ **Not yet confirmed which segment is at fault**, and possibly moot: the run
+may not be one continuous cable — Zoe's plan is to physically open up the run
+and check, since a passive coupler joining two shorter cables mid-run would
+be an additional lossy, unpowered connector pair on top of the length itself,
+and would need replacing as a unit rather than patched at one end.
+
+**Current state: the KVM is out of the signal path entirely.** Both monitors
+are direct-to-GPU. Reintroducing it — for this pair of monitors, or for the
+Mac/future-work-laptop sharing setup under discussion (see `DECISIONS.md`) —
+is blocked on the cable-run finding above, not on replacing the switch itself;
+nothing here vindicates or condemns the KVM's own quality, since it has never
+yet been tested within a channel length it could plausibly carry.
