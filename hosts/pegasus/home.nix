@@ -59,6 +59,7 @@
     _1password-gui
     _1password-cli
     claude-code
+    gh
 
     discord
     ferdium
