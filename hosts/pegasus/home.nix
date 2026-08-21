@@ -160,6 +160,22 @@
     # organizing/renaming/combining scans into PDFs.
     naps2
 
+    # PDF reading — Okular (full-featured: annotation, forms, signing) already
+    # rides in for free via services.desktopManager.plasma6.enable in
+    # modules/nixos/desktop-plasma.nix (confirmed against nixpkgs' plasma6.nix
+    # module: it's in plasma6's default optionalPackages set, and this repo
+    # never sets environment.plasma6.excludePackages). Zathura is the
+    # deliberate lightweight/keyboard-driven alternative for quick reads under
+    # niri, added 2026-08-20 per Zoe's request — not a duplicate, a different
+    # tool for a different moment.
+    zathura
+
+    # wl-paste, for the swappy screenshot-annotation bind below — niri's own
+    # wiki examples use wl-clipboard the same way (piping wl-paste into
+    # another program). See programs.swappy below and the Mod+Shift+S bind in
+    # niri-settings.nix.
+    wl-clipboard
+
     # ── Found on Serenity's /Applications, not yet replicated (2026-07-12) ────
     calibre # ebook library management
     makemkv # disc ripping, pairs with the jellyfin/vlc media stack
@@ -210,6 +226,24 @@
     # (they shell out to npx/uvx/etc. expecting a standard FHS layout).
     claudeDesktop
   ];
+
+  # ── Screenshot annotation (swappy) ──────────────────────────────────────────
+  # niri's own Print/Ctrl+Print/Alt+Print binds (niri-settings.nix) already do
+  # the actual *capturing* — niri implements screenshot capture itself at the
+  # compositor level (confirmed against niri's own wiki, Configuration:-Key-
+  # Bindings.md: "The screenshot is both stored to the clipboard and saved to
+  # disk"), so no grim/slurp is needed here, unlike on sway/Hyprland. swappy
+  # only adds a markup step on top: Mod+Shift+S (niri-settings.nix) pipes
+  # whatever niri just put on the clipboard into swappy for annotation
+  # (arrows/boxes/text/blur); swappy's own Ctrl+S then saves the edited copy
+  # to save_dir below, separately from niri's own screenshot-path.
+  programs.swappy = {
+    enable = true;
+    settings.Default = {
+      save_dir = "$HOME/Pictures/Screenshots";
+      save_filename_format = "swappy-%Y%m%d-%H%M%S.png";
+    };
+  };
 
   # ── Declarative Plasma 6 (plasma-manager) ───────────────────────────────────
   # plasma-manager's HM module is wired in via home-manager.sharedModules in
