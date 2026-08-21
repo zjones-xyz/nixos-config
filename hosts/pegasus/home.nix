@@ -149,9 +149,9 @@
     winetricks
     yad
 
-    # GPU-accelerated terminal emulators.
+    # GPU-accelerated terminal emulators. kitty itself is declared via
+    # programs.kitty below now (not here) — see that block for why.
     ghostty
-    kitty
 
     # Doxie Q2 (DX320) scan management — the scanner itself needs no driver
     # (mounts as plain USB mass storage; Wi-Fi direct-to-cloud setup is the
@@ -226,6 +226,19 @@
     # (they shell out to npx/uvx/etc. expecting a standard FHS layout).
     claudeDesktop
   ];
+
+  # ── kitty: launch zsh directly, not the login shell ─────────────────────────
+  # Login shell stays bash (modules/nixos/common.nix — kept for predictable
+  # non-interactive `ssh z@host cmd` semantics, see interactive-zsh.nix) and
+  # every interactive bash session execs into zsh anyway, but that's a hop
+  # kitty doesn't need to take: pointing it at zsh directly skips it. Per
+  # Zoe's request, 2026-08-20. Package now comes from programs.kitty.package
+  # (default) instead of the plain home.packages entry — same store path,
+  # declared once instead of twice.
+  programs.kitty = {
+    enable = true;
+    settings.shell = "${pkgs.zsh}/bin/zsh";
+  };
 
   # ── Screenshot annotation (swappy) ──────────────────────────────────────────
   # niri's own Print/Ctrl+Print/Alt+Print binds (niri-settings.nix) already do
