@@ -51,10 +51,11 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
 
 - `.md`/comment/bootstrap-script changes → commit straight to `main`.
 - Pending human/manual steps in markdown (`SECRETS-TODO.md`, `MANUAL-STEPS.md`,
-  `DEPLOY.md`, etc.) use checkboxes (`- [ ]`), not plain numbers or dashes, so
-  they can be checked off as done. Narrative/history — what already happened,
-  what was verified on real hardware — stays prose; only actually-pending
-  action items get a checkbox.
+  `DEPLOY.md`, etc.) use numbered checkboxes (`1. [ ]`, `2. [ ]`, …), not plain
+  numbers or dashes, so they can be checked off as done while keeping sequence
+  for order-dependent steps. Narrative/history — what already happened, what
+  was verified on real hardware — stays prose; only actually-pending action
+  items get a checkbox.
 - `.nix`/config changes → feature branch + PR, title prefixed with the host scope
   in brackets, e.g. `[memory-alpha] …`, `[pegasus] …`, `[all] …`.
 - Validate with `nix flake check` / `nix eval`. On the Mac (aarch64-darwin) the
