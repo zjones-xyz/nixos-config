@@ -699,3 +699,40 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   `mkForce` lines in `modules/nixos/keyring.nix` plus disabling gnome-keyring.
   **Not verified on hardware** — the switch, and which daemon ends up owning
   the bus name afterward, still needs a real login. See MANUAL-STEPS.md §19.
+
+- **Bambu Studio blank build plate (Prepare/Preview tabs), 2026-08-22 — fixed
+  via `overrideAttrs` in `hosts/pegasus/home.nix`, routing its OpenGL canvas
+  through Mesa + Zink instead of the NVIDIA vendor GL libs.** *alt 1:* bump
+  this flake's shared `nixpkgs` input to a post-2026-05-27 `release-26.05`
+  revision and use the real `withNvidiaGLWorkaround` package arg upstream
+  shipped for exactly this. *Why not:* `nixpkgs` is a single input shared by
+  every host in the fleet (`hosts/*`), so that bump would move package
+  versions fleet-wide just to fix one desktop app on one host — too broad a
+  blast radius for this. *alt 2:* switch to the Flatpak build (several
+  reports it renders fine on identical NixOS/NVIDIA hardware) or to
+  OrcaSlicer. *Why not:* this repo has no Flatpak plumbing, and OrcaSlicer is
+  a separate app already installed alongside Bambu Studio, not a substitute
+  for Bambu-specific cloud features.
+  *Why the bug happens:* not niri/xwayland-satellite-specific — Bambu
+  Studio's wxWidgets OpenGL canvas is broadly fragile against NVIDIA's
+  proprietary GL on Linux; the toolbars/panels are plain widgets and render
+  fine, only the GL-backed 3D canvas doesn't. Same symptom reported across
+  Hyprland, GNOME, KDE X11, and Docker+NVIDIA — tracked upstream at
+  https://github.com/NixOS/nixpkgs/issues/498311. nixpkgs fixed it via a
+  `withNvidiaGLWorkaround` package arg
+  (https://github.com/NixOS/nixpkgs/pull/522161, merged + backported to
+  `release-26.05` 2026-05-27) that sets four env vars forcing the GL context
+  through Mesa's Zink driver (OpenGL-over-Vulkan, still hardware-accelerated
+  via NVIDIA's own Vulkan ICD) instead of NVIDIA's GLX/EGL vendor libs. This
+  flake's `nixpkgs` was locked 2026-01-08, well before that merge, so the
+  fix is hand-applied via `overrideAttrs` appending the same
+  `gappsWrapperArgs` the upstream fix uses, rather than waiting for the pin
+  to catch up.
+  **Not yet verified on hardware** — needs a real `nixos-rebuild switch` +
+  launching Bambu Studio on pegasus to confirm the plate actually renders;
+  only `nix-instantiate --parse` has checked this (this session had no
+  working `nix eval`/build access to the flake's full input graph). If it
+  doesn't fix it, check `bambu-studio`'s stderr for the actual GL init
+  failure before trying something else — the four-var Zink route is a
+  strong match for the *specific* symptom (chrome renders, only the 3D
+  canvas is blank) but Bambu Studio's Linux GL bugs aren't all one bug.
