@@ -1,4 +1,4 @@
-{ config, pkgs, lib, claudeDesktop, ... }:
+{ config, pkgs, lib, claudeDesktop, orcaSlicerNewer, bambuStudioNewer, ... }:
 
 {
   imports = [
@@ -65,8 +65,6 @@
 
     discord
     ferdium
-    bambu-studio
-    orca-slicer
     openscad
     obsidian
     spotify
@@ -229,6 +227,17 @@
     # flake.nix — the FHS-wrapped variant, needed for MCP servers to work
     # (they shell out to npx/uvx/etc. expecting a standard FHS layout).
     claudeDesktop
+    # 02.05.00.67, with the real upstream withNvidiaGLWorkaround applied —
+    # fixes the blank Prepare/Preview build plate on this host's NVIDIA GPU.
+    # From the separate nixpkgs-bambu-studio input (see flake.nix); this
+    # flake's main nixpkgs pin predates both that version bump and the fix.
+    bambuStudioNewer
+    # 2.3.2 — this flake's main nixpkgs pin predates nixpkgs' 2.3.1 -> 2.3.2
+    # bump, so this comes from the separate nixpkgs-orca-slicer input
+    # instead (see flake.nix). Confirmed viewport already renders fine on
+    # this host's NVIDIA setup at 2.3.1, so no GL workaround needed here
+    # unlike bambuStudioNewer above.
+    orcaSlicerNewer
   ];
 
   # ── kitty: launch zsh directly, not the login shell ─────────────────────────
