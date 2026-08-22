@@ -784,3 +784,28 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   Validated the same way as `nixpkgs-bambu-studio` above
   (`flake-check-sandboxed.sh`, exit 0). Not yet confirmed with a real
   `nixos-rebuild switch` on pegasus.
+
+- **Opened UDP 2021 + 1900 on the firewall for Bambu printer LAN
+  auto-discovery, 2026-08-22.** Bambu/Orca don't send a discovery query —
+  the printer periodically broadcasts its presence over UDP (source port
+  1900), and the slicer just listens for it on 2021. `networking.firewall.
+  enable = true` is set fleet-wide (`modules/nixos/common.nix`), and until
+  now nothing on pegasus opened either port, so that unsolicited inbound
+  broadcast was silently dropped — the printer likely wasn't appearing on
+  its own in LAN-only mode. *alt considered:* skip the firewall change
+  entirely and add the printer manually by IP + access code in Bambu
+  Studio (Device tab), since every actual data-plane connection — file
+  send over FTPS, MQTT status, camera stream — is outbound from the
+  slicer and was already unaffected by the firewall. *Why not:* Zoe wants
+  real auto-discovery, not just a workaround.
+  Requires the printer to be on the same L2 broadcast domain as pegasus —
+  confirmed same VLAN, bridged across a LAN/WLAN boundary (i.e. wired
+  pegasus, printer on Wi-Fi, same AP/VLAN) rather than crossing an actual
+  router/VLAN boundary, which broadcast wouldn't survive without a relay
+  (e.g. https://github.com/inindev/bambu-bridge). If discovery still
+  doesn't work after this, suspect client isolation on the AP (common on
+  guest/IoT SSIDs, blocks broadcast between wireless clients even on the
+  same subnet) before assuming the firewall rule is wrong.
+  Validated with `flake-check-sandboxed.sh` (exit 0). Not yet confirmed on
+  hardware — needs `nixos-rebuild switch` + checking whether the printer
+  now appears automatically in Bambu Studio's device list.
