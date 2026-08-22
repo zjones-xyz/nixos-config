@@ -1,34 +1,5 @@
-{ config, pkgs, lib, claudeDesktop, ... }:
+{ config, pkgs, lib, claudeDesktop, orcaSlicerNewer, bambuStudioNewer, ... }:
 
-let
-  # Bambu Studio's 3D canvas (Prepare/Preview build plate) renders blank on
-  # NVIDIA's proprietary GL — the toolbars/panels draw fine, only the OpenGL
-  # canvas itself doesn't, because wxWidgets' GL context negotiation trips
-  # over the NVIDIA vendor libs specifically. Routing through Mesa + Zink
-  # (OpenGL-over-Vulkan, still hardware-accelerated via NVIDIA's Vulkan ICD)
-  # sidesteps it. Confirmed as a real, currently-open bug at
-  # https://github.com/NixOS/nixpkgs/issues/498311 — not niri/xwayland-
-  # satellite-specific, it's Bambu Studio's general NVIDIA/Linux GL fragility
-  # (same symptom reported across Hyprland, GNOME, KDE, Docker+NVIDIA).
-  #
-  # Upstream nixpkgs fixed this via a `withNvidiaGLWorkaround` package arg
-  # (PR https://github.com/NixOS/nixpkgs/pull/522161, merged + backported to
-  # release-26.05) that sets exactly the four env vars below. That fix isn't
-  # in this flake's pinned nixpkgs rev yet (locked well before the May 2026
-  # merge), so it's hand-applied here via overrideAttrs — drop this and
-  # switch to `pkgs.bambu-studio.override { withNvidiaGLWorkaround = true; }`
-  # once the pin catches up.
-  bambuStudioNvidiaFix = pkgs.bambu-studio.overrideAttrs (old: {
-    preFixup = old.preFixup + ''
-      gappsWrapperArgs+=(
-        --set __GLX_VENDOR_LIBRARY_NAME mesa
-        --set __EGL_VENDOR_LIBRARY_FILENAMES /run/opengl-driver/share/glvnd/egl_vendor.d/50_mesa.json
-        --set MESA_LOADER_DRIVER_OVERRIDE zink
-        --set GALLIUM_DRIVER zink
-      )
-    '';
-  });
-in
 {
   imports = [
     ../../modules/home/common.nix
@@ -92,7 +63,6 @@ in
 
     discord
     ferdium
-    orca-slicer
     openscad
     obsidian
     spotify
@@ -255,7 +225,17 @@ in
     # flake.nix — the FHS-wrapped variant, needed for MCP servers to work
     # (they shell out to npx/uvx/etc. expecting a standard FHS layout).
     claudeDesktop
-    bambuStudioNvidiaFix
+    # 02.05.00.67, with the real upstream withNvidiaGLWorkaround applied —
+    # fixes the blank Prepare/Preview build plate on this host's NVIDIA GPU.
+    # From the separate nixpkgs-bambu-studio input (see flake.nix); this
+    # flake's main nixpkgs pin predates both that version bump and the fix.
+    bambuStudioNewer
+    # 2.3.2 — this flake's main nixpkgs pin predates nixpkgs' 2.3.1 -> 2.3.2
+    # bump, so this comes from the separate nixpkgs-orca-slicer input
+    # instead (see flake.nix). Confirmed viewport already renders fine on
+    # this host's NVIDIA setup at 2.3.1, so no GL workaround needed here
+    # unlike bambuStudioNewer above.
+    orcaSlicerNewer
   ];
 
   # ── kitty: launch zsh directly, not the login shell ─────────────────────────

@@ -728,11 +728,59 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   fix is hand-applied via `overrideAttrs` appending the same
   `gappsWrapperArgs` the upstream fix uses, rather than waiting for the pin
   to catch up.
-  **Not yet verified on hardware** — needs a real `nixos-rebuild switch` +
-  launching Bambu Studio on pegasus to confirm the plate actually renders;
-  only `nix-instantiate --parse` has checked this (this session had no
-  working `nix eval`/build access to the flake's full input graph). If it
-  doesn't fix it, check `bambu-studio`'s stderr for the actual GL init
-  failure before trying something else — the four-var Zink route is a
-  strong match for the *specific* symptom (chrome renders, only the 3D
-  canvas is blank) but Bambu Studio's Linux GL bugs aren't all one bug.
+  **Confirmed on hardware, same day:** the build plate renders correctly
+  after `nixos-rebuild switch` on pegasus.
+
+  **Superseded same day** by pulling `bambu-studio` from a second, standalone
+  `nixpkgs-bambu-studio` flake input pinned to commit `13b979d` (2026-05-27,
+  `git+https://github.com/NixOS/nixpkgs.git?rev=13b979d75662827615c1de6dd22f87e6296ba71d`)
+  instead of the hand-rolled `overrideAttrs`. That commit both bumps
+  `bambu-studio` to 02.05.00.67 (from this flake's pinned 02.03.01.51 — two
+  version bumps: 02.04.00.70, then 02.05.00.67) *and* already carries the
+  real `withNvidiaGLWorkaround` package arg, so `hosts/pegasus/home.nix` now
+  just does `pkgs'.bambu-studio.override { withNvidiaGLWorkaround = true; }`
+  against that pinned `pkgs'` — the actual upstream fix, not a hand-copied
+  reimplementation of it — while keeping the same "don't touch the shared
+  `nixpkgs` input" reasoning above (same blast-radius argument, this is a
+  second isolated input, not a bump of the fleet-wide one).
+  One gotcha hit doing this: `nixpkgs-bambu-studio.legacyPackages.<system>`
+  (unlike the main `nixpkgs`, which gets `nixpkgs.config.allowUnfree = true`
+  fleet-wide via `modules/nixos/common.nix`) has `allowUnfree` unset, and
+  `bambu-studio` was marked `agpl3Plus unfree` in nixpkgs the same day as the
+  GL fix (commit `4acf48b`) — evaluating it through plain `legacyPackages`
+  throws. Fixed by constructing the pkgs set explicitly in `flake.nix`
+  (`import nixpkgs-bambu-studio { system = ...; config.allowUnfree = true; }`)
+  instead of using `legacyPackages` directly.
+  Validated with `.claude/hooks/flake-check-sandboxed.sh` (`nix flake check`
+  against every input rewritten to git+https at its exact locked rev, to
+  route around this sandboxed session's GitHub-tarball-fetch 403 — see that
+  script's own header comment) — exits 0 across all five configs. Actual
+  `nixos-rebuild switch` + relaunch on pegasus still needed to confirm this
+  refactor didn't change runtime behavior versus the already-confirmed
+  hand-rolled version.
+
+- **OrcaSlicer bumped 2.3.1 -> 2.3.2, 2026-08-22** — pulled from a third
+  standalone flake input, `nixpkgs-orca-slicer`, pinned to nixpkgs commit
+  `e749b91` (2026-03-23, the exact commit that bumped `orca-slicer` in
+  nixpkgs), for the same reason and via the same mechanism as
+  `nixpkgs-bambu-studio` above. *alt considered:* hand-override
+  `version`/`src`/hash to chase OrcaSlicer's actual upstream latest stable
+  (v2.4.2, 2026-07-07) directly, skipping nixpkgs entirely. *Why not, for
+  now:* nixpkgs hasn't packaged anything past 2.3.2 yet (checked
+  `release-26.05` HEAD 2026-08-22), so there's no already-vetted patch set
+  for 2.4.x to build against — this repo's existing patches (webkit linking,
+  opencv, cmake4, gcc15 stdint) are pinned to what 2.3.x needs, and
+  reworking them by hand with no build/eval access in this session to
+  validate against was judged not worth the risk for a UI that (confirmed on
+  hardware, same day) already renders correctly at 2.3.1 — unlike Bambu
+  Studio, this one isn't fixing a real bug, just chasing a newer version.
+  No GL workaround applied here: OrcaSlicer's own NVIDIA/Zink route has a
+  documented regression risk the Bambu Studio one doesn't (Zink reportedly
+  breaks OrcaSlicer's Home/Device/Project pages and printer/filament preset
+  dialogs on some driver versions — see
+  https://github.com/OrcaSlicer/OrcaSlicer/issues/9474, closed
+  not-planned/stale) — moot here since this host's viewport already works
+  without it.
+  Validated the same way as `nixpkgs-bambu-studio` above
+  (`flake-check-sandboxed.sh`, exit 0). Not yet confirmed with a real
+  `nixos-rebuild switch` on pegasus.

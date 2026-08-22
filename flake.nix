@@ -77,9 +77,33 @@
       url = "github:sodiboo/niri-flake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # A second, standalone nixpkgs — deliberately NOT inputs.nixpkgs.follows,
+    # unlike every other input above — pinned only to pull a newer
+    # `orca-slicer` (used on pegasus) than the one in the main `nixpkgs`
+    # input above. The main nixpkgs is locked well before nixpkgs bumped
+    # orca-slicer 2.3.1 -> 2.3.2 (2026-03-23); this pins exactly that bump
+    # commit rather than a moving branch HEAD, so the diff here is nothing
+    # but that one already-vetted version bump. Moving the *shared* nixpkgs
+    # input instead was considered and rejected for the same reason as the
+    # Bambu Studio NVIDIA-GL fix (see hosts/pegasus/DECISIONS.md): it's a
+    # single input shared by every host in the fleet, so bumping it would
+    # move package versions fleet-wide just for one desktop app on one host.
+    # git+https rather than github: — see the claude-desktop-debian input
+    # comment above for why.
+    nixpkgs-orca-slicer.url = "git+https://github.com/NixOS/nixpkgs.git?rev=e749b91730e1d4c612294f1e10dd351674d697fa&shallow=1";
+
+    # Same idea as nixpkgs-orca-slicer above, for bambu-studio: the main
+    # nixpkgs pin has it at 02.03.01.51 with the NVIDIA-GL fix hand-applied
+    # via overrideAttrs (hosts/pegasus/home.nix). This pins the commit where
+    # nixpkgs both bumped it to 02.05.00.67 *and* already carries the real
+    # upstream withNvidiaGLWorkaround package arg (nixpkgs#522161) — so this
+    # replaces the hand-rolled overrideAttrs fix with the real thing, plus
+    # picks up two extra version bumps (02.04.00.70, 02.05.00.67).
+    nixpkgs-bambu-studio.url = "git+https://github.com/NixOS/nixpkgs.git?rev=13b979d75662827615c1de6dd22f87e6296ba71d&shallow=1";
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, niri-flake, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, niri-flake, nixpkgs-orca-slicer, nixpkgs-bambu-studio, ... }:
   {
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
@@ -114,8 +138,28 @@
             ];
             # claude-desktop-debian has no HM module, just a package — pass it
             # through directly rather than adding it as a NixOS-level overlay.
+            # orcaSlicerNewer/bambuStudioNewer are the same idea, from the
+            # standalone nixpkgs-orca-slicer/nixpkgs-bambu-studio inputs above
+            # (see their comments for why they're separate nixpkgs rather than
+            # an overlay on the shared one). withNvidiaGLWorkaround is the
+            # real upstream fix (nixpkgs#522161) baked into that pin — see
+            # hosts/pegasus/home.nix and DECISIONS.md.
             home-manager.extraSpecialArgs = {
               claudeDesktop = claude-desktop-debian.packages.x86_64-linux.claude-desktop-fhs;
+              orcaSlicerNewer = nixpkgs-orca-slicer.legacyPackages.x86_64-linux.orca-slicer;
+              # bambu-studio is unfree (agpl3Plus + unfree, marked as of the
+              # pinned commit) — legacyPackages defaults to allowUnfree =
+              # false, unlike the main `nixpkgs` above (set globally via
+              # modules/nixos/common.nix), so this needs its own pkgs import
+              # rather than plain legacyPackages.
+              bambuStudioNewer =
+                (import nixpkgs-bambu-studio {
+                  system = "x86_64-linux";
+                  config.allowUnfree = true;
+                }).bambu-studio.override
+                  {
+                    withNvidiaGLWorkaround = true;
+                  };
             };
             # Niri's own auto-generated ~/.config/niri/config.kdl (a plain,
             # not-home-manager-owned file, hand-edited in place during Niri
