@@ -110,10 +110,9 @@
     # FreeIPMI-not-ipmitool rationale.
     freeipmi
 
-    # Desktop GUI for Borg — browse archives and restore files by hand,
-    # without touching a terminal. Bundles its own borg (nixpkgs wraps
-    # vorta's PATH with borgbackup at build time), so no separate
-    # borgbackup entry is needed here just to run it.
+    # Desktop GUI for Borg. Bundles its own borg (nixpkgs wraps vorta's PATH
+    # with borgbackup at build time), so no separate borgbackup entry is
+    # needed here just to run it.
     #
     # This is the interactive half, not the backup job itself: docs/BACKUP.md
     # §4b decided borg + borgmatic as the fleet's backup tool and recommends
