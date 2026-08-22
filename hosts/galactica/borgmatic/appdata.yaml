@@ -1,0 +1,257 @@
+# ── tower / appdata → tower-hot ───────────────────────────────────────────────
+#
+# The paired-appdata rule (`hosts/galactica/SHARES.md` §5):
+#
+#   > A service's `appdata` subtree inherits the highest tier of any data share
+#   > it indexes.
+#
+# So Immich's database is Precious-adjacent regardless of what the rest of
+# appdata is. `docs/BACKUP.md` §3 measured the whole share at **76.1 GiB**,
+# entirely pool-resident, and drew the obvious conclusion: at that size there is
+# no need to carve out per-service subtrees — back up the whole share and the
+# rule is satisfied by construction.
+#
+# Lands in tower-HOT: high churn, nightly, deep retention.
+#
+# ⚠ THE PER-CONTAINER PASS HAS NOT RUN (SHARES.md §3). Until it does, this file
+# copies every container's appdata as *files*, and a file-level copy of a live
+# database is not a backup — it restores cleanly, mounts cleanly, and fails
+# later, often only on the rows you needed. The dump hooks below fix that for the
+# databases they cover. **Everything they do not cover is in the archive but must
+# not be trusted**, which is a worse trap than not having it at all, because it
+# looks like protection. Finish the pass.
+
+source_directories:
+    - /mnt/user/appdata
+
+source_directories_must_exist: true
+
+repositories:
+    - path: ssh://REPLACE@REPLACE.repo.borgbase.com/./tower-hot
+      label: tower-hot
+      encryption: repokey-blake2
+
+# ⚠ Distinct from documents.yaml — both write into tower-hot and both run their
+# own prune. See the long note in documents.yaml; this is the setting whose
+# failure mode is silent deletion of the other config's history.
+archive_name_format: 'tower-appdata-{now:%Y-%m-%dT%H:%M:%S.%f}'
+
+encryption_passcommand: cat /mnt/user/appdata/borgmatic/passphrase
+
+ssh_command: ssh -i /mnt/user/appdata/borgmatic/ssh/id_ed25519 -o UserKnownHostsFile=/mnt/user/appdata/borgmatic/ssh/known_hosts -o StrictHostKeyChecking=yes
+
+compression: zstd
+
+exclude_caches: true
+exclude_if_present:
+    - .nobackup
+
+exclude_patterns:
+      # ⚠⚠ borgmatic's own state, INCLUDING THE REPOSITORY PASSPHRASE. This
+      # directory sits inside the share it is backing up, so without this
+      # exclusion the key to the repository would be stored inside the
+      # repository. Borg encrypts it, so this is hygiene rather than catastrophe
+      # — but BACKUP.md §5 is emphatic that custody is the load-bearing problem,
+      # and the real copy lives on paper in a fireproof box, not here.
+    - /mnt/user/appdata/borgmatic
+
+      # ⚠ SOCKETS — this is not cosmetic, it is the footgun that comes free with
+      # the database hooks below. borgmatic's schema is explicit: "when a
+      # database hook is used, the setting here is ignored and read_special is
+      # considered true." So enabling ONE dump hook silently turns on
+      # --read-special for the ENTIRE source tree, and borg will then try to
+      # *read* any FIFO or socket it walks over — where it blocks forever.
+      # Containers scatter unix sockets through appdata as a matter of course, so
+      # on this share that is a near-certainty, and the symptom is a backup that
+      # hangs with no error rather than one that fails.
+    - '*.sock'
+    - '*.socket'
+    - '*.pid'
+
+      # Regenerable caches. Not correctness, just not paying to store and ship
+      # thumbnails that rebuild themselves. ⟨Extend this list from the
+      # per-container pass — `du -sh /mnt/user/appdata/* | sort -h` is the input,
+      # and SHARES.md §3 notes some appdata contents are stale caches that should
+      # NOT be restored, not merely need not be.⟩
+    - '*/transcodes/*'
+    - '*/cache/*'
+    - '*/Cache/*'
+    - '*/log/*.log'
+
+      # PartDB's live SQLite file — the sqlite_databases hook below dumps it
+      # properly; a file-level copy alongside that dump would be redundant at
+      # best and a torn copy at worst.
+    - /mnt/user/appdata/partdb/db
+
+# ── Databases — BACKUP.md §4d ─────────────────────────────────────────────────
+#
+# ⭐ borgmatic 2.1.5 can `docker exec` into a container directly — the `container:`
+# option, "Container name/id to connect to. When specified the hostname is
+# ignored. Requires docker/podman CLI." That means the borgmatic container needs
+# the Docker socket mounted, and does NOT need to share a Docker network with
+# every database it dumps.
+#
+# ⚠ The dumps are STREAMED into the archive — no intermediate file, no
+# dump-then-backup ordering constraint, no retention to manage on dump files.
+# This is most of why borgmatic won over a restic wrapper.
+#
+# ⚠ Container names below were cross-referenced against `homelab_stacks`
+# (verified where an explicit `container_name:` exists, derived where it
+# doesn't — see the per-service notes). Confirm on the box before trusting:
+#     docker ps --format '{{.Names}}\t{{.Image}}'
+
+postgresql_databases:
+      # Immich. Precious-adjacent by the paired-appdata rule.
+      #
+      # ✅ Verified against homelab_stacks' tower/immich/compose.yaml
+      # (`container_name: immich_postgres`), not recalled.
+    - name: all
+      container: immich_postgres
+      username: postgres
+
+      # ⚠⚠ THE COMPRESSION FOOTGUN, AND borgmatic's DEFAULT WALKS INTO IT.
+      #
+      # BACKUP.md §4d says borgmatic "sidesteps this entirely" because there is
+      # no intermediate file to be tempted to compress. **That is wrong for
+      # PostgreSQL.** Read off the 2.1.5 schema directly:
+      #
+      #   format:      "Defaults to 'custom' (unlike raw pg_dump)"
+      #   compression: "Defaults to moderate 'gzip' for 'custom' and 'directory'
+      #                 formats and no compression for the 'plain' format"
+      #
+      # So borgmatic's out-of-the-box PostgreSQL dump is gzipped. borg dedups
+      # with content-defined chunking, which needs the input to change only where
+      # the data changed — and gzip output diverges globally from a one-row
+      # delta. Left at the default, a nightly Immich dump stores a FULL COPY
+      # every night instead of roughly the delta. Against a 950 GB budget and a
+      # years-long retention window that is the difference between a rounding
+      # error and the dominant line item.
+      #
+      # Belt and braces: `plain` already implies no compression, but state both
+      # so a later format change cannot silently re-arm it.
+      format: plain
+      compression: none
+
+      # ⚠ Immich's PostgreSQL depends on a vector extension, and restoring
+      # requires a compatible extension version in the target. This is a
+      # documented sharp edge with its own upstream guidance — FOLLOW IMMICH'S
+      # OWN BACKUP AND RESTORE DOCUMENTATION here rather than a generic
+      # pg_dumpall recipe, and test the restore before relying on it. It is
+      # Precious-adjacent data; it deserves the extra care.
+
+# ⚠ Four database groups were named in `docs/BACKUP.md` §4d and each got a
+# verdict by cross-referencing `homelab_stacks`, not by guessing:
+#
+# 1. Immich / PostgreSQL — hook above, container name verified.
+# 2. The *arr stack and Audiobookshelf / SQLite — ⭐ NO HOOK HERE, and that is
+#    the verdict, not an oversight. Their data does not live in `appdata` at
+#    all: the *arr stack's config/state is under `arr_config`
+#    (`tower/arr/compose.yaml` — `/mnt/user/arr_config/<service>`), and
+#    `arr_config` is classified "Painful to rebuild, small" in `SHARES.md` §5 —
+#    a tier that gets redundancy, not offsite. `podcasts_audiobookshelf` is
+#    "Re-acquirable", same story. Neither share is in this file's scope (see
+#    README.md's "whole offsite scope" table), so there is nothing to hook here.
+#    ⟨Audiobookshelf's container was not found anywhere in `homelab_stacks`
+#    either, despite the `podcasts_audiobookshelf` share existing on Tower —
+#    it may run as a native Unraid Docker template outside Dockge. Worth an
+#    `docker ps` pass if it's ever brought into scope, but out of scope now.⟩
+# 3. BookLore / MariaDB — hook below. ⚠ Container name is DERIVED, not
+#    verified: `tower/grimmory/compose.yaml`'s `mariadb` service sets no
+#    `container_name`, so Compose falls back to its default
+#    `<project>-<service>-<index>` naming. The project name defaults to the
+#    compose file's directory, `grimmory` (no `name:` override in that file,
+#    no `COMPOSE_PROJECT_NAME` in its `config.env`). That gives
+#    `grimmory-mariadb-1` — plausible, not confirmed. **Run
+#    `docker ps --format '{{.Names}}\t{{.Image}}'` on Tower before trusting
+#    this**, per the standing warning that a wrong container name succeeds
+#    while backing up nothing you meant. (BookLore itself runs under the
+#    container name `grimmory`, not "booklore" — `BOOKLORE_PORT` in its
+#    `config.env` and the tailscale hostname `books` confirm it's the same
+#    app under a different image/container name.)
+# 4. PartDB / ⚠ **SQLite, not MariaDB.** `docs/BACKUP.md` §4d and
+#    `DESIGN.md` §6.6 both assumed MySQL/MariaDB for PartDB. That's wrong:
+#    `tower/inventory/compose.yaml`'s `partdb` service sets
+#    `DATABASE_URL: sqlite:///%kernel.project_dir%/var/db/app.db`, and its
+#    only volume onto `appdata` is `/mnt/user/appdata/partdb/db`. Verified
+#    from the compose file directly — see the same correction filed against
+#    `docs/BACKUP.md` §4d. Hook is under sqlite_databases below, not here.
+
+mariadb_databases:
+      # BookLore, container `grimmory-mariadb-1` — see the derivation note
+      # above. Username/database both "grimmory" per
+      # `tower/grimmory/config.env` (`MYSQL_USER`, `MYSQL_DATABASE`); password
+      # is generated at deploy time and not in git. mariadb-dump output is
+      # already plain text and borgmatic offers no compression option for it,
+      # so the PostgreSQL trap above does not apply here.
+    - name: all
+      container: grimmory-mariadb-1
+      username: grimmory
+      password: "{credential file /mnt/user/appdata/borgmatic/credentials/grimmory-mariadb-password}"
+
+sqlite_databases:
+      # PartDB. ⭐ SQLite's online `.backup` is consistent WITHOUT stopping the
+      # application — no downtime needed for this hook.
+      # ⚠ Takes a `path:`, not a `container:` — read directly off the /mnt/user
+      # bind, which is why source_directories excludes the raw db file below
+      # (a file-level copy sitting next to the hook's own dump would be
+      # redundant at best and a torn copy at worst).
+      # ⚠ A read-only /mnt/user bind may block this: SQLite generally needs to
+      # touch -wal/-shm to read a live database. Test it in the pilot
+      # (pilot-partdb.yaml); if it fails, mount appdata read-write and rely on
+      # BorgBase's append-only key for the safety property instead.
+    - name: partdb
+      path: /mnt/user/appdata/partdb/db/app.db
+
+# ⟨Homebox and Spoolman (`tower/inventory/compose.yaml`) are also SQLite and
+# also under `appdata`, and are NOT hooked above — they weren't named in
+# BACKUP.md §4d's inventory and the per-container appdata pass (SHARES.md §3)
+# that would properly scope them hasn't run. Same "in the archive but not
+# trusted" caveat as the rest of appdata applies to them meanwhile.⟩
+
+# ── Canary — BACKUP.md §3b signal 3 ───────────────────────────────────────────
+# Mandatory on Unraid, not optional: `source_directories_must_exist` catches an
+# unmounted share, not a mounted-but-empty one. See scripts/canary-check.sh.
+# ⚠ The canary file itself is not yet created — that's a one-time manual step
+# on Tower (`touch /mnt/user/appdata/.backup-canary`), listed in README.md's
+# still-REPLACE section alongside deploying this script to
+# /mnt/user/appdata/borgmatic/scripts/.
+commands:
+    - before: action
+      when: [create]
+      run:
+          - /mnt/user/appdata/borgmatic/scripts/canary-check.sh /mnt/user/appdata/.backup-canary
+
+# ── Retention ─────────────────────────────────────────────────────────────────
+#
+# ⚠ Deeper than tower-cold ON PURPOSE — see the constraint in immich-photos.yaml.
+# Immich's database lives here while its photos live in tower-cold, and the
+# paired-appdata rule says they restore together. If this retention were the
+# shallower of the two there would be a depth at which you recover photos with no
+# database to give them meaning. 24 monthly / 3 yearly against cold's 12 / 3.
+keep_daily: 14
+keep_weekly: 8
+keep_monthly: 24
+keep_yearly: 3
+
+checks:
+    - name: repository
+      frequency: 2 weeks
+    - name: archives
+      frequency: 1 month
+
+# ⟨Commented out for now — same reason as documents.yaml: no Kuma push
+# monitor exists yet. Re-enable once it's created.⟩
+# uptime_kuma:
+#     push_url: https://kuma.hopper.internal/api/push/REPLACE
+#     states:
+#         - start
+#         - finish
+#         - fail
+
+ntfy:
+    topic: tower-backup
+    server: https://ntfy.hopper.internal
+    fail:
+        title: tower-hot / appdata FAILED
+        message: appdata and the database dumps did not back up. See journalctl on Tower.
+        priority: urgent
