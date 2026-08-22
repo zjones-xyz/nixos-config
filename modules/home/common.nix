@@ -16,6 +16,9 @@
     jq
     btop
     micro
+    # npull's PR-number argument shells out to `gh pr checkout` — needed on
+    # every host, not just the ones that already had other uses for it.
+    gh
   ];
 
   # Prompt.

@@ -34,7 +34,6 @@
     # Exact invocations and the argument-parsing gotchas are in
     # hosts/galactica/PLATFORM.md §2.
     freeipmi
-    gh
     neovim
     nmap
     sl  # for lolz — steam locomotive when you fat-finger `ls`

@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ ... }:
 
 {
   imports = [
@@ -7,11 +7,6 @@
 
   home.username = "z";
   home.homeDirectory = "/home/z";
-
-  # gh — npull's PR-number argument shells out to `gh pr checkout`.
-  home.packages = with pkgs; [
-    gh
-  ];
 
   home.shellAliases = {
     nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#hamilton";
