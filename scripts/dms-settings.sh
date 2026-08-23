@@ -156,6 +156,13 @@ for t in $TARGETS; do
 done
 
 if [ "$ACTION" = "snapshot" ] && [ "${#TOUCHED[@]}" -gt 0 ]; then
+  # `git diff` alone shows nothing for a brand-new (untracked) checkpoint —
+  # there's nothing in the index to diff against yet. `add --intent-to-add`
+  # stages a zero-content placeholder so the diff below shows the real
+  # content as an addition on a first-ever snapshot, without fully staging
+  # it (a later `git add` still behaves normally). Harmless no-op on a
+  # checkpoint that's already tracked.
+  git -C "$REPO" add --intent-to-add -- "${TOUCHED[@]}" 2>/dev/null || true
   echo
   echo "Review with: git -C $REPO diff -- ${TOUCHED[*]}"
 fi
