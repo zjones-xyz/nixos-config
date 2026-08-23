@@ -40,6 +40,7 @@
     sops
     unzip
     wget
+    zeal # offline API docs — same package as pegasus's home.nix (Dash-alike)
 
     # ── Backend / frontend dev tooling ─────────────────────────────────────
     # .NET 8 SDK — nixpkgs build is not broken on aarch64-darwin (meta.broken=false).
