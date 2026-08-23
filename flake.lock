@@ -224,6 +224,23 @@
         "url": "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz"
       }
     },
+    "nixpkgs-bambu-studio": {
+      "locked": {
+        "lastModified": 1779892497,
+        "narHash": "sha256-woEz9CQSVtj/s+k0ccCCtOPeRUUoGCMw3HRFUJvHnAw=",
+        "ref": "refs/heads/master",
+        "rev": "13b979d75662827615c1de6dd22f87e6296ba71d",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/NixOS/nixpkgs.git"
+      },
+      "original": {
+        "rev": "13b979d75662827615c1de6dd22f87e6296ba71d",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/NixOS/nixpkgs.git"
+      }
+    },
     "nixpkgs-lib": {
       "locked": {
         "lastModified": 1782614948,
@@ -237,6 +254,23 @@
         "owner": "nix-community",
         "repo": "nixpkgs.lib",
         "type": "github"
+      }
+    },
+    "nixpkgs-orca-slicer": {
+      "locked": {
+        "lastModified": 1774271439,
+        "narHash": "sha256-hX4Cz6sWdwdjKVB/JW+kWfNDQGQF0KbKdqw6XV+4XRY=",
+        "ref": "refs/heads/master",
+        "rev": "e749b91730e1d4c612294f1e10dd351674d697fa",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/NixOS/nixpkgs.git"
+      },
+      "original": {
+        "rev": "e749b91730e1d4c612294f1e10dd351674d697fa",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/NixOS/nixpkgs.git"
       }
     },
     "nixpkgs-stable": {
@@ -303,6 +337,8 @@
         "nix-darwin": "nix-darwin",
         "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs_2",
+        "nixpkgs-bambu-studio": "nixpkgs-bambu-studio",
+        "nixpkgs-orca-slicer": "nixpkgs-orca-slicer",
         "plasma-manager": "plasma-manager",
         "sops-nix": "sops-nix"
       }
