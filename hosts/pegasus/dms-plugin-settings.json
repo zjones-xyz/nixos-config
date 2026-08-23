@@ -3,6 +3,6 @@
     "enabled": true
   },
   "dmsThemeSync": {
-    "enabled": true
+    "enabled": false
   }
 }
