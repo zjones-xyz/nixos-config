@@ -729,6 +729,14 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   **No checkpoint committed yet** — `hosts/pegasus/dms-settings.json` only
   exists after `dms-settings-snapshot` is run on real hardware with a DMS
   config worth keeping; nothing here fabricates one.
+  **Extended 2026-08-23** to also cover `plugin_settings.json` (per-plugin
+  enabled flag + config — a second file DMS saves the same atomic way,
+  separate from `settings.json`), and added a `diff` action (compares live
+  vs. checkpoint without touching either — what `snapshot` would capture or
+  `restore` would overwrite). `snapshot`/`restore`/`diff` all now take an
+  optional `[settings|plugins|all]` target, defaulting to `all`; `home.nix`'s
+  `seedDmsSettings` seeds both checkpoints independently, same never-clobber
+  rule as before.
 
 - **Bambu Studio blank build plate (Prepare/Preview tabs), 2026-08-22 — fixed
   via `overrideAttrs` in `hosts/pegasus/home.nix`, routing its OpenGL canvas

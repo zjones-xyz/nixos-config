@@ -42,6 +42,7 @@
     ipmi-tower-set-bios-next-boot = ''~/nixos-config/scripts/ipmi-remote.sh bios-next-boot towerbmc.internal "op://System Keys/tower ipmi/password"'';
     dms-settings-snapshot = "~/nixos-config/scripts/dms-settings.sh snapshot";
     dms-settings-restore = "~/nixos-config/scripts/dms-settings.sh restore";
+    dms-settings-diff = "~/nixos-config/scripts/dms-settings.sh diff";
   };
 
   # ── Desktop apps ────────────────────────────────────────────────────────────
@@ -341,25 +342,33 @@
   '';
 
   # ── DankMaterialShell settings: seed-only-if-missing ────────────────────────
-  # DMS's own settings.json is deliberately NOT Home-Manager-managed (no
-  # home.file/xdg.configFile, in-store or mkOutOfStoreSymlink alike) — DMS
-  # saves it via an atomic write-temp-then-rename, which severs any symlink
-  # at that path on the very first GUI change instead of writing through it.
-  # See scripts/dms-settings.sh and DECISIONS.md for the full reasoning.
+  # DMS's own settings.json and plugin_settings.json are deliberately NOT
+  # Home-Manager-managed (no home.file/xdg.configFile, in-store or
+  # mkOutOfStoreSymlink alike) — DMS saves both via an atomic
+  # write-temp-then-rename, which severs any symlink at that path on the
+  # very first GUI change instead of writing through it. See
+  # scripts/dms-settings.sh and DECISIONS.md for the full reasoning.
   #
-  # This just seeds a fresh host — one with no live settings.json yet — from
-  # the repo's checkpoint (hosts/pegasus/dms-settings.json, created by
-  # `dms-settings-snapshot`), so a rebuild-from-scratch starts from the
-  # last-known-good bar/dock config instead of DMS's own defaults. It never
-  # touches an existing live file, so it can't clobber an in-progress GUI
-  # experiment — that traffic only ever flows explicitly, via
-  # dms-settings-snapshot/-restore above.
+  # This just seeds a fresh host — one with no live file yet — from the
+  # repo's checkpoints (hosts/pegasus/dms-settings.json and
+  # dms-plugin-settings.json, created by `dms-settings-snapshot`), so a
+  # rebuild-from-scratch starts from the last-known-good config instead of
+  # DMS's own defaults. Each check is independent and never touches an
+  # existing live file, so it can't clobber an in-progress GUI experiment —
+  # that traffic only ever flows explicitly, via dms-settings-snapshot/
+  # -restore/-diff above.
   home.activation.seedDmsSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    DMS_SETTINGS="$HOME/.config/DankMaterialShell/settings.json"
-    CHECKPOINT="$HOME/nixos-config/hosts/pegasus/dms-settings.json"
-    if [ ! -e "$DMS_SETTINGS" ] && [ -e "$CHECKPOINT" ]; then
-      $DRY_RUN_CMD mkdir -p "$(dirname "$DMS_SETTINGS")"
-      $DRY_RUN_CMD cp "$CHECKPOINT" "$DMS_SETTINGS"
+    DMS_DIR="$HOME/.config/DankMaterialShell"
+    CHECKPOINTS="$HOME/nixos-config/hosts/pegasus"
+
+    if [ ! -e "$DMS_DIR/settings.json" ] && [ -e "$CHECKPOINTS/dms-settings.json" ]; then
+      $DRY_RUN_CMD mkdir -p "$DMS_DIR"
+      $DRY_RUN_CMD cp "$CHECKPOINTS/dms-settings.json" "$DMS_DIR/settings.json"
+    fi
+
+    if [ ! -e "$DMS_DIR/plugin_settings.json" ] && [ -e "$CHECKPOINTS/dms-plugin-settings.json" ]; then
+      $DRY_RUN_CMD mkdir -p "$DMS_DIR"
+      $DRY_RUN_CMD cp "$CHECKPOINTS/dms-plugin-settings.json" "$DMS_DIR/plugin_settings.json"
     fi
   '';
 
