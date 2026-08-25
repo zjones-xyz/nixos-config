@@ -70,6 +70,11 @@
     jellyfin-desktop
     vlc
 
+    # file managers
+    nemo
+    nautilus
+    thunar
+
     # itch.io's official client — handles login/library/downloads/updates.
     # lutris has no native itch.io integration (no account sync), so this is
     # the actual client, not a duplicate of lutris's job.
