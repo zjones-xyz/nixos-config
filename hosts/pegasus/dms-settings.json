@@ -355,9 +355,9 @@
       "cursorHideTimeout": 0
     }
   },
-  "launcherLogoMode": "apps",
+  "launcherLogoMode": "os",
   "launcherLogoCustomPath": "",
-  "launcherLogoColorOverride": "",
+  "launcherLogoColorOverride": "primary",
   "launcherLogoColorInvertOnMode": false,
   "launcherLogoBrightness": 0.5,
   "launcherLogoContrast": 1,
@@ -389,7 +389,7 @@
   "soundPluggedIn": true,
   "muteSoundsWhenMediaPlaying": true,
   "acMonitorTimeout": 0,
-  "acLockTimeout": 0,
+  "acLockTimeout": 900,
   "acSuspendTimeout": 0,
   "acSuspendBehavior": 0,
   "acProfileName": "",
@@ -472,7 +472,7 @@
   "dockMargin": 0,
   "dockIconSize": 33,
   "dockIndicatorStyle": "circle",
-  "dockBorderEnabled": false,
+  "dockBorderEnabled": true,
   "dockBorderColor": "surfaceText",
   "dockBorderOpacity": 1,
   "dockBorderThickness": 1,
@@ -487,8 +487,8 @@
   "dockMaxVisibleApps": 0,
   "dockMaxVisibleRunningApps": 0,
   "dockShowOverflowBadge": true,
-  "dockShowTrash": false,
-  "dockTrashFileManager": "default",
+  "dockShowTrash": true,
+  "dockTrashFileManager": "dolphin",
   "dockTrashCustomCommand": "",
   "notificationOverlayEnabled": false,
   "notificationPopupShadowEnabled": true,
@@ -516,7 +516,7 @@
   "lockPamExternallyManaged": false,
   "lockU2fPamPath": "",
   "lockScreenInactiveColor": "#000000",
-  "lockScreenNotificationMode": 0,
+  "lockScreenNotificationMode": 2,
   "lockScreenVideoEnabled": false,
   "lockScreenVideoPath": "",
   "lockScreenVideoCycling": false,
@@ -606,10 +606,10 @@
   },
   "activeDisplayProfileModes": {
     "niri": {
-      "DP-2": {
+      "DP-1": {
         "mode": "3840x2160@59.997"
       },
-      "DP-1": {
+      "DP-2": {
         "mode": "3840x2160@59.997"
       }
     }
@@ -645,7 +645,11 @@
           "enabled": true,
           "mediaSize": 3
         },
-        "weather"
+        "weather",
+        {
+          "id": "dcalUpcoming",
+          "enabled": true
+        }
       ],
       "rightWidgets": [
         "systemTray",
