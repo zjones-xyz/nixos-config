@@ -2,9 +2,12 @@
 
 {
   # ── NVIDIA proprietary driver (RTX 4070, Ada) ───────────────────────────────
-  # Ada-generation cards run fine on the current proprietary driver with the
-  # OPEN kernel modules (hardware.nvidia.open = true). This is the supported
-  # path for Turing and newer — do NOT pin a legacy driver here.
+  # Ada-generation cards normally run the current proprietary driver with the
+  # OPEN kernel modules (hardware.nvidia.open = true) — that's the supported
+  # path for Turing and newer, and do NOT pin a legacy driver here.
+  #
+  # TEMPORARY EXCEPTION: `open = false` below, pending a kernel-7.2 fix — see
+  # the comment on `hardware.nvidia.open`.
   #
   # The dual-GTX-1070 (Pascal) box is a SEPARATE node precisely because adding
   # Pascal cards would force this whole host onto the frozen 580 legacy branch.
@@ -17,52 +20,37 @@
 
   hardware.nvidia = {
     modesetting.enable = true;
-    open = true; # open kernel modules — supported on Ada
     nvidiaSettings = true;
     # `production` is the conservative default (well-tested). Swap to
     # `config.boot.kernelPackages.nvidiaPackages.latest` if a needed fix or
     # newer-GPU support lands there — see hosts/pegasus/DECISIONS.md.
-    #
-    # `.open` (not `.mod` — that's the closed-source module path, unused
-    # here since `open = true` above) fails to build against kernel 7.2:
-    # kernel 7.2 dropped strncpy()'s declaration from <linux/string.h>
-    # entirely (only strscpy() remains — confirmed directly against
-    # `linuxPackages_latest.kernel.dev`'s headers for this pin; strcpy,
-    # memcpy, and the rest are untouched). nvidia-open 595.71.05 still
-    # calls strncpy() directly in four spots: kernel-open/nvidia/os-interface.c,
-    # kernel-open/nvidia/linux_nvswitch.c (x2), kernel-open/nvidia-uvm/uvm_pmm_gpu.c,
-    # and kernel-open/nvidia-modeset/nvidia-modeset-linux.c (NVIDIA's own
-    # nvkms_strncpy wrapper). `#define`s a local compat shim with strncpy's
-    # exact classic semantics (fixed-length copy, zero-pad remainder, no
-    # guaranteed NUL-termination) into each, rather than switching call
-    # sites to strscpy() and risking a padding/truncation behavior change.
-    # Not yet patched upstream in nixpkgs as of this pin. Safe to drop once
-    # nixpkgs' nvidia-x11 expression picks up a fix (or a newer driver
-    # version that no longer calls strncpy()).
-    package = config.boot.kernelPackages.nvidiaPackages.production // {
-      open = config.boot.kernelPackages.nvidiaPackages.production.open.overrideAttrs (old: {
-        postPatch = (old.postPatch or "") + ''
-          cat > "$TMPDIR/nv-strncpy-compat.h" <<'EOF'
-          #include <linux/string.h>
-          static inline char *nv_compat_strncpy(char *dest, const char *src, size_t n)
-          {
-              size_t i;
-              for (i = 0; i < n && src[i] != '\0'; i++)
-                  dest[i] = src[i];
-              for (; i < n; i++)
-                  dest[i] = '\0';
-              return dest;
-          }
-          #define strncpy nv_compat_strncpy
-          EOF
-          for f in kernel-open/nvidia/os-interface.c \
-                   kernel-open/nvidia/linux_nvswitch.c \
-                   kernel-open/nvidia-uvm/uvm_pmm_gpu.c \
-                   kernel-open/nvidia-modeset/nvidia-modeset-linux.c; do
-            sed -i "0r $TMPDIR/nv-strncpy-compat.h" "$f"
-          done
-        '';
-      });
-    };
+    package = config.boot.kernelPackages.nvidiaPackages.production;
+    # `open` forced false (was `true`): nvidia-open 595.71.05's kernel-open/
+    # sources don't build against kernel 7.2. Two issues found so far, of
+    # growing severity:
+    #   1. kernel 7.2 dropped strncpy()'s declaration from <linux/string.h>
+    #      entirely (only strscpy() remains) — fixable, was patched via a
+    #      local compat shim in postPatch.
+    #   2. kernel 7.2 also renamed `struct drm_atomic_state` to
+    #      `struct drm_atomic_commit` and removed/renamed its lifecycle
+    #      functions (drm_atomic_state_alloc/_free/_put/_init/_default/_clear)
+    #      — a real DRM-subsystem API restructure, not a rename-only shim
+    #      candidate: 44 call sites across 7 files in kernel-open/nvidia-drm/,
+    #      and it's not clear from the kernel source alone whether object
+    #      allocation/ownership semantics changed along with the names. Bad
+    #      guesses here risk a driver that *compiles* but misbehaves at
+    #      runtime (KMS/Wayland corruption, hangs), not a clean build
+    #      failure — too risky to hand-patch blind.
+    # Falling back to the closed/proprietary kernel module path instead of
+    # chasing (2). NOTE: nvidia-x11's kernel-interface glue (including
+    # nvidia-drm/*.c) has been substantially unified between the open and
+    # closed variants for a long time, so this may hit the exact same
+    # drm_atomic_state break — unverified, since the closed driver's `.run`
+    # installer is fetched from download.nvidia.com, which this sandbox
+    # can't reach. If `nrs` on pegasus still fails here, the real fix is
+    # pinning `boot.kernelPackages` to `pkgs.linuxKernel.packages.linux_7_1`
+    # (present in this nixpkgs pin) until nixpkgs/NVIDIA ship a real 7.2 fix.
+    # Revert to `open = true` (drop this whole override) once that lands.
+    open = false;
   };
 }
