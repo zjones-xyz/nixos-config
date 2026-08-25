@@ -116,6 +116,9 @@
     # FreeIPMI-not-ipmitool rationale.
     freeipmi
 
+    # Desktop GUI for Borg.
+    vorta
+
     # Archive handling — wasn't anywhere in the package set (system or home).
     unzip
     p7zip
