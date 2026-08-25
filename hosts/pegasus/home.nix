@@ -189,7 +189,9 @@
 
     # ── Found on Serenity's /Applications, not yet replicated (2026-07-12) ────
     calibre # ebook library management
-    makemkv # disc ripping, pairs with the jellyfin/vlc media stack
+    # makemkv disabled 2026-08-25: makemkv.com origin returning Cloudflare 525
+    # (SSL handshake failed), blocking nrs. Re-enable once it's reachable again.
+    # makemkv # disc ripping, pairs with the jellyfin/vlc media stack
     filebot # media file renaming/organizing, same media stack
     arduino-ide
     proton-vpn # renamed from protonvpn-gui upstream
