@@ -49,7 +49,7 @@
   # allowUnfree is already set globally in modules/nixos/common.nix, which
   # pegasus imports — vscode/google-chrome/vivaldi/1Password/discord/spotify/
   # ticktick/obsidian/bambu-studio are all unfree and need it; firefox/
-  # ferdium/openscad/orca-slicer/streamdeck-ui are free/open.
+  # ferdium/signal-desktop/openscad/orca-slicer/streamdeck-ui are free/open.
   #
   # Brain.fm was left out — no nixpkgs package, no native Linux client
   # anywhere (subscription web app only); usable via firefox/chrome.
@@ -65,6 +65,7 @@
 
     discord
     ferdium
+    signal-desktop
     openscad
     obsidian
     spotify
