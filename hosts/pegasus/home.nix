@@ -70,13 +70,7 @@
     jellyfin-desktop
     vlc
 
-    # Alternative file managers, alongside Dolphin (Plasma's default, pulled
-    # in via services.desktopManager.plasma6.enable) — for hands-on
-    # comparison the same way Albert/Vicinae were both installed below.
-    # Standalone home.packages entries rather than DE session integration:
-    # niri's portal already wires a Nautilus dbus-service backend for the
-    # FileChooser portal (modules/nixos/desktop-niri.nix), but that's a
-    # backend service, not this GUI app.
+    # file managers
     nemo
     nautilus
     thunar
