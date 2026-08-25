@@ -1,0 +1,21 @@
+{
+  "dankLauncherKeys": {
+    "enabled": true
+  },
+  "dmsThemeSync": {
+    "enabled": false
+  },
+  "dcalUpcoming": {
+    "enabled": true,
+    "dynamicWidth": true,
+    "pillMaxWidth": 300,
+    "lookAheadDays": 1,
+    "calendarIds": [
+      "8dd5ac2b-0f6e-4caf-a4db-81cd5a32edbd",
+      "9f8ff8bb-3874-48af-98f8-7e282a2a5f0d"
+    ]
+  },
+  "qcalCalendar": {
+    "enabled": true
+  }
+}
