@@ -847,3 +847,13 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   Validated with `flake-check-sandboxed.sh` (exit 0). Not yet confirmed on
   hardware — needs `nixos-rebuild switch` + checking whether the printer
   now appears automatically in Bambu Studio's device list.
+
+- **Signal Desktop added, 2026-08-25.** `signal-desktop` confirmed present in
+  the pinned nixpkgs (v7.83.0, license AGPL-3.0-only — free, no
+  `allowUnfree` needed) before adding, same practice as the original
+  2026-07-11 desktop-apps batch. Added to `home.packages` alongside the
+  other chat clients (discord, ferdium). No further wiring needed —
+  Signal's own account linking (scan a QR code from an existing mobile
+  install) happens interactively on first launch, same as Discord/Ferdium
+  needed no declarative account setup.
+  Validated with `flake-check-sandboxed.sh`. Not yet confirmed on hardware.
