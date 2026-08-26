@@ -162,6 +162,19 @@ in
   # failure mode, so it costs nothing to have it fail closed regardless.
   systemd.services.borgmatic.unitConfig.RequiresMountsFor = [ "/home" ];
 
+  # Upstream's borgmatic.timer already runs daily with a 10-minute
+  # RandomizedDelaySec and Persistent=true (catches up a missed run) — this
+  # only pins the time of day to 1 AM instead of midnight. Same list-element
+  # trick as the LoadCredentialEncrypted override above and for the same
+  # reason: OnCalendar= is a repeatable systemd directive, so a drop-in's
+  # OnCalendar=01:00 would just ADD a second daily trigger alongside the
+  # upstream OnCalendar=daily rather than replacing it. The leading empty
+  # string renders a bare `OnCalendar=` clearing line first.
+  systemd.timers.borgmatic.timerConfig.OnCalendar = lib.mkForce [
+    ""
+    "01:00"
+  ];
+
   # Provisioning status: keypair generated, pegasus-home repo created on
   # BorgBase with the append-only key registered, and the passphrase/ssh_key
   # secrets are in secrets/pegasus.yaml (2026-08-26). Remaining steps tracked
