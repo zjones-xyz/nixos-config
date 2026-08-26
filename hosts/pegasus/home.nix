@@ -43,6 +43,18 @@
     dms-settings-snapshot = "~/nixos-config/scripts/dms-settings.sh snapshot";
     dms-settings-restore = "~/nixos-config/scripts/dms-settings.sh restore";
     dms-settings-diff = "~/nixos-config/scripts/dms-settings.sh diff";
+
+    # Ad-hoc `sops secrets/pegasus.yaml` edits from pegasus itself, without
+    # needing Serenity's admin age key. `.sops.yaml` already lists pegasus's
+    # own host SSH key (&pegasus) as a recipient for that file — the only
+    # real blocker is that /etc/ssh/ssh_host_ed25519_key is root-only, and
+    # plain `sops` doesn't know to look there. z already has passwordless
+    # sudo (wheel, security.sudo.wheelNeedsPassword in common.nix), so this
+    # just runs sops as root with the right identity pointed out, forwarding
+    # $EDITOR through explicitly since sudo resets the environment by
+    # default. Usage is identical to plain sops, e.g.
+    # `sops-hostkey secrets/pegasus.yaml`.
+    sops-hostkey = ''sudo env SOPS_AGE_SSH_PRIVATE_KEY_FILE=/etc/ssh/ssh_host_ed25519_key EDITOR="$EDITOR" sops'';
   };
 
   # ── Desktop apps ────────────────────────────────────────────────────────────
