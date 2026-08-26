@@ -128,9 +128,17 @@ in
   # Extends the existing sops block in configuration.nix (same hasSops gate,
   # same pattern as the tailscale authKey / z's SSH key already there).
   sops = lib.mkIf hasSops {
-    secrets."borgmatic/passphrase" = { };
+    # owner = "z" (rather than the default root) so Vorta — a GUI Vorta runs
+    # as z, not root — can read the same passphrase and key borgmatic's
+    # systemd service uses, instead of provisioning a second BorgBase
+    # identity just for browsing/restoring what the first one already wrote.
+    # Root still reads both fine regardless of file ownership: the packaged
+    # borgmatic.service runs as root with CAP_DAC_READ_SEARCH retained in its
+    # CapabilityBoundingSet, which bypasses the read permission check.
+    secrets."borgmatic/passphrase" = { owner = "z"; };
     secrets."borgmatic/ssh_key" = {
       path = "/var/lib/borgmatic/ssh/id_ed25519";
+      owner = "z";
       mode = "0400";
     };
   };
