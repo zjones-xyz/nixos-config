@@ -88,7 +88,22 @@ in
     authKeyFile = lib.mkIf hasSops config.sops.secrets."tailscale/authKey".path;
   };
   networking.firewall.trustedInterfaces = [ "tailscale0" ];
-  networking.firewall.allowedUDPPorts = [ config.services.tailscale.port ];
+  networking.firewall.allowedUDPPorts = [
+    config.services.tailscale.port
+
+    # Bambu Lab printer LAN-mode auto-discovery: the printer periodically
+    # broadcasts its presence over UDP (source port 1900), and Bambu
+    # Studio/OrcaSlicer just listen for it on 2021 — nothing sends a query
+    # first, so the default stateful firewall drops it as unsolicited
+    # inbound unless the port is opened. 1900 is also opened since some
+    # printer firmware/slicer combos use it directly rather than just as
+    # the broadcast's source port. Requires the printer to actually be on
+    # the same L2 broadcast domain as this host (crosses a LAN<->WLAN
+    # bridge fine if the AP bridges them into one domain; doesn't cross a
+    # router/VLAN boundary without a relay).
+    2021
+    1900
+  ];
 
   # ── Remote Desktop (xrdp) ────────────────────────────────────────────────────
   # SUPERSEDED KRDP (KWin's built-in RDP server) — see DECISIONS.md. KRDP only

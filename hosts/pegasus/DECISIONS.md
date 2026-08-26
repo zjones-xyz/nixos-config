@@ -699,3 +699,161 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   `mkForce` lines in `modules/nixos/keyring.nix` plus disabling gnome-keyring.
   **Not verified on hardware** — the switch, and which daemon ends up owning
   the bus name afterward, still needs a real login. See MANUAL-STEPS.md §19.
+
+- **DMS settings.json → snapshot/restore script, not a Home-Manager symlink**
+  (2026-08-21). *alt:* `config.lib.file.mkOutOfStoreSymlink` pointing
+  `~/.config/DankMaterialShell/settings.json` at a repo-tracked file, for
+  live GUI edits to land directly in the git working tree. *Why rejected:*
+  DMS persists settings via Quickshell's `FileView { atomicWrites: true }`
+  (`Common/SettingsData.qml`), which writes a temp file and `rename()`s it
+  over the target path. `rename()` onto a symlinked path replaces the
+  symlink itself rather than following it to the target — so the first
+  setting toggled through the DMS GUI would silently detach
+  `settings.json` from the repo and turn it back into an ordinary file, with
+  no error surfaced. `home.file`'s in-store form has the same problem plus
+  it's read-only to begin with (DMS does detect that case — `onSaveFailed`
+  sets an internal read-only flag — but that only means it fails safe, not
+  that edits reach git).
+  Went with `scripts/dms-settings.sh snapshot|restore` instead: `snapshot`
+  copies the live file to `hosts/pegasus/dms-settings.json` for manual
+  review/commit, `restore` copies it back (refuses to clobber an existing
+  live file unless `FORCE=1`). `home.nix`'s `seedDmsSettings` activation
+  script additionally seeds a *fresh* host (no live file yet) from that
+  checkpoint, so a rebuild-from-scratch starts from the last-known-good
+  config rather than DMS's defaults — it never touches an already-existing
+  live file, so it can't clobber an in-progress GUI experiment.
+  Checked the settings schema for anything that shouldn't be committed in
+  plaintext: nothing secret (one unrelated `lockScreenShowPasswordField`
+  bool); it does capture `weatherLocation`/`weatherCoordinates` if those get
+  set, worth knowing before committing.
+  **No checkpoint committed yet** — `hosts/pegasus/dms-settings.json` only
+  exists after `dms-settings-snapshot` is run on real hardware with a DMS
+  config worth keeping; nothing here fabricates one.
+  **Extended 2026-08-23** to also cover `plugin_settings.json` (per-plugin
+  enabled flag + config — a second file DMS saves the same atomic way,
+  separate from `settings.json`), and added a `diff` action (compares live
+  vs. checkpoint without touching either — what `snapshot` would capture or
+  `restore` would overwrite). `snapshot`/`restore`/`diff` all now take an
+  optional `[settings|plugins|all]` target, defaulting to `all`; `home.nix`'s
+  `seedDmsSettings` seeds both checkpoints independently, same never-clobber
+  rule as before.
+
+- **Bambu Studio blank build plate (Prepare/Preview tabs), 2026-08-22 — fixed
+  via `overrideAttrs` in `hosts/pegasus/home.nix`, routing its OpenGL canvas
+  through Mesa + Zink instead of the NVIDIA vendor GL libs.** *alt 1:* bump
+  this flake's shared `nixpkgs` input to a post-2026-05-27 `release-26.05`
+  revision and use the real `withNvidiaGLWorkaround` package arg upstream
+  shipped for exactly this. *Why not:* `nixpkgs` is a single input shared by
+  every host in the fleet (`hosts/*`), so that bump would move package
+  versions fleet-wide just to fix one desktop app on one host — too broad a
+  blast radius for this. *alt 2:* switch to the Flatpak build (several
+  reports it renders fine on identical NixOS/NVIDIA hardware) or to
+  OrcaSlicer. *Why not:* this repo has no Flatpak plumbing, and OrcaSlicer is
+  a separate app already installed alongside Bambu Studio, not a substitute
+  for Bambu-specific cloud features.
+  *Why the bug happens:* not niri/xwayland-satellite-specific — Bambu
+  Studio's wxWidgets OpenGL canvas is broadly fragile against NVIDIA's
+  proprietary GL on Linux; the toolbars/panels are plain widgets and render
+  fine, only the GL-backed 3D canvas doesn't. Same symptom reported across
+  Hyprland, GNOME, KDE X11, and Docker+NVIDIA — tracked upstream at
+  https://github.com/NixOS/nixpkgs/issues/498311. nixpkgs fixed it via a
+  `withNvidiaGLWorkaround` package arg
+  (https://github.com/NixOS/nixpkgs/pull/522161, merged + backported to
+  `release-26.05` 2026-05-27) that sets four env vars forcing the GL context
+  through Mesa's Zink driver (OpenGL-over-Vulkan, still hardware-accelerated
+  via NVIDIA's own Vulkan ICD) instead of NVIDIA's GLX/EGL vendor libs. This
+  flake's `nixpkgs` was locked 2026-01-08, well before that merge, so the
+  fix is hand-applied via `overrideAttrs` appending the same
+  `gappsWrapperArgs` the upstream fix uses, rather than waiting for the pin
+  to catch up.
+  **Confirmed on hardware, same day:** the build plate renders correctly
+  after `nixos-rebuild switch` on pegasus.
+
+  **Superseded same day** by pulling `bambu-studio` from a second, standalone
+  `nixpkgs-bambu-studio` flake input pinned to commit `13b979d` (2026-05-27,
+  `git+https://github.com/NixOS/nixpkgs.git?rev=13b979d75662827615c1de6dd22f87e6296ba71d`)
+  instead of the hand-rolled `overrideAttrs`. That commit both bumps
+  `bambu-studio` to 02.05.00.67 (from this flake's pinned 02.03.01.51 — two
+  version bumps: 02.04.00.70, then 02.05.00.67) *and* already carries the
+  real `withNvidiaGLWorkaround` package arg, so `hosts/pegasus/home.nix` now
+  just does `pkgs'.bambu-studio.override { withNvidiaGLWorkaround = true; }`
+  against that pinned `pkgs'` — the actual upstream fix, not a hand-copied
+  reimplementation of it — while keeping the same "don't touch the shared
+  `nixpkgs` input" reasoning above (same blast-radius argument, this is a
+  second isolated input, not a bump of the fleet-wide one).
+  One gotcha hit doing this: `nixpkgs-bambu-studio.legacyPackages.<system>`
+  (unlike the main `nixpkgs`, which gets `nixpkgs.config.allowUnfree = true`
+  fleet-wide via `modules/nixos/common.nix`) has `allowUnfree` unset, and
+  `bambu-studio` was marked `agpl3Plus unfree` in nixpkgs the same day as the
+  GL fix (commit `4acf48b`) — evaluating it through plain `legacyPackages`
+  throws. Fixed by constructing the pkgs set explicitly in `flake.nix`
+  (`import nixpkgs-bambu-studio { system = ...; config.allowUnfree = true; }`)
+  instead of using `legacyPackages` directly.
+  Validated with `.claude/hooks/flake-check-sandboxed.sh` (`nix flake check`
+  against every input rewritten to git+https at its exact locked rev, to
+  route around this sandboxed session's GitHub-tarball-fetch 403 — see that
+  script's own header comment) — exits 0 across all five configs. Actual
+  `nixos-rebuild switch` + relaunch on pegasus still needed to confirm this
+  refactor didn't change runtime behavior versus the already-confirmed
+  hand-rolled version.
+
+- **OrcaSlicer bumped 2.3.1 -> 2.3.2, 2026-08-22** — pulled from a third
+  standalone flake input, `nixpkgs-orca-slicer`, pinned to nixpkgs commit
+  `e749b91` (2026-03-23, the exact commit that bumped `orca-slicer` in
+  nixpkgs), for the same reason and via the same mechanism as
+  `nixpkgs-bambu-studio` above. *alt considered:* hand-override
+  `version`/`src`/hash to chase OrcaSlicer's actual upstream latest stable
+  (v2.4.2, 2026-07-07) directly, skipping nixpkgs entirely. *Why not, for
+  now:* nixpkgs hasn't packaged anything past 2.3.2 yet (checked
+  `release-26.05` HEAD 2026-08-22), so there's no already-vetted patch set
+  for 2.4.x to build against — this repo's existing patches (webkit linking,
+  opencv, cmake4, gcc15 stdint) are pinned to what 2.3.x needs, and
+  reworking them by hand with no build/eval access in this session to
+  validate against was judged not worth the risk for a UI that (confirmed on
+  hardware, same day) already renders correctly at 2.3.1 — unlike Bambu
+  Studio, this one isn't fixing a real bug, just chasing a newer version.
+  No GL workaround applied here: OrcaSlicer's own NVIDIA/Zink route has a
+  documented regression risk the Bambu Studio one doesn't (Zink reportedly
+  breaks OrcaSlicer's Home/Device/Project pages and printer/filament preset
+  dialogs on some driver versions — see
+  https://github.com/OrcaSlicer/OrcaSlicer/issues/9474, closed
+  not-planned/stale) — moot here since this host's viewport already works
+  without it.
+  Validated the same way as `nixpkgs-bambu-studio` above
+  (`flake-check-sandboxed.sh`, exit 0). Not yet confirmed with a real
+  `nixos-rebuild switch` on pegasus.
+
+- **Opened UDP 2021 + 1900 on the firewall for Bambu printer LAN
+  auto-discovery, 2026-08-22.** Bambu/Orca don't send a discovery query —
+  the printer periodically broadcasts its presence over UDP (source port
+  1900), and the slicer just listens for it on 2021. `networking.firewall.
+  enable = true` is set fleet-wide (`modules/nixos/common.nix`), and until
+  now nothing on pegasus opened either port, so that unsolicited inbound
+  broadcast was silently dropped — the printer likely wasn't appearing on
+  its own in LAN-only mode. *alt considered:* skip the firewall change
+  entirely and add the printer manually by IP + access code in Bambu
+  Studio (Device tab), since every actual data-plane connection — file
+  send over FTPS, MQTT status, camera stream — is outbound from the
+  slicer and was already unaffected by the firewall. *Why not:* Zoe wants
+  real auto-discovery, not just a workaround.
+  Requires the printer to be on the same L2 broadcast domain as pegasus —
+  confirmed same VLAN, bridged across a LAN/WLAN boundary (i.e. wired
+  pegasus, printer on Wi-Fi, same AP/VLAN) rather than crossing an actual
+  router/VLAN boundary, which broadcast wouldn't survive without a relay
+  (e.g. https://github.com/inindev/bambu-bridge). If discovery still
+  doesn't work after this, suspect client isolation on the AP (common on
+  guest/IoT SSIDs, blocks broadcast between wireless clients even on the
+  same subnet) before assuming the firewall rule is wrong.
+  Validated with `flake-check-sandboxed.sh` (exit 0). Not yet confirmed on
+  hardware — needs `nixos-rebuild switch` + checking whether the printer
+  now appears automatically in Bambu Studio's device list.
+
+- **Signal Desktop added, 2026-08-25.** `signal-desktop` confirmed present in
+  the pinned nixpkgs (v7.83.0, license AGPL-3.0-only — free, no
+  `allowUnfree` needed) before adding, same practice as the original
+  2026-07-11 desktop-apps batch. Added to `home.packages` alongside the
+  other chat clients (discord, ferdium). No further wiring needed —
+  Signal's own account linking (scan a QR code from an existing mobile
+  install) happens interactively on first launch, same as Discord/Ferdium
+  needed no declarative account setup.
+  Validated with `flake-check-sandboxed.sh`. Not yet confirmed on hardware.

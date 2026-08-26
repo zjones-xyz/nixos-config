@@ -340,9 +340,27 @@
       # niri-flake's config.lib.niri.actions cache either (they take
       # optional properties, e.g. show-pointer) — same documented
       # action.<name>=value form as above.
+      #
+      # This host's keyboard (RDR Alice, a compact Alice-layout board) has no
+      # dedicated PrtSc key — confirmed by Zoe 2026-08-20, physically sends
+      # Print Screen via Fn+K. Firmware-level mapping, not something this
+      # config (or niri) controls; recorded here since it's the non-obvious
+      # half of "how do I actually trigger these binds".
       "Print".action.screenshot = { };
       "Ctrl+Print".action.screenshot-screen = { };
       "Alt+Print".action.screenshot-window = { };
+
+      # Markup pass on whatever the binds above just put on the clipboard —
+      # niri copies every screenshot to the clipboard automatically (see
+      # home.nix's programs.swappy comment for the doc citation), so this is
+      # deliberately NOT a grim+slurp+swappy pipeline, which would duplicate
+      # the capture niri already does above. swappy itself only edits, it
+      # doesn't capture. wl-paste comes from wl-clipboard, swappy is enabled
+      # + configured via programs.swappy — both in home.nix.
+      "Mod+Shift+S" = {
+        hotkey-overlay.title = "Annotate Last Screenshot (swappy)";
+        action = spawn-sh "wl-paste --type image/png | swappy -f -";
+      };
 
       # Escape hatch for exactly the situation this host is tested under —
       # remote/KVM input — kept from the original template unchanged.

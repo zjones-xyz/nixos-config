@@ -7,10 +7,10 @@
 # borgmatic via the real `services.borgmatic` module: declarative, checked at
 # build time (`enableConfigCheck`, on by default), no Docker indirection.
 #
-# ⚠ NOT evaluated or built from where this was written — no `nix` available in
-# that environment. Cross-referenced directly against the nixpkgs module
-# source (`nixos/modules/services/backup/borgmatic.nix`) rather than recalled,
-# but run `nix flake check` / build this for real before trusting it.
+# Validated 2026-08-22 against the pinned nixpkgs tree's borgmatic 2.1.5: the
+# generated YAML was hand-translated and run through `borgmatic config
+# validate` directly, and `nix flake check` passes for pegasus with this
+# imported. Still needs a real `nixos-rebuild switch` on the box itself.
 #
 # Same per-service-file spirit as Tower's `hosts/galactica/borgmatic/*.yaml`
 # (BACKUP.md §4c/§4d's "unit of configuration" reasoning), kept as its own
@@ -101,22 +101,23 @@ in
         { name = "archives"; frequency = "1 month"; }
       ];
 
-      # ⟨Commented out for now — no Kuma push monitor exists yet for this
-      # config. Re-enable once one's created, matching Tower's files.⟩
-      # uptime_kuma = {
-      #   push_url = "https://kuma.hopper.internal/api/push/REPLACE";
-      #   states = [ "start" "finish" "fail" ];
+      # Monitoring deliberately deferred to BorgBase's own inactivity alerting
+      # (docs/BACKUP.md §6: "Turn on BorgBase's own inactivity alerting... as
+      # a heartbeat that does not depend on hopper being up") rather than
+      # ntfy/Uptime Kuma hooks — Zoe's call, 2026-08-22, same reasoning as why
+      # this config carries no uptime_kuma block either: no point wiring a
+      # second monitor when the provider's own is a config-free toggle in its
+      # UI. Revisit if that stops being enough (e.g. wanting a signal that
+      # doesn't depend on BorgBase itself being reachable/up).
+      # ntfy = {
+      #   topic = "pegasus-backup";
+      #   server = "https://ntfy.hopper.internal";
+      #   fail = {
+      #     title = "pegasus-home FAILED";
+      #     message = "pegasus's home directory did not back up. Check journalctl -u borgmatic on pegasus.";
+      #     priority = "urgent";
+      #   };
       # };
-
-      ntfy = {
-        topic = "pegasus-backup";
-        server = "https://ntfy.hopper.internal";
-        fail = {
-          title = "pegasus-home FAILED";
-          message = "pegasus's home directory did not back up. Check journalctl -u borgmatic on pegasus.";
-          priority = "urgent";
-        };
-      };
     };
   };
 
@@ -131,6 +132,29 @@ in
     };
   };
 
+  # The upstream borgmatic.service ships `LoadCredentialEncrypted=borgmatic.pw`
+  # (systemd-creds, TPM-backed) as its default secret-delivery mechanism — this
+  # fleet uses sops-nix for every other secret, not systemd-creds, and without
+  # this override the unit fails to start outright (systemd refuses to start a
+  # service whose LoadCredentialEncrypted target is missing). Verified
+  # directly (2026-08-22) that a `[""]` override is what's needed: NixOS's
+  # systemd module renders `systemd.services.<name>.serviceConfig` as a
+  # drop-in layered ON TOP of the package-provided unit — drop-ins add to
+  # list-type directives rather than replacing them, so `mkForce []` (an empty
+  # Nix list) renders no line at all and leaves the upstream directive
+  # in effect. A single empty-string list element renders the bare
+  # `LoadCredentialEncrypted=` line systemd itself treats as "clear everything
+  # assigned so far" — confirmed by building this repo's actual generated
+  # unit and reading the rendered drop-in.
+  systemd.services.borgmatic.serviceConfig.LoadCredentialEncrypted = lib.mkForce [ "" ];
+
+  # /home is a subvolume mount of pegasus's own root pool (hosts/pegasus/
+  # disko.nix), not expected to ever be absent — but this is the cheap,
+  # declarative guard docs/BACKUP.md §3b calls out for the "backup ran,
+  # reported success, and silently backed up an empty/unmounted directory"
+  # failure mode, so it costs nothing to have it fail closed regardless.
+  systemd.services.borgmatic.unitConfig.RequiresMountsFor = [ "/home" ];
+
   # ⚠ Needs a human, same shape as hosts/pegasus/SECRETS-TODO.md's existing
   # entries — not created here:
   #   1. Generate a dedicated ed25519 keypair for this repo (do NOT reuse
@@ -142,6 +166,9 @@ in
   #   3. ssh-keyscan the BorgBase host into /var/lib/borgmatic/ssh/known_hosts
   #      on pegasus once (not secret, doesn't need sops).
   #   4. sops updatekeys secrets/pegasus.yaml, commit, deploy.
-  # Until all four are done, the systemd timer will fire on schedule and fail
+  #   5. Turn on BorgBase's own inactivity alerting for this repo in its UI
+  #      (docs/BACKUP.md §6) — the monitoring signal this config relies on,
+  #      since no ntfy/Kuma hook is wired here.
+  # Until all steps are done, the systemd timer will fire on schedule and fail
   # loudly against a REPLACE repository URL — that's expected, not a bug.
 }

@@ -34,13 +34,13 @@
     # Exact invocations and the argument-parsing gotchas are in
     # hosts/galactica/PLATFORM.md §2.
     freeipmi
-    gh
     neovim
     nmap
     sl  # for lolz — steam locomotive when you fat-finger `ls`
     sops
     unzip
     wget
+    zeal # offline API docs — same package as pegasus's home.nix (Dash-alike)
 
     # ── Backend / frontend dev tooling ─────────────────────────────────────
     # .NET 8 SDK — nixpkgs build is not broken on aarch64-darwin (meta.broken=false).
