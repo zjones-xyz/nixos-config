@@ -63,12 +63,19 @@ in
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # Stock latest mainline kernel (NOT a CachyOS/Chaotic kernel). sched-ext is
-  # upstream since 6.12, so the stock kernel is all scx needs — see
-  # modules/nixos/performance.nix. If the NVIDIA production driver ever lags the
-  # bleeding-edge kernel, drop this line to fall back to the default kernel
-  # (still >= 6.12). See hosts/pegasus/DECISIONS.md.
-  boot.kernelPackages = pkgs.linuxPackages_latest;
+  # Stock mainline kernel (NOT a CachyOS/Chaotic kernel). sched-ext is
+  # upstream since 6.12, so any of these kernels is all scx needs — see
+  # modules/nixos/performance.nix.
+  #
+  # Pinned to 7.1 (was `linuxPackages_latest`, i.e. 7.2): the NVIDIA
+  # production driver (both nvidia-open and the closed/proprietary kernel
+  # module — confirmed both) doesn't build against 7.2's kernel-interface
+  # changes (strncpy() dropped from <linux/string.h>; the DRM atomic API
+  # renamed struct drm_atomic_state -> drm_atomic_commit and restructured
+  # its lifecycle functions). See hosts/pegasus/DECISIONS.md and the git
+  # history on modules/nixos/nvidia.nix for what was tried. Bump back to
+  # `linuxPackages_latest` once nixpkgs/NVIDIA ship a real 7.2 fix.
+  boot.kernelPackages = pkgs.linuxPackages_7_1;
 
   # Fleet default (modules/nixos/common.nix) reboots 10s after a panic. Pegasus
   # has a physical display attached, so widen that to 600s — enough time to

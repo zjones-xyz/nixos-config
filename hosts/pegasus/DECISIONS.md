@@ -857,3 +857,42 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   install) happens interactively on first launch, same as Discord/Ferdium
   needed no declarative account setup.
   Validated with `flake-check-sandboxed.sh`. Not yet confirmed on hardware.
+
+- **Kernel pinned to 7.1 (`linuxPackages_7_1`), was `linuxPackages_latest`,
+  2026-08-25.** A routine flake bump moved `linuxPackages_latest` from
+  7.1.7 to 7.2, which broke the NVIDIA production driver two different
+  ways on real hardware:
+  1. Kernel 7.2 dropped `strncpy()`'s declaration from `<linux/string.h>`
+     entirely (only `strscpy()` remains). Fixable — patched via a local
+     compat shim (`#define strncpy nv_compat_strncpy`) into the four
+     nvidia-open files that call it directly.
+  2. With (1) fixed, the build got further and hit kernel 7.2 renaming
+     `struct drm_atomic_state` to `struct drm_atomic_commit` and
+     removing/renaming its lifecycle functions
+     (`drm_atomic_state_alloc/_free/_put/_init/_default/_clear`) — a real
+     DRM-subsystem API restructure, 44 call sites across 7 files in
+     nvidia-open's `kernel-open/nvidia-drm/`. Unlike (1), this isn't a
+     safe rename-only shim candidate: it's not verifiable from the kernel
+     header alone whether object allocation/ownership semantics changed
+     along with the names, and a wrong guess risks a driver that
+     *compiles* but misbehaves at runtime (KMS/Wayland corruption, hangs).
+  *alt tried:* fall back to `hardware.nvidia.open = false` (the closed/
+  proprietary kernel module) instead of chasing (2), on the theory that
+  its kernel-interface glue might have dodged the break. *Why not:*
+  confirmed on real hardware — the closed driver has its own separate
+  `kernel/` source tree (bundled inside the `.run` installer, distinct
+  from nvidia-open's `kernel-open/` GitHub tree) and it hit the identical
+  strncpy issue in its own copy of `os-interface.c`. Given that, and
+  that the closed tree's source isn't inspectable at all without a real
+  `download.nvidia.com` fetch (unfree, no public mirror), continuing to
+  patch blind against a wall already too risky to hand-patch in the
+  *readable* open tree was judged worse than just pinning the kernel back.
+  Pinning to 7.1 needs no driver-source patches at all — `hardware.nvidia`
+  in `modules/nixos/nvidia.nix` is back to its original clean state
+  (`open = true`, no `postPatch` overrides). Bump `boot.kernelPackages`
+  back to `linuxPackages_latest` once nixpkgs/NVIDIA ship a real 7.2 fix;
+  nothing in `nvidia.nix` needs to change when that happens.
+  Confirmed on real hardware: the strncpy fix and the drm_atomic_state
+  break were both hit via actual `nrs` runs on pegasus (not just eval).
+  The 7.1 kernel pin itself was validated with `flake-check-sandboxed.sh`
+  (exit 0) but not yet confirmed with a real `nixos-rebuild switch`.
