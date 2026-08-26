@@ -47,7 +47,7 @@ in
         "/home/z/.local/share/Steam"
         "/home/z/.steam"
         "/home/z/.config/discord"
-        "/home/z/.lmstudio"
+        "/home/z/.lmstudio" # model weights
 
         # Catch-all for model weights wherever they end up next, not just
         # today's .lmstudio/models — borg's default fnmatch style matches `*`
