@@ -47,6 +47,7 @@ in
         "/home/z/.local/share/Steam"
         "/home/z/.steam"
         "/home/z/.config/discord"
+        "/home/z/.lmstudio"
       ];
 
       repositories = [
