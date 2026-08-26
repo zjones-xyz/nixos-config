@@ -52,14 +52,15 @@ wiring automatically.
 7. [x] Run the first backup by hand and time it before trusting the systemd
        timer's default schedule:
        `borgmatic -c /etc/borgmatic.d/pegasus-home.yaml create`.
-8. [ ] Turn on BorgBase's own server-side pruning/retention for this repo in
-       its UI, matching the `keep_daily`/`keep_weekly`/`keep_monthly` values
-       in `hosts/pegasus/borgmatic.nix` — `prune`/`compact` are skipped in
-       the local config since the append-only key can't do either, so this
-       is the actual enforcement mechanism for routine retention. Manual
-       prune from pegasus itself is still possible on the rare occasion it's
-       needed, by temporarily switching the key to full access in BorgBase's
-       UI.
+8. [ ] Periodically trigger BorgBase's server-side compaction for this repo
+       (its UI: More > Compact repo, from the repo table) to reclaim the
+       disk space `prune` frees up logically but can't free physically over
+       an append-only key. `prune` itself already runs automatically every
+       night per `keep_daily`/`keep_weekly`/`keep_monthly` in
+       `hosts/pegasus/borgmatic.nix` — only `compact` is skipped there,
+       since it silently no-ops over an append-only key. No key changes
+       needed for this: BorgBase's dashboard button runs with its own
+       authority, not through pegasus's SSH key at all.
 
 ## Inference API keys (only if used)
 
