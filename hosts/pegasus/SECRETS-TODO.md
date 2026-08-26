@@ -24,25 +24,28 @@ wiring automatically.
 
 ## Borgmatic offsite backup (hosts/pegasus/borgmatic.nix)
 
-1. [ ] Generate a dedicated ed25519 keypair — do NOT reuse Tower's borgmatic
+1. [x] Generate a dedicated ed25519 keypair — do NOT reuse Tower's borgmatic
        key or z's own SSH key:
        ```sh
        ssh-keygen -t ed25519 -f pegasus-borgmatic -N ""
        ```
-2. [ ] Create the `pegasus-home` repo on BorgBase (see
+2. [x] Create the `pegasus-home` repo on BorgBase (see
        `hosts/galactica/borgmatic/README.md` for the account, if it doesn't
        exist yet) and register `pegasus-borgmatic.pub` as its append-only key.
-3. [ ] `sops secrets/pegasus.yaml` and add:
+3. [x] `sops secrets/pegasus.yaml` and add:
        ```yaml
        borgmatic:
          passphrase: <a new, distinct passphrase — do not reuse Tower's>
          ssh_key: |
            <contents of pegasus-borgmatic, the private half>
        ```
-4. [ ] `sops updatekeys secrets/pegasus.yaml`, commit, deploy.
-5. [ ] On pegasus, once deployed:
-       `ssh-keyscan <borgbase-host> >> /var/lib/borgmatic/ssh/known_hosts`
-       (not secret — doesn't go through sops).
+4. [x] `sops updatekeys secrets/pegasus.yaml`, commit, deploy.
+5. [x] On pegasus, once deployed:
+       `ssh-keyscan <borgbase-host> | sudo tee -a /var/lib/borgmatic/ssh/known_hosts`
+       (not secret — doesn't go through sops; `sudo` is needed since
+       sops-nix creates `/var/lib/borgmatic/ssh/` as root, and the plain
+       `>>` redirect form doesn't work through `sudo` — the shell opens
+       that file with the calling user's permissions before `sudo` runs).
 6. [ ] Turn on BorgBase's own inactivity alerting for this repo in its UI
        (docs/BACKUP.md §6) — that's the monitoring signal this config relies
        on; no ntfy/Kuma hook is wired for it.

@@ -50,12 +50,12 @@ in
 
       repositories = [
         {
-          # ⟨REPLACE — pegasus's own BorgBase repo. BACKUP.md §4b: borg wants
-          # one client per repository, so this is NOT tower-hot/tower-cold;
-          # it's a new repo against the same 950 GB budget. Append-only key
-          # for pegasus, separate prunable key on the admin machine, same
-          # shape as Tower's.⟩
-          path = "ssh://REPLACE@REPLACE.repo.borgbase.com/./pegasus-home";
+          # pegasus's own BorgBase repo (created 2026-08-26). BACKUP.md §4b:
+          # borg wants one client per repository, so this is NOT
+          # tower-hot/tower-cold; it's its own repo against the same 950 GB
+          # budget. Append-only key for pegasus, separate prunable key on the
+          # admin machine, same shape as Tower's.
+          path = "ssh://gtsko72z@gtsko72z.repo.borgbase.com/./repo";
           label = "pegasus-home";
           # ⚠ No `encryption:` here, unlike Tower's YAML files. The nixpkgs
           # module's `repository` submodule only declares `path`/`label` (no
@@ -155,20 +155,9 @@ in
   # failure mode, so it costs nothing to have it fail closed regardless.
   systemd.services.borgmatic.unitConfig.RequiresMountsFor = [ "/home" ];
 
-  # ⚠ Needs a human, same shape as hosts/pegasus/SECRETS-TODO.md's existing
-  # entries — not created here:
-  #   1. Generate a dedicated ed25519 keypair for this repo (do NOT reuse
-  #      Tower's or z's own SSH key): ssh-keygen -t ed25519 -f pegasus-borgmatic
-  #   2. Register the public half as BorgBase's append-only key for
-  #      pegasus-home; add the private half to secrets/pegasus.yaml under
-  #      borgmatic.ssh_key (sops secrets/pegasus.yaml), and a passphrase under
-  #      borgmatic.passphrase.
-  #   3. ssh-keyscan the BorgBase host into /var/lib/borgmatic/ssh/known_hosts
-  #      on pegasus once (not secret, doesn't need sops).
-  #   4. sops updatekeys secrets/pegasus.yaml, commit, deploy.
-  #   5. Turn on BorgBase's own inactivity alerting for this repo in its UI
-  #      (docs/BACKUP.md §6) — the monitoring signal this config relies on,
-  #      since no ntfy/Kuma hook is wired here.
-  # Until all steps are done, the systemd timer will fire on schedule and fail
-  # loudly against a REPLACE repository URL — that's expected, not a bug.
+  # Provisioning status: keypair generated, pegasus-home repo created on
+  # BorgBase with the append-only key registered, and the passphrase/ssh_key
+  # secrets are in secrets/pegasus.yaml (2026-08-26). Remaining steps tracked
+  # in hosts/pegasus/SECRETS-TODO.md — ssh-keyscan into known_hosts, turn on
+  # BorgBase's inactivity alerting, and run the first backup by hand.
 }
