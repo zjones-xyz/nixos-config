@@ -94,10 +94,29 @@ in
 
       # ⟨Proposal, not decided — same status as Tower's numbers. A desktop's
       # home directory churns less than Tower's documents share but is worth
-      # more than zero versioning.⟩
+      # more than zero versioning.⟩ Still worth keeping even though the
+      # nightly run never acts on it directly (see skip_actions below) — it's
+      # the retention policy to use for a manual prune once the key is
+      # temporarily bumped to full access.
       keep_daily = 7;
       keep_weekly = 4;
       keep_monthly = 6;
+
+      # The default action sequence (create, prune, compact, check) would
+      # fail every night: this repo's registered SSH key is append-only
+      # (see the repositories comment below), and BorgBase rejects both
+      # prune and compact over that key — they both need delete access.
+      # borgmatic treats a failed action as a CRITICAL log and exits 1
+      # either way, so left unskipped this would mark borgmatic.service
+      # failed nightly even though create itself succeeded. Zoe's call,
+      # 2026-08-26: rely on BorgBase's own server-side pruning for routine
+      # retention instead, and only prune/compact from pegasus by hand,
+      # after temporarily switching the key to full access in BorgBase's
+      # UI — see SECRETS-TODO.md.
+      skip_actions = [
+        "prune"
+        "compact"
+      ];
 
       checks = [
         { name = "repository"; frequency = "2 weeks"; }

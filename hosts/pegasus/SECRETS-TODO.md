@@ -49,9 +49,17 @@ wiring automatically.
 6. [ ] Turn on BorgBase's own inactivity alerting for this repo in its UI
        (docs/BACKUP.md §6) — that's the monitoring signal this config relies
        on; no ntfy/Kuma hook is wired for it.
-7. [ ] Run the first backup by hand and time it before trusting the systemd
+7. [x] Run the first backup by hand and time it before trusting the systemd
        timer's default schedule:
        `borgmatic -c /etc/borgmatic.d/pegasus-home.yaml create`.
+8. [ ] Turn on BorgBase's own server-side pruning/retention for this repo in
+       its UI, matching the `keep_daily`/`keep_weekly`/`keep_monthly` values
+       in `hosts/pegasus/borgmatic.nix` — `prune`/`compact` are skipped in
+       the local config since the append-only key can't do either, so this
+       is the actual enforcement mechanism for routine retention. Manual
+       prune from pegasus itself is still possible on the rare occasion it's
+       needed, by temporarily switching the key to full access in BorgBase's
+       UI.
 
 ## Inference API keys (only if used)
 
