@@ -46,6 +46,12 @@ in
       exclude_patterns = [
         "/home/z/.local/share/Steam"
         "/home/z/.steam"
+
+        # Electron app, so most of this is Chromium's own Cache/Code
+        # Cache/GPUCache — large, regenerable, and re-downloaded on login
+        # anyway. Settings themselves are trivial; excluding the whole
+        # directory is simpler than picking out the cache subdirs by hand.
+        "/home/z/.config/discord"
       ];
 
       repositories = [
