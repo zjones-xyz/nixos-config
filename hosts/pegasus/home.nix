@@ -276,6 +276,22 @@
     settings.shell = "${pkgs.zsh}/bin/zsh";
   };
 
+  # ── Home Assistant (local app) ──────────────────────────────────────────────
+  # Home Assistant ships official companion apps for iOS/Android only — the
+  # macOS/Windows "native apps" Zoe has used are third-party Electron
+  # wrappers (e.g. github.com/iprodanovbg/homeassistant-desktop), none of
+  # which are packaged in nixpkgs. Chrome's --app mode gets the same
+  # app-like window (no tabs/omnibox, its own taskbar entry) without adding
+  # an unpackaged Electron dependency. Points straight at the LAN instance
+  # (homeassistant.local:8123) — no cloud relay involved.
+  xdg.desktopEntries.home-assistant = {
+    name = "Home Assistant";
+    type = "Application";
+    exec = "${pkgs.google-chrome}/bin/google-chrome-stable --app=http://homeassistant.local:8123";
+    icon = "google-chrome";
+    categories = [ "Network" ];
+  };
+
   # ── Screenshot annotation (swappy) ──────────────────────────────────────────
   # niri's own Print/Ctrl+Print/Alt+Print binds (niri-settings.nix) already do
   # the actual *capturing* — niri implements screenshot capture itself at the
