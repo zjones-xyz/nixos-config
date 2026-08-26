@@ -46,6 +46,7 @@ in
       exclude_patterns = [
         "/home/z/.local/share/Steam"
         "/home/z/.steam"
+        "/home/z/.config/discord"
       ];
 
       repositories = [
