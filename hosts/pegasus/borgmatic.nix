@@ -48,10 +48,6 @@ in
         "/home/z/.steam"
         "/home/z/.config/discord"
         "/home/z/.lmstudio" # model weights
-
-        # Catch-all for model weights wherever they end up next, not just
-        # today's .lmstudio/models — borg's default fnmatch style matches `*`
-        # across path separators, so this hits any .gguf regardless of depth.
         "*.gguf"
       ];
 
