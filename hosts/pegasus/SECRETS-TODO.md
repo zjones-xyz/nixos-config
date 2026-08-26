@@ -40,9 +40,12 @@ wiring automatically.
            <contents of pegasus-borgmatic, the private half>
        ```
 4. [x] `sops updatekeys secrets/pegasus.yaml`, commit, deploy.
-5. [ ] On pegasus, once deployed:
-       `ssh-keyscan <borgbase-host> >> /var/lib/borgmatic/ssh/known_hosts`
-       (not secret — doesn't go through sops).
+5. [x] On pegasus, once deployed:
+       `ssh-keyscan <borgbase-host> | sudo tee -a /var/lib/borgmatic/ssh/known_hosts`
+       (not secret — doesn't go through sops; `sudo` is needed since
+       sops-nix creates `/var/lib/borgmatic/ssh/` as root, and the plain
+       `>>` redirect form doesn't work through `sudo` — the shell opens
+       that file with the calling user's permissions before `sudo` runs).
 6. [ ] Turn on BorgBase's own inactivity alerting for this repo in its UI
        (docs/BACKUP.md §6) — that's the monitoring signal this config relies
        on; no ntfy/Kuma hook is wired for it.
