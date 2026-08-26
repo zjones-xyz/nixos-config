@@ -24,22 +24,22 @@ wiring automatically.
 
 ## Borgmatic offsite backup (hosts/pegasus/borgmatic.nix)
 
-1. [ ] Generate a dedicated ed25519 keypair — do NOT reuse Tower's borgmatic
+1. [x] Generate a dedicated ed25519 keypair — do NOT reuse Tower's borgmatic
        key or z's own SSH key:
        ```sh
        ssh-keygen -t ed25519 -f pegasus-borgmatic -N ""
        ```
-2. [ ] Create the `pegasus-home` repo on BorgBase (see
+2. [x] Create the `pegasus-home` repo on BorgBase (see
        `hosts/galactica/borgmatic/README.md` for the account, if it doesn't
        exist yet) and register `pegasus-borgmatic.pub` as its append-only key.
-3. [ ] `sops secrets/pegasus.yaml` and add:
+3. [x] `sops secrets/pegasus.yaml` and add:
        ```yaml
        borgmatic:
          passphrase: <a new, distinct passphrase — do not reuse Tower's>
          ssh_key: |
            <contents of pegasus-borgmatic, the private half>
        ```
-4. [ ] `sops updatekeys secrets/pegasus.yaml`, commit, deploy.
+4. [x] `sops updatekeys secrets/pegasus.yaml`, commit, deploy.
 5. [ ] On pegasus, once deployed:
        `ssh-keyscan <borgbase-host> >> /var/lib/borgmatic/ssh/known_hosts`
        (not secret — doesn't go through sops).
