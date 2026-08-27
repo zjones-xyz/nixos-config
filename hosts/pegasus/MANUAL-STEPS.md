@@ -615,3 +615,34 @@ and reading the packaging, not from a real login.
    Whether that session gets an empty keyring each login or inherits the
    already-running daemon from the shared user manager wasn't determined —
    check with step 2 from inside that session if it matters.
+
+## 20. Kali VM for class — first use
+
+Added `modules/nixos/virt-manager.nix` (libvirtd + qemu_kvm + virt-manager,
+imported in `configuration.nix`) so a Kali guest can run under KVM instead of
+needing a second machine. Nothing in it downloads or configures Kali itself —
+that's the interactive part below. OpenVPN is *not* set up on the host at
+all: the plan is to run the OpenVPN client inside the Kali guest (it ships
+with `openvpn` already), which only needs the guest to reach the internet —
+libvirt's default NAT network (created automatically once `libvirtd` is
+enabled) covers that with no extra host config.
+
+1. [ ] `nixos-rebuild switch --flake .#pegasus`, then log out/in (or reboot)
+       so the `libvirtd` group membership actually takes effect for `z` —
+       group changes need a fresh login session, same trap as `docker`.
+2. [ ] Confirm access without `sudo`: `virsh -c qemu:///system list --all`
+       should run cleanly (no polkit prompt/permission error).
+3. [ ] Download the Kali ISO (installer or live) from kali.org and create the
+       VM in virt-manager: File → New Virtual Machine → point at the ISO. UEFI
+       vs. BIOS and the disk size are whatever the class asks for; nothing
+       here dictates it.
+4. [ ] Inside the installed guest, verify it has a normal internet route
+       (`ping -c1 1.1.1.1`), then bring in the class's `.ovpn` profile and
+       any auth files and run `sudo openvpn --config class.ovpn` (or import
+       it into NetworkManager's OpenVPN plugin, already present on Kali, for
+       a GUI toggle instead of a foreground terminal command).
+5. [ ] If the class's VPN concentrator instead requires the VM to appear as
+       its own device on the LAN (rather than NAT'd behind pegasus's IP),
+       that needs a bridged libvirt network instead of the default NAT
+       one — not set up here since it wasn't asked for; revisit only if the
+       NAT setup actually fails for that reason.
