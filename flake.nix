@@ -146,6 +146,15 @@
             # hosts/pegasus/home.nix and DECISIONS.md.
             home-manager.extraSpecialArgs = {
               claudeDesktop = claude-desktop-debian.packages.x86_64-linux.claude-desktop-fhs;
+              # Askimo (multi-LLM desktop chat client) — not in nixpkgs at
+              # all, unlike claudeDesktop/orcaSlicerNewer/bambuStudioNewer
+              # above (which are all upstream packages nixpkgs just hasn't
+              # caught up to yet). pkgs/askimo.nix unpacks upstream's own
+              # jpackage .deb release and runs it on nixpkgs' jdk25 — see
+              # that file for why. callPackage against the main nixpkgs
+              # rather than a pin: no version-skew concern since there's no
+              # nixpkgs copy of this package to skew against.
+              askimoDesktop = nixpkgs.legacyPackages.x86_64-linux.callPackage ./pkgs/askimo.nix { };
               orcaSlicerNewer = nixpkgs-orca-slicer.legacyPackages.x86_64-linux.orca-slicer;
               # bambu-studio is unfree (agpl3Plus + unfree, marked as of the
               # pinned commit) — legacyPackages defaults to allowUnfree =

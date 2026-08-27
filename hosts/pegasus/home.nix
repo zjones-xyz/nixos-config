@@ -1,4 +1,4 @@
-{ config, pkgs, lib, claudeDesktop, orcaSlicerNewer, bambuStudioNewer, ... }:
+{ config, pkgs, lib, claudeDesktop, askimoDesktop, orcaSlicerNewer, bambuStudioNewer, ... }:
 
 {
   imports = [
@@ -74,6 +74,22 @@
     _1password-gui
     _1password-cli
     claude-code
+    # Google's agentic IDE (Cursor/Windsurf-adjacent) — in nixpkgs since
+    # 26.05, x86_64-linux included.
+    antigravity
+    # Google's terminal coding agent, the CLI counterpart to claude-code
+    # above — nixpkgs' own npm-sourced build (gemini-cli-bin, the prebuilt
+    # binary variant, also exists but isn't used here for the same
+    # build-from-source-when-available reason claude-code isn't the -bin
+    # variant either).
+    gemini-cli
+    # ChatGPT desktop: nixpkgs' `chatgpt` package unpacks a .dmg and is
+    # darwin-only (see hosts/serenity, via modules/darwin/homebrew.nix) —
+    # OpenAI ships no official Linux client. The only Linux option is a
+    # third-party repackaging of the extracted macOS Electron app, which
+    # re-hosts a proprietary binary outside OpenAI's own build pipeline —
+    # not worth the trust trade for a client that's also just a browser tab
+    # away. Same call as Brain.fm below: web app via firefox/chrome.
 
     discord
     ferdium
@@ -250,6 +266,12 @@
     # flake.nix — the FHS-wrapped variant, needed for MCP servers to work
     # (they shell out to npx/uvx/etc. expecting a standard FHS layout).
     claudeDesktop
+    # Askimo — multi-LLM desktop chat client (ChatGPT/Claude/Gemini/Ollama),
+    # not in nixpkgs. askimoDesktop comes from pkgs/askimo.nix via
+    # home-manager.extraSpecialArgs in flake.nix — see that file's comment
+    # and pkgs/askimo.nix itself for why it's a hand-written derivation
+    # rather than a flake input like claudeDesktop above.
+    askimoDesktop
     # 02.05.00.67, with the real upstream withNvidiaGLWorkaround applied —
     # fixes the blank Prepare/Preview build plate on this host's NVIDIA GPU.
     # From the separate nixpkgs-bambu-studio input (see flake.nix); this
