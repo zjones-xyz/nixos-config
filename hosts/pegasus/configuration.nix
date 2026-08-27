@@ -281,6 +281,15 @@ in
   # this rule but doesn't wire it in automatically; needs registering here.
   services.udev.packages = [ pkgs.streamdeck-ui ];
 
+  # NoiseTorch — RNNoise-based virtual mic, for mic noise suppression in apps
+  # (e.g. Discord) that don't ship it themselves on Linux (Discord's Krisp is
+  # Windows/Mac only). The module wraps the binary with cap_sys_resource so it
+  # can raise its RLIMIT_RTPRIO/RLIMIT_MEMLOCK without running setuid; talks to
+  # PipeWire over the pulse compat layer already enabled in desktop-plasma.nix.
+  # First-run device selection is a manual, interactive step — see
+  # MANUAL-STEPS.md §20.
+  programs.noisetorch.enable = true;
+
   # @games (see hardware-configuration.nix / disko.nix) is a freshly created
   # BTRFS subvolume root — owned by root:root with 0755 perms by default,
   # like any subvolume root, since nothing at mkfs/install time set it
