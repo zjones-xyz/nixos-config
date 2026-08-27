@@ -808,3 +808,28 @@ named workspace is homed there.
    `dms-settings.json`), or by giving `Mail` an icon under "Named Workspace
    Icons" — that card only appears once niri reports a named workspace. If
    either is turned on, capture it with `dms-settings-snapshot`.
+
+## 26. NoiseTorch — pick an input device (needed once per profile)
+
+Added 2026-08-26 (`programs.noisetorch.enable` in
+`hosts/pegasus/configuration.nix`) to cover the mic-noise-suppression gap
+Discord's Linux client has — Krisp is Windows/Mac only there, regardless of
+how Discord itself is packaged. The Nix side (setcap wrapper + package) is
+fully declarative; picking a mic and turning suppression on is not — it's
+stored in NoiseTorch's own per-user config, not anything this repo can set.
+
+1. After the next `nixos-rebuild switch --flake .#pegasus`, launch
+   `noisetorch` (GUI, appears in the app launcher / `noisetorch` on
+   `$PATH`).
+2. Select the real input device (not an existing NoiseTorch virtual one),
+   click "Load", and confirm a new `Noise Suppressed <device>` source shows
+   up: `pactl list sources short | grep -i noise` (or `wpctl status` under
+   PipeWire).
+3. In Discord (or whichever app), pick that `Noise Suppressed` device as
+   the input/mic source in its own audio settings — NoiseTorch doesn't
+   redirect anything automatically, apps must select it like any other mic.
+4. NoiseTorch does not start suppression automatically on login by
+   default — it has to be relaunched (or run with `noisetorch -i` to
+   reload the last config non-interactively) after each reboot unless an
+   autostart entry is added later. Not wired up here since it wasn't asked
+   for; revisit if the manual relaunch gets annoying.
