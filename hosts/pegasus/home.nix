@@ -113,6 +113,12 @@
     # ollama.nix's gaming-drain oneshot is actually freeing VRAM/compute.
     nvtopPackages.nvidia
 
+    # Monitor control over DDC/CI (brightness, input source, etc. from the
+    # CLI, no on-screen-display fumbling). Needs the hardware.i2c.enable
+    # wiring in hosts/pegasus/configuration.nix and the NVIDIA software-I2C
+    # registry fix in modules/nixos/nvidia.nix — see those for why.
+    ddcutil
+
     # IPMI/BMC out-of-band management client — ipmi-sensors, ipmipower,
     # ipmiconsole (SOL), bmc-info. Same toolset as on serenity. Pegasus is a
     # consumer desktop board with no BMC, so this is the LAN client for
