@@ -38,6 +38,7 @@
     nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#pegasus";
     nrt = "sudo nixos-rebuild test --flake ~/nixos-config#pegasus";
     npull = "~/nixos-config/scripts/npull.sh";
+    ipmi-tower = ''~/nixos-config/scripts/ipmi-remote.sh run towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-open-tty = ''~/nixos-config/scripts/ipmi-remote.sh console towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-set-bios-next-boot = ''~/nixos-config/scripts/ipmi-remote.sh bios-next-boot towerbmc.internal "op://System Keys/tower ipmi/password"'';
     dms-settings-snapshot = "~/nixos-config/scripts/dms-settings.sh snapshot";
