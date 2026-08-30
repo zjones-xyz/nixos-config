@@ -219,6 +219,20 @@
           sops-nix.nixosModules.sops
         ];
       };
+
+      # galactica-live-iso — throwaway live ISO for Tower's bare metal, built
+      # to de-risk the migration plan (boot test, mounting the Unraid array
+      # read-only, hardware profile) BEFORE galactica has a real config — see
+      # hosts/galactica/README.md (no configuration.nix yet, deliberately) and
+      # hosts/galactica/live-iso.nix for the build/flash commands. This is not
+      # nixosConfigurations.galactica and never becomes the real host.
+      galactica-live-iso = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+          ./hosts/galactica/live-iso.nix
+        ];
+      };
     };
 
     # ── Darwin (macOS) ──────────────────────────────────────────────────────
