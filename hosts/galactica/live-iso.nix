@@ -23,11 +23,24 @@
 { pkgs, ... }:
 
 {
+  imports = [ ../../modules/nixos/serial-console.nix ];
+
   networking.hostName = "galactica-live";
 
   # lsiutil/storcli/megacli (below) are all unfree — Broadcom/Avago vendor
   # tooling, same as every other proprietary LSI utility.
   nixpkgs.config.allowUnfree = true;
+
+  # Tower's BMC does IPMI SOL on COM2/ttyS1 @ 115200 by convention on
+  # Supermicro X9 boards (PLATFORM.md §2) — but that BIOS-level redirection
+  # only covers POST and the firmware boot-device menu. Without this, the
+  # kernel and login prompt only go to tty0/VGA, so SOL would go dark the
+  # instant the bootloader hands off. tty0 stays too (serial-console.nix
+  # appends rather than replaces), so a physically attached monitor still
+  # works. ⚠ Confirm against *Advanced → Serial Port Console Redirection* in
+  # BIOS before trusting this — a mismatch reads as a hung machine, not a
+  # wrong setting.
+  homelab.serialConsole.device = "ttyS1,115200n8";
 
   # Root login over SSH, key-only. The installation-device profile this
   # builds on defaults to an *empty* root password with PermitRootLogin =
