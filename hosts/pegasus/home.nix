@@ -65,10 +65,6 @@
   #
   # Brain.fm was left out — no nixpkgs package, no native Linux client
   # anywhere (subscription web app only); usable via firefox/chrome.
-  #
-  # 1Password (GUI + CLI) is NOT here — moved to configuration.nix's
-  # programs._1password{,-gui}, which is required (not just nicer) for the
-  # desktop app's CLI-integration toggle to work. See that file for why.
   home.packages = with pkgs; [
     sl # for the inevitable `sl` typo
     vscode
