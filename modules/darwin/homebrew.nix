@@ -45,6 +45,10 @@
       "bambu-studio"
       "chatgpt"
       "claude"
+      # Offline API docs (was zeal via nixpkgs — qt6.qtwebengine's
+      # Chromium-from-source build fails on aarch64-darwin, <atomic>/<cstdint>
+      # not found compiling abseil-cpp; not worth chasing for a docs browser).
+      "dash"
       "ferdium"
       "fuse-t"
       "macos-fuse-t/cask/fuse-t-sshfs"

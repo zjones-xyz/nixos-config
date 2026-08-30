@@ -475,9 +475,9 @@ re-derive why it stopped applying.
     during a write can corrupt data. Check its firmware revision before use.
     Everything in this fleet polls SMART constantly.
 
-  Two label characters still need confirming at attach time: the `0`/`O` in
-  `h-6D0X` (inside the four-char suffix, so it affects the identifier) and
-  whether `h25-P4TH` is 40 GB or 60 GB.
+  One label character still needs confirming at attach time: whether `h25-P4TH`
+  is 40 GB or 60 GB. ~~The `0`/`O` in `h-6D0X`~~ **is closed — confirmed a digit
+  zero, 2026-08-10**, so the identifier stands and its caddy label is printable.
 - **Tower has no offsite backup, and that is the fleet's real asymmetry.**
   Surfaced while classifying `serenity_time_machine` (`SHARES.md` §5). The owner's
   call is that **offsite for Serenity's data is Serenity's responsibility**, on

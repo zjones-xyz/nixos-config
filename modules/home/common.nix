@@ -16,6 +16,7 @@
     jq
     btop
     micro
+    gh
   ];
 
   # Prompt.

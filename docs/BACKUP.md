@@ -1016,7 +1016,14 @@ cleanly, and fails later — often much later, and often only on the rows you
 needed.
 
 Tower's `appdata` holds several: Immich on PostgreSQL, the *arr stack and
-Audiobookshelf on SQLite, BookLore and PartDB on MySQL/MariaDB.
+Audiobookshelf on SQLite, BookLore on MySQL/MariaDB.
+
+⚠ **Corrected — PartDB is SQLite, not MySQL/MariaDB**, contradicting what this
+section and `DESIGN.md` §6.6 both assumed. Verified against `homelab_stacks`'
+`tower/inventory/compose.yaml` directly: the `partdb` service sets
+`DATABASE_URL: sqlite:///%kernel.project_dir%/var/db/app.db`. See
+`hosts/galactica/borgmatic/appdata.yaml` and `pilot-partdb.yaml`, which hook
+it under `sqlite_databases` accordingly.
 
 ### The three approaches, best first
 
@@ -1071,11 +1078,20 @@ the dominant line item.
 - **Let borg compress** — `compression: zstd` in borgmatic, or `--compression zstd`
   directly. borg has shipped zstd since 1.1.4, so 1.4.4 has it.
 
-⚠ **borgmatic's streamed database hooks sidestep this entirely**, which is a
-reason the trap matters less under the chosen tool than it would have under a
-restic wrapper: there is no intermediate file to be tempted to compress. The
-warning is kept because the temptation returns the moment anyone writes a
-hand-rolled dump script alongside it.
+⚠ **Corrected — borgmatic's streamed database hooks sidestep the intermediate
+*file*, not the compression.** The dump is streamed straight to borg with no
+file ever hitting disk, which is most of why borgmatic won over a restic
+wrapper — but the dump's own compression is a separate setting the hook
+still controls, and PostgreSQL's default walks straight into this trap: borgmatic
+2.1.5's `format` defaults to `custom`, whose `compression` defaults to
+moderate gzip. Left at the default, borgmatic's own PostgreSQL hook compresses
+every nightly dump, and gzip output diverges globally from a one-row delta —
+so borg stores a full copy every night instead of roughly the delta. See
+`hosts/galactica/borgmatic/README.md` and `appdata.yaml`, which pin
+`format: plain` / `compression: none` for exactly this reason. MariaDB and
+SQLite dumps are plain text with no compression option, so they're unaffected.
+The general warning below is kept because the temptation returns the moment
+anyone writes a hand-rolled dump script alongside a native hook.
 
 ### Dumps are also the migration mechanism, not just the backup
 

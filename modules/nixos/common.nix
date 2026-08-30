@@ -55,6 +55,13 @@
     LC_TIME           = "en_US.UTF-8";
   };
 
+  # ── FHS-style shebangs ───────────────────────────────────────────────────────
+  # NixOS has no /bin or /usr/bin, so scripts with a hardcoded shebang
+  # (#!/bin/bash, #!/usr/bin/env python3) fail outright. envfs mounts a
+  # synthetic /usr/bin (bind-mounted to /bin) that resolves each lookup
+  # dynamically against the calling process's PATH.
+  services.envfs.enable = true;
+
   security.sudo.wheelNeedsPassword = false;
 
   users.users.z = {

@@ -263,6 +263,276 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   before assuming a fix didn't work — and remember the isolated profile is
   wiped every login, which defeats any "first-run only" assumption KDE's
   own subsystems make.
+- **Niri, added 2026-08-10 as a fourth selectable SDDM session (bare, no
+  shell layered on yet).** Same additive pattern as COSMIC — SDDM stays the
+  sole display manager, `defaultSession` stays "plasma-dragonized", Niri just
+  gains an entry in the session picker. Used nixpkgs' own `programs.niri`
+  module (`nixos/modules/programs/wayland/niri.nix`, confirmed against the
+  `release-26.05` branch, not niri-flake) — Niri is packaged directly in
+  nixpkgs, no third-party flake input needed, unlike Dragonized's fetchGit
+  sources or Claude Desktop's flake input. The module already registers its
+  own session file (via `services.displayManager.sessionPackages`) and wires
+  up the upstream-recommended portal config (xdg-desktop-portal-gnome +
+  gnome-keyring + a Nautilus dbus-service backend for the FileChooser
+  portal), so `modules/nixos/desktop-niri.nix` only needed two lines:
+  `programs.niri.enable = true;` and `xwayland-satellite` in
+  `environment.systemPackages` (Niri, unlike KWin/Mutter, has no built-in
+  Xwayland — it auto-integrates xwayland-satellite once the binary is on
+  PATH; needed for the X11-only apps already in daily use here — Discord,
+  some Steam titles, Bambu Studio/OpenSCAD).
+  *NVIDIA fit, confirmed on real hardware 2026-08-10:* explicit sync (fixes
+  flicker/stutter on NVIDIA Wayland) needs driver >=555 and kernel >=6.8 —
+  both already satisfied by this host's existing `nvidia.nix`/kernel choice,
+  made for Plasma/COSMIC/Dragonized, so no changes needed there. Niri uses
+  smithay, not wlroots, so none of the wlroots-specific NVIDIA env-var
+  workarounds apply. First login confirmed clean rendering (1920x1080@60Hz,
+  no EGL/DRM errors) and `xwayland-satellite` working (Discord spawned and
+  tiled normally). The known cosmetic quirk flagged upstream — driver
+  doesn't release VRAM properly under Niri, idles near ~1 GiB instead of
+  ~100 MiB — was NOT hit in its severe form here (idle baseline measured at
+  392 MiB); worth re-checking after extended real use. Full verification
+  log in MANUAL-STEPS.md §15, including how the physical console's black
+  screen from the switch below was diagnosed and fixed.
+  *Deliberately deferred:* no shell (DankMaterialShell or Noctalia) layered
+  on top yet — bare Niri first, to confirm the compositor+NVIDIA session is
+  solid on real hardware before adding Quickshell's dependency footprint.
+  Both candidate shells need extra flake inputs to reach on this repo's
+  pinned `nixos-26.05` (Noctalia's nixpkgs package is unstable-only; DMS
+  ships as its own flake, no nixpkgs package at all) — same shape as the
+  `claude-desktop-debian` input already in this repo, deferred until a shell
+  is actually chosen.
+- **DankMaterialShell chosen over Noctalia, 2026-08-11, once bare Niri was
+  confirmed solid on real hardware.** Both are Quickshell-based, both ~13
+  months old at decision time. Checked actual community signal rather than
+  guessing: GitHub activity (Noctalia: 9,423 stars/683 forks/222 open
+  issues ≈2.4% of stars; DMS: 7,553 stars/471 forks/427 open issues ≈5.7%
+  of stars — Noctalia has more traction and a lower issue ratio, though DMS
+  has more surface area by design: bar, launcher, notification center,
+  control center, lock screen, plugin system, Go backend, vs Noctalia's
+  deliberately minimal "quiet by design" scope); a [HN
+  thread](https://news.ycombinator.com/item?id=46841741) ("DMS... works
+  better on NixOS out of the box... Noctalia [suits] slimmer builds");
+  and a [hands-on comparison](https://www.logctl.com/posts/why-i-chose-niri-dms/)
+  where the author ran Noctalia on a simple single-monitor laptop
+  successfully but had it "not work out as smoothly as expected" on a
+  complex multi-monitor desktop, where DMS "came together surprisingly
+  smoothly" instead. Deciding factor: pegasus is going multi-monitor soon,
+  which is Noctalia's one concretely documented weak spot in everything
+  checked.
+  *Implementation, `modules/nixos/desktop-niri.nix`:* added
+  `dank-material-shell` as a flake input (`git+https://` for the same
+  sandboxed-GitHub-access reason as `claude-desktop-debian`; unlike that
+  precedent, DMS's transitive `github:` inputs — `dank-qml-common`,
+  `flake-compat` — resolved fine from here, no follow-up lock needed on
+  pegasus itself), `inputs.nixpkgs.follows = "nixpkgs"`. Used DMS's
+  **`nixosModules.dank-material-shell`**, not its home-manager module — it
+  matches how every other `desktop-*.nix` on this host is wired
+  (Plasma/COSMIC/Dragonized are all NixOS-level), and it avoids needing a
+  `programs.quickshell` home-manager option this repo doesn't otherwise
+  pull in (the NixOS module just does `environment.systemPackages` +
+  `systemd.user.services.dms` directly). Quickshell itself (the QML engine
+  DMS runs on) is already in nixpkgs 26.05 at exactly 0.3.0 — DMS's own
+  stated minimum — so no separate quickshell flake input was needed,
+  confirmed by checking the actual `version` in nixpkgs'
+  `pkgs/by-name/qu/quickshell/package.nix` on the `release-26.05` branch
+  rather than assuming from an out-of-date `dms doctor` report (0.2.1) seen
+  during research.
+  *Deliberately skipped: DMS's `homeModules.niri` keybind-injection layer*
+  (would bind `Mod+Space` → launcher, `Mod+N` → notifications, etc.). That
+  module writes into `programs.niri.settings`, an option that only exists
+  under **niri-flake**'s home-manager module — this host deliberately uses
+  plain nixpkgs' `programs.niri` instead (see the earlier bare-Niri entry
+  above), so adopting it would mean pulling in niri-flake just to get
+  keybinds, a bigger architectural change than "add a shell." This repo
+  already has a precedent for not fighting declarative keybind config for
+  a shell layer — see the `programs.plasma.hotkeys.commands is broken`
+  entry below, where Dragonized's shortcuts ended up configured live
+  instead of declaratively. Same call here: DMS's keybinds get hand-added
+  to `~/.config/niri/config.kdl` after first login — see MANUAL-STEPS.md
+  §16 for the exact lines (sourced directly from DMS's own `niri.nix`
+  module so they match what it would have generated).
+  *Not verified — needs a real x86_64-linux build on pegasus:* the
+  `dms-shell` package is a Go build with a pinned `vendorHash`; `nix flake
+  check`/forced `drvPath` eval both pass clean from this Mac (no Linux
+  builder here), but a vendorHash mismatch only surfaces at actual build
+  time, same caveat as Olla's packaging in this repo.
+- **Two general "additive session" gotchas found during Niri's first
+  real-hardware test, 2026-08-10 — relevant to COSMIC and any future
+  session too, not Niri-specific:**
+  1. **`nixos-rebuild switch` can crash an already-logged-in graphical
+     session on this host**, not just fail to affect it. A Dragonized
+     session had been logged in since Aug 8 (two days) when the switch
+     that added Niri ran; activation's user-unit reload
+     ("restarting the following user units: nixos-activation.service...")
+     crashed it outright (`sddm-helper... crashed exit code 1`), and no
+     new greeter re-spawned afterward — full black screen on the physical
+     KVM feed, `display-manager.service` itself never restarted so it
+     looked "fine" from a pure systemd-status check. Fixed with
+     `sudo systemctl restart display-manager` (no reboot needed — nothing
+     salvageable was left running). *Takeaway: before switching, check
+     `loginctl list-sessions` for an active graphical session, not just
+     whether whoever's driving the switch is physically at the console* —
+     asking "are you logged in locally right now" isn't sufficient, a
+     stale session from days earlier is invisible unless you actually look.
+  2. **Long-lived, D-Bus-activated user services don't pick up a new
+     session's environment just because you switched sessions live.**
+     `xdg-desktop-portal.service` had been running since that same Aug-8
+     Dragonized login and never restarted when Niri started, so its own
+     process environment (confirmed via `/proc/<pid>/environ`) was still
+     `XDG_CURRENT_DESKTOP=KDE` even though `systemctl --user
+     show-environment` correctly showed the session-wide value as `niri`
+     — portal calls from Niri apps would have been routed against a
+     desktop that was no longer active. Fixed with
+     `systemctl --user restart xdg-desktop-portal.service`, confirmed via
+     `busctl --user call ... Screenshot`. Same mechanism would affect any
+     other long-lived `--user` service that reads `XDG_CURRENT_DESKTOP`
+     once at startup — worth checking for on the next live session switch
+     (COSMIC or otherwise), not just after a fresh reboot.
+- **niri-flake adopted for declarative config, 2026-08-11 — but only its
+  `homeModules.config`, not the full `nixosModules.niri`.** Motivation: the
+  hand-edited `~/.config/niri/config.kdl` (natural-scroll disabled by hand,
+  DMS's keybinds still not wired in) was unmanaged, unversioned state
+  sitting only on pegasus's disk — real drift/loss risk if the disk is ever
+  wiped or reinstalled. Checked what adopting niri-flake would actually
+  cost before doing it (see `sodiboo/niri-flake`'s actual source, not just
+  its reputation):
+  - `nixosModules.niri` is a **hard replacement**, not an addition — it
+    literally sets `disabledModules = [ "programs/wayland/niri.nix" ]`,
+    turning off nixpkgs' module and installing niri-flake's own
+    from-source build instead. Rejected: its "stable" track is pinned to
+    `v25.08`, while nixpkgs 26.05's niri self-reports as version **26.04**
+    — nixpkgs is currently *ahead*, so this would be a downgrade, not the
+    usual "niri-flake tracks upstream faster" benefit. It would also mean
+    either compiling niri from source or opting into a third-party binary
+    cache (`niri.cachix.org`, run by the flake's maintainer) — a new trust
+    boundary this repo hasn't taken on anywhere else — and it runs its own
+    polkit agent alongside whatever Plasma already runs, untested here.
+  - `homeModules.config` (used instead) is genuinely additive per its own
+    README: "won't install niri by itself, but it does set the package
+    version used for build-time validation." It only adds
+    `programs.niri.settings` (declarative, KDL-validated at build time)
+    and `config.lib.niri.actions`. `programs.niri.enable` from nixpkgs
+    (above in `desktop-niri.nix`) is completely unchanged — set
+    `programs.niri.package = pkgs.niri;` so niri-flake validates against
+    the niri actually installed, not its own build.
+  - ⚠ **Divergence risk, explicitly asked to be tracked**: niri-flake's own
+    README states `programs.niri.settings`'s schema "is not guaranteed to
+    be compatible with niri versions other than the two [niri-flake]
+    provides," and that nixpkgs' niri is fine "unless running old versions
+    2+ releases behind." True today (nixpkgs is ahead, not behind), but if
+    that flips — nixpkgs lags, or niri-flake's schema changes out from
+    under an unbumped input — expect either an eval error naming an
+    unknown niri action, or worse, a config that builds but silently
+    doesn't do what's declared. See the divergence-risk comment at the top
+    of `hosts/pegasus/niri-settings.nix` for the full note kept next to
+    the actual settings.
+  - Concretely hit and fixed migrating the hand-tuned binds: **4 of the
+    ~90 action names used aren't in niri-flake's `config.lib.niri.actions`
+    cache** (`screenshot`, `screenshot-screen`, `screenshot-window`,
+    `move-column-to-workspace` — all take optional properties or a
+    non-trivial argument type the cache's generator apparently skips),
+    caught as Nix eval errors (`undefined variable`) and fixed by using
+    the documented `action.<name> = value` attrset form for just those
+    four instead of the `with config.lib.niri.actions;` bare-name form
+    used everywhere else. Also: `hotkey-overlay.title` doesn't accept
+    `null` for hiding a bind from the overlay — that's
+    `hotkey-overlay.hidden = true;` instead. All caught by `nix flake
+    check`/forced eval before ever reaching pegasus — see
+    `hosts/pegasus/niri-settings.nix`.
+  - **Not using DMS's own `homeModules.niri`** (which would auto-generate
+    DMS's keybinds) — that module needs DMS's `homeModules.dank-material-
+    shell` also imported at the home-manager level for its `cfg.enable`
+    reference to resolve, which reintroduces the exact `programs.
+    quickshell` HM-option exposure avoided by using DMS's NixOS module
+    (see the earlier DMS entry above). DMS's ~8 keybinds are hand-
+    transcribed into `niri-settings.nix` instead, matching upstream's own
+    bind list. Doing this surfaced **3 real key conflicts** between niri's
+    own suggested defaults and what DMS wanted the same key for:
+    `Mod+Comma` (niri: consume-window-into-column; DMS: settings panel —
+    niri's moved to `Mod+Shift+Comma`), `Mod+V` (niri: toggle-window-
+    floating; DMS: clipboard manager — niri's moved to `Mod+Ctrl+V`,
+    paired with the existing `Mod+Shift+V`), and the six volume/brightness
+    media keys (niri's raw `wpctl`/`brightnessctl` calls replaced with
+    DMS's own `dms ipc audio/brightness ...` so DMS's on-screen indicators
+    actually fire — media *transport* keys like play/pause have no DMS
+    equivalent and were left as niri's original `playerctl` bindings).
+  - **Not verified on real hardware.** `nix flake check` and a forced
+    `system.build.toplevel.drvPath` eval both pass clean, but niri-flake's
+    own build-time KDL validation (`validated-config-for`, which actually
+    runs niri's validator against the generated config) only executes
+    during a real derivation *build*, which this Mac can't do for
+    x86_64-linux. The Nix-level checks catch wrong option names/types
+    (as they did, four times, above) but not e.g. a syntactically-valid-
+    to-Nix KDL value that niri itself would still reject. First real
+    `nixos-rebuild switch` on pegasus is the actual test.
+  - Also: the pre-existing hand-edited `~/.config/niri/config.kdl` isn't
+    home-manager-owned, so it collides with home-manager now declaring
+    that same path — added `home-manager.backupFileExtension =
+    "pre-declarative-niri-config";` for pegasus (matching the pattern
+    already used for serenity's pre-existing dotfiles) so activation
+    renames rather than aborts on it. The old file will sit there
+    afterward as `config.kdl.pre-declarative-niri-config` — home-manager
+    doesn't clean these up on its own.
+  - **First real `nixos-rebuild switch` attempt, 2026-08-11: niri-flake's
+    KDL build-time validation passed clean** — `config.kdl.drv` built with
+    no error, meaning every one of the ~90 transcribed binds (plus the
+    touchpad settings and window-rule) validated against real niri. The
+    switch still failed, but on something unrelated to niri or this
+    file: DMS's Go build (`dms-shell`) needs Go ≥1.26.4, and this repo's
+    then-pinned `nixpkgs` (2026-06-11) only had 1.26.3. Not a DMS commit
+    problem — checked, `go.mod` had required 1.26.4 for a while already —
+    just a stale lock; the `nixos-26.05` branch tip already had 1.26.5.
+    **Fixed by bumping `nixpkgs` forward within the same `nixos-26.05`
+    branch** (2026-06-11 → 2026-08-09; cascades to every `.follows`-linked
+    input: home-manager, sops-nix, nix-darwin, plasma-manager,
+    claude-desktop-debian, dank-material-shell, niri-flake). `nix flake
+    check` re-run clean across all five hosts after the bump before
+    retrying on pegasus.
+  - **Second switch attempt, same day, succeeded** — `Done.`, new
+    generation activated. Notably `niri.service` was NOT restarted as
+    part of activation (this switch didn't touch niri's own package),
+    which is exactly why the already-logged-in Niri session on the
+    physical console survived intact this time — contrast with the
+    Niri-install switch in the entry above, which crashed the
+    then-running Dragonized session.
+  - **But two things still needed manual intervention post-switch, both
+    now confirmed fixed and worth remembering for next time:**
+    1. **Niri didn't live-reload the new config** — home-manager
+       activation swaps `~/.config/niri/config.kdl`'s *symlink target*
+       atomically (unlink + new symlink), not an in-place file edit.
+       Niri's config file-watcher apparently doesn't pick this up the
+       same way it does an in-place edit (confirmed: zero niri journal
+       activity after the switch, versus a clear `loaded config from
+       ...` log line during earlier hand-edit testing). Fixed with
+       `systemctl --user restart niri.service` — this DOES restart the
+       compositor (closes windows, black screen briefly), so only do
+       this when nothing valuable is open, or expect users logged in
+       physically to lose their session. After restart, journal showed
+       `loaded config from "/home/z/.config/niri/config.kdl"` with no
+       errors, confirming the full ~90-bind config validated at runtime
+       too, not just at build time.
+    2. **`dms.service` never auto-started, even after the niri restart
+       above** — root cause is different from #1: `dms.service` is
+       `WantedBy=graphical-session.target`, but that target had been
+       continuously active since the *original* Niri login (Aug 10) and
+       never itself stopped/restarted — restarting a sibling unit
+       (`niri.service`) doesn't restart the target it belongs to, so a
+       brand-new unit `WantedBy` an already-active target never gets an
+       automatic start trigger. This is a generic systemd gotcha for any
+       unit newly introduced by a switch into an already-running
+       session's target graph, not niri- or DMS-specific. Fixed with a
+       direct `systemctl --user start dms.service` — came up clean,
+       quickshell + the Go backend both initialized without error
+       (bluetooth/network/clipboard managers all fine). One harmless
+       warning: `Failed to watch config directory: no such file or
+       directory` — `~/.config/DankMaterialShell/` doesn't exist since
+       `programs.dank-material-shell.settings` was never set; DMS just
+       runs on its own defaults until/unless that's configured.
+    **Takeaway for any future switch that adds a new `WantedBy=graphical-
+    session.target` unit to an already-logged-in session: don't assume
+    it auto-starts. Check `systemctl --user status <unit>` after
+    switching, and `systemctl --user start` it directly if it's sitting
+    `inactive (dead)`.**
 - **Remote desktop → xrdp + xorgxrdp (Plasma-over-X11, independent session
   per connection), tailscale0-gated, added 2026-07-16/17.** *Real motivation
   surfaced mid-implementation:* this is meant to eventually replace the
@@ -342,3 +612,287 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   started. Package name reference if picked up later: `idriveforlinux`,
   main binary `/opt/IDriveForLinux/idriveforlinux %U`, icon
   `idriveforlinux`, `StartupWMClass=IDriveForLinux`.
+- **dankcalendar added 2026-08-11, chosen over sticking with khal+vdirsyncer
+  alone.** Standalone calendar app (Local/Google/Microsoft/CalDAV/iCloud)
+  from the same "Dank" suite as DMS — not a khal replacement, a genuinely
+  separate app with its own daemon, tray icon, and native OAuth. Compared
+  against khal directly before deciding: khal is already the lower-effort
+  path (in nixpkgs, already wired as the backend for DMS's own calendar
+  widget via `enableCalendarEvents`), but was still inert on this host —
+  nothing had configured `vdirsyncer` to actually sync a real calendar into
+  it. dankcalendar's native OAuth (no manual CalDAV URL/auth wrangling) and
+  broader account support (iCloud, which khal+vdirsyncer doesn't cover as
+  cleanly) won out, accepting that it runs *alongside* khal rather than
+  replacing it — DMS's own widget still reads from khal, dankcalendar is a
+  separate surface.
+  *Packaging, `modules/nixos/dankcalendar.nix`:* no upstream Nix packaging
+  exists (Flatpak/AUR/source-only at time of writing) — packaged from
+  scratch, `buildGoModule` + the quickshell UI tree baked in via
+  `go:embed`, following the exact shape of DMS's own package build.
+  Pinned to master HEAD (`a57a8790`, no tagged release exists yet).
+  Genuinely nontrivial part: replicating `core/Makefile`'s `sync-shell`
+  target (copies `quickshell/` into `internal/shellembed/dist`, the
+  `go:embed` target for the `withshell` build tag) — including resolving
+  the `DankCommon` submodule symlink to `dank-qml-common`'s real content,
+  since `go:embed` rejects symlinks (same reason the Makefile dereferences
+  it via `tar -h`). Wrapped with the same Qt/QML plugin paths DMS's own
+  package uses (`kirigami`, `sonnet`, `qtmultimedia`, `qtimageformats`,
+  `kimageformats`) since both apps share the `dank-qml-common` widget
+  library, plus an explicit `quickshell` on `PATH` rather than relying on
+  it already being there system-wide via DMS's module.
+  *All three hashes (dankcalendar source, dank-qml-common source, Go
+  `vendorHash`) were resolved locally on this Mac* rather than round-
+  tripping to pegasus for each — fetching and Go module vendoring are both
+  architecture-independent operations (no actual compilation happens),
+  confirmed by forcing each fixed-output derivation to build against
+  `aarch64-darwin`'s own nixpkgs with `lib.fakeHash` and reading the real
+  hash out of the resulting mismatch error. Only the final compile (`go
+  build -tags withshell`) genuinely needed x86_64-linux.
+  **First real build, 2026-08-11: succeeded on the first attempt** — no
+  vendorHash mismatch, no embed-step failure, no compile error. Confirmed
+  working end-to-end: `dcal version` reports the correct ldflags-injected
+  version string, `dcal.service` starts clean and correctly spawns
+  `quickshell` as a subprocess against the runtime-unpacked embedded UI
+  (`/run/user/1000/dankcal-shell/...`), IPC socket comes up. One benign
+  warning in the log (`Failed to register with host portal... Connection
+  already associated with an application ID`) — same class of harmless
+  D-Bus name-registration warning already seen from niri's own screensaver/
+  keyboard-monitor services; service stayed active, not a crash.
+  Same `graphical-session.target`-already-active gotcha as `dms.service`
+  applied here too (see the niri-flake switch entry above) — needed a
+  direct `systemctl --user start dcal.service`, didn't auto-start on its
+  own.
+  **Not yet done:** actually adding a calendar account (`dcal account`) —
+  needs an interactive login (Google/Microsoft OAuth, or a CalDAV/iCloud
+  app-password flow), can't be driven from this SSH session. See
+  MANUAL-STEPS.md §18.
+
+- **Keyring (Secret Service) → gnome-keyring, declared; KWallet's PAM unlock
+  turned off.** *alt:* KWallet as the single provider, or leave both as-is.
+  *Why:* nothing in the config named a keyring, yet three modules each pulled
+  one in — `desktop-plasma.nix` (Plasma 6's kwalletd6 + ksecretd, with
+  `pam_kwallet` wired into the `login` stack by nixpkgs' plasma6 module, which
+  SDDM substacks), `desktop-cosmic.nix` and `desktop-niri.nix` (both
+  `services.gnome.gnome-keyring.enable = lib.mkDefault true`, the latter also
+  pinning `xdg.portal.config.niri."org.freedesktop.impl.portal.Secret"` to
+  gnome-keyring). Evaluating the pre-change closure confirmed **both** were
+  enabled and both auto-unlocked at every graphical login. Only one can own
+  `org.freedesktop.secrets`, so which store the browsers and every Electron
+  app actually wrote to was decided by startup order.
+  That is sharper on this host than it sounds, because the `systemd --user`
+  manager and `graphical-session.target` persist across session switches (the
+  same property behind the `dms.service`/`dcal.service` auto-start gotcha
+  above): the winner holds the bus name until a full logout or reboot, so
+  secrets stored under one owner silently vanish under the other — presenting
+  as "the browser forgot my logins", not as a keyring fault.
+  gnome-keyring was picked because Niri is the daily-driver session and both
+  it and COSMIC already default to it, niri's Secret portal is already pinned
+  to it, and it is the only one of the two that needs no per-session glue in
+  all four sessions. KWallet outside Plasma would need two pieces Plasma
+  supplies for free: `ksecretd` started by hand (its D-Bus activation name is
+  `org.kde.secretservicecompat`, never the `org.freedesktop.secrets` that apps
+  request) and `plasma-kwallet-pam.service` given a `WantedBy` (it ships with
+  `PartOf=graphical-session.target` and nothing else).
+  Cost accepted: a KDE app in the Plasma/Dragonized sessions that genuinely
+  wants the wallet now prompts rather than opening silently. Nothing on this
+  host does — wired ethernet, no KDE PIM. Reversing the decision is the two
+  `mkForce` lines in `modules/nixos/keyring.nix` plus disabling gnome-keyring.
+  **Not verified on hardware** — the switch, and which daemon ends up owning
+  the bus name afterward, still needs a real login. See MANUAL-STEPS.md §19.
+
+- **DMS settings.json → snapshot/restore script, not a Home-Manager symlink**
+  (2026-08-21). *alt:* `config.lib.file.mkOutOfStoreSymlink` pointing
+  `~/.config/DankMaterialShell/settings.json` at a repo-tracked file, for
+  live GUI edits to land directly in the git working tree. *Why rejected:*
+  DMS persists settings via Quickshell's `FileView { atomicWrites: true }`
+  (`Common/SettingsData.qml`), which writes a temp file and `rename()`s it
+  over the target path. `rename()` onto a symlinked path replaces the
+  symlink itself rather than following it to the target — so the first
+  setting toggled through the DMS GUI would silently detach
+  `settings.json` from the repo and turn it back into an ordinary file, with
+  no error surfaced. `home.file`'s in-store form has the same problem plus
+  it's read-only to begin with (DMS does detect that case — `onSaveFailed`
+  sets an internal read-only flag — but that only means it fails safe, not
+  that edits reach git).
+  Went with `scripts/dms-settings.sh snapshot|restore` instead: `snapshot`
+  copies the live file to `hosts/pegasus/dms-settings.json` for manual
+  review/commit, `restore` copies it back (refuses to clobber an existing
+  live file unless `FORCE=1`). `home.nix`'s `seedDmsSettings` activation
+  script additionally seeds a *fresh* host (no live file yet) from that
+  checkpoint, so a rebuild-from-scratch starts from the last-known-good
+  config rather than DMS's defaults — it never touches an already-existing
+  live file, so it can't clobber an in-progress GUI experiment.
+  Checked the settings schema for anything that shouldn't be committed in
+  plaintext: nothing secret (one unrelated `lockScreenShowPasswordField`
+  bool); it does capture `weatherLocation`/`weatherCoordinates` if those get
+  set, worth knowing before committing.
+  **No checkpoint committed yet** — `hosts/pegasus/dms-settings.json` only
+  exists after `dms-settings-snapshot` is run on real hardware with a DMS
+  config worth keeping; nothing here fabricates one.
+  **Extended 2026-08-23** to also cover `plugin_settings.json` (per-plugin
+  enabled flag + config — a second file DMS saves the same atomic way,
+  separate from `settings.json`), and added a `diff` action (compares live
+  vs. checkpoint without touching either — what `snapshot` would capture or
+  `restore` would overwrite). `snapshot`/`restore`/`diff` all now take an
+  optional `[settings|plugins|all]` target, defaulting to `all`; `home.nix`'s
+  `seedDmsSettings` seeds both checkpoints independently, same never-clobber
+  rule as before.
+
+- **Bambu Studio blank build plate (Prepare/Preview tabs), 2026-08-22 — fixed
+  via `overrideAttrs` in `hosts/pegasus/home.nix`, routing its OpenGL canvas
+  through Mesa + Zink instead of the NVIDIA vendor GL libs.** *alt 1:* bump
+  this flake's shared `nixpkgs` input to a post-2026-05-27 `release-26.05`
+  revision and use the real `withNvidiaGLWorkaround` package arg upstream
+  shipped for exactly this. *Why not:* `nixpkgs` is a single input shared by
+  every host in the fleet (`hosts/*`), so that bump would move package
+  versions fleet-wide just to fix one desktop app on one host — too broad a
+  blast radius for this. *alt 2:* switch to the Flatpak build (several
+  reports it renders fine on identical NixOS/NVIDIA hardware) or to
+  OrcaSlicer. *Why not:* this repo has no Flatpak plumbing, and OrcaSlicer is
+  a separate app already installed alongside Bambu Studio, not a substitute
+  for Bambu-specific cloud features.
+  *Why the bug happens:* not niri/xwayland-satellite-specific — Bambu
+  Studio's wxWidgets OpenGL canvas is broadly fragile against NVIDIA's
+  proprietary GL on Linux; the toolbars/panels are plain widgets and render
+  fine, only the GL-backed 3D canvas doesn't. Same symptom reported across
+  Hyprland, GNOME, KDE X11, and Docker+NVIDIA — tracked upstream at
+  https://github.com/NixOS/nixpkgs/issues/498311. nixpkgs fixed it via a
+  `withNvidiaGLWorkaround` package arg
+  (https://github.com/NixOS/nixpkgs/pull/522161, merged + backported to
+  `release-26.05` 2026-05-27) that sets four env vars forcing the GL context
+  through Mesa's Zink driver (OpenGL-over-Vulkan, still hardware-accelerated
+  via NVIDIA's own Vulkan ICD) instead of NVIDIA's GLX/EGL vendor libs. This
+  flake's `nixpkgs` was locked 2026-01-08, well before that merge, so the
+  fix is hand-applied via `overrideAttrs` appending the same
+  `gappsWrapperArgs` the upstream fix uses, rather than waiting for the pin
+  to catch up.
+  **Confirmed on hardware, same day:** the build plate renders correctly
+  after `nixos-rebuild switch` on pegasus.
+
+  **Superseded same day** by pulling `bambu-studio` from a second, standalone
+  `nixpkgs-bambu-studio` flake input pinned to commit `13b979d` (2026-05-27,
+  `git+https://github.com/NixOS/nixpkgs.git?rev=13b979d75662827615c1de6dd22f87e6296ba71d`)
+  instead of the hand-rolled `overrideAttrs`. That commit both bumps
+  `bambu-studio` to 02.05.00.67 (from this flake's pinned 02.03.01.51 — two
+  version bumps: 02.04.00.70, then 02.05.00.67) *and* already carries the
+  real `withNvidiaGLWorkaround` package arg, so `hosts/pegasus/home.nix` now
+  just does `pkgs'.bambu-studio.override { withNvidiaGLWorkaround = true; }`
+  against that pinned `pkgs'` — the actual upstream fix, not a hand-copied
+  reimplementation of it — while keeping the same "don't touch the shared
+  `nixpkgs` input" reasoning above (same blast-radius argument, this is a
+  second isolated input, not a bump of the fleet-wide one).
+  One gotcha hit doing this: `nixpkgs-bambu-studio.legacyPackages.<system>`
+  (unlike the main `nixpkgs`, which gets `nixpkgs.config.allowUnfree = true`
+  fleet-wide via `modules/nixos/common.nix`) has `allowUnfree` unset, and
+  `bambu-studio` was marked `agpl3Plus unfree` in nixpkgs the same day as the
+  GL fix (commit `4acf48b`) — evaluating it through plain `legacyPackages`
+  throws. Fixed by constructing the pkgs set explicitly in `flake.nix`
+  (`import nixpkgs-bambu-studio { system = ...; config.allowUnfree = true; }`)
+  instead of using `legacyPackages` directly.
+  Validated with `.claude/hooks/flake-check-sandboxed.sh` (`nix flake check`
+  against every input rewritten to git+https at its exact locked rev, to
+  route around this sandboxed session's GitHub-tarball-fetch 403 — see that
+  script's own header comment) — exits 0 across all five configs. Actual
+  `nixos-rebuild switch` + relaunch on pegasus still needed to confirm this
+  refactor didn't change runtime behavior versus the already-confirmed
+  hand-rolled version.
+
+- **OrcaSlicer bumped 2.3.1 -> 2.3.2, 2026-08-22** — pulled from a third
+  standalone flake input, `nixpkgs-orca-slicer`, pinned to nixpkgs commit
+  `e749b91` (2026-03-23, the exact commit that bumped `orca-slicer` in
+  nixpkgs), for the same reason and via the same mechanism as
+  `nixpkgs-bambu-studio` above. *alt considered:* hand-override
+  `version`/`src`/hash to chase OrcaSlicer's actual upstream latest stable
+  (v2.4.2, 2026-07-07) directly, skipping nixpkgs entirely. *Why not, for
+  now:* nixpkgs hasn't packaged anything past 2.3.2 yet (checked
+  `release-26.05` HEAD 2026-08-22), so there's no already-vetted patch set
+  for 2.4.x to build against — this repo's existing patches (webkit linking,
+  opencv, cmake4, gcc15 stdint) are pinned to what 2.3.x needs, and
+  reworking them by hand with no build/eval access in this session to
+  validate against was judged not worth the risk for a UI that (confirmed on
+  hardware, same day) already renders correctly at 2.3.1 — unlike Bambu
+  Studio, this one isn't fixing a real bug, just chasing a newer version.
+  No GL workaround applied here: OrcaSlicer's own NVIDIA/Zink route has a
+  documented regression risk the Bambu Studio one doesn't (Zink reportedly
+  breaks OrcaSlicer's Home/Device/Project pages and printer/filament preset
+  dialogs on some driver versions — see
+  https://github.com/OrcaSlicer/OrcaSlicer/issues/9474, closed
+  not-planned/stale) — moot here since this host's viewport already works
+  without it.
+  Validated the same way as `nixpkgs-bambu-studio` above
+  (`flake-check-sandboxed.sh`, exit 0). Not yet confirmed with a real
+  `nixos-rebuild switch` on pegasus.
+
+- **Opened UDP 2021 + 1900 on the firewall for Bambu printer LAN
+  auto-discovery, 2026-08-22.** Bambu/Orca don't send a discovery query —
+  the printer periodically broadcasts its presence over UDP (source port
+  1900), and the slicer just listens for it on 2021. `networking.firewall.
+  enable = true` is set fleet-wide (`modules/nixos/common.nix`), and until
+  now nothing on pegasus opened either port, so that unsolicited inbound
+  broadcast was silently dropped — the printer likely wasn't appearing on
+  its own in LAN-only mode. *alt considered:* skip the firewall change
+  entirely and add the printer manually by IP + access code in Bambu
+  Studio (Device tab), since every actual data-plane connection — file
+  send over FTPS, MQTT status, camera stream — is outbound from the
+  slicer and was already unaffected by the firewall. *Why not:* Zoe wants
+  real auto-discovery, not just a workaround.
+  Requires the printer to be on the same L2 broadcast domain as pegasus —
+  confirmed same VLAN, bridged across a LAN/WLAN boundary (i.e. wired
+  pegasus, printer on Wi-Fi, same AP/VLAN) rather than crossing an actual
+  router/VLAN boundary, which broadcast wouldn't survive without a relay
+  (e.g. https://github.com/inindev/bambu-bridge). If discovery still
+  doesn't work after this, suspect client isolation on the AP (common on
+  guest/IoT SSIDs, blocks broadcast between wireless clients even on the
+  same subnet) before assuming the firewall rule is wrong.
+  Validated with `flake-check-sandboxed.sh` (exit 0). Not yet confirmed on
+  hardware — needs `nixos-rebuild switch` + checking whether the printer
+  now appears automatically in Bambu Studio's device list.
+
+- **Signal Desktop added, 2026-08-25.** `signal-desktop` confirmed present in
+  the pinned nixpkgs (v7.83.0, license AGPL-3.0-only — free, no
+  `allowUnfree` needed) before adding, same practice as the original
+  2026-07-11 desktop-apps batch. Added to `home.packages` alongside the
+  other chat clients (discord, ferdium). No further wiring needed —
+  Signal's own account linking (scan a QR code from an existing mobile
+  install) happens interactively on first launch, same as Discord/Ferdium
+  needed no declarative account setup.
+  Validated with `flake-check-sandboxed.sh`. Not yet confirmed on hardware.
+
+- **Kernel pinned to 7.1 (`linuxPackages_7_1`), was `linuxPackages_latest`,
+  2026-08-25.** A routine flake bump moved `linuxPackages_latest` from
+  7.1.7 to 7.2, which broke the NVIDIA production driver two different
+  ways on real hardware:
+  1. Kernel 7.2 dropped `strncpy()`'s declaration from `<linux/string.h>`
+     entirely (only `strscpy()` remains). Fixable — patched via a local
+     compat shim (`#define strncpy nv_compat_strncpy`) into the four
+     nvidia-open files that call it directly.
+  2. With (1) fixed, the build got further and hit kernel 7.2 renaming
+     `struct drm_atomic_state` to `struct drm_atomic_commit` and
+     removing/renaming its lifecycle functions
+     (`drm_atomic_state_alloc/_free/_put/_init/_default/_clear`) — a real
+     DRM-subsystem API restructure, 44 call sites across 7 files in
+     nvidia-open's `kernel-open/nvidia-drm/`. Unlike (1), this isn't a
+     safe rename-only shim candidate: it's not verifiable from the kernel
+     header alone whether object allocation/ownership semantics changed
+     along with the names, and a wrong guess risks a driver that
+     *compiles* but misbehaves at runtime (KMS/Wayland corruption, hangs).
+  *alt tried:* fall back to `hardware.nvidia.open = false` (the closed/
+  proprietary kernel module) instead of chasing (2), on the theory that
+  its kernel-interface glue might have dodged the break. *Why not:*
+  confirmed on real hardware — the closed driver has its own separate
+  `kernel/` source tree (bundled inside the `.run` installer, distinct
+  from nvidia-open's `kernel-open/` GitHub tree) and it hit the identical
+  strncpy issue in its own copy of `os-interface.c`. Given that, and
+  that the closed tree's source isn't inspectable at all without a real
+  `download.nvidia.com` fetch (unfree, no public mirror), continuing to
+  patch blind against a wall already too risky to hand-patch in the
+  *readable* open tree was judged worse than just pinning the kernel back.
+  Pinning to 7.1 needs no driver-source patches at all — `hardware.nvidia`
+  in `modules/nixos/nvidia.nix` is back to its original clean state
+  (`open = true`, no `postPatch` overrides). Bump `boot.kernelPackages`
+  back to `linuxPackages_latest` once nixpkgs/NVIDIA ship a real 7.2 fix;
+  nothing in `nvidia.nix` needs to change when that happens.
+  Confirmed on real hardware: the strncpy fix and the drm_atomic_state
+  break were both hit via actual `nrs` runs on pegasus (not just eval).
+  The 7.1 kernel pin itself was validated with `flake-check-sandboxed.sh`
+  (exit 0) but not yet confirmed with a real `nixos-rebuild switch`.
