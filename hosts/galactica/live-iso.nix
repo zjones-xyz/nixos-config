@@ -8,7 +8,9 @@
 #     plan around it") — the data disks are plain XFS or btrfs, LUKS on the
 #     two data disks and the SSD pools, plaintext on the two parity disks
 #     (HARDWARE-MAP.md §2)
-#   - capture a hardware profile for HARDWARE-MAP.md / PLATFORM.md
+#   - capture a hardware profile for HARDWARE-MAP.md / PLATFORM.md, persisted
+#     onto a spare partition on the flash drive itself where possible (this
+#     medium's own root is tmpfs and evaporates on reboot)
 #
 # Build:
 #   nix build .#nixosConfigurations.galactica-live-iso.config.system.build.isoImage
@@ -22,6 +24,10 @@
 
 {
   networking.hostName = "galactica-live";
+
+  # lsiutil/storcli/megacli (below) are all unfree — Broadcom/Avago vendor
+  # tooling, same as every other proprietary LSI utility.
+  nixpkgs.config.allowUnfree = true;
 
   # Root login over SSH, key-only. The installation-device profile this
   # builds on defaults to an *empty* root password with PermitRootLogin =
@@ -46,13 +52,21 @@
   networking.firewall.enable = true;
 
   # Tools to open/mount the Unraid array directly, plus enough
-  # hardware-inventory tools to profile the machine.
+  # hardware-inventory tools to profile the machine. lsiutil/storcli/megacli
+  # are for the LSI 9240-8i SAS2008 HBA (PLATFORM.md §7b) — already validated
+  # as a genuine, correctly crossflashed IT-mode card (cold pass 2026-08-09),
+  # about to be seated permanently, and IT mode passes disks straight through
+  # so it doesn't otherwise change how the array-mounting test works.
+  # ⚠ sas2flash is NOT in nixpkgs (PLATFORM.md §7b) — if IT/IR needs
+  # re-confirming beyond what lsiutil/the device ID show, it has to come from
+  # Broadcom separately, this ISO doesn't carry it.
   environment.systemPackages = with pkgs; [
     cryptsetup
     xfsprogs
     btrfs-progs
     parted
     gptfdisk
+    dosfstools
     smartmontools
     nvme-cli
     pciutils
@@ -61,6 +75,9 @@
     lshw
     inxi
     lm_sensors
+    lsiutil
+    storcli
+    megacli
 
     (pkgs.writeShellScriptBin "capture-hardware-profile" ''
       set -euo pipefail
@@ -73,9 +90,91 @@
         echo; echo "## lsblk"; lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,MODEL,SERIAL,WWN
         echo; echo "## nvme list"; nvme list || true
         echo; echo "## smartctl --scan"; smartctl --scan
+        for dev in $(smartctl --scan | awk '{print $1}'); do
+          echo; echo "## smartctl -a $dev"
+          smartctl -a "$dev" || true
+        done
+
+        # LSI/SAS2008 HBA (PLATFORM.md §7b). Device ID settles firmware
+        # personality outright: 1000:0072 = MPT (IT-capable), 1000:0073 =
+        # stock MegaRAID. storcli/megacli enumerating the card at all is a
+        # negative test — in true IT mode, neither should see it.
+        echo; echo "## lspci -nnk -d 1000: (LSI/Avago/Broadcom devices)"
+        lspci -nnk -d 1000: || true
+        echo; echo "## dmesg | grep -E 'LSISAS|sas_address|mpt2sas|mpt3sas'"
+        echo "   (mpt3sas is the module; SAS2 hardware itself registers as mpt2sas_cm0 — PLATFORM.md §7b's naming trap)"
+        dmesg | grep -E "LSISAS|sas_address|mpt2sas|mpt3sas" || true
+        echo; echo "## storcli show (should FAIL to enumerate the card in true IT mode)"
+        storcli show || true
+        echo; echo "## megacli -AdpAllInfo -aALL (should also FAIL to enumerate)"
+        megacli -AdpAllInfo -aALL || true
+        echo "   (lsiutil is interactive/menu-driven — run it by hand for IT-vs-IR and the SAS address if the above isn't conclusive)"
+
         echo; echo "## lshw"; lshw
       } > "$out" 2>&1
-      echo "Wrote $out — scp it off before rebooting, this medium is not persistent."
+      echo "Wrote $out"
+
+      # Best-effort: persist a copy onto the flash drive itself, in whatever
+      # free space is left after the ISO image (this medium's own root is
+      # tmpfs and evaporates on reboot). Never touches the ISO's own
+      # partitions — only creates a new one in unallocated space, and only if
+      # one doesn't already exist from a previous run.
+      isoSrc=$(findmnt -no SOURCE /iso || true)
+      if [ -z "$isoSrc" ]; then
+        echo "Could not find the boot device (/iso not mounted from a block device) — skipping persistence, scp $out off instead."
+        exit 0
+      fi
+      # This is a hybrid isohybrid image: booted from a USB stick, the
+      # ISO9660 filesystem is normally found directly on the whole-disk node
+      # (e.g. /dev/sdb, TYPE=disk) rather than a partition — pkname on that
+      # is empty because it has no parent, not because there's no disk.
+      srcType=$(lsblk -no TYPE "$isoSrc")
+      case "$srcType" in
+        disk) disk="$isoSrc" ;;
+        part) disk="/dev/$(lsblk -no pkname "$isoSrc")" ;;
+        *)
+          echo "Boot device $isoSrc is a '$srcType', not a writable disk (optical media?) — skipping persistence, scp $out off instead."
+          exit 0
+          ;;
+      esac
+
+      dataPart=$(blkid -L HWPROFILE 2>/dev/null || true)
+      if [ -z "$dataPart" ]; then
+        echo "No HWPROFILE partition yet on $disk — looking for free space to create one..."
+        # Machine-readable free-space line looks like "START:END:SIZE:free;"
+        # (no leading partition-number field, unlike a real partition line).
+        freeStart=$(parted -ms "$disk" unit MiB print free 2>/dev/null | awk -F: '/:free;$/ {start=$1} END{print start}' | tr -d 'MiB')
+        if [ -z "$freeStart" ]; then
+          echo "No free space found on $disk — skipping persistence, scp $out off instead."
+          exit 0
+        fi
+        # mkpart's syntax differs by table type: GPT partitions take a NAME
+        # before the fs-type, MBR partitions take primary/extended/logical
+        # instead. This hybrid ISO (makeEfiBootable + makeUsbBootable) is
+        # normally GPT, but detect rather than assume.
+        table=$(parted -ms "$disk" print 2>/dev/null | sed -n '2p' | cut -d: -f6)
+        echo "Creating a FAT32 HWPROFILE partition on $disk ($table) starting at ''${freeStart}MiB..."
+        if [ "$table" = "gpt" ]; then
+          parted --script "$disk" -- mkpart HWPROFILE fat32 "''${freeStart}MiB" 100%
+        else
+          parted --script "$disk" -- mkpart primary fat32 "''${freeStart}MiB" 100%
+        fi
+        partprobe "$disk" || true
+        udevadm settle
+        # Freshly partitioned, not yet formatted, so blkid -L can't find it
+        # yet — the new partition is the last one lsblk lists for this disk.
+        newPartName=$(lsblk -nlo NAME "$disk" | tail -n1)
+        newPart="/dev/$newPartName"
+        mkfs.vfat -F 32 -n HWPROFILE "$newPart"
+        dataPart="$newPart"
+      fi
+
+      mkdir -p /mnt/hwprofile
+      mount "$dataPart" /mnt/hwprofile
+      cp "$out" /mnt/hwprofile/
+      sync
+      umount /mnt/hwprofile
+      echo "Copied $(basename "$out") onto $dataPart (label HWPROFILE) — readable from pegasus or serenity after unplugging the drive."
     '')
   ];
 }
