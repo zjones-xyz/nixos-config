@@ -289,6 +289,24 @@ in
   # survives a reinstall without a manual step.
   systemd.tmpfiles.rules = [ "d /games 0755 z users - -" ];
 
+  # ── 1Password ────────────────────────────────────────────────────────────────
+  # NixOS modules, not plain home.packages entries (which is how the GUI+CLI
+  # pair were installed before). The plain-package form is enough to run
+  # `1password` and `op` standalone, but the desktop app's Settings → Developer
+  # → "Integrate with 1Password CLI" toggle only authorizes a CLI binary that's
+  # setgid-wrapped into the `onepassword-cli` group — these modules are what
+  # actually create that wrapper (security.wrappers."op" /
+  # security.wrappers."1Password-BrowserSupport"), per nixpkgs'
+  # nixos/modules/programs/_1password{,-gui}.nix. Without them the toggle has
+  # nothing to authorize and biometric/session-based `op read op://...` (used
+  # by the ipmi-tower-* aliases in home.nix) never actually unlocks.
+  # polkitPolicyOwners grants the wrapper to z, the only account on this box.
+  programs._1password.enable = true;
+  programs._1password-gui = {
+    enable = true;
+    polkitPolicyOwners = [ "z" ];
+  };
+
   # ── home-manager ──────────────────────────────────────────────────────────
   home-manager = {
     useGlobalPkgs = true;

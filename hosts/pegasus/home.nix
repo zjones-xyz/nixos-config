@@ -71,8 +71,6 @@
     google-chrome
     firefox
     vivaldi
-    _1password-gui
-    _1password-cli
     claude-code
 
     discord
