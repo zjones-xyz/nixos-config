@@ -59,6 +59,15 @@ in
     pciutils
   ];
 
+  # ── DDC/CI (ddcutil) ─────────────────────────────────────────────────────────
+  # ddcutil itself is installed via home.packages (home.nix) — this is just the
+  # kernel/udev wiring it needs: loads i2c-dev and grants read/write on
+  # /dev/i2c-* to whoever's logged in at the seat (and to members of a new
+  # "i2c" group), so no sudo/group-membership dance is needed to run it. See
+  # modules/nixos/nvidia.nix for the other half — the driver-side I2C fix
+  # this proprietary-NVIDIA host also needs for ddcutil to actually work.
+  hardware.i2c.enable = true;
+
   # ── Boot ────────────────────────────────────────────────────────────────────
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
