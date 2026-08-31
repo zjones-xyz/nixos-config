@@ -141,7 +141,10 @@
       # ISO9660 filesystem is normally found directly on the whole-disk node
       # (e.g. /dev/sdb, TYPE=disk) rather than a partition — pkname on that
       # is empty because it has no parent, not because there's no disk.
-      srcType=$(lsblk -no TYPE "$isoSrc")
+      # -d/--nodeps is required: without it lsblk lists the device's children
+      # too (disk + all its partitions), so $srcType would be a multi-line
+      # dump that matches neither case arm below.
+      srcType=$(lsblk -dno TYPE "$isoSrc")
       case "$srcType" in
         disk) disk="$isoSrc" ;;
         part) disk="/dev/$(lsblk -no pkname "$isoSrc")" ;;
