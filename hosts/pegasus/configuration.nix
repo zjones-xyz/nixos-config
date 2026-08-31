@@ -57,6 +57,7 @@ in
   # resolves — sudo does not inherit the user profile's PATH.
   environment.systemPackages = with pkgs; [
     pciutils
+    nmap
   ];
 
   # ── Boot ────────────────────────────────────────────────────────────────────
