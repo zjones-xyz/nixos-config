@@ -119,8 +119,8 @@
         dmesg | grep -E "LSISAS|sas_address|mpt2sas|mpt3sas" || true
         echo; echo "## storcli show (should FAIL to enumerate the card in true IT mode)"
         storcli show || true
-        echo; echo "## megacli -AdpAllInfo -aALL (should also FAIL to enumerate)"
-        megacli -AdpAllInfo -aALL || true
+        echo; echo "## MegaCli64 -AdpAllInfo -aALL (should also FAIL to enumerate)"
+        MegaCli64 -AdpAllInfo -aALL || true
         echo "   (lsiutil is interactive/menu-driven — run it by hand for IT-vs-IR and the SAS address if the above isn't conclusive)"
 
         echo; echo "## lshw"; lshw

@@ -40,6 +40,49 @@ temperatures 30–39 °C.
 **Array total: 24 TB, 17.1 TB used, 6.88 TB free.** That is the number the
 migration plan turns on — see `DESIGN.md` §6, where it closes an assumption.
 
+### `sidepool` — a fifth pool, missing from the 2026-08-07 Main-tab reading above
+
+**Not read from Unraid's Main tab like the rest of §1** — discovered
+2026-08-31 from a live NixOS boot (`hosts/galactica/live-iso.nix`), by
+`lsblk`-ing the whole machine and finding four `crypto_LUKS` disks that
+matched none of the serials above. Called `sidepool` by the owner; functions
+as Unraid's staging area for the migration.
+
+| Serial | Size | Model | LUKS |
+|---|---|---|---|
+| `76HE4XDAS` | 2.7 TB | TOSHIBA DT01ACA300 | yes |
+| `WD-WXD2D534CY72` | 3.6 TB | WDC WD40EFAX-68JH4N1 | yes |
+| `WD-WXM2D72D3V35` | 3.6 TB | WDC WD40EFPX-68C6CN0 | yes |
+| `WD-WXD2D534CJE9` | 3.6 TB | WDC WD40EFAX-68JH4N1 | yes |
+
+**One btrfs filesystem spanning all four** (`blkid` shows a shared `UUID` plus
+a per-device `UUID_SUB` — btrfs's own multi-device signature), ~13.5 TB raw,
+10.56 TiB used. Confirmed 2026-08-31: opens with the same passphrase as the
+main array, and mounts **read-only** cleanly and completely — `btrfs
+filesystem show` lists all four devices present, none missing.
+
+Two top-level directories once mounted:
+
+- **`pools/`** — `cache`, `fastservices`, `services` (names matching the three
+  real pools above), plus `unraid_config` (root-only) and
+  `unraid_flash.img` — **30,752,636,928 bytes, exactly the documented size of
+  the Unraid boot flash** (§1 above — the SanDisk Ultra, 28.6 GB), with an
+  mtime from the day it was checked. A current, full image backup of the boot
+  media.
+- **`move_aside/`** — directories matching real share names from `SHARES.md`
+  (`arr_media`, `documents`, `immich_photos`, `jellyfin`, `music`, `books`,
+  `ha_backup`, etc.), plus dated `ab_2026MMDD_*` folders — almost certainly
+  weekly appdata-backup snapshots.
+
+⚠ **Relevant to `DESIGN.md`'s Phase 0 backup concern about the Unraid flash
+and config being unrecoverable** (§6.2 step 1) — at least that half of the
+insurance already exists here and looked current as of this reading. Worth
+confirming it's still being refreshed before leaning on it, but this changes
+"we need to back this up" to "confirm this backup stays good."
+
+The WD40EFAX model matches `PLATFORM.md` §7b's drawer-spare disks exactly,
+consistent with `sidepool` being built from drawer disks as its name implies.
+
 ⚠ **`sdX` letters are not stable** across reboots or recabling. They are recorded
 because they were captured in the same reading as everything else and make the
 sysfs port lookup in §3 cheaper; **map by serial, never by `sdX`.**

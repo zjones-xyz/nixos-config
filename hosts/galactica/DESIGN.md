@@ -1045,9 +1045,15 @@ Two things to verify on the machine before committing `[unverified]`:
   LUKS per disk, so `cryptsetup open` works from NixOS — you need the passphrase and
   `/etc/crypttab` entries, and it changes the boot sequence. ⚠ The parity asymmetry does
   **not** carry over; see step 12.
-- **Partition layout.** Unraid partitions array disks itself; check `lsblk`/`parted` and
-  confirm the filesystem mounts cleanly read-only from a Linux live environment *before* you
-  plan around it.
+- ~~**Partition layout.**~~ ✅ **Substantially answered 2026-08-31** via a live
+  NixOS boot test (`hosts/galactica/live-iso.nix`, `HARDWARE-MAP.md`'s new
+  `sidepool` section): a `cryptsetup luksOpen` + read-only mount of an
+  Unraid-built, multi-device LUKS+btrfs pool worked cleanly and completely
+  from a bare Linux live environment, no Unraid involved — `btrfs filesystem
+  show` reported all members present, nothing missing. That's a harder case
+  than the main array's two *single-disk* data disks, which were identified
+  by serial (`8CG7T97E` = Disk 1, `8DJPNS3Y` = Disk 2) but not yet
+  mount-tested themselves — a quick follow-up, not a real unknown anymore.
 
 ### 6.2 Recommended sequence
 
