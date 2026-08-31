@@ -27,6 +27,13 @@
 
   networking.hostName = "galactica-live";
 
+  # Silences an eval warning: the base installer profile pulls in ZFS
+  # support generically (so the installer can handle ZFS targets), which
+  # defaults `forceImportRoot` to `true`. This ISO has no ZFS root of its
+  # own to import, so there's nothing to force — same setting galactica's
+  # real configuration.nix already sets, for the same reason.
+  boot.zfs.forceImportRoot = false;
+
   # lsiutil/storcli/megacli (below) are all unfree — Broadcom/Avago vendor
   # tooling, same as every other proprietary LSI utility.
   nixpkgs.config.allowUnfree = true;
