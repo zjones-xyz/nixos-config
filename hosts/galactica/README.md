@@ -1,15 +1,16 @@
 # galactica — Tower's NixOS identity
 
-**Supermicro X9SCM-F, Xeon E3-1230 v2, 32 GB.** Currently running Unraid 7.3.2
-on bare metal, as it has for years. The plan is to replace that with bare-metal
-NixOS running SnapRAID + mergerfs.
+**Supermicro X9SCM-F, Xeon E3-1230 v2, 32 GB.** Was running Unraid 7.3.2 on
+bare metal for years; migrating to bare-metal NixOS with a native ZFS RAIDZ1
+array (LUKS underneath, not SnapRAID + mergerfs — see the "Blocking item"
+section below, this replaced the original plan outside this repo).
 
-⚠ **There is no `configuration.nix` in this directory, and that is deliberate.**
-This host is documented before it is configured, because almost every line of its
-eventual config is downstream of a storage layout that has not been decided yet.
-See `DECISIONS.md` decision 3. Consequently there is no
-`nixosConfigurations.galactica` in the flake and no `secrets/galactica.yaml`
-staging in `.sops.yaml` — both land together with the config.
+`configuration.nix`, `disko.nix`, and `home.nix` now exist (root: LUKS +
+btrfs, matching the fleet). `nixosConfigurations.galactica` is still not in
+`flake.nix` — `hardware-configuration.nix` can only be generated live, on the
+real machine, and adding the flake entry before that exists would break
+`nix flake check` on an unresolvable import. See `MANUAL-STEPS.md` for
+what's left before that wiring lands.
 
 ## The five documents
 
@@ -42,12 +43,13 @@ decoupled. `DECISIONS.md` §2.
 
 ## Blocking item
 
-**The storage layout, which has not caught up to the data.** `SHARES.md` §5 now
-puts a tier on all 34 shares — twenty-two owner-confirmed, twelve still
-proposals. That was the blocking item and it is closed.
-
-What blocks now is `DESIGN.md` §5: it was written around a **two-way** split and
-faces **eight** tiers, it provides no versioning (which the Critical tier
-requires), and Protected turned out to span both the array and the SSD pools —
-so it is a policy rather than a place, and needs implementing in two mechanisms.
-`DECISIONS.md` `## Still open` has the detail.
+⚠ **The storage design below (`DESIGN.md`, `DECISIONS.md`) has been
+superseded outside this repo, and this section is stale.** As of 2026-08-31
+the live plan is native ZFS RAIDZ1 across the four 12 TB drives (LUKS
+underneath, not ZFS-native encryption — matches this host's existing
+LUKS-everywhere convention), staged via a temporary btrfs pool
+(`sidepool`) built on an LSI HBA, not SnapRAID + mergerfs. Reconciling
+`DESIGN.md`/`DECISIONS.md` with that decision is a real rewrite that hasn't
+happened yet — treat the storage-layout discussion below as historical
+context for *why bare metal* and *why not SnapRAID as originally scoped*,
+not as the current plan.
