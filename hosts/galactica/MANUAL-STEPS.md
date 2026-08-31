@@ -28,8 +28,24 @@ having shifted, since disko wipes whatever `device` points at.
 
 ## 2. Run disko, then generate real hardware-configuration.nix
 
+Boot `galactica-live-iso` (rebuild it first — it now carries `disko` and
+`git`, added specifically to drive this step rather than just diagnose
+hardware):
 ```bash
-nix run github:nix-community/disko -- --mode disko ./hosts/galactica/disko.nix
+nix build .#nixosConfigurations.galactica-live-iso.config.system.build.isoImage
+```
+Get the repo onto the booted ISO. Simplest: from pegasus or serenity, which
+already have both the repo and standing SSH access to the ISO's root
+account (`live-iso.nix`'s `authorizedKeys`) — no need for the ISO itself to
+have outbound GitHub credentials, or to know/care whether the repo is
+public:
+```bash
+rsync -a ~/nixos-config/ root@<tower-ip>:~/nixos-config/
+```
+Then, on the booted ISO:
+```bash
+cd nixos-config
+disko --mode disko ./hosts/galactica/disko.nix
 nixos-generate-config --no-filesystems --root /mnt
 ```
 

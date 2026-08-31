@@ -92,6 +92,18 @@
     storcli
     megacli
 
+    # This ISO now also drives the actual install (MANUAL-STEPS.md), not
+    # just hardware diagnosis — `disko` packaged directly rather than `nix
+    # run github:nix-community/disko`, which needs flakes enabled (this
+    # profile doesn't have them on) and a live GitHub fetch at the single
+    # least-recoverable step in the whole migration. The repo itself gets
+    # onto this ISO via `rsync` from pegasus/serenity (which already have
+    # standing SSH access here — see authorizedKeys above), not a git clone,
+    # so this ISO never needs outbound GitHub credentials. `git` is still
+    # included for convenience once the repo's local.
+    disko
+    git
+
     (pkgs.writeShellScriptBin "capture-hardware-profile" ''
       set -euo pipefail
       out="/root/hardware-profile-$(date +%Y%m%d-%H%M%S).txt"
