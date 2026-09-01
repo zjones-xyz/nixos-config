@@ -123,6 +123,10 @@
     npull = "~/Code/nixos-config/scripts/npull.sh";
     unlock-memory-alpha = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh memory-alpha.internal "op://System Keys/memory-alpha luks/password"'';
     unlock-pegasus = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh pegasus.internal "op://System Keys/pegasus luks/password"'';
+    # unlock-tower (2026-08-31): carried on both serenity and pegasus, unlike
+    # the two above — see hosts/pegasus/home.nix's comment for why. "tower",
+    # not "galactica", matching every other alias for this host.
+    unlock-tower = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh tower.internal "op://System Keys/tower luks/password"'';
     ipmi-tower = ''~/Code/nixos-config/scripts/ipmi-remote.sh run towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-open-tty = ''~/Code/nixos-config/scripts/ipmi-remote.sh console towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-set-bios-next-boot = ''~/Code/nixos-config/scripts/ipmi-remote.sh bios-next-boot towerbmc.internal "op://System Keys/tower ipmi/password"'';
