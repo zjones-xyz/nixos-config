@@ -139,6 +139,16 @@
     # FreeIPMI-not-ipmitool rationale.
     freeipmi
 
+    # expect — drives the passphrase handoff in scripts/luks-unlock-remote.sh
+    # for the unlock-tower alias above (and any future unlock-* on this box).
+    # serenity already carries it for the same reason; pegasus was missing it,
+    # so unlock-tower fell back to a manual initrd session here
+    # (expect: command not found) even though the alias was defined. Same
+    # echo-off-race rationale as serenity's copy: expect waits for the real
+    # prompt text before sending, so the passphrase can't land on the remote
+    # pty before systemd-tty-ask-password-agent has disabled echo.
+    expect
+
     # Desktop GUI for Borg.
     vorta
 
