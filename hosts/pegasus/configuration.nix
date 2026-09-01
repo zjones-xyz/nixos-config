@@ -84,6 +84,16 @@ in
   # the evidence is gone.
   boot.kernel.sysctl."kernel.panic" = lib.mkForce 600;
 
+  # ── aarch64 emulation (Colmena's build host for the Pis) ─────────────────────
+  # Registers QEMU user-mode emulation for aarch64-linux via binfmt_misc, so
+  # this x86_64 box can build aarch64 derivations for hopper/hamilton. Moved
+  # here from memory-alpha (2026-08-31) — pegasus has the most CPU/RAM in the
+  # fleet, so it's the better home for this now that Colmena delegates the
+  # build via colmena.nix's `meta.machinesFile` (see
+  # colmena-builders.machines). See memory-alpha/configuration.nix's git
+  # history for the original writeup of what this does and why.
+  boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
+
   # ── Tailscale ───────────────────────────────────────────────────────────────
   # Pegasus is reached over the tailnet (it is the primary GPU inference
   # endpoint — see modules/nixos/olla-router.nix). It is NOT an exit node, so we

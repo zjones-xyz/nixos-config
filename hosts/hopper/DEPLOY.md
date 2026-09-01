@@ -1,20 +1,20 @@
 # Deploying hopper (Raspberry Pi 4)
 
 hopper is an `aarch64-linux` host built with `raspberry-pi-nix`. The flow is:
-build a complete SD image on **memory-alpha** (which emulates aarch64 via
+build a complete SD image on **pegasus** (which emulates aarch64 via
 binfmt) → flash it → boot straight into the full hopper config → enrol its
 sops key → deploy normally with `nixos-rebuild --target-host` from then on.
 
 ---
 
-## 0. Build host: memory-alpha (not the Mac)
+## 0. Build host: pegasus (not the Mac)
 
 > **macOS 26 (Darwin 25.x) known issue:** The `darwin.linux-builder` VM crashes
 > immediately on macOS 26 due to a QEMU / Hypervisor.framework incompatibility
 > (`HVF SMCR_EL1 assertion failed`). This affects both nixpkgs and
 > nixpkgs-unstable as of June 2026.
 >
-> **memory-alpha is the aarch64 build host instead.** It registers QEMU
+> **pegasus is the aarch64 build host instead.** It registers QEMU
 > user-mode emulation via `boot.binfmt.emulatedSystems = [ "aarch64-linux" ]`
 > (see its `configuration.nix`), so it can build aarch64 closures and images
 > natively-ish. Emulated builds are slower than native but far faster than a
@@ -28,13 +28,13 @@ sops key → deploy normally with `nixos-rebuild --target-host` from then on.
 
 ## 1. Bootstrap: build and flash the hopper SD image
 
-### 1a. Build the image on memory-alpha
+### 1a. Build the image on pegasus
 
-SSH into memory-alpha, clone this repo, and build hopper's SD image. Because
-memory-alpha has aarch64 binfmt emulation, this just works:
+SSH into pegasus, clone this repo, and build hopper's SD image. Because
+pegasus has aarch64 binfmt emulation, this just works:
 
 ```sh
-ssh z@memory-alpha.internal
+ssh z@pegasus.internal
 nix-shell -p git    # if git isn't already available
 git clone <your-nixos-config-repo-url> ~/nixos-config
 cd ~/nixos-config
@@ -45,11 +45,11 @@ The finished image lands in `result/sd-image/*.img.zst`.
 
 ### 1b. Flash it to the SD card
 
-Copy the image off memory-alpha (or flash from memory-alpha directly if the
+Copy the image off pegasus (or flash from pegasus directly if the
 card reader is attached there). To flash from the Mac:
 
 ```sh
-scp z@memory-alpha.internal:~/nixos-config/result/sd-image/*.img.zst .
+scp z@pegasus.internal:~/nixos-config/result/sd-image/*.img.zst .
 diskutil list                      # find the SD card device
 diskutil unmountDisk /dev/diskN
 zstdcat *.img.zst | sudo dd of=/dev/diskN bs=4M status=progress conv=fsync
@@ -122,18 +122,18 @@ proxied):
 
 Once sops is enrolled, redeploy so the secrets-dependent services (Tailscale,
 Traefik, NUT, Beszel, speedtest-tracker) come up properly. From the Mac, with
-memory-alpha as the aarch64 build host:
+pegasus as the aarch64 build host:
 
 ```sh
 nixos-rebuild switch \
   --flake .#hopper \
   --target-host z@hopper.internal \
-  --build-host z@memory-alpha.internal \
+  --build-host z@pegasus.internal \
   --use-remote-sudo
 ```
 
-`--build-host z@memory-alpha.internal` offloads the aarch64 build to
-memory-alpha and ships the closure to hopper — no Mac builder needed, and the
+`--build-host z@pegasus.internal` offloads the aarch64 build to
+pegasus and ships the closure to hopper — no Mac builder needed, and the
 Pi never compiles. This is the standard command for all subsequent deploys.
 
 ## 4. Post-deploy checklist
@@ -186,14 +186,22 @@ startup. Flipping back to staging reuses the cached staging certs.
 
 ## Routine updates
 
-From the Mac, once hopper is running:
+Preferred: `colmena apply --on hopper` (or `--on @fleet` for the whole fleet
+except galactica) from pegasus — see `colmena.nix` at the repo root. It does
+the same `--build-host`-style delegation to pegasus automatically via
+`meta.machinesFile`, without needing the flags spelled out by hand.
+(Running it from the Mac instead needs `nix.settings.trusted-users` set
+there too — Determinate Nix, outside this repo's control; see the PR that
+introduced colmena.nix.)
+
+Manual fallback, once hopper is running:
 
 ```sh
 git pull
 nixos-rebuild switch \
   --flake .#hopper \
   --target-host z@hopper.internal \
-  --build-host z@memory-alpha.internal \
+  --build-host z@pegasus.internal \
   --use-remote-sudo
 ```
 
