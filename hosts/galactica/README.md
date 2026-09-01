@@ -6,11 +6,10 @@ array (LUKS underneath, not SnapRAID + mergerfs — see the "Blocking item"
 section below, this replaced the original plan outside this repo).
 
 `configuration.nix`, `disko.nix`, and `home.nix` now exist (root: LUKS +
-btrfs, matching the fleet). `nixosConfigurations.galactica` is still not in
-`flake.nix` — `hardware-configuration.nix` can only be generated live, on the
-real machine, and adding the flake entry before that exists would break
-`nix flake check` on an unresolvable import. See `MANUAL-STEPS.md` for
-what's left before that wiring lands.
+btrfs, matching the fleet), and `nixosConfigurations.galactica` is wired into
+`flake.nix` against a real, disko-reconciled `hardware-configuration.nix`. See
+`MANUAL-STEPS.md` for what's still outstanding (the array rebuild, an
+unconfirmed DNS fix, NUT/UPS, Beszel agent, NFS re-export cutover).
 
 ## The five documents
 
