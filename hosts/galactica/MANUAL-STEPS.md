@@ -236,6 +236,41 @@ media the entire time between "Unraid goes away" and "this lands."
 
 ## 9. The array itself
 
+### ✅ Built and cold-boot-verified — 2026-09-01
+
+The array now exists, and its config is declared and proven across a cold boot:
+
+- **Pool `tank`** — RAIDZ1 over the four 12 TB spinners + a **3-way mirror**
+  special vdev over the three healthy SSDs (WD Blue + both BX500s), all
+  **LUKS-under-ZFS** (`ashift=12` forced — these are 512e drives; one sops
+  `luks/arrayKeyFile` in slot 0 + a fleet recovery passphrase in slot 1 per
+  disk). The MX100 hard-failed on its first write and was dropped (project
+  memory `project-galactica-mx100-failed-3way-pivot`), which is why the
+  special vdev is 3-way, not the planned 2×2 — a forward path to 2×2 exists
+  (`zpool detach` + `add`) if a 4th SSD arrives.
+- **Config** — crypttab (7 members, `nofail`, `discard` on the SSDs only),
+  `zfs-import-tank` ordered `after cryptsetup.target`, `devNodes=/dev/mapper`,
+  `extraPools=["tank"]`. Committed and **cold-boot verified**: the array
+  auto-unlocks and imports from a power-cycle. `tank` ≈ 31.6 TiB usable.
+- **`tank/appdata`** created, forced onto the special vdev
+  (`special_small_blocks == recordsize == 64K`).
+- **⚠ ESP stayed on midden.** The migration to the WD Blue ESP was reverted:
+  the WD Blue (and both BX500s) sit on the add-in ASMedia controller
+  (PCI `02:00.0`) that this BIOS can't UEFI-boot — only the onboard C204
+  (`00:1f.2`: midden + the four spinners) boots. Completing ESP-off-midden
+  needs the WD Blue physically recabled to the free onboard C204 port
+  (deferred). WD Blue's 1 GiB ESP partition is left vestigial for reuse.
+
+**Still to do:** the media/data **dataset tree** (deferred — needs the *arr
+hardlink-co-location and the SHARES.md tiering decisions, see §8), the
+**copy-back** from `sidepool` (needs it physically reconnected), and the
+**NFS re-exports** (§8, fsids 100–103).
+
+The original forward-looking notes below are now mostly satisfied; kept for
+provenance.
+
+---
+
 Not part of this install at all — built afterward, per the migration
 handoff's step 8, once `sidepool`'s cables are reconnected and its contents
 reconfirmed readable. Its ZFS datasets and mountpoints land in a follow-up
