@@ -896,3 +896,16 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   break were both hit via actual `nrs` runs on pegasus (not just eval).
   The 7.1 kernel pin itself was validated with `flake-check-sandboxed.sh`
   (exit 0) but not yet confirmed with a real `nixos-rebuild switch`.
+
+- **SDDM `defaultSession` switched from "plasma-dragonized" to "niri",
+  2026-09-01.** Niri (added 2026-08-10, see above) is now the daily driver;
+  Plasma/Dragonized/COSMIC stay registered as selectable SDDM sessions,
+  they're just no longer pre-selected at the greeter. "niri" is nixpkgs'
+  niri package's declared `passthru.providedSessions` value (confirmed
+  against `nixos/modules/programs/wayland/niri.nix` and
+  `pkgs/by-name/ni/niri/package.nix` on the `release-26.05` branch) — the
+  same session name `programs.niri.enable` already registers via
+  `services.displayManager.sessionPackages`, so no new session wiring was
+  needed, just the one-line `defaultSession` change in
+  `desktop-plasma.nix` (SDDM's own module stays the owner of that option,
+  same as before). Not yet confirmed on real hardware.
