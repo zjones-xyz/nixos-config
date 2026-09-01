@@ -227,17 +227,37 @@ in
   # Same NetworkManager/initrd-DHCP interaction every x86_64 host in this
   # fleet has hit — see pegasus/memory-alpha's configuration.nix for the full
   # explanation. Without this: routing works, DNS is empty, every boot.
+  # Widened 2026-08-31 after the original (address-flush-only) version
+  # provably never fixed DNS on this host — NetworkManager still showed
+  # enp0s25 as "connected (externally)" every boot, with an empty
+  # /etc/resolv.conf. Three changes bundled into one attempt rather than
+  # three separate reboot cycles:
+  #   1. A kmsg marker, so a future "did this even run" question is
+  #      answerable without relying on journal transfer across
+  #      switch-root — this is the one piece of real evidence this
+  #      debugging session was missing.
+  #   2. Stop systemd-networkd outright, not just remove its address —
+  #      NetworkManager may be deferring to a still-active DHCP client
+  #      independent of what `ip addr` shows.
+  #   3. Bring the link administratively down, not just flush its
+  #      address — NetworkManager's "externally configured" heuristic may
+  #      key off the link already being UP at NM startup, which a plain
+  #      address flush never touched.
   boot.initrd.systemd.services.flush-network-before-switch-root = {
     description = "Flush initrd DHCP state so NetworkManager re-negotiates DNS";
     before = [ "initrd-switch-root.target" ];
     wantedBy = [ "initrd-switch-root.target" ];
     unitConfig.DefaultDependencies = false;
     serviceConfig.Type = "oneshot";
-    path = [ pkgs.iproute2 pkgs.gawk ];
+    path = [ pkgs.iproute2 pkgs.gawk pkgs.systemd ];
     script = ''
+      echo "flush-network-before-switch-root: starting" > /dev/kmsg || true
+      systemctl stop systemd-networkd.service || true
       for iface in $(ip -o link show type ether | awk -F': ' '{print $2}'); do
         ip addr flush dev "$iface" || true
+        ip link set dev "$iface" down || true
       done
+      echo "flush-network-before-switch-root: done" > /dev/kmsg || true
     '';
   };
   boot.initrd.systemd.storePaths = [ "${pkgs.iproute2}/bin/ip" ];
