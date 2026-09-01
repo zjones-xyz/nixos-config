@@ -34,6 +34,16 @@
   # real configuration.nix already sets, for the same reason.
   boot.zfs.forceImportRoot = false;
 
+  # Packaging `disko` directly (below) didn't fully sidestep needing flakes
+  # the way it looked like it would — its CLI wrapper shells out through the
+  # new-style `nix` commands internally regardless of how it's invoked, and
+  # this installer profile has neither `nix-command` nor `flakes` on by
+  # default. Discovered 2026-08-31 running disko live rather than caught
+  # ahead of time — the workaround at that moment was
+  # `NIX_CONFIG="extra-experimental-features = nix-command flakes"` on the
+  # invocation; this makes it unnecessary on the next rebuild.
+  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+
   # lsiutil/storcli/megacli (below) are all unfree — Broadcom/Avago vendor
   # tooling, same as every other proprietary LSI utility.
   nixpkgs.config.allowUnfree = true;
