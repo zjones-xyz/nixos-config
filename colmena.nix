@@ -129,30 +129,42 @@
     ];
   };
 
-  # ── galactica ───────────────────────────────────────────────────────────────
-  # `tower.internal`, not `galactica.internal` — the AdGuard rewrite that
-  # keeps the old Tower/Unraid hostname resolving to this box is the fleet's
-  # actual DNS story for it (DECISIONS.md §2); nothing answers to
-  # `galactica.internal`. Deliberately left OFF the `fleet` tag: galactica is
-  # periodically LUKS-locked at boot (initrd SSH unlock on :2222, see
-  # scripts/luks-unlock-remote.sh / the `unlock-tower` aliases) and plain SSH
-  # to :22 simply times out until someone unlocks it — that's expected, not a
-  # deploy failure. `colmena apply --on @fleet` (the routine command — see the
-  # note below meta) skips it for exactly that reason; deploy to it
-  # explicitly (`colmena apply --on galactica`, or `--on @luks-locked`) once
-  # it's confirmed unlocked and reachable.
-  galactica = {
-    deployment = {
-      targetHost = "tower.internal";
-      targetUser = "z";
-      tags = [ "luks-locked" ];
-    };
-    imports = [
-      ./hosts/galactica/configuration.nix
-      home-manager.nixosModules.home-manager
-      sops-nix.nixosModules.sops
-    ];
-  };
+  # ── galactica — NOT YET IN THE HIVE ───────────────────────────────────────
+  # There is no `hosts/galactica/configuration.nix` and no
+  # `nixosConfigurations.galactica` in flake.nix as of this writing —
+  # hosts/galactica/README.md is explicit that this is deliberate (the
+  # storage layout isn't settled yet; see its DECISIONS.md decision 3). This
+  # file can't reference a module that doesn't exist, so there's no galactica
+  # node below, and `colmena apply`/`--on @fleet` today really does mean
+  # "all four real hosts" — there's no fifth one being silently skipped.
+  #
+  # Once `hosts/galactica/configuration.nix` and `nixosConfigurations.
+  # galactica` land, add its node here in the same shape as the others:
+  #
+  #   galactica = {
+  #     deployment = {
+  #       # tower.internal, NOT galactica.internal — the AdGuard rewrite that
+  #       # keeps the old Tower/Unraid hostname resolving to this box is the
+  #       # fleet's actual DNS story for it (see galactica's DECISIONS.md
+  #       # decision on naming); nothing answers to `galactica.internal`.
+  #       targetHost = "tower.internal";
+  #       targetUser = "z";
+  #       # Deliberately NOT tagged "fleet": galactica is periodically
+  #       # LUKS-locked at boot (initrd SSH unlock on :2222 — see
+  #       # scripts/luks-unlock-remote.sh / the `unlock-tower` aliases), and
+  #       # plain SSH to :22 simply times out until someone unlocks it —
+  #       # expected, not a deploy failure. `colmena apply --on @fleet`
+  #       # then skips it for exactly that reason; deploy to it explicitly
+  #       # (`colmena apply --on galactica`, or `--on @luks-locked`) once
+  #       # it's confirmed unlocked and reachable.
+  #       tags = [ "luks-locked" ];
+  #     };
+  #     imports = [
+  #       ./hosts/galactica/configuration.nix
+  #       home-manager.nixosModules.home-manager
+  #       sops-nix.nixosModules.sops
+  #     ];
+  #   };
 
   # ── hopper (Raspberry Pi 4) ─────────────────────────────────────────────────
   hopper = {
@@ -188,12 +200,15 @@
 }
 
 # ── Running it ───────────────────────────────────────────────────────────────
-#   colmena apply --on @fleet    # routine deploy — every host except galactica
-#   colmena apply --on galactica # only once galactica is confirmed unlocked
-#   colmena apply                # everything, incl. galactica — same caveat
+#   colmena apply --on @fleet    # routine deploy — every host in the hive
+#   colmena apply                # same, today — no untagged host to skip yet
 #   colmena apply --on pegasus   # single host, by name (globs work too: hop*)
 #
 # `--on` only supports positive selection (names, globs, `@tag`) — Colmena has
 # no `!host`/negation syntax as of the version current when this was written
-# (2026-08), which is why galactica gets its own `luks-locked` tag instead of
-# relying on excluding it from a catch-all.
+# (2026-08). `@fleet` vs plain `colmena apply` are equivalent right now (every
+# node is tagged `fleet`) but stop being equivalent the moment galactica's
+# node is added above with the `luks-locked` tag instead — at that point
+# `--on @fleet` becomes the routine, galactica-skipping command and plain
+# `colmena apply` starts trying (and, until unlocked, failing) to reach it
+# too. Reach for `@fleet` by habit once that lands.

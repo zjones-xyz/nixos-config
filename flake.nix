@@ -243,13 +243,14 @@
 
     # ── Colmena ─────────────────────────────────────────────────────────────
     # Deployment layer on top of the `nixosConfigurations` above — see
-    # colmena.nix for the hive itself (per-host `deployment.targetHost`, the
-    # aarch64-via-pegasus distributed-build wiring, and the galactica
-    # LUKS-locked exclusion tag) and colmena-builders.machines for the build
-    # delegation. `nix flake check` does not evaluate this output (colmena
-    # isn't a recognized flake output type to Nix itself, just a convention
-    # the `colmena` CLI looks for) — validate hive changes with
-    # `colmena eval -E '...'` or a real `colmena apply --on <host>` instead.
+    # colmena.nix for the hive itself (per-host `deployment.targetHost` and
+    # the aarch64-via-pegasus distributed-build wiring — plus the
+    # not-yet-active galactica LUKS-locked exclusion tag, staged there ready
+    # for when galactica gets a real `nixosConfigurations.galactica`) and
+    # colmena-builders.machines for the build delegation. `nix flake check`
+    # does not evaluate this output (colmena isn't a recognized flake output
+    # type to Nix itself, just a convention the `colmena` CLI looks for) —
+    # validate hive changes with `colmena build --on <host>` instead.
     colmena = import ./colmena.nix {
       inherit self nixpkgs home-manager sops-nix nixos-hardware
         dank-material-shell plasma-manager niri-flake claude-desktop-debian

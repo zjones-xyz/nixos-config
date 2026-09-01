@@ -186,9 +186,9 @@ startup. Flipping back to staging reuses the cached staging certs.
 
 ## Routine updates
 
-Preferred: `colmena apply --on hopper` (or `--on @fleet` for the whole fleet
-except galactica) from pegasus — see `colmena.nix` at the repo root. It does
-the same `--build-host`-style delegation to pegasus automatically via
+Preferred: `colmena apply --on hopper` (or `--on @fleet` for the whole hive)
+from pegasus — see `colmena.nix` at the repo root. It does the same
+`--build-host`-style delegation to pegasus automatically via
 `meta.machinesFile`, without needing the flags spelled out by hand.
 (Running it from the Mac instead needs `nix.settings.trusted-users` set
 there too — Determinate Nix, outside this repo's control; see the PR that
