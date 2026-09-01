@@ -31,6 +31,15 @@ let
   # first boot, same gating pattern as hosts/pegasus/configuration.nix. Until
   # then this evaluates cleanly with sops-dependent bits disabled.
   hasSops = builtins.pathExists ../../secrets/galactica.yaml;
+
+  # The ZFS array's LUKS keyfile is a separate binary sops file
+  # (secrets/galactica-array.key), created live on Tower once the array is
+  # built (MANUAL-STEPS.md §9). Until it exists, the array crypttab entries
+  # and tank's auto-import stay disabled so this file still evaluates — same
+  # gating pattern as hasSops itself. The four spinner + three SSD LUKS
+  # members are all keyed by this one keyfile (slot 0); each also carries the
+  # fleet recovery passphrase in slot 1.
+  hasArrayKey = builtins.pathExists ../../secrets/galactica-array.key;
 in
 {
   imports = [
@@ -87,6 +96,22 @@ in
     interval = "weekly";
   };
 
+  # ── tank import ordering (LUKS-under-ZFS) — the three gotchas the opus
+  # review flagged for this exact moment (MANUAL-STEPS.md §9) ─────────────────
+  # tank's members live under /dev/mapper (dm-crypt), opened in stage-2 by the
+  # crypttab above — so import must (a) scan /dev/mapper, not the by-id default,
+  # or it finds nothing; (b) run only AFTER cryptsetup.target, or on a cold
+  # boot it races the seven LUKS opens and imports a degraded/absent pool; and
+  # (c) be driven by extraPools, because tank's datasets use native ZFS
+  # mountpoints (/tank/*) rather than fileSystems.* entries, so nothing else
+  # would trigger the import at boot. All three gated on the keyfile existing,
+  # alongside the crypttab entries that actually open the mappers.
+  boot.zfs.devNodes = lib.mkIf hasArrayKey "/dev/mapper";
+  boot.zfs.extraPools = lib.mkIf hasArrayKey [ "tank" ];
+  systemd.services."zfs-import-tank" = lib.mkIf hasArrayKey {
+    after = [ "cryptsetup.target" ];
+  };
+
   # Low-swappiness swap partition (disko.nix) — a pressure release valve, not
   # a memory tier. 32 GB RAM and a mostly-sequential media workload means
   # this should rarely if ever actually get used.
@@ -139,6 +164,23 @@ in
   environment.etc."crypttab" = lib.mkIf hasSops {
     text = ''
       cryptlogs UUID=b44e545c-b4b3-4037-a263-d5a522933b37 ${config.sops.secrets."luks/middenKeyFile".path} luks,discard,nofail
+    '' + lib.optionalString hasArrayKey ''
+      # ── ZFS array `tank` — LUKS-under-ZFS members (MANUAL-STEPS.md §9) ────────
+      # Opened in stage-2 (not initrd — data disks, not root, DECISIONS.md §7),
+      # all keyed by the one sops arrayKeyFile. Mapper names match what `zpool
+      # create` imported and what boot.zfs.devNodes = "/dev/mapper" re-imports
+      # by. `nofail` on every line so a missing disk or keyfile degrades the
+      # boot rather than blocking it — and so tank's import (ordered after
+      # cryptsetup.target below) can proceed with whatever opened. `discard`
+      # only on the three SSD special-vdev members; the four spinners get none
+      # (TRIM is meaningless on an HDD, and they were opened without it).
+      array-HJDH   UUID=0e3ffb41-6b97-4a7d-9581-27c6987ef21c ${config.sops.secrets."luks/arrayKeyFile".path} luks,nofail
+      array-NS3Y   UUID=d55d13e2-91b1-4bba-96da-2f25facee673 ${config.sops.secrets."luks/arrayKeyFile".path} luks,nofail
+      array-X4WE   UUID=78811230-8648-4b32-afcc-c93fbb99e927 ${config.sops.secrets."luks/arrayKeyFile".path} luks,nofail
+      array-T97E   UUID=dbf28412-07e7-4b61-8afa-33c38bd6d1f6 ${config.sops.secrets."luks/arrayKeyFile".path} luks,nofail
+      special-3255 UUID=016d6496-2bc1-456d-bdcc-21ca45436d5e ${config.sops.secrets."luks/arrayKeyFile".path} luks,discard,nofail
+      special-768C UUID=f0a8f677-290b-4607-9422-d3cbd43b7666 ${config.sops.secrets."luks/arrayKeyFile".path} luks,discard,nofail
+      special-8162 UUID=2fccd949-3fad-4a91-a218-c55aab11c553 ${config.sops.secrets."luks/arrayKeyFile".path} luks,discard,nofail
     '';
   };
 
@@ -385,7 +427,21 @@ in
     # Raw keyfile for midden (see the crypttab block above) — not
     # a passphrase, generated once with `head -c 4096 /dev/urandom` and
     # registered against the LUKS header with `cryptsetup luksAddKey`.
-    secrets."luks/middenKeyFile" = { };
+    secrets = {
+      "luks/middenKeyFile" = { };
+    } // lib.optionalAttrs hasArrayKey {
+      # Raw 4096-byte keyfile unlocking all seven ZFS-array LUKS members
+      # (slot 0; each disk also carries the fleet recovery passphrase in slot
+      # 1, so the boot never depends solely on this). Stored as a dedicated
+      # `format = "binary"` sops file rather than a value inside galactica.yaml
+      # — binary format is the reliable byte-exact round-trip for raw key
+      # material. Verify the decrypted path's sha256 == 6fbbd614…fca930 (the
+      # hash recorded at luksFormat) before trusting a cold-boot unlock.
+      "luks/arrayKeyFile" = {
+        format = "binary";
+        sopsFile = ../../secrets/galactica-array.key;
+      };
+    };
   };
 
   # Twelve-plus real disks (array, special vdev pairs, root NVMe) once the

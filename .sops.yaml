@@ -57,3 +57,11 @@ creation_rules:
       - age:
           - *admin
           - *galactica
+  # galactica's ZFS-array LUKS keyfile — a dedicated binary sops file (raw
+  # 4096-byte key), consumed via sops.secrets."luks/arrayKeyFile".format =
+  # "binary". Same recipients as galactica.yaml.
+  - path_regex: secrets/galactica-array\.key$
+    key_groups:
+      - age:
+          - *admin
+          - *galactica

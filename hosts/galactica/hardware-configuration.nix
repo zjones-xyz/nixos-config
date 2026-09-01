@@ -9,21 +9,18 @@
 # it; harmless, and useful to have already present for when those disks come
 # back for the array build (MANUAL-STEPS.md §9).
 #
-# ⚠ `/boot` is on midden, NOT the NVMe — discovered live, same day, the hard
-# way. PLATFORM.md §11's open question ("does this firmware's UEFI actually
-# enumerate the NVMe as a boot target, independent of supporting UEFI
-# generally") resolved negative: the BIOS boot-option filesystem browser
-# only ever listed the USB stick, never the NVMe, across multiple attempts.
-# The NVMe's own ESP partition (disko.nix: disk.main) is now vestigial —
-# still physically present, formatted, unused. Root/`/nix`/`/home` stay on
-# the NVMe; only the ESP moved. This is a deliberately temporary landing
-# spot: MANUAL-STEPS.md §9 has the plan to migrate it onto one of the
-# special-vdev candidate disks (MX100, the largest) once those are
-# reconnected for the array build — NOT left on midden long-term, since
-# midden is the one disk in this design explicitly expected to fail within
-# about a year, and tying the machine's ability to boot at all to that
-# would be strictly worse than what midden's failure was originally
-# supposed to cost (disposable logs and Nix build scratch, nothing more).
+# ⚠ `/boot` now lives on the WD Blue ESP (special-vdev disk s-3255, part1),
+# migrated 2026-09-01. It was TEMPORARILY on midden (see git history) after
+# the NVMe proved unbootable — PLATFORM.md §11's open question ("does this
+# firmware's UEFI enumerate the NVMe as a boot target") resolved negative:
+# the BIOS boot-option filesystem browser only ever listed the USB stick,
+# never the NVMe. MANUAL-STEPS.md §9 planned to land the ESP on the MX100,
+# but the MX100 hard-failed on its first write during the array build (see
+# the project memory / §9), so the ESP went onto the WD Blue's 1 GiB part1
+# instead, carved alongside its 420 GiB LUKS special-vdev partition. midden's
+# old ESP (by-uuid/5B33-9B74) is left intact as a cold-boot fallback until
+# this one is proven across a real reboot. The NVMe's own ESP stays vestigial.
+# Root/`/nix`/`/home` remain on the NVMe; only the ESP moved.
 # ─────────────────────────────────────────────────────────────────────────────
 { config, lib, pkgs, modulesPath, ... }:
 
@@ -68,11 +65,11 @@
     allowDiscards = true;
   };
 
-  # On midden, not the NVMe — see the header note above. This partition
-  # didn't exist at original disko time; carved out of nixBuildScratch's
-  # allocation (shrunk by 1G to make room) once the NVMe proved unbootable.
+  # On the WD Blue ESP (special-vdev disk s-3255, part1) as of 2026-09-01 —
+  # see the header note. Migrated off midden here; midden's old ESP is left
+  # intact as a cold-boot fallback until this one is proven across a reboot.
   fileSystems."/boot" = {
-    device = "/dev/disk/by-uuid/5B33-9B74";
+    device = "/dev/disk/by-uuid/0B82-159C";
     fsType = "vfat";
     options = [ "fmask=0077" "dmask=0077" ];
   };
