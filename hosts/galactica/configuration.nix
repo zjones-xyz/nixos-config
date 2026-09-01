@@ -37,10 +37,21 @@ in
     ./hardware-configuration.nix
     ../../modules/nixos/common.nix
     ../../modules/nixos/btrfs-snapshots.nix
+    ../../modules/nixos/serial-console.nix
   ];
 
   networking.hostName = "galactica";
   networking.networkmanager.enable = true;
+
+  # Same reasoning as live-iso.nix: BIOS-level IPMI SOL redirection (Tower's
+  # BMC, ttyS1 @ 115200 by Supermicro X9 convention, PLATFORM.md §2) only
+  # covers POST and the bootloader — the kernel needs its own console=
+  # parameter or SOL goes dark the instant it takes over. Missing here was a
+  # real gap, not a hypothetical: it's why SOL showed ISOLINUX and the
+  # systemd-boot menu fine but nothing from the kernel or the initrd
+  # onward on the very first real boot, forcing the LUKS unlock over SSH
+  # instead (which worked, but was never supposed to be the only option).
+  homelab.serialConsole.device = "ttyS1,115200n8";
 
   # `tower.internal` keeps resolving to this host via an AdGuard rewrite on
   # hopper, not via the hostname — DECISIONS.md §2. Nothing to configure here;
