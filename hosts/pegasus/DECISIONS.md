@@ -896,3 +896,43 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   break were both hit via actual `nrs` runs on pegasus (not just eval).
   The 7.1 kernel pin itself was validated with `flake-check-sandboxed.sh`
   (exit 0) but not yet confirmed with a real `nixos-rebuild switch`.
+
+- **NoiseTorch abandoned for mic noise suppression, 2026-08-26** — added
+  first (`programs.noisetorch.enable`) to cover Discord's Linux client
+  having no Krisp support at all (Windows/Mac only, regardless of
+  packaging). Confirmed on real hardware: the toggle in NoiseTorch's UI
+  never goes active. Root-caused from upstream, not guessed:
+  - NoiseTorch extracts its bundled RNNoise LADSPA plugin to
+    `/tmp/librnnoise-<random>.so` at runtime and tells PipeWire's
+    PulseAudio-compat layer to load the sink plugin from that literal
+    path (`module-ladspa-sink` with `plugin=/tmp/...`).
+  - PipeWire 1.6 hardened the filter-graph LADSPA loader to only search
+    `LADSPA_PATH` plus a handful of fixed system dirs
+    (`/usr/lib64/ladspa`, `/usr/lib/ladspa`, `/usr/lib`) — arbitrary
+    `/tmp` paths are rejected outright
+    (`failed to load plugin '/tmp/...': No such file or directory` in
+    the PipeWire journal). nixos-26.05 ships PipeWire well past 1.6.
+  - Confirmed against upstream: `noisetorch/NoiseTorch#467` ("NoiseTorch
+    is unable to load on PipeWire 1.6.3"), `#412` (same error, filed
+    earlier), and `#470` (an open, unmerged fix — pass `plugin=` by LADSPA
+    label instead of full path, and install the `.so` into a real LADSPA
+    dir). nixpkgs pins NoiseTorch at `0.12.2`, predating that fix, and it
+    isn't merged upstream regardless — the nixpkgs package can't route
+    around this by bumping versions today.
+  *alt considered:* patch nixpkgs's `noisetorch` derivation locally with
+  the same source change as `#470`. *Why not:* would still leave a
+  GUI-toggle-per-login as the only way to (de)activate it, and the whole
+  point of the upstream fix is redundant once PipeWire's own filter-chain
+  can load the identical plugin directly. *What replaced it:* see
+  `modules/nixos/mic-denoise.nix` — a native `libpipewire-module-filter-chain`
+  config using `pkgs.rnnoise-plugin.ladspa` (nixpkgs's package of
+  `werman/noise-suppression-for-voice`, the exact upstream project
+  NoiseTorch's `c/ladspa` vendors — same `librnnoise_ladspa.so` /
+  `noise_suppressor_mono` LADSPA label). `LADSPA_PATH` is wired up
+  automatically via `services.pipewire.extraLadspaPackages`, so the plugin
+  is found by name, not a path — this is the same fix `#470` proposes,
+  just applied at the PipeWire-native filter-chain level (which already
+  worked this way) instead of patching NoiseTorch's PulseAudio-compat code
+  path. Net effect: no GUI, no per-login relaunch, active as soon as
+  PipeWire starts. See MANUAL-STEPS.md §20 for the one remaining manual
+  step (selecting the resulting device in Discord).
