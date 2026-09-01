@@ -9,18 +9,22 @@
 # it; harmless, and useful to have already present for when those disks come
 # back for the array build (MANUAL-STEPS.md §9).
 #
-# ⚠ `/boot` now lives on the WD Blue ESP (special-vdev disk s-3255, part1),
-# migrated 2026-09-01. It was TEMPORARILY on midden (see git history) after
-# the NVMe proved unbootable — PLATFORM.md §11's open question ("does this
-# firmware's UEFI enumerate the NVMe as a boot target") resolved negative:
-# the BIOS boot-option filesystem browser only ever listed the USB stick,
-# never the NVMe. MANUAL-STEPS.md §9 planned to land the ESP on the MX100,
-# but the MX100 hard-failed on its first write during the array build (see
-# the project memory / §9), so the ESP went onto the WD Blue's 1 GiB part1
-# instead, carved alongside its 420 GiB LUKS special-vdev partition. midden's
-# old ESP (by-uuid/5B33-9B74) is left intact as a cold-boot fallback until
-# this one is proven across a real reboot. The NVMe's own ESP stays vestigial.
-# Root/`/nix`/`/home` remain on the NVMe; only the ESP moved.
+# ⚠ `/boot` is on midden (by-uuid/5B33-9B74), and stays there for now. The
+# NVMe can't be a UEFI boot target on this board (PLATFORM.md §11, resolved
+# negative — the BIOS only ever listed the USB stick). MANUAL-STEPS.md §9
+# planned to migrate the ESP onto a special-vdev SSD, and it was attempted on
+# 2026-09-01 (MX100 first — it hard-failed on first write; then the WD Blue),
+# but BOTH remaining special-vdev SSDs turned out to sit on the add-in ASMedia
+# SATA controller (PCI 02:00.0), which this BIOS cannot UEFI-boot. Only the
+# onboard C204 (00:1f.2 — midden + the four spinners) is bootable. So the ESP
+# stays on midden until the WD Blue is physically recabled to the free onboard
+# C204 port (the port it occupied before the array-build recabling). The WD
+# Blue's 1 GiB ESP partition (by-uuid 0B82-159C) still exists with a
+# bootloader installed — now vestigial, like the NVMe's, and reused when the
+# recabling happens. See the /boot fileSystems entry below + the project memory.
+# ⚠ midden is the disk this design expects to fail within ~a year, so this is
+# a known, accepted temporary risk — not the intended end state.
+# Root/`/nix`/`/home` remain on the NVMe.
 # ─────────────────────────────────────────────────────────────────────────────
 { config, lib, pkgs, modulesPath, ... }:
 
@@ -65,11 +69,11 @@
     allowDiscards = true;
   };
 
-  # On the WD Blue ESP (special-vdev disk s-3255, part1) as of 2026-09-01 —
-  # see the header note. Migrated off midden here; midden's old ESP is left
-  # intact as a cold-boot fallback until this one is proven across a reboot.
+  # On midden — see the header note. The WD Blue ESP migration was reverted
+  # 2026-09-01 (WD Blue is on the non-bootable add-in ASMedia controller);
+  # ESP stays here until the WD Blue is recabled to the onboard C204.
   fileSystems."/boot" = {
-    device = "/dev/disk/by-uuid/0B82-159C";
+    device = "/dev/disk/by-uuid/5B33-9B74";
     fsType = "vfat";
     options = [ "fmask=0077" "dmask=0077" ];
   };
