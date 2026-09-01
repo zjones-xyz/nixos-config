@@ -40,6 +40,47 @@ temperatures 30–39 °C.
 **Array total: 24 TB, 17.1 TB used, 6.88 TB free.** That is the number the
 migration plan turns on — see `DESIGN.md` §6, where it closes an assumption.
 
+### 2026-09-01 — current physical/logical state, read live under NixOS
+
+Read directly on the booted NixOS system (`lsblk`, `/dev/disk/by-id`) after the
+SATA/SAS cables were reconnected for the array build. **This is the source of
+truth for the ZFS pool config**, superseding the Unraid-era roles above (kept
+for provenance). `sidepool` is deliberately **disconnected** for this phase —
+its disks are the only staging copy, so keeping them physically out during
+destructive pool creation removes any chance of targeting them by mistake (see
+the `project-galactica-zfs-pivot` reasoning) — and so does not appear below.
+The Kingston `s-5509` boot-pool disk is also absent, not reconnected.
+
+`sdX` names are noted only as they enumerated **this boot**; they are *not*
+stable across reboots. Build the pool against the `by-id` paths, which are
+serial-derived and stable.
+
+| ID | Model | Serial | `by-id` (stable) | This-boot `sdX` | Intended role |
+|---|---|---|---|---|---|
+| `h-HJDH` | HGST HUH721212ALE601 12 TB | `8DKUHJDH` | `ata-HUH721212ALE601_8DKUHJDH` | `sdc` | RAIDZ1 member |
+| `h-NS3Y` | HGST HUH721212ALE601 12 TB | `8DJPNS3Y` | `ata-HUH721212ALE601_8DJPNS3Y` | `sde` | RAIDZ1 member |
+| `h-X4WE` | HGST HUH721212ALE601 12 TB | `8CJZX4WE` | `ata-HUH721212ALE601_8CJZX4WE` | `sdg` | RAIDZ1 member |
+| `h-T97E` | HGST HUH721212ALE601 12 TB | `8CG7T97E` | `ata-HUH721212ALE601_8CG7T97E` | `sdi` | RAIDZ1 member |
+| `s-768C` | Crucial BX500 480 GB | `2422E8B6768C` | `ata-CT480BX500SSD1_2422E8B6768C` | `sdb` | special vdev |
+| `s-8162` | Crucial BX500 480 GB | `2506E9A58162` | `ata-CT480BX500SSD1_2506E9A58162` | `sdf` | special vdev |
+| `s-3255` | WD Blue SA510 500 GB | `244964803255` | `ata-WD_Blue_SA510_2.5_500GB_244964803255` | `sda` | special vdev |
+| `s-3100` | Crucial MX100 512 GB | `15090EE23100` | `ata-Crucial_CT512MX100SSD1_15090EE23100` | `sdd` | special vdev **+ future ESP host** |
+| `s-9545` | SATA SSD (generic) 224 GB | `19013024009545` | `ata-SATA_SSD_19013024009545` | `sdh` | **midden** — `/boot`, `/var/log/journal`, nix build scratch |
+| — | SPCC M.2 PCIe SSD 932 GB | `AA2300905N401KG00206` | `nvme-SPCC_M.2_PCIe_SSD_AA2300905N401KG00206` | `nvme0n1` | LUKS root (`cryptroot`) + swap + vestigial ESP |
+
+Notes for the pool build:
+- The two BX500s carry **distinct** serials, so the correlated-failure split
+  (one BX500 per special-vdev mirror, each paired with a non-BX500) is cleanly
+  expressible by `by-id`.
+- `s-3100` (MX100) still carries **two leftover partitions** from its Unraid
+  life (a ~476 GB data partition + a ~468 MB stale ESP). It is earmarked to
+  host `/boot` *and* a special-vdev partition, so partition **around** the
+  planned allocation — do not blind-wipe the whole disk.
+- `sdc1/sde1/sdg1/sdi1` (the four 12 TB) almost certainly still hold the
+  **original array data** — the very data copied to `sidepool`. Wiping them for
+  RAIDZ1 is the destructive step; its safety net is `sidepool`'s verified copy
+  being present but disconnected.
+
 ### `sidepool` — a fifth pool, missing from the 2026-08-07 Main-tab reading above
 
 **Not read from Unraid's Main tab like the rest of §1** — discovered
