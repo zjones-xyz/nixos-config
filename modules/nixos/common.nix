@@ -55,6 +55,15 @@
     LC_TIME           = "en_US.UTF-8";
   };
 
+  # ── Terminal terminfo for the whole fleet ───────────────────────────────────
+  # Installs the terminfo entries — not the emulators themselves, just the
+  # compiled terminfo (a few KB each) — for kitty/wezterm/alacritty/foot/etc.,
+  # so SSHing *into* any fleet host from a modern terminal doesn't hit
+  # "'xterm-kitty': unknown terminal type" the moment anything pages (git log,
+  # systemctl, less). A handful of tiny cached derivations; nothing at runtime.
+  # Hit live on galactica 2026-09-01, which is what prompted this.
+  environment.enableAllTerminfo = true;
+
   # ── FHS-style shebangs ───────────────────────────────────────────────────────
   # NixOS has no /bin or /usr/bin, so scripts with a hardcoded shebang
   # (#!/bin/bash, #!/usr/bin/env python3) fail outright. envfs mounts a
