@@ -254,12 +254,16 @@ The array now exists, and its config is declared and proven across a cold boot:
   auto-unlocks and imports from a power-cycle. `tank` ≈ 31.6 TiB usable.
 - **`tank/appdata`** created, forced onto the special vdev
   (`special_small_blocks == recordsize == 64K`).
-- **⚠ ESP stayed on midden.** The migration to the WD Blue ESP was reverted:
-  the WD Blue (and both BX500s) sit on the add-in ASMedia controller
-  (PCI `02:00.0`) that this BIOS can't UEFI-boot — only the onboard C204
-  (`00:1f.2`: midden + the four spinners) boots. Completing ESP-off-midden
-  needs the WD Blue physically recabled to the free onboard C204 port
-  (deferred). WD Blue's 1 GiB ESP partition is left vestigial for reuse.
+- **✅ ESP migrated off midden onto the WD Blue.** The WD Blue (+ both BX500s)
+  were on the **LSI HBA** (PCI `02:00.0`), which this BIOS can't UEFI-boot
+  (nor the NVMe — firmware pruned explicit NVRAM entries for both at POST).
+  Fix: the WD Blue was physically **recabled from the LSI to onboard C204 port
+  `ata1`**, after which it boots. `/boot` is now `0B82-159C` (WD Blue).
+  Config: `canTouchEfiVariables = false` (this BIOS boots only the
+  `\EFI\BOOT\BOOTX64.EFI` fallback, so the NVRAM entry "galactica-wdblue" is
+  hand-owned); midden's ESP kept as a bootable fallback. See
+  `hardware-configuration.nix`'s `/boot` header for the manual re-create
+  command if NVRAM is ever cleared.
 
 **Still to do:** the media/data **dataset tree** (deferred — needs the *arr
 hardlink-co-location and the SHARES.md tiering decisions, see §8), the
