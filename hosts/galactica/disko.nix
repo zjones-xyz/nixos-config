@@ -107,13 +107,12 @@
     # off the printed identifier, same pattern as `h-P2NJ`/"spinner" on
     # pegasus. Replaces the earlier Kingston (`s-5509`) plan — that disk is
     # currently out of the case, while this one's already known-good and
-    # already in the machine. Split two ways: /var/log/journal, and Nix's
-    # build scratch space (`nix.settings.build-dir`, configuration.nix) —
-    # both deliberately kept off the NVMe root disk to spare it the churn,
-    # both disposable enough that losing the disk costs nothing worth
-    # protecting beyond confidentiality. LUKS'd anyway, matching the fleet
-    # convention of encrypting everything regardless of how disposable the
-    # contents are — same reasoning as the special vdev pairs.
+    # already in the machine. Split two ways: /var/log/journal (LUKS'd —
+    # logs routinely end up with incidentally-sensitive content), and Nix's
+    # build scratch space (`nix.settings.build-dir`, configuration.nix —
+    # plain, unencrypted; see that partition's own comment for why the two
+    # don't actually share a rationale despite both being disposable). Both
+    # deliberately kept off the NVMe root disk to spare it the churn.
     #
     # ✅ `device` confirmed 2026-08-31 directly on Tower: `ata-SATA_SSD_19013024009545`.
     # Already carries an Unraid partition (`-part1`) — disko wipes it regardless.
@@ -171,21 +170,28 @@
               };
             };
           };
+          # No LUKS here, deliberately — reversed 2026-08-31 (owner's
+          # challenge, after the fact: disko had already formatted this one
+          # encrypted, fixed while still empty rather than left as-is). The
+          # "encrypt everything disposable" reasoning that justifies the
+          # logs partition doesn't actually transfer here: logs routinely
+          # end up with incidentally-sensitive content (IPs, tokens in error
+          # text, paths), but this is purely Nix's own sandboxed build
+          # output — derived from nixpkgs/flake inputs that are either
+          # public or already unencrypted-readable in the Nix store itself
+          # (the store is not confidential by design). Nothing secret should
+          # transit here under correct Nix usage; if it did, that's a Nix
+          # hygiene bug this encryption layer was never positioned to catch.
+          # Plain ext4, same reasoning as /var/log/journal above for the
+          # filesystem choice itself (disposable, recreated every build, no
+          # btrfs feature actually applies).
           nixBuildScratch = {
             size = "100%";
             content = {
-              type = "luks";
-              name = "cryptnixbuild";
-              settings.allowDiscards = true;
-              content = {
-                # Same ext4 reasoning as /var/log above — this is scratch
-                # space Nix recreates on every build, not data worth any of
-                # btrfs's CoW/snapshot machinery.
-                type = "filesystem";
-                format = "ext4";
-                mountpoint = "/var/cache/nix-build";
-                mountOptions = [ "noatime" ];
-              };
+              type = "filesystem";
+              format = "ext4";
+              mountpoint = "/var/cache/nix-build";
+              mountOptions = [ "noatime" ];
             };
           };
         };

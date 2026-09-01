@@ -81,31 +81,29 @@ in
   # this should rarely if ever actually get used.
   boot.kernel.sysctl."vm.swappiness" = 10;
 
-  # ── /var/log/journal + Nix build scratch on midden (disko.nix: disk.midden) ──
+  # ── /var/log/journal on midden (disko.nix: disk.midden) ─────────────────────
   # Not root, so no initrd unlock — same reasoning DECISIONS.md §7 already
-  # applied to every other data disk on this host. Both unlocked
-  # automatically during normal boot via a shared sops-provisioned keyfile
-  # (same disk, same disposability, same threat model — one keyfile added as
-  # a LUKS keyslot on both containers, rather than managing two), matching
-  # DESIGN.md's own description of the array's disks: "sops-nix keyfiles
-  # decrypt at boot ... and /etc/crypttab opens the pools." No manual
-  # passphrase entry — this is disposable data, not the thing worth adding a
-  # step to protect.
+  # applied to every other data disk on this host. Unlocked automatically
+  # during normal boot via a sops-provisioned keyfile, matching DESIGN.md's
+  # own description of the array's disks: "sops-nix keyfiles decrypt at
+  # boot ... and /etc/crypttab opens the pools." No manual passphrase entry —
+  # this is disposable data, not the thing worth adding a step to protect.
+  #
+  # ⚠ Only `cryptlogs` needs this — `midden`'s other partition
+  # (`/var/cache/nix-build`) is deliberately NOT encrypted at all (reversed
+  # 2026-08-31, owner's challenge after disko had already formatted it
+  # encrypted, fixed while still empty). See disko.nix's `nixBuildScratch`
+  # comment for why the two partitions don't actually share a rationale
+  # despite both being disposable — logs routinely pick up incidentally
+  # sensitive content, Nix build scratch structurally shouldn't ever hold
+  # anything the Nix store itself doesn't already expose unencrypted.
   #
   # ⚠ NOT YET CONFIRMED / NOT YET DONE:
-  #   - both LUKS UUIDs below (`blkid` after disko creates the partitions)
+  #   - the LUKS UUID below (`blkid` after disko creates the partition)
   #   - the keyfile itself doesn't exist yet: generate with
-  #     `head -c 4096 /dev/urandom > midden-keyfile`, register it on
-  #     BOTH containers with `cryptsetup luksAddKey`, then `sops
-  #     secrets/galactica.yaml` and add it as `luks/middenKeyFile`.
-  #   - hardware-configuration.nix's generated `/var/cache/nix-build` entry
-  #     should get `"nofail"` added by hand — a missing keyfile on some
-  #     future boot (sops not decryptable yet, disk unplugged) should
-  #     degrade gracefully rather than hold up booting the whole machine.
-  #     The logs mount is at /var/log/journal specifically (not /var/log —
-  #     see below) so it isn't in NixOS' hardcoded pathsNeededForBoot list
-  #     and doesn't need the same treatment, but `nofail` costs nothing and
-  #     is added anyway for the same reason.
+  #     `head -c 4096 /dev/urandom > midden-keyfile`, register it with
+  #     `cryptsetup luksAddKey`, then `sops secrets/galactica.yaml` and add
+  #     it as `luks/middenKeyFile`.
   #
   # ⚠ `.text` must be set INSIDE the mkIf, not mkIf applied to `.text` — an
   # opus review agent caught this: environment.etc's submodule forces
@@ -116,17 +114,20 @@ in
   # defined") — the exact state this config is in right now. Confirmed by
   # evaluating both branches directly.
   #
-  # `,discard` at the end of each line — without it dm-crypt silently drops
-  # every TRIM, and the whole point of `allowDiscards`/weekly `zpool trim`
-  # elsewhere in this design is defeated. disko's own `allowDiscards = true`
-  # only ever emits `boot.initrd.luks.devices.*.allowDiscards`, which is
-  # meaningless for a non-initrd device and moot anyway since disko.nix isn't
-  # imported live — this crypttab option is the only place it actually takes
-  # effect for these two disks.
+  # `,discard` at the end — without it dm-crypt silently drops every TRIM,
+  # and the whole point of `allowDiscards`/weekly `zpool trim` elsewhere in
+  # this design is defeated. disko's own `allowDiscards = true` only ever
+  # emits `boot.initrd.luks.devices.*.allowDiscards`, which is meaningless
+  # for a non-initrd device and moot anyway since disko.nix isn't imported
+  # live — this crypttab option is the only place it actually takes effect.
+  # (In practice disko's live run also opened this with `cryptsetup
+  # --persistent`, which stores the discard flag in the LUKS2 header itself
+  # — a second, independent path to the same effect, not a substitute for
+  # this one.) `nofail` since a missing keyfile or unplugged disk on some
+  # future boot should degrade gracefully rather than hold up the machine.
   environment.etc."crypttab" = lib.mkIf hasSops {
     text = ''
       cryptlogs UUID=CONFIRM_ME_LIVE_LOGS ${config.sops.secrets."luks/middenKeyFile".path} luks,discard,nofail
-      cryptnixbuild UUID=CONFIRM_ME_LIVE_NIXBUILD ${config.sops.secrets."luks/middenKeyFile".path} luks,discard,nofail
     '';
   };
 

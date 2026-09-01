@@ -99,22 +99,21 @@ Once `hardware-configuration.nix` is real:
 step — see the crypttab fix already applied to configuration.nix, caught by
 the opus review before it could bite here.)
 
-## 4. midden's shared keyfile
+## 4. midden's logs keyfile
 
-Once `disko.nix` has run and both LUKS partitions exist on midden:
+Only `cryptlogs` needs this now — `/var/cache/nix-build` is unencrypted
+(reversed 2026-08-31, see disko.nix's `nixBuildScratch` comment for why).
+Once `disko.nix` has run and the LUKS partition exists:
 
 ```bash
 head -c 4096 /dev/urandom > midden-keyfile
 cryptsetup luksAddKey /dev/disk/by-id/<midden-logs-partition> midden-keyfile
-cryptsetup luksAddKey /dev/disk/by-id/<midden-nixbuild-partition> midden-keyfile
 blkid /dev/disk/by-id/<midden-logs-partition>      # get cryptlogs' UUID
-blkid /dev/disk/by-id/<midden-nixbuild-partition>  # get cryptnixbuild's UUID
 ```
 
-Put both UUIDs into `configuration.nix`'s `environment.etc."crypttab"` entry
-(replacing `CONFIRM_ME_LIVE_LOGS`/`CONFIRM_ME_LIVE_NIXBUILD`), then `sops
-secrets/galactica.yaml` and add `midden-keyfile`'s contents as
-`luks/middenKeyFile`.
+Put the UUID into `configuration.nix`'s `environment.etc."crypttab"` entry
+(replacing `CONFIRM_ME_LIVE_LOGS`), then `sops secrets/galactica.yaml` and
+add `midden-keyfile`'s contents as `luks/middenKeyFile`.
 
 ## 5. ✅ journald's retention cap — decided 2026-08-31
 
