@@ -98,12 +98,12 @@ in
   # sensitive content, Nix build scratch structurally shouldn't ever hold
   # anything the Nix store itself doesn't already expose unencrypted.
   #
-  # ⚠ NOT YET CONFIRMED / NOT YET DONE:
-  #   - the LUKS UUID below (`blkid` after disko creates the partition)
-  #   - the keyfile itself doesn't exist yet: generate with
-  #     `head -c 4096 /dev/urandom > midden-keyfile`, register it with
-  #     `cryptsetup luksAddKey`, then `sops secrets/galactica.yaml` and add
-  #     it as `luks/middenKeyFile`.
+  # ✅ UUID confirmed 2026-08-31 via `blkid` post-disko.
+  #
+  # ⚠ NOT YET DONE: the keyfile itself. Generate with
+  # `head -c 4096 /dev/urandom > midden-keyfile`, register it with
+  # `cryptsetup luksAddKey`, then `sops secrets/galactica.yaml` and add it
+  # as `luks/middenKeyFile` (MANUAL-STEPS.md §4).
   #
   # ⚠ `.text` must be set INSIDE the mkIf, not mkIf applied to `.text` — an
   # opus review agent caught this: environment.etc's submodule forces
@@ -127,7 +127,7 @@ in
   # future boot should degrade gracefully rather than hold up the machine.
   environment.etc."crypttab" = lib.mkIf hasSops {
     text = ''
-      cryptlogs UUID=CONFIRM_ME_LIVE_LOGS ${config.sops.secrets."luks/middenKeyFile".path} luks,discard,nofail
+      cryptlogs UUID=b44e545c-b4b3-4037-a263-d5a522933b37 ${config.sops.secrets."luks/middenKeyFile".path} luks,discard,nofail
     '';
   };
 
