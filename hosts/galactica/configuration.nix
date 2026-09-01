@@ -76,7 +76,15 @@ in
   networking.hostId = "f9e250c9";
 
   boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
+  # ⚠ FALSE, deliberately — see hardware-configuration.nix's /boot header. This
+  # board's AMI BIOS boots ONLY the removable-media fallback
+  # (`\EFI\BOOT\BOOTX64.EFI`), never the `\EFI\systemd\` path NixOS would
+  # register in NVRAM. So the working boot entry ("galactica-wdblue", a
+  # partition-signature path to the fallback) is created and owned by hand;
+  # letting NixOS touch EFI variables just re-adds an unbootable `\EFI\systemd\`
+  # entry every `switch` that the firmware then prunes at POST. `bootctl` still
+  # keeps the `\EFI\BOOT\BOOTX64.EFI` file itself current on each switch.
+  boot.loader.efi.canTouchEfiVariables = false;
 
   # ── ZFS (the RAIDZ1 array, built separately — see the header note) ─────────
   boot.supportedFilesystems = [ "zfs" ];

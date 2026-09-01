@@ -9,22 +9,30 @@
 # it; harmless, and useful to have already present for when those disks come
 # back for the array build (MANUAL-STEPS.md §9).
 #
-# ⚠ `/boot` is on midden (by-uuid/5B33-9B74), and stays there for now. The
-# NVMe can't be a UEFI boot target on this board (PLATFORM.md §11, resolved
-# negative — the BIOS only ever listed the USB stick). MANUAL-STEPS.md §9
-# planned to migrate the ESP onto a special-vdev SSD, and it was attempted on
-# 2026-09-01 (MX100 first — it hard-failed on first write; then the WD Blue),
-# but BOTH remaining special-vdev SSDs turned out to sit on the add-in ASMedia
-# SATA controller (PCI 02:00.0), which this BIOS cannot UEFI-boot. Only the
-# onboard C204 (00:1f.2 — midden + the four spinners) is bootable. So the ESP
-# stays on midden until the WD Blue is physically recabled to the free onboard
-# C204 port (the port it occupied before the array-build recabling). The WD
-# Blue's 1 GiB ESP partition (by-uuid 0B82-159C) still exists with a
-# bootloader installed — now vestigial, like the NVMe's, and reused when the
-# recabling happens. See the /boot fileSystems entry below + the project memory.
-# ⚠ midden is the disk this design expects to fail within ~a year, so this is
-# a known, accepted temporary risk — not the intended end state.
-# Root/`/nix`/`/home` remain on the NVMe.
+# ⚠ `/boot` is on the WD Blue ESP (special-vdev disk s-3255, by-uuid
+# 0B82-159C), migrated off midden 2026-09-01. The road there: the NVMe can't
+# be a UEFI boot target on this board (PLATFORM.md §11), and the two candidate
+# SSDs both sat on add-in controllers this AMI BIOS won't UEFI-boot — the MX100
+# hard-failed on first write, and the WD Blue + both BX500s were on the LSI HBA
+# (PCI 02:00.0). Only the onboard C204 (00:1f.2) boots. Confirmed empirically:
+# explicit `\EFI\BOOT\BOOTX64.EFI` NVRAM entries for the NVMe and the
+# LSI-attached WD Blue were both *pruned by the firmware at POST*. Fix: the WD
+# Blue was physically recabled from the LSI to onboard port `ata1` (its
+# pre-array-build home), after which the firmware boots it fine. midden's old
+# ESP (5B33-9B74) is kept intact as a bootable fallback (it still carries a
+# gen-8 systemd-boot). The NVMe's own ESP stays vestigial.
+#
+# ⚠ This BIOS boots ONLY the removable-media fallback path
+# (`\EFI\BOOT\BOOTX64.EFI`), never `\EFI\systemd\systemd-bootx64.efi`. So the
+# working boot entry is a *manually created* efibootmgr entry ("galactica-wdblue",
+# HD(1,GPT,d3ede3b6,…)/\EFI\BOOT\BOOTX64.EFI) — a partition-signature path, so it
+# survives the disk moving controllers. That is why configuration.nix sets
+# `boot.loader.efi.canTouchEfiVariables = false`: NixOS must NOT manage the NVRAM
+# entry here, or it re-creates an unbootable `\EFI\systemd\` entry every switch.
+# If NVRAM is ever cleared, re-create the entry by hand:
+#   efibootmgr --create --disk <WD-Blue-dev> --part 1 \
+#     --label galactica-wdblue --loader '\EFI\BOOT\BOOTX64.EFI'
+# Root/`/nix`/`/home` remain on the NVMe; only the ESP moved.
 # ─────────────────────────────────────────────────────────────────────────────
 { config, lib, pkgs, modulesPath, ... }:
 
@@ -69,11 +77,12 @@
     allowDiscards = true;
   };
 
-  # On midden — see the header note. The WD Blue ESP migration was reverted
-  # 2026-09-01 (WD Blue is on the non-bootable add-in ASMedia controller);
-  # ESP stays here until the WD Blue is recabled to the onboard C204.
+  # On the WD Blue ESP (special-vdev disk s-3255, part1) — migrated off midden
+  # 2026-09-01 after recabling the WD Blue from the LSI HBA to onboard C204
+  # port ata1. See the header note for the full story + the manual NVRAM entry
+  # this BIOS needs. midden's ESP (5B33-9B74) stays as a bootable fallback.
   fileSystems."/boot" = {
-    device = "/dev/disk/by-uuid/5B33-9B74";
+    device = "/dev/disk/by-uuid/0B82-159C";
     fsType = "vfat";
     options = [ "fmask=0077" "dmask=0077" ];
   };
