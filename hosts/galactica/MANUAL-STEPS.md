@@ -305,3 +305,24 @@ which gets it real mirrored redundancy AND a natural place for ZFS-native
 snapshots, solving both problems at once rather than bolting `btrbk`
 coverage onto a single-disk subvolume. See §9 for the actual plan.
 Not fixed yet; needs a decision on the right mechanism, not just the intent.
+
+## 11. ✅/❓ DNS on `enp0s25` — fix committed, never tested
+
+First real boot: `nmcli device status` showed `enp0s25` stuck as
+`connected (externally)`, `/etc/resolv.conf` empty, worked around for that
+session with `echo "nameserver 1.1.1.1" | sudo tee -a /etc/resolv.conf`.
+Commit `365f0e1` widens `flush-network-before-switch-root` (kmsg marker,
+stops `systemd-networkd` outright, brings the link down not just flushes
+its address) — but this needs a real reboot to take effect and none
+happened after it landed. **Next reboot, check in this order:**
+
+```bash
+dmesg | grep flush-network        # did the unit even run this time?
+nmcli device status                # is enp0s25 still "connected (externally)"?
+cat /etc/resolv.conf               # real nameservers, without the manual workaround?
+```
+
+If the kmsg marker never shows up, the unit still isn't executing and the
+problem is deeper than the flush logic — don't keep iterating on this
+script blind, actually investigate why a `wantedBy`/`before` oneshot unit
+with a correct Nix-level definition doesn't run in the initrd at all.
