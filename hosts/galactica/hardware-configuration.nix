@@ -88,11 +88,18 @@
   # /var/log/journal is NOT root, so no boot.initrd.luks.devices entry here —
   # cryptlogs is opened during normal boot by configuration.nix's own
   # environment.etc."crypttab", not initrd (DECISIONS.md §7). By the time
-  # this fileSystems entry mounts, /dev/mapper/cryptlogs already exists.
+  # this fileSystems entry mounts, /dev/mapper/cryptlogs already exists —
+  # PROVIDED secrets/galactica.yaml exists, since that crypttab entry is
+  # gated on `hasSops`. Found live, the hard way, on the first real boot:
+  # without `nofail` here, a boot with no secrets file yet (this one) waits
+  # out systemd's default ~90s device timeout for a mapper device that will
+  # never appear, before continuing in a degraded boot. `nofail` matches
+  # what MANUAL-STEPS.md §2 already called for and this file should have had
+  # from the start.
   fileSystems."/var/log/journal" = {
     device = "/dev/mapper/cryptlogs";
     fsType = "ext4";
-    options = [ "noatime" ];
+    options = [ "noatime" "nofail" ];
   };
 
   # Plain, unencrypted (reversed 2026-08-31 — see disko.nix's
@@ -103,7 +110,7 @@
   fileSystems."/var/cache/nix-build" = {
     device = "/dev/disk/by-uuid/644dbaff-563a-415f-877b-11d41ed8cb89";
     fsType = "ext4";
-    options = [ "noatime" ];
+    options = [ "noatime" "nofail" ];
   };
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
