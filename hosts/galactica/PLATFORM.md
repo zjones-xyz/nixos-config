@@ -1624,6 +1624,27 @@ NVMe namespace as a boot target, because the standard postdates the firmware. So
 systemd-boot only needs firmware to reach the ESP; the initrd loads `nvme` and
 pivots.
 
+#### ✅ Answered 2026-08-31 — the NVMe does not enumerate as a UEFI boot target
+
+Tested during the actual install with the adapter physically installed: UEFI
+itself works fine on this firmware (`UEFI: USB` boots the install media
+successfully, confirmed as boot option #1), but the boot-option filesystem
+browser never listed the NVMe as a candidate, across multiple attempts —
+only the USB stick. The predicted failure mode landed exactly as described
+above: a working UEFI implementation with no NVMe boot driver behind it.
+
+**§5.5's workaround is now the actual layout, not a contingency.** ESP
+moved onto a SATA-attached disk (`hosts/galactica/disko.nix`,
+`hosts/galactica/MANUAL-STEPS.md` §2b) — root and `/nix` stay on the NVMe,
+initrd loads `nvme` and pivots, exactly as anticipated. One refinement the
+original workaround didn't specify: *which* SATA disk matters. It initially
+landed on `midden` (the disk repurposed for disposable logs/build-scratch,
+already connected at install time) as a stopgap, with a planned migration
+to one of the special-vdev candidate disks once those are reconnected —
+`midden` is explicitly expected to fail within about a year, and a disk
+that's supposed to be safely disposable shouldn't also be the one thing the
+whole machine's ability to boot depends on.
+
 **The fallback that matters: the Unraid flash still boots this machine bare
 metal.** Nothing in any NixOS install touches the flash or its boot entry. Keep
 it ahead of, or trivially selectable against, the NixOS root disk in the boot

@@ -24,6 +24,18 @@
 # Root stays LUKS + btrfs, matching the fleet's LUKS-underneath convention
 # (galactica/DECISIONS.md §7) rather than ZFS — the RAIDZ1 array is where ZFS
 # lives on this host, built separately, after this install.
+#
+# ⚠ **The NVMe does NOT actually boot on this firmware — do not put an ESP
+# here on a future re-install.** Discovered live, 2026-08-31: this 2011-era
+# board's UEFI genuinely works (confirmed via a successful `UEFI: USB` boot)
+# but has no NVMe boot driver — the boot-option filesystem browser never
+# listed the NVMe as a candidate across multiple attempts, only the USB
+# stick. `PLATFORM.md` §11 had flagged this as an open question; it's now
+# answered, negatively. The ESP partition below is kept in this spec only
+# because removing it from an already-partitioned live disk wasn't worth
+# the disruption — it is NOT where `/boot` actually lives. See disk.midden's
+# ESP partition further down for where it really goes, and
+# hardware-configuration.nix's header for the full story.
 {
   disko.devices = {
     disk.main = {
@@ -32,13 +44,18 @@
       content = {
         type = "gpt";
         partitions = {
+          # Vestigial — NOT the real /boot (see the header warning above).
+          # No mountpoint: this partition exists, is formatted, and is
+          # simply unused. Kept rather than removed from a live disk that
+          # wasn't worth the disruption to change; a genuinely fresh install
+          # following this spec from scratch could just drop this partition
+          # entirely and give the space to the LUKS container instead.
           ESP = {
             size = "1G";
             type = "EF00";
             content = {
               type = "filesystem";
               format = "vfat";
-              mountpoint = "/boot";
               mountOptions = [ "fmask=0077" "dmask=0077" ];
             };
           };
@@ -185,13 +202,43 @@
           # Plain ext4, same reasoning as /var/log/journal above for the
           # filesystem choice itself (disposable, recreated every build, no
           # btrfs feature actually applies).
+          # Shrunk by 1G (2026-08-31, live, after the original disko run —
+          # was "100%") to make room for the ESP partition below, once the
+          # NVMe proved unbootable. Deleted and recreated rather than
+          # resized in place — it was still completely empty, so a fresh
+          # mkfs cost nothing.
           nixBuildScratch = {
-            size = "100%";
+            size = "-1G";
             content = {
               type = "filesystem";
               format = "ext4";
               mountpoint = "/var/cache/nix-build";
               mountOptions = [ "noatime" ];
+            };
+          };
+
+          # The REAL /boot — added live, 2026-08-31, after discovering the
+          # NVMe's own ESP (disk.main) is unusable on this firmware (see the
+          # warning at the top of this file). Deliberately temporary: midden
+          # is the one disk in this design explicitly expected to fail
+          # within about a year (that's the entire premise behind giving it
+          # only disposable data), so tying the machine's ability to boot at
+          # all to it is a worse outcome than what midden's failure was
+          # originally supposed to cost. Plan (MANUAL-STEPS.md §9): migrate
+          # this to MX100 (the largest of the four special-vdev candidate
+          # disks) once those are reconnected for the array build — MX100
+          # has room for both a 1G ESP and its eventual 420G special-vdev
+          # partition, so this doesn't need to be undone later, just moved.
+          # Not on the special-vdev disks from the start only because they
+          # weren't reconnected yet at this point in the install.
+          ESP = {
+            size = "100%";
+            type = "EF00";
+            content = {
+              type = "filesystem";
+              format = "vfat";
+              mountpoint = "/boot";
+              mountOptions = [ "fmask=0077" "dmask=0077" ];
             };
           };
         };

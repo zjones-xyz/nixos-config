@@ -40,14 +40,52 @@ account (`live-iso.nix`'s `authorizedKeys`) — no need for the ISO itself to
 have outbound GitHub credentials, or to know/care whether the repo is
 public:
 ```bash
-rsync -a ~/nixos-config/ root@<tower-ip>:~/nixos-config/
+rsync -a -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" ~/nixos-config/ root@<tower-ip>:~/nixos-config/
 ```
-Then, on the booted ISO:
+`StrictHostKeyChecking=no`/`UserKnownHostsFile=/dev/null` since the ISO gets
+a fresh SSH host key every boot (tmpfs root) — nothing worth remembering in
+your real `known_hosts`. Then, on the booted ISO:
 ```bash
 cd nixos-config
+chown -R root:root ~/nixos-config
 disko --mode disko ./hosts/galactica/disko.nix
 nixos-generate-config --no-filesystems --root /mnt
 ```
+`chown` because `rsync -a` as root preserves the *source's* ownership
+(pegasus/serenity's `z` user, UID 1000) rather than defaulting to root —
+without this, `nixos-install`'s flake fetcher refuses to trust the repo
+later (libgit2's ownership check, same protection `git` itself added a few
+years back). Cheapest to just do it every time you re-sync, rather than
+find out again at install time.
+
+⚠ **On this board, the NVMe will very likely not show up as a UEFI boot
+target at all** — discovered live during this install, not a hypothetical.
+`PLATFORM.md` §11 had flagged this as genuinely open; it's now answered,
+negatively. If `disko --mode disko` above puts the ESP on the NVMe as
+written, expect to redo it: see §2b below for the live fix that was
+actually applied, and consider just starting there instead of installing
+onto the NVMe's ESP first and discovering the problem after the fact.
+
+## 2b. What actually happened this time — ESP moved to midden
+
+After `nixos-install` completed once (onto the NVMe's ESP), the BIOS boot
+menu's UEFI filesystem browser only ever listed the USB installer stick —
+never the NVMe, across multiple attempts. Fix applied live: carved a new 1G
+ESP out of `midden`'s `nixBuildScratch` allocation (shrunk from `"100%"` to
+`"-1G"`, still empty at the time so a reformat cost nothing), reopened the
+existing LUKS containers and remounted everything under `/mnt` **without**
+the NVMe's ESP this time, then re-ran `nixos-install` against the corrected
+layout. `disko.nix` and `hardware-configuration.nix` now reflect this as
+the real, current state — the NVMe's original ESP partition is still
+physically there but unused (vestigial, see disko.nix's warning comment).
+
+**This is deliberately temporary.** `midden` is the one disk in this whole
+design explicitly expected to fail within about a year (§10's reasoning,
+originally about the Kingston, carried over when the plan moved to
+`fastservices`/`midden` instead) — tying the machine's ability to boot at
+all to that disk is worse than what its failure was supposed to cost. See
+§9 for the plan to migrate this onto MX100 once the special-vdev disks are
+reconnected.
 
 Copy the generated `hardware-configuration.nix` into
 `hosts/galactica/hardware-configuration.nix`, reconciling `fileSystems.*`
@@ -236,6 +274,24 @@ forward-looking rather than blocking now:
   ZFS redundancy for those specific ones. Not designed yet — a per-service
   decision for whoever's doing the appdata tiering once real workloads
   exist to measure.
+- **Migrate `/boot`'s ESP from `midden` to MX100** (see §2b — this is not
+  optional cleanup, `midden` is expected to fail within about a year and
+  currently hosts the only way this machine boots at all). Once the four
+  special-vdev disks are reconnected:
+  1. Identify MX100's by-id path (largest of the four, ~477GiB raw).
+  2. Partition **around** any special-vdev allocation already planned for
+     it — do NOT `blkdiscard` the whole disk. A 1G ESP plus its eventual
+     420G special-vdev partition both fit with room to spare; the
+     overprovisioning math barely moves (~56GB reserved instead of ~57GB).
+  3. `mkfs.vfat`, copy the bootloader over (`bootctl install` from a
+     booted system, or another `nixos-install` pass with `/boot`
+     re-pointed), verify it actually boots from MX100 before touching
+     `midden`'s copy.
+  4. Update `fileSystems."/boot"` in `hardware-configuration.nix` to the
+     new device, remove the ESP partition from `disko.nix`'s `disk.midden`
+     (or leave it vestigial, matching how the NVMe's original ESP was
+     handled — don't blindly wipe it without checking nothing still
+     references it first).
 
 ## 10. `@appdata` — moved off the NVMe entirely (see §9)
 
