@@ -249,11 +249,27 @@ in
     wantedBy = [ "initrd-switch-root.target" ];
     unitConfig.DefaultDependencies = false;
     serviceConfig.Type = "oneshot";
-    path = [ pkgs.iproute2 pkgs.gawk pkgs.systemd ];
+    # Only `ip` needs `path` here, and it is copied into the initrd via
+    # storePaths below. The earlier version also listed pkgs.gawk and used
+    # `awk` to enumerate interfaces — but `path` only sets $PATH, it does NOT
+    # copy a binary into the initrd (memory-alpha's own storePaths comment
+    # documents this exact footgun for `ip`). gawk was never added to
+    # storePaths, so `awk` was silently "command not found" in the initrd, the
+    # `$(… | awk …)` interface list came back empty, the loop body never ran,
+    # and NOTHING was ever flushed — which is why this "fix" provably never
+    # worked despite looking correct. `systemctl` is intrinsic to a systemd
+    # initrd (it runs networkd there), so it needs no path/storePaths entry.
+    path = [ pkgs.iproute2 ];
+    # No awk, no interface discovery: iterate /sys/class/net with pure shell
+    # parameter expansion (`${p##*/}`), which needs no external binary at all.
+    # This is the whole point of the rewrite — the script now depends solely on
+    # `ip`, the one binary actually present in the initrd.
     script = ''
       echo "flush-network-before-switch-root: starting" > /dev/kmsg || true
       systemctl stop systemd-networkd.service || true
-      for iface in $(ip -o link show type ether | awk -F': ' '{print $2}'); do
+      for p in /sys/class/net/*; do
+        iface=''${p##*/}
+        [ "$iface" = "lo" ] && continue
         ip addr flush dev "$iface" || true
         ip link set dev "$iface" down || true
       done
