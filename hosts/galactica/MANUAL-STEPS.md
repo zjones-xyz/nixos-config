@@ -377,3 +377,63 @@ nameserver fd2e:7702:f2a4::1                                # ← real, NM-gener
 No manual `nameserver` workaround needed anymore. Lesson for the rest of the
 fleet: any `boot.initrd.systemd.services.*` script that calls a non-systemd,
 non-`ip` binary must add that binary to `storePaths` or it silently no-ops.
+
+## 12. paperless-ngx — datasets + admin secret
+
+`modules/nixos/paperless.nix` is imported and fully wired, but its own
+`paperlessReady` switch is `false`, so it contributes nothing until deliberately
+flipped. (It is NOT gated on the array keyfile: that file is already committed,
+so gating on it would flip paperless on at the next `switch` — before the
+datasets exist — and let it create plain dirs instead of tier-datasets.) Do the
+steps below IN ORDER; the flip is last. The module header explains the tier
+reasoning behind the three-way split.
+
+1. [ ] **Create the datasets** (on Tower, once `tank` is imported). Names must
+   match the paths hardcoded in the module:
+
+   ```bash
+   # Media = CRITICAL originals + archive. Child of the documents trove so it
+   # inherits that subtree's tier + snapshot policy.
+   zfs create tank/documents/paperless
+   zfs set homelab:tier=critical tank/documents/paperless
+
+   # Data = regenerable index/models/keys (+ transient consume subdir).
+   zfs create tank/services/paperless
+   zfs set homelab:tier=regenerable tank/services/paperless
+
+   # Postgres = PRECIOUS metadata, on the special-vdev-backed appdata. Tune for
+   # a DB workload: 16K records, throughput logbias, no atime.
+   zfs create -o recordsize=16K -o logbias=throughput -o atime=off \
+     tank/appdata/paperless
+   zfs set homelab:tier=precious tank/appdata/paperless
+   ```
+
+   The module points `services.postgresql.dataDir` at `/tank/appdata/paperless`;
+   confirm no other service already owns the system PostgreSQL cluster before
+   the first switch (paperless is the first DB consumer on this host).
+
+2. [ ] **Create the admin password secret.** `sops secrets/galactica.yaml` and
+   add `paperless/adminPassword` (the web-UI superuser password, user `admin`).
+   No DB password is needed — Postgres uses peer auth over the unix socket.
+
+3. [ ] **`PAPERLESS_SECRET_KEY`** is auto-generated and persisted by the module
+   at `/tank/services/paperless/nixos-paperless-secret-key` — nothing to do,
+   *unless* migrating an existing paperless instance, in which case its old key
+   must be carried over via an `environmentFile` sops secret (not `settings`,
+   which is world-readable in the Nix store). See the module header.
+
+4. [ ] **Migrate the existing trove** (open question, not automated). The raw
+   `documents` share on `tank/documents` predates paperless and is NOT under
+   paperless's management. Decide whether to bulk-import it (drop into the
+   consume dir, or `document_importer`) or leave it as a separate flat archive
+   alongside paperless's managed store. This is a data-migration decision, not
+   a config one.
+
+5. [ ] **Flip it on.** Once the datasets (step 1) and the admin secret (step 2)
+   exist, set `paperlessReady = true` in `modules/nixos/paperless.nix` and
+   `switch`. This is the deliberate last step — nothing paperless runs before it.
+
+6. [ ] **Ingress** is out of scope for the NixOS config — the intended path is a
+   Tailscale-fronted tsdproxy route in the `homelab_stacks` repo pointed at
+   `127.0.0.1:28981` (see `HOMELAB_STACKS_HANDOFF.md`). When it lands, set
+   `settings.PAPERLESS_URL` (and CSRF trusted origins) to the external hostname.

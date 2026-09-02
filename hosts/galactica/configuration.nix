@@ -47,6 +47,11 @@ in
     ../../modules/nixos/common.nix
     ../../modules/nixos/btrfs-snapshots.nix
     ../../modules/nixos/serial-console.nix
+    # paperless-ngx — imported but inert: its own `paperlessReady` switch is
+    # OFF until the owner flips it after MANUAL-STEPS §12 (datasets + admin
+    # secret). Storage layout + rationale in the module header. (Parallel PRs
+    # also touch this imports list — keep this line if resolving a conflict.)
+    ../../modules/nixos/paperless.nix
   ];
 
   networking.hostName = "galactica";
