@@ -151,6 +151,56 @@ deploy, and it should be short — the durable material has already been extract
 
 ## 7. Filesystems — btrfs everywhere, and the one place that is not a default
 
+> ### ✅ Superseded for the array — it is one ZFS pool now, built and cold-boot-verified 2026-09-01
+>
+> **The media array is a single ZFS pool `tank`, not btrfs-per-disk + SnapRAID.**
+> This section's premise — btrfs for every role, SnapRAID parity on XFS/ext4, ZFS
+> confined to the photo tier — was overtaken when the whole storage design pivoted
+> from SnapRAID + mergerfs to ZFS (`DESIGN.md`'s superseded banner; project memory
+> `project-galactica-zfs-pivot`). The body below is kept as provenance for the
+> reasoning; the built state is in `MANUAL-STEPS.md` §9, `HARDWARE-MAP.md` §1 and
+> `hosts/galactica/configuration.nix`. What actually exists:
+>
+> - **Pool `tank`** — **RAIDZ1** over the four 12 TB spinners + a **3-way mirror
+>   special vdev** over three SSDs (WD Blue + both BX500s; the MX100 that would
+>   have made it 2×2 failed on first write). ~31.6 TiB usable. `ashift=12` forced
+>   (512e drives), `compression` lz4 (zstd on some datasets), `atime=off`,
+>   `xattr=sa`, `acltype=posixacl`.
+> - **Encryption is LUKS underneath ZFS**, not ZFS-native — and this is the one
+>   decision in this section that held **and was extended**: the ⭐ "LUKS
+>   underneath" ruling below, originally scoped to the photo tier, now covers all
+>   **seven** array members. One sops `luks/arrayKeyFile` in slot 0 of every disk
+>   + a fleet recovery passphrase in slot 1, opened in stage-2 crypttab. Keeps the
+>   fleet's single unlock story and sidesteps ZFS-native-crypto's `send`/`recv`
+>   corruption bugs — the same "raw send goes unused anyway" argument, at array
+>   scale.
+> - **`networking.hostId`, `services.zfs.autoScrub`, `zfs trim`, import ordered
+>   after `cryptsetup.target`, `devNodes = "/dev/mapper"`, `extraPools`** — exactly
+>   the implementation notes anticipated below, now live in `configuration.nix`.
+> - **Datasets are organized by content**, with a `homelab:tier` ZFS **user
+>   property** carrying the `SHARES.md` backup tier (`critical`, `precious`,
+>   `protected`, `reacquirable`, `regenerable`, `painful`, `transient`), inherited
+>   by children and overridable per-leaf — so re-tiering is a cheap `zfs set`
+>   rather than a data move. `tank/appdata` is forced onto the special vdev.
+>
+> **Two prior rulings in this section were knowingly reversed, not overlooked:**
+>
+> - **"Why not RAIDZ for the array" (damage confinement) — reversed.** RAIDZ1
+>   does trade away the "lose only the failed disk, every survivor stays
+>   mountable" property this section valued. Accepted because the array's bulk is
+>   re-acquirable media, the genuinely irreplaceable state rides the **mirrored
+>   special vdev** (appdata) or an **offsite borg** copy (the Precious tier), and a
+>   single unified pool buys checksummed self-healing on every read plus one
+>   snapshot story instead of SnapRAID's up-to-24 h-stale, churn-fragile parity
+>   (the failure mode `DESIGN.md` §4.1 spends pages on). The btrfs-parity /
+>   `chattr +C` reasoning below is moot: there is no SnapRAID parity file.
+> - **The standalone photo tier folded into `tank`.** The three-way photo mirror
+>   on drawer 1 TB disks (subsection below) was **not** built as a separate pool —
+>   photos are datasets (`tank/photos/{immich,immich_archived}`), so photo
+>   redundancy is now RAIDZ1 (single-disk) plus the offsite borg copy that was
+>   always the real "irreplaceable" guarantee. The three-way mirror that *did* get
+>   built is the SSD **special vdev**, a different thing.
+
 **btrfs for every role, except SnapRAID parity, which goes on XFS or ext4** —
 *alt:* ZFS for the photo mirror and the app-state pool; ZFS on root; RAIDZ for
 the array.
@@ -213,6 +263,12 @@ is not what would stop it.
   there safely and ZFS can.
 
 ### ✅ Reversed for the photo tier only — 2026-08-09
+
+> ⚠ **Superseded 2026-09-01 — folded into `tank`, see the section banner above.**
+> The standalone three-way photo mirror on drawer disks was never built as its own
+> pool; photos are datasets on `tank` (`tank/photos/*`). What survives from this
+> subsection is the **LUKS-underneath-not-native** ruling below, which the whole
+> array now follows. The rest is provenance.
 
 **Decision: the photo tier is a ZFS three-way mirror on LUKS, across the drawer's
 three 1 TB CMR disks** (`h-5N8F`, `h-NYXN`, `h-6D0X`). 1 TB usable, tolerates
@@ -286,6 +342,30 @@ wiped — `zpool import -N` for a look first if anything on it is wanted.
 ---
 
 ## 8. The no-parity window is accepted for media — and measurement made it a priced bet
+
+> ### ✅ Superseded 2026-09-01 — the conversion was not in-place, so this window never opened as described
+>
+> This section priced the exposure of an **in-place SnapRAID conversion** (steps
+> 11–13 of `DESIGN.md` §6.2: write the first mergerfs/SnapRAID layout onto the
+> live disks, then build parity). That path was abandoned with SnapRAID itself.
+> `tank` was instead built **fresh** on the four spinners after their contents had
+> been copied to `sidepool` — so the shape of the risk changed rather than the risk
+> being eliminated:
+>
+> - During `tank`'s destructive `zpool create`, **`sidepool` is the only copy** of
+>   the migrated data. Its safeguard is being kept physically disconnected during
+>   the create, then reconnected **read-only** for the copy-back
+>   (`HARDWARE-MAP.md` §1). The single-point-of-failure worry moved from "the array
+>   has no parity for 12–24 h" to "the staging copy must survive until copy-back
+>   verifies" — the parachute reasoning below (`h-XDAS`, the relocated SMR disk)
+>   still applies to exactly that.
+> - Once data lands on `tank` it is **RAIDZ1-redundant from the first byte** —
+>   there is no window where freshly-written array data sits at zero parity, which
+>   was the whole hazard this section accepted. The Precious tier's offsite borg
+>   copy (Phase 0) remains the real backstop regardless.
+>
+> The tier table and the measurement below still describe what data exists and
+> what protects it, so they are kept; the "steps 11–13" framing is the stale part.
 
 **Owner, 2026-08-08:** *"For the arr managed media, I'm willing to roll the dice on
 attempting an in-place conversion, understanding that I won't have parity
