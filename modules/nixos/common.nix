@@ -115,6 +115,7 @@
     wget
     curl
     htop
+    screen
     vim
     age
     ssh-to-age
