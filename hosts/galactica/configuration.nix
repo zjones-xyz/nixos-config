@@ -47,6 +47,7 @@ in
     ../../modules/nixos/common.nix
     ../../modules/nixos/btrfs-snapshots.nix
     ../../modules/nixos/serial-console.nix
+    ./media.nix
   ];
 
   networking.hostName = "galactica";
