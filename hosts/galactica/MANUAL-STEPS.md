@@ -308,6 +308,25 @@ forward-looking rather than blocking now:
   dataset earlier. Consequence, accepted knowingly: Docker/appdata-dependent
   services can't start until the array — special vdev included — is fully
   built. No interim NVMe home, on purpose.
+- **Future, explicitly deferred — an NVMe acceleration/hot tier for `tank`
+  (discussed 2026-09-02).** The idea: use the root NVMe (much faster than the
+  SATA special-vdev SSDs) as a tier above them. Conclusions:
+  - ZFS has **no automatic heat-based tiering** — the special vdev is the only
+    automatic placement and it is *size*-based (`special_small_blocks`), not
+    access-frequency-based. So a self-promoting hot-NVMe layer isn't a native
+    option (would need bcache/dm-cache under ZFS — not worth it).
+  - **L2ARC** (`zpool add tank cache <nvme-part>`) is the closest — a
+    redundancy-neutral read cache above everything. Judged **marginal for this
+    workload**: metadata + all of `appdata` already live on the special vdev,
+    media reads are sequential (L2ARC skips those), and 32 GB ARC already
+    covers most of the random-read window. Also needs a partition carved from
+    the root NVMe (currently `cryptroot`+swap, no free partition). Low-risk to
+    try later (removable) but **measure hit rate before committing space**.
+  - **SLOG** helps only sync writes — negligible here. Skip.
+  - **Direct placement is the real path** (and the same idea as the bullet
+    below): promote specific latency-bound databases *onto* the NVMe (a small
+    second pool/dataset), trading ZFS redundancy for backups. Per-service,
+    measured, once real workloads exist — not a pool-wide tier.
 - **Future, explicitly deferred:** individual databases may later get
   "promoted" back onto the NVMe for latency, relying on backups rather than
   ZFS redundancy for those specific ones. Not designed yet — a per-service
