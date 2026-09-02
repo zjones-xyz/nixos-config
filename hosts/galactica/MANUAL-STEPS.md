@@ -348,6 +348,19 @@ forward-looking rather than blocking now:
     target for the non-offsite `reacquirable` datasets if `tank` ever goes
     degraded. **This is a decision to make AT retirement time**, not purely
     deferred — flagged here so the retirement step weighs it.
+  - **Do NOT concat those small disks into a fake 12 TB member.** Considered
+    (`mdadm --level=linear` / LVM / RAID0 → `zpool replace tank <failed>
+    /dev/md0`) and rejected: a no-redundancy concat makes the logical member
+    die the instant *any one* of its 3–4 disks dies — **3–4× the failure
+    probability, on the member you least want fragile**, which in a degraded
+    pool is what takes the whole pool down. Resilvering onto SMR drives is
+    days-to-weeks of punishment while they're your only parity margin, and
+    LUKS → md/LVM → ZFS layering adds boot-assembly fragility (and 3 × 3.6 TB
+    = 10.9 < 12, so it needs all four disks anyway). It restores vdev parity
+    only on a foundation likely to re-degrade you. **Same disks, as the
+    `zfs send` copy target above, have the opposite risk profile** — a
+    small-disk failure costs part of a recoverable copy, not the pool. Use
+    them as a copy, never as a member.
   - Weekly scrub + SMART (both on) to catch a second disk degrading early.
 - **Migrate `/boot`'s ESP from `midden` to MX100** (see §2b — this is not
   optional cleanup, `midden` is expected to fail within about a year and
