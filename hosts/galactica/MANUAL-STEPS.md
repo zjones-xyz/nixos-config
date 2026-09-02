@@ -332,6 +332,23 @@ forward-looking rather than blocking now:
   ZFS redundancy for those specific ones. Not designed yet — a per-service
   decision for whoever's doing the appdata tiering once real workloads
   exist to measure.
+- **⚠ Degraded-disk contingency (RAIDZ1 = 1-disk tolerance), 2026-09-02.**
+  If a 12 TB member fails, the pool stays online + readable degraded; the only
+  danger is a *second* failure before resilver. A replacement must be ≥ 12 TB
+  (no smaller disk, no drawer spare qualifies, no raidz-shrink), and **recert
+  12 TB enterprise drives are ~$350 (2026-09)** — a real cost, so a cold spare
+  is **budgeted-when-affordable, not on hand**. Interim plan for a degraded
+  window:
+  - The offsite borg backup (`precious`+`critical`) survives even a double
+    failure, and the `reacquirable` media is re-downloadable — so a degraded
+    window risks a *painful media re-download*, not irreplaceable loss.
+  - **Keep sidepool's disks as the zero-cost hedge.** When sidepool is retired
+    (migration step 6), consider NOT reclaiming its 4 disks: hold them
+    (old/partly-SMR — fine for temporary use) as an emergency `zfs send`
+    target for the non-offsite `reacquirable` datasets if `tank` ever goes
+    degraded. **This is a decision to make AT retirement time**, not purely
+    deferred — flagged here so the retirement step weighs it.
+  - Weekly scrub + SMART (both on) to catch a second disk degrading early.
 - **Migrate `/boot`'s ESP from `midden` to MX100** (see §2b — this is not
   optional cleanup, `midden` is expected to fail within about a year and
   currently hosts the only way this machine boots at all). Once the four
