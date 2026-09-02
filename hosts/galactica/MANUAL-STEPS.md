@@ -184,12 +184,23 @@ Create `secrets/galactica.yaml`'s `nut/upsmonPassword` at the same time
 
 ## 7. Beszel agent
 
-No config exists for this yet — `modules/nixos/beszel.nix` turned out to be
-hopper's own hub+agent bundle, not a reusable agent module (see the comment in
-`configuration.nix`, confirmed by the opus review reading the file directly).
-Write a small host-specific unit: the `henrygd/beszel-agent` container, host
-network mode, `KEY` env pointed at hopper's hub. Register galactica as a new
-system in hopper's hub UI first to get that key.
+✅ **Config now exists** — `modules/nixos/beszel-agent.nix` (a reusable
+agent-only module, shaped like `modules/nixos/arcane-agent.nix`), imported and
+wired in `configuration.nix` (`services.beszelAgent`, gated on `hasSops`). It
+runs the `henrygd/beszel-agent` container in host-network mode, rootful docker
+socket read-only, and injects the hub `KEY` from the `beszel/agentKey` sops
+secret at runtime. Deliberately NOT `modules/nixos/beszel.nix`, which is
+hopper's own hub+agent bundle (see the comment in `configuration.nix`).
+
+Two owner steps remain before it activates (it stays dormant until both are
+done and `secrets/galactica.yaml` exists, flipping `hasSops` true):
+
+1. [ ] Register galactica as a new system in hopper's Beszel hub UI. The hub
+   prints a public key to paste into the agent.
+2. [ ] `sops secrets/galactica.yaml` and add that key as `beszel/agentKey`
+   (the raw key value — the module `cat`s the file and exports it as `KEY`,
+   so no `KEY=` prefix). The firewall already opens `45876` via the module
+   (`openFirewall`, default on) so the hub can reach the agent.
 
 ## 8. memory-alpha's NFS mounts — the cutover plan (decided 2026-08-31)
 

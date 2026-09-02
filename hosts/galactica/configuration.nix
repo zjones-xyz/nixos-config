@@ -47,6 +47,7 @@ in
     ../../modules/nixos/common.nix
     ../../modules/nixos/btrfs-snapshots.nix
     ../../modules/nixos/serial-console.nix
+    ../../modules/nixos/beszel-agent.nix
   ];
 
   networking.hostName = "galactica";
@@ -362,16 +363,31 @@ in
     '';
   };
 
-  # ── Beszel agent — NOT YET WIRED ────────────────────────────────────────────
-  # DESIGN.md's Phase 2 step 8 calls for "a Beszel agent (modules/nixos/beszel.nix
-  # — the hub already runs on hopper)", but that file turns out to be hopper's
-  # own hub+agent bundle: hardcoded `beszel.hopper.internal` Traefik hostnames
-  # and a dependency on hopper's own `docker-proxy-network`/`traefik-docker`
-  # units. Importing it here would try to stand up a second, redundant hub
-  # rather than just an agent pointed at hopper's existing one. Needs a real
-  # agent-only unit (same `henrygd/beszel-agent` container, host network mode,
-  # KEY env pointed at hopper's hub) written for this host specifically — see
-  # MANUAL-STEPS.md. Left undone rather than guessed at.
+  # ── Beszel agent (modules/nixos/beszel-agent.nix) ───────────────────────────
+  # Reports this host's metrics to the hub hopper already runs. NOT
+  # modules/nixos/beszel.nix — that's hopper's own hub+agent bundle (hardcoded
+  # `beszel.hopper.internal` Traefik hostnames, a dependency on hopper's
+  # docker-proxy-network/traefik-docker units, and the rootless docker socket);
+  # importing it here would stand up a second, redundant hub. beszel-agent.nix
+  # is the agent-only unit written for that exact reason — see its header.
+  #
+  # Gated on hasSops because the agent's whole job needs the hub KEY, and that
+  # KEY comes from a sops secret (`beszel/agentKey`, declared in the sops block
+  # below, same conditional). Until secrets/galactica.yaml exists the agent
+  # simply isn't declared — nothing to run without a key anyway, and it keeps
+  # this file evaluating cleanly pre-first-boot like every other secret-gated
+  # bit here.
+  #
+  # ⚠ OWNER STEP (MANUAL-STEPS.md §7): register galactica as a new system in
+  # hopper's Beszel hub UI to get the KEY, then create the secret —
+  # `sops secrets/galactica.yaml`, add `beszel/agentKey` as the raw hub public
+  # key value. Only after that (and hasSops flipping true) does this activate.
+  services.beszelAgent = lib.mkIf hasSops {
+    enable = true;
+    keyFile = config.sops.secrets."beszel/agentKey".path;
+    # hubUrl / port / image all default to the fleet's values (hopper's hub,
+    # 45876, henrygd/beszel-agent:latest) — see beszel-agent.nix.
+  };
 
   # ── NUT — galactica is the server, UPS attached directly ───────────────────
   # DECISIONS.md's "Reversed by the move to bare metal": under bare metal the
@@ -437,6 +453,11 @@ in
     # registered against the LUKS header with `cryptsetup luksAddKey`.
     secrets = {
       "luks/middenKeyFile" = { };
+      # Hub public key for the Beszel agent (see the services.beszelAgent block
+      # above). `owner = "z"` so the agent's compose invocation can read it;
+      # created by the owner after registering galactica in hopper's hub UI
+      # (MANUAL-STEPS.md §7).
+      "beszel/agentKey".owner = "z";
     } // lib.optionalAttrs hasArrayKey {
       # Raw 4096-byte keyfile unlocking all seven ZFS-array LUKS members
       # (slot 0; each disk also carries the fleet recovery passphrase in slot
