@@ -47,6 +47,7 @@ in
     ../../modules/nixos/common.nix
     ../../modules/nixos/btrfs-snapshots.nix
     ../../modules/nixos/serial-console.nix
+    ../../modules/nixos/borgmatic.nix
   ];
 
   networking.hostName = "galactica";
@@ -468,6 +469,18 @@ in
   # doesn't need the rpcbind/mountd/statd port spread NFSv3 requires.
   services.nfs.server.enable = true;
   networking.firewall.allowedTCPPorts = [ 2049 ];
+
+  # ── Offsite backup (borgmatic → BorgBase) ──────────────────────────────────
+  # modules/nixos/borgmatic.nix. ZFS-snapshot, property-driven: the offsite
+  # boundary (Critical + Precious) lives on the datasets as
+  # `org.torsion.borgmatic:backup=auto`, so nothing here enumerates mountpoints
+  # — see hosts/galactica/BACKUP-BORG.md for the mechanism, the one-time
+  # `zfs set` per leaf, and what the owner must create (repo + two sops
+  # secrets). Gated on `hasSops` for the same reason as the sops block below:
+  # it evaluates cleanly with no secrets, and only activates once they exist.
+  # The BorgBase repo URL is still REPLACE (module default) until the account
+  # exists; set `homelab.borgmatic.repository` then.
+  homelab.borgmatic.enable = hasSops;
 
   # ── home-manager ──────────────────────────────────────────────────────────
   home-manager = {
