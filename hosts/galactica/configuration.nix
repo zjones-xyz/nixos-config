@@ -323,7 +323,7 @@
   # sops-nix activation fail. Bring-up checklist in BACKUP-BORG.md. Flip to true
   # (and set homelab.borgmatic.repository) as the final step of that checklist.
   homelab.borgmatic = {
-    enable = false;
+    enable = true;
     repository = "ssh://kentmevx@kentmevx.repo.borgbase.com/./repo";
   };
 
