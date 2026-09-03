@@ -322,7 +322,10 @@
   # in secrets/galactica.yaml — enabling it before the secret VALUES exist makes
   # sops-nix activation fail. Bring-up checklist in BACKUP-BORG.md. Flip to true
   # (and set homelab.borgmatic.repository) as the final step of that checklist.
-  homelab.borgmatic.enable = false;
+  homelab.borgmatic = {
+    enable = false;
+    repository = "ssh://kentmevx@kentmevx.repo.borgbase.com/./repo";
+  };
 
   # ── NFS server (re-exports the array to memory-alpha) ──────────────────────
   # Enabling the server and opening its port don't depend on the array
