@@ -615,3 +615,38 @@ and reading the packaging, not from a real login.
    Whether that session gets an empty keyring each login or inherits the
    already-running daemon from the shared user manager wasn't determined —
    check with step 2 from inside that session if it matters.
+
+## 20. Thunderbird + Proton Bridge — first-run login (interactive)
+
+Added `thunderbird` and `protonmail-bridge-gui` to `hosts/pegasus/home.nix`.
+The packages install declaratively; wiring them to a live Proton mailbox is a
+one-time interactive flow this session can't drive. After the next switch:
+
+1. **Launch the Bridge and sign in.** Run `protonmail-bridge` (the GUI tray
+   app) and log in with the Proton account — a paid plan is required; Bridge is
+   not available on free Proton. On first launch it stores its own credentials
+   and mailbox keys in the Secret Service, i.e. the **gnome-keyring** daemon
+   from §19 — so do this from a session where §19 is confirmed working
+   (`busctl --user list | grep secrets` shows `org.freedesktop.secrets` owned
+   by `gnome-keyring-daemon`). If the keyring isn't up, Bridge falls back to
+   prompting on every start.
+
+2. **Copy the Bridge's local IMAP/SMTP settings.** In the Bridge window, open
+   the account's Mailbox details — it shows a `127.0.0.1` host, the IMAP and
+   SMTP ports, and a **Bridge-generated password** (this is NOT the Proton
+   account password; it's unique per client and only valid against the local
+   Bridge). Leave the Bridge running — it must stay up for Thunderbird to send
+   or receive, since it's the proxy.
+
+3. **Add the account in Thunderbird** using those values: server `127.0.0.1`,
+   the IMAP/SMTP ports and Bridge password from step 2, connection security
+   **STARTTLS**, auth **normal password**. Thunderbird will warn about the
+   Bridge's self-signed certificate on first connect — expected (the TLS is
+   purely loopback), accept/trust it. Or use the Bridge's "Configure
+   automatically" export if Thunderbird's autoconfig is offered.
+
+4. **Autostart (optional).** Mail only flows while the Bridge is running. If
+   you want it up without launching by hand each login, enable its own
+   "Start on login" toggle in the Bridge's settings — deliberately not declared
+   in Nix here (it's per-user GUI state, and the headless systemd-user service
+   variant was passed over on purpose, see the home.nix comment).

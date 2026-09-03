@@ -85,6 +85,27 @@
     jellyfin-desktop
     vlc
 
+    # ── Mail: Thunderbird + Proton Bridge ───────────────────────────────────
+    # Thunderbird is the IMAP/SMTP client; the Bridge is what lets it reach a
+    # Proton mailbox at all. Proton exposes no standard IMAP/SMTP of its own
+    # (everything is end-to-end encrypted behind their API), so the Bridge runs
+    # locally, authenticates/decrypts against that API, and re-serves the
+    # mailbox as a plain IMAP+SMTP endpoint on 127.0.0.1 that Thunderbird then
+    # points at. This is a different tool from the protonmail-desktop app
+    # already in the set below — that's Proton's own standalone client; the
+    # Bridge is the glue for using a *third-party* client like Thunderbird.
+    #
+    # GUI variant (not the headless `protonmail-bridge`): it's the interactive
+    # tray app you log into once, matching this host's all-GUI desktop pattern.
+    # The headless build is a systemd-user service that would need pass/GPG set
+    # up for its credential store — deliberately not wired up here.
+    #
+    # First-run is a manual step (login + copying the Bridge's generated
+    # IMAP/SMTP credentials into Thunderbird); it also needs a running Secret
+    # Service to persist its keychain. See MANUAL-STEPS.md.
+    thunderbird
+    protonmail-bridge-gui
+
     # file managers
     nemo
     nautilus
