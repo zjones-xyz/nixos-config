@@ -24,6 +24,7 @@
     ../../modules/nixos/luks-remote-unlock.nix
     ../../modules/nixos/beszel-agent.nix
     ../../modules/nixos/arcane-agent.nix
+    ../../modules/nixos/borgmatic.nix
   ];
 
   networking.hostName = "galactica";
@@ -314,6 +315,14 @@
   # array exists — smartd has plenty to poll. modules/nixos/smart.nix ships
   # the package fleet-wide regardless; this turns on monitoring.
   homelab.smart.monitor = true;
+
+  # ── Offsite backup (borgmatic → BorgBase) ──────────────────────────────────
+  # Module is imported above; keep it OFF until the BorgBase repo is created and
+  # the two sops secrets (borgmatic/passphrase, borgmatic/ssh_key) are populated
+  # in secrets/galactica.yaml — enabling it before the secret VALUES exist makes
+  # sops-nix activation fail. Bring-up checklist in BACKUP-BORG.md. Flip to true
+  # (and set homelab.borgmatic.repository) as the final step of that checklist.
+  homelab.borgmatic.enable = false;
 
   # ── NFS server (re-exports the array to memory-alpha) ──────────────────────
   # Enabling the server and opening its port don't depend on the array
