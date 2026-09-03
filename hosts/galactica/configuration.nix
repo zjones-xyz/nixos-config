@@ -223,7 +223,7 @@
   # agent's TLS to the manager just works over split-horizon DNS.
   services.arcaneAgent = {
     enable = true;
-    managerUrl = "https://arcane.memory-alpha.zjones.dev";
+    managerUrl = "https://arcane.monitor.zjones.dev";
     tokenFile = config.sops.secrets."arcane/agentToken".path;
   };
 
