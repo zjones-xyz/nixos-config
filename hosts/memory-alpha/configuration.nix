@@ -41,6 +41,7 @@ in
     ../../modules/nixos/dockge.nix
     ../../modules/nixos/arcane.nix
     ../../modules/nixos/nut-client.nix
+    ../../modules/nixos/luks-remote-unlock.nix
   ];
 
   networking.hostName = "memory-alpha";
@@ -82,9 +83,12 @@ in
     "xt_MASQUERADE"
   ];
 
-  # systemd-based initrd (26.05 default) — required for LUKS SSH unlock
-  boot.initrd.systemd.enable = true;
-
+  # ── LUKS SSH unlock ─────────────────────────────────────────────────────────
+  # The shared flow (initrd SSH server, DHCP, pre-switch-root network flush,
+  # chimes) lives in modules/nixos/luks-remote-unlock.nix, imported above.
+  # Only memory-alpha's host-specific pieces stay here: the USB NIC drivers
+  # and the MAC-pinned interface names.
+  #
   # Both of memory-alpha's real uplink NICs are identical USB-C Ethernet
   # dongles using the cdc_ncm/cdc_ether class drivers (confirmed via sysfs
   # driver links: /sys/class/net/<iface>/device/driver). hardware-configuration.nix's
@@ -106,140 +110,6 @@ in
   ];
 
   boot.initrd.systemd.network.links = ethLinks;
-
-  # NixOS normally auto-generates a DHCP .network unit for the initrd
-  # (genericDhcpNetworks in nixos/modules/tasks/network-interfaces-systemd.nix)
-  # whenever boot.initrd.network.enable = true — but only when
-  # networking.useDHCP is true. networking.networkmanager.enable = true above
-  # implicitly sets networking.useDHCP = false (NetworkManager manages DHCP
-  # for the *running* system instead), and that same flag gates the initrd's
-  # auto-generated DHCP config, so no lease was ever requested in the initrd —
-  # the NIC came up at the link layer but never got an IP. Define the DHCP
-  # match explicitly here, scoped to the initrd only, independent of the main
-  # system's NetworkManager-driven config.
-  boot.initrd.systemd.network.networks."99-ethernet-default-dhcp" = {
-    matchConfig = {
-      Type = "ether";
-      Kind = "!*";
-    };
-    DHCP = "yes";
-  };
-
-  # switch-root doesn't reset interface state — the initrd's DHCP-assigned
-  # addresses/routes on eth-primary/eth-secondary (needed above for the LUKS
-  # SSH unlock) survive into the real system. NetworkManager then finds those
-  # interfaces already configured and adopts them as "connected (externally)"
-  # instead of running its own DHCP client — which is the only thing that
-  # populates /etc/resolv.conf. Net effect: routing works but DNS is empty on
-  # every boot. Flush the addresses right before switch-root so NetworkManager
-  # always starts from a clean interface and does its own full DHCP
-  # negotiation, DNS included.
-  boot.initrd.systemd.services.flush-network-before-switch-root = {
-    description = "Flush initrd DHCP state so NetworkManager re-negotiates DNS";
-    before = [ "initrd-switch-root.target" ];
-    wantedBy = [ "initrd-switch-root.target" ];
-    unitConfig.DefaultDependencies = false;
-    serviceConfig.Type = "oneshot";
-    path = [ pkgs.iproute2 ];
-    script = ''
-      ip addr flush dev eth-primary || true
-      ip addr flush dev eth-secondary || true
-    '';
-  };
-
-  # `path = [ pkgs.iproute2 ]` above only sets $PATH inside the unit — the
-  # initrd-systemd module doesn't trace that back to copy the `ip` binary
-  # into the initrd image itself. Without this, `ip` was silently
-  # "command not found" (the script's `|| true` swallowed the failure),
-  # the flush never ran, and every boot inherited stale initrd DHCP state:
-  # NetworkManager saw the interfaces as already "connected (externally)",
-  # skipped its own DHCP negotiation, and /etc/resolv.conf ended up with
-  # no nameservers. This is what actually gets the binary copied in.
-  boot.initrd.systemd.storePaths = [ "${pkgs.iproute2}/bin/ip" ];
-
-  # LUKS SSH unlock — lets you decrypt the drive remotely after a reboot.
-  #
-  # How it works:
-  #   1. A tiny SSH server starts in the initrd (before LUKS is unlocked).
-  #   2. You SSH in and run `systemd-tty-ask-password-agent --query` to enter
-  #      the passphrase (or send it via stdin with heredoc).
-  #   3. The drive unlocks, the real system boots, the initrd SSH server exits.
-  #
-  # sops-nix age key interaction:
-  #   sops-nix decrypts secrets using the host's SSH ed25519 key
-  #   (/etc/ssh/ssh_host_ed25519_key), which lives on the encrypted volume.
-  #   This is fine — sops secrets are only needed *after* LUKS unlock, during
-  #   the normal boot activation stage, not in initrd.
-  #
-  # Setup steps (do once after install):
-  #   1. Generate a dedicated initrd SSH host key (NOT the same as the main host key):
-  #        ssh-keygen -t ed25519 -N "" -f /run/secrets/initrd-ssh-host-key
-  #      Store it somewhere safe — it's an unencrypted secret embedded in initrd.
-  #      Add to secrets/ and reference via sops after first boot if desired,
-  #      but the simplest path is a key in /etc/secrets/initrd/ (unencrypted dir).
-  #   2. Set `authorizedKeys` below to your public key.
-  #   3. On reboot: ssh root@memory-alpha -p 2222
-  #      then: systemd-tty-ask-password-agent --query
-  boot.initrd.network = {
-    enable = true;
-    ssh = {
-      enable = true;
-      port = 2222;
-      # Add your SSH public key here:
-      authorizedKeys = [
-        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCfTHdojQvKOlTaaTYT2RmYMNKQ/6rBQwn6V+bPnrtASaI/G5E7RW67XGbZHi3K7EctyB9UP9Uw54sayEu4ebixI/dNFVVWeZ2byBQ49FoXh5o9Cfok0Qwf0QM7g9Td8O6Iu2ElnI8e+9cr8ThrfPpKmP68e6mpuYDvhQb4omcx8kRhxnsuNxkL2xCTNVxG/jw68o/1KHX++6tRqf0E3PBCjZ3Z8HMTdS8ouEBa8Y96GGeUvslwDJ9cUtLNCUhR5t3mGu3iSS9RYpFg/JujyTT9yhe2O/0og+OhBeSayGZMOXGWngGUEItExlbq2I4rMV5pFB1q+OyqksvlUfkJ/j3yJOii5uwonYvkWLZfR02yhn2b/bgOfYaimO5rfKj5jAC8bMRnWqLJAiG2qRDwtJT+ijyYlTKgLpz73sOGAQVvZygq11Vc35cZMFojlMeqAHdZMGi6XkUHnfZt8gyplw6VPV5EQnyDI4bRfY9sknuFvjHqdEzNyNrIEXtlmIB870s= z@Serenity.local"
-      ];
-      # Dedicated initrd host key — generate with:
-      #   ssh-keygen -t ed25519 -N "" -f /etc/secrets/initrd/ssh_host_ed25519_key
-      # This key lives OUTSIDE the encrypted volume (e.g., on /boot or hardcoded path).
-      hostKeys = [ "/etc/secrets/initrd/ssh_host_ed25519_key" ];
-    };
-  };
-
-  # Audible chimes at the two initrd milestones that matter when unlocking
-  # headlessly: (1) the SSH unlock server is up and reachable, and (2) LUKS
-  # has actually been decrypted and boot is continuing. Without these there's
-  # no feedback loop — you're left guessing whether `ssh root@... -p 2222` is
-  # worth trying yet, or whether a submitted passphrase was accepted.
-  #
-  # Both just write BEL (\a) to /dev/console. The kernel's VT layer toggles
-  # the PC speaker directly for that (kd_mksound, in drivers/tty/vt/vt.c) —
-  # no ALSA, no `beep` package, nothing that needs to survive into the
-  # initrd's minimal closure. Different beep counts/spacing so the two events
-  # are distinguishable by ear alone.
-  boot.initrd.systemd.services.chime-waiting-unlock = {
-    description = "Chime: initrd SSH unlock server ready";
-    after = [ "sshd.service" ];
-    wantedBy = [ "initrd.target" ];
-    before = [ "shutdown.target" ];
-    conflicts = [ "shutdown.target" ];
-    unitConfig.DefaultDependencies = false;
-    serviceConfig.Type = "oneshot";
-    path = [ pkgs.coreutils ];
-    script = ''
-      for i in 1 2 3; do
-        printf '\a' > /dev/console
-        sleep 0.15
-      done
-    '';
-  };
-
-  boot.initrd.systemd.services.chime-unlock-finished = {
-    description = "Chime: LUKS unlock finished";
-    after = [ "cryptsetup.target" ];
-    wantedBy = [ "initrd.target" ];
-    before = [ "shutdown.target" ];
-    conflicts = [ "shutdown.target" ];
-    unitConfig.DefaultDependencies = false;
-    serviceConfig.Type = "oneshot";
-    path = [ pkgs.coreutils ];
-    script = ''
-      for i in 1 2; do
-        printf '\a' > /dev/console
-        sleep 0.5
-      done
-    '';
-  };
 
   # ── sops-nix ──────────────────────────────────────────────────────────────
   # Uses the host's SSH ed25519 key as the age identity.

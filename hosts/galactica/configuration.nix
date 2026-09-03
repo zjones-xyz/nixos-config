@@ -47,6 +47,7 @@ in
     ../../modules/nixos/common.nix
     ../../modules/nixos/btrfs-snapshots.nix
     ../../modules/nixos/serial-console.nix
+    ../../modules/nixos/luks-remote-unlock.nix
   ];
 
   networking.hostName = "galactica";
@@ -225,142 +226,14 @@ in
 
   # ── LUKS SSH unlock (root only — see DECISIONS.md §7 on why data disks
   # don't get this) ───────────────────────────────────────────────────────────
-  # Same shape as memory-alpha/pegasus — see memory-alpha/configuration.nix
-  # for the full writeup of why each piece exists.
+  # The shared flow lives in modules/nixos/luks-remote-unlock.nix (imported
+  # above). Only the host-specific piece stays here:
   #
   # ✅ Confirmed 2026-08-31 directly on Tower (`readlink -f
   # /sys/class/net/*/device/driver`): `e1000e`, matching PLATFORM.md's
   # documented Intel 82574L — checked rather than assumed, same as every
   # other host's initrd-NIC fix in this fleet.
-  boot.initrd.systemd.enable = true;
   boot.initrd.availableKernelModules = lib.mkAfter [ "e1000e" ];
-
-  boot.initrd.network = {
-    enable = true;
-    ssh = {
-      enable = true;
-      port = 2222;
-      authorizedKeys = [
-        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCfTHdojQvKOlTaaTYT2RmYMNKQ/6rBQwn6V+bPnrtASaI/G5E7RW67XGbZHi3K7EctyB9UP9Uw54sayEu4ebixI/dNFVVWeZ2byBQ49FoXh5o9Cfok0Qwf0QM7g9Td8O6Iu2ElnI8e+9cr8ThrfPpKmP68e6mpuYDvhQb4omcx8kRhxnsuNxkL2xCTNVxG/jw68o/1KHX++6tRqf0E3PBCjZ3Z8HMTdS8ouEBa8Y96GGeUvslwDJ9cUtLNCUhR5t3mGu3iSS9RYpFg/JujyTT9yhe2O/0og+OhBeSayGZMOXGWngGUEItExlbq2I4rMV5pFB1q+OyqksvlUfkJ/j3yJOii5uwonYvkWLZfR02yhn2b/bgOfYaimO5rfKj5jAC8bMRnWqLJAiG2qRDwtJT+ijyYlTKgLpz73sOGAQVvZygq11Vc35cZMFojlMeqAHdZMGi6XkUHnfZt8gyplw6VPV5EQnyDI4bRfY9sknuFvjHqdEzNyNrIEXtlmIB870s= z@Serenity.local"
-        # Added 2026-08-31, live — the initrd unlock config was copied
-        # verbatim from memory-alpha/pegasus, both of which have this exact
-        # same gap: common.nix already grants pegasus's key access to the
-        # normal system's z user, but this list is separate and only ever
-        # had serenity's key. Found by hitting "Permission denied" trying
-        # to unlock from pegasus on the first real boot.
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICjzi98Mik0CUMxSpUBf7+LA8co0grMtDb5NqwhVZ7nF z@pegasus"
-      ];
-      hostKeys = [ "/etc/secrets/initrd/ssh_host_ed25519_key" ];
-    };
-  };
-
-  # `networking.networkmanager.enable = true` implicitly sets
-  # `networking.useDHCP = false`, which is exactly what gates nixpkgs' own
-  # auto-generated initrd DHCP `.network` unit — without an explicit one, the
-  # NIC comes up at link layer in the initrd SSH-unlock stage above and never
-  # gets an address, so `ssh -p 2222` just times out, indistinguishable from
-  # the `e1000e` guess being wrong. memory-alpha already carries this fix;
-  # pegasus does not — an opus review agent caught that this file had copied
-  # pegasus's shape rather than memory-alpha's, and that the gap matters more
-  # here since galactica is headless (pegasus has a display to fall back on,
-  # plausibly why it was never noticed there). Generic match rather than
-  # MAC-pinned like memory-alpha's, since this host has one onboard NIC with
-  # no renaming scheme to keep consistent with.
-  boot.initrd.systemd.network.networks."99-ethernet-default-dhcp" = {
-    matchConfig = {
-      Type = "ether";
-      Kind = "!*";
-    };
-    DHCP = "yes";
-  };
-
-  # Same NetworkManager/initrd-DHCP interaction every x86_64 host in this
-  # fleet has hit — see pegasus/memory-alpha's configuration.nix for the full
-  # explanation. Without this: routing works, DNS is empty, every boot.
-  # Widened 2026-08-31 after the original (address-flush-only) version
-  # provably never fixed DNS on this host — NetworkManager still showed
-  # enp0s25 as "connected (externally)" every boot, with an empty
-  # /etc/resolv.conf. Three changes bundled into one attempt rather than
-  # three separate reboot cycles:
-  #   1. A kmsg marker, so a future "did this even run" question is
-  #      answerable without relying on journal transfer across
-  #      switch-root — this is the one piece of real evidence this
-  #      debugging session was missing.
-  #   2. Stop systemd-networkd outright, not just remove its address —
-  #      NetworkManager may be deferring to a still-active DHCP client
-  #      independent of what `ip addr` shows.
-  #   3. Bring the link administratively down, not just flush its
-  #      address — NetworkManager's "externally configured" heuristic may
-  #      key off the link already being UP at NM startup, which a plain
-  #      address flush never touched.
-  boot.initrd.systemd.services.flush-network-before-switch-root = {
-    description = "Flush initrd DHCP state so NetworkManager re-negotiates DNS";
-    before = [ "initrd-switch-root.target" ];
-    wantedBy = [ "initrd-switch-root.target" ];
-    unitConfig.DefaultDependencies = false;
-    serviceConfig.Type = "oneshot";
-    # Only `ip` needs `path` here, and it is copied into the initrd via
-    # storePaths below. The earlier version also listed pkgs.gawk and used
-    # `awk` to enumerate interfaces — but `path` only sets $PATH, it does NOT
-    # copy a binary into the initrd (memory-alpha's own storePaths comment
-    # documents this exact footgun for `ip`). gawk was never added to
-    # storePaths, so `awk` was silently "command not found" in the initrd, the
-    # `$(… | awk …)` interface list came back empty, the loop body never ran,
-    # and NOTHING was ever flushed — which is why this "fix" provably never
-    # worked despite looking correct. `systemctl` is intrinsic to a systemd
-    # initrd (it runs networkd there), so it needs no path/storePaths entry.
-    path = [ pkgs.iproute2 ];
-    # No awk, no interface discovery: iterate /sys/class/net with pure shell
-    # parameter expansion (`${p##*/}`), which needs no external binary at all.
-    # This is the whole point of the rewrite — the script now depends solely on
-    # `ip`, the one binary actually present in the initrd.
-    script = ''
-      echo "flush-network-before-switch-root: starting" > /dev/kmsg || true
-      systemctl stop systemd-networkd.service || true
-      for p in /sys/class/net/*; do
-        iface=''${p##*/}
-        [ "$iface" = "lo" ] && continue
-        ip addr flush dev "$iface" || true
-        ip link set dev "$iface" down || true
-      done
-      echo "flush-network-before-switch-root: done" > /dev/kmsg || true
-    '';
-  };
-  boot.initrd.systemd.storePaths = [ "${pkgs.iproute2}/bin/ip" ];
-
-  boot.initrd.systemd.services.chime-waiting-unlock = {
-    description = "Chime: initrd SSH unlock server ready";
-    after = [ "sshd.service" ];
-    wantedBy = [ "initrd.target" ];
-    before = [ "shutdown.target" ];
-    conflicts = [ "shutdown.target" ];
-    unitConfig.DefaultDependencies = false;
-    serviceConfig.Type = "oneshot";
-    path = [ pkgs.coreutils ];
-    script = ''
-      for i in 1 2 3; do
-        printf '\a' > /dev/console
-        sleep 0.15
-      done
-    '';
-  };
-
-  boot.initrd.systemd.services.chime-unlock-finished = {
-    description = "Chime: LUKS unlock finished";
-    after = [ "cryptsetup.target" ];
-    wantedBy = [ "initrd.target" ];
-    before = [ "shutdown.target" ];
-    conflicts = [ "shutdown.target" ];
-    unitConfig.DefaultDependencies = false;
-    serviceConfig.Type = "oneshot";
-    path = [ pkgs.coreutils ];
-    script = ''
-      for i in 1 2; do
-        printf '\a' > /dev/console
-        sleep 0.5
-      done
-    '';
-  };
 
   # ── Beszel agent — NOT YET WIRED ────────────────────────────────────────────
   # DESIGN.md's Phase 2 step 8 calls for "a Beszel agent (modules/nixos/beszel.nix
