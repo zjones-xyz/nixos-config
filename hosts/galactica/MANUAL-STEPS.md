@@ -286,6 +286,16 @@ against the source, plus the Unraid flash+config insurance into
    WD Blue's cable label is stale post-recable, and HARDWARE-MAP §3/§7's
    cage/port enumeration needs eyes-in-the-case anyway). Disks return to
    the drawer after a cooling-off period.
+   > **2026-09-03 — data-safety precondition met; the pull leaves nothing
+   > behind.** sidepool was reopened one last time (read-only: `cryptsetup
+   > open --readonly` ×4 + `mount -o ro,rescue=nologreplay`) and its `pools/`
+   > directory — 117 GB, the Unraid `cache`/`fastservices`/`services` pool
+   > appdata plus `unraid_config` and `unraid_flash.img`, none of which were
+   > array shares in the copy-back — was rsynced to
+   > `tank/backups/sidepool-pools` and `--checksum`-verified byte-identical
+   > (silent verify pass). `move_aside/` was confirmed to be only the already
+   > migrated array shares. So only the physical case work remains; nothing on
+   > sidepool is still needed. Mappers closed again afterward.
 4. [ ] **NFS re-exports** (§8, fsids 100–103) — and re-point memory-alpha's
    mounts, which still reference the dead Unraid paths
    (`tower.internal:/mnt/user/...`).
