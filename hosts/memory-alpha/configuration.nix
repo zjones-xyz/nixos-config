@@ -123,16 +123,26 @@ in
   };
 
   # ── NFS mounts (Tower media) ───────────────────────────────────────────────
+  # INERT until the §8 NFS cutover. Tower is galactica/ZFS now and these old
+  # Unraid share paths (/mnt/user/…) aren't exported yet, so every mount
+  # attempt gets `access denied`. `x-systemd.automount` is deliberately dropped
+  # for now: with it, a consumer touching the mountpoint during a switch (e.g.
+  # jellyfin restarting) fires a synchronous mount that fails and lands the
+  # .mount unit in `failed` — which makes `nixos-rebuild switch` exit non-zero.
+  # Without the automount and with `noauto`, nothing ever triggers them, so they
+  # stay inert placeholders (no failed units) rather than hard errors. `nofail`
+  # keeps them non-critical for good measure. The §8 cutover restores
+  # `x-systemd.automount` and re-points device= at the real ZFS export paths.
   fileSystems."/mnt/unmanaged" = {
     device = "tower.internal:/mnt/user/jellyfin";
     fsType = "nfs";
-    options = [ "nfsvers=4" "soft" "timeo=30" "x-systemd.automount" "noauto" "rsize=131072" "wsize=131072" "async" "nconnect=4" "noatime" ];
+    options = [ "nfsvers=4" "soft" "timeo=30" "noauto" "nofail" "rsize=131072" "wsize=131072" "async" "nconnect=4" "noatime" ];
   };
 
   fileSystems."/mnt/arr_managed_data" = {
     device = "tower.internal:/mnt/user/arr_managed_data";
     fsType = "nfs";
-    options = [ "nfsvers=4" "soft" "timeo=30" "x-systemd.automount" "noauto" "rsize=131072" "wsize=131072" "nconnect=4" "noatime" ];
+    options = [ "nfsvers=4" "soft" "timeo=30" "noauto" "nofail" "rsize=131072" "wsize=131072" "nconnect=4" "noatime" ];
   };
 
   # ── home-manager ──────────────────────────────────────────────────────────
