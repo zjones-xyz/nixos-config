@@ -265,10 +265,24 @@ The array now exists, and its config is declared and proven across a cold boot:
   `hardware-configuration.nix`'s `/boot` header for the manual re-create
   command if NVRAM is ever cleared.
 
-**Still to do:** the media/data **dataset tree** (deferred — needs the *arr
-hardlink-co-location and the SHARES.md tiering decisions, see §8), the
-**copy-back** from `sidepool` (needs it physically reconnected), and the
-**NFS re-exports** (§8, fsids 100–103).
+**Since done (2026-09-02):** the **dataset tree** — ~30 datasets organized by
+content with backup tier as an inherited `homelab:tier` user property (not
+tier-based paths; see the media-stack project memory), `tank/appdata` on the
+special vdev, `tank/sort/*` as staging. And the **copy-back**: sidepool
+reconnected on the LSI, mounted read-only, all 24 shares rsync'd in (~21 h,
+every share rc=0), crown jewels (documents/photos/appdata) checksum-verified
+against the source, plus the Unraid flash+config insurance into
+`tank/backups/unraid`.
+
+**Still to do:**
+
+1. [ ] Sweep the media datasets into `tank/media_staging/*` (zfs renames) so
+   nixarr gets a clean `/tank/media`; collections re-enter via *arr imports.
+2. [ ] Retire sidepool: unmount, close the four LUKS mappers, physically
+   disconnect; disks return to the drawer after a cooling-off period.
+3. [ ] **NFS re-exports** (§8, fsids 100–103) — and re-point memory-alpha's
+   mounts, which still reference the dead Unraid paths
+   (`tower.internal:/mnt/user/...`).
 
 The original forward-looking notes below are now mostly satisfied; kept for
 provenance.

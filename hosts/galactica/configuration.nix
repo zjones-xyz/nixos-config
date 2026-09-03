@@ -1,46 +1,20 @@
 { config, pkgs, lib, ... }:
 
 # ─────────────────────────────────────────────────────────────────────────────
-# galactica — Tower, bare-metal NixOS.
+# galactica — Tower, bare-metal NixOS (Supermicro X9SCM-F, ex-Unraid).
 # ─────────────────────────────────────────────────────────────────────────────
-# NOT YET WIRED INTO flake.nix. `hardware-configuration.nix` (imported below)
-# does not exist yet — it can only be generated live, on the real machine,
-# booted from the install ISO (`nixos-generate-config --no-filesystems --root
-# /mnt` after disko.nix has partitioned the NVMe). Adding this to
-# `nixosConfigurations` before that file exists would break `nix flake check`
-# for an import that can never resolve outside the real hardware. Add the
-# flake.nix entry and the secrets/galactica.yaml .sops.yaml staging (see the
-# sops-nix section below) as the last step of the install, once
-# hardware-configuration.nix is real.
+# Root is LUKS + btrfs on the NVMe (hosts/galactica/disko.nix), matching every
+# other host in the fleet — NOT ZFS. ZFS lives in `tank`, the RAIDZ1 media
+# array (4× 12 TB LUKS spinners + a 3-way-mirror LUKS SSD special vdev),
+# built live 2026-09-01 and declared below (crypttab + import ordering) — see
+# DECISIONS.md §7 for why the two encryption/filesystem stories are kept
+# separate, and MANUAL-STEPS.md §9 for the build record.
 #
-# What's settled vs. still needs live confirmation on the actual machine is
-# marked inline as it comes up — see also MANUAL-STEPS.md for the consolidated
-# checklist.
-#
-# Root is LUKS + btrfs (hosts/galactica/disko.nix), matching every other host
-# in the fleet — NOT ZFS. The RAIDZ1 media array is where ZFS lives on this
-# host; see DECISIONS.md §7 for why the two encryption/filesystem stories are
-# deliberately kept separate. The array itself isn't declared here yet: it
-# doesn't exist until built live (`zpool create ...`, migration handoff step
-# 8), and its datasets/mountpoints land in a follow-up commit once that's done
-# and their names are settled — same "no config for a layout that doesn't
-# exist yet" reasoning as DECISIONS.md §3 already applied to this whole host.
+# ⚠ /boot is on the WD Blue's ESP, NOT the NVMe or midden — this board's
+# firmware can't UEFI-boot the NVMe or anything behind the LSI HBA, and the
+# working NVRAM entry is hand-owned. hardware-configuration.nix's header has
+# the full story; it's why canTouchEfiVariables is false below.
 
-let
-  # secrets/galactica.yaml does not exist in the repo yet — created after
-  # first boot, same gating pattern as hosts/pegasus/configuration.nix. Until
-  # then this evaluates cleanly with sops-dependent bits disabled.
-  hasSops = builtins.pathExists ../../secrets/galactica.yaml;
-
-  # The ZFS array's LUKS keyfile is a separate binary sops file
-  # (secrets/galactica-array.key), created live on Tower once the array is
-  # built (MANUAL-STEPS.md §9). Until it exists, the array crypttab entries
-  # and tank's auto-import stay disabled so this file still evaluates — same
-  # gating pattern as hasSops itself. The four spinner + three SSD LUKS
-  # members are all keyed by this one keyfile (slot 0); each also carries the
-  # fleet recovery passphrase in slot 1.
-  hasArrayKey = builtins.pathExists ../../secrets/galactica-array.key;
-in
 {
   imports = [
     ./hardware-configuration.nix
@@ -113,11 +87,10 @@ in
   # boot it races the seven LUKS opens and imports a degraded/absent pool; and
   # (c) be driven by extraPools, because tank's datasets use native ZFS
   # mountpoints (/tank/*) rather than fileSystems.* entries, so nothing else
-  # would trigger the import at boot. All three gated on the keyfile existing,
-  # alongside the crypttab entries that actually open the mappers.
-  boot.zfs.devNodes = lib.mkIf hasArrayKey "/dev/mapper";
-  boot.zfs.extraPools = lib.mkIf hasArrayKey [ "tank" ];
-  systemd.services."zfs-import-tank" = lib.mkIf hasArrayKey {
+  # would trigger the import at boot. Cold-boot verified 2026-09-01.
+  boot.zfs.devNodes = "/dev/mapper";
+  boot.zfs.extraPools = [ "tank" ];
+  systemd.services."zfs-import-tank" = {
     after = [ "cryptsetup.target" ];
   };
 
@@ -143,21 +116,8 @@ in
   # sensitive content, Nix build scratch structurally shouldn't ever hold
   # anything the Nix store itself doesn't already expose unencrypted.
   #
-  # ✅ UUID confirmed 2026-08-31 via `blkid` post-disko.
-  #
-  # ⚠ NOT YET DONE: the keyfile itself. Generate with
-  # `head -c 4096 /dev/urandom > midden-keyfile`, register it with
-  # `cryptsetup luksAddKey`, then `sops secrets/galactica.yaml` and add it
-  # as `luks/middenKeyFile` (MANUAL-STEPS.md §4).
-  #
-  # ⚠ `.text` must be set INSIDE the mkIf, not mkIf applied to `.text` — an
-  # opus review agent caught this: environment.etc's submodule forces
-  # `.source` (derived from `.text`) unconditionally once the entry exists at
-  # all, so `environment.etc."crypttab".text = lib.mkIf hasSops "...";`
-  # still instantiates the entry and fails eval with `hasSops = false`
-  # ("option `environment.etc.crypttab.source' was accessed but has no value
-  # defined") — the exact state this config is in right now. Confirmed by
-  # evaluating both branches directly.
+  # ✅ UUID confirmed 2026-08-31 via `blkid` post-disko; keyfile generated,
+  # registered, and stored as `luks/middenKeyFile` (MANUAL-STEPS.md §4, done).
   #
   # `,discard` at the end — without it dm-crypt silently drops every TRIM,
   # and the whole point of `allowDiscards`/weekly `zpool trim` elsewhere in
@@ -170,10 +130,10 @@ in
   # — a second, independent path to the same effect, not a substitute for
   # this one.) `nofail` since a missing keyfile or unplugged disk on some
   # future boot should degrade gracefully rather than hold up the machine.
-  environment.etc."crypttab" = lib.mkIf hasSops {
+  environment.etc."crypttab" = {
     text = ''
       cryptlogs UUID=b44e545c-b4b3-4037-a263-d5a522933b37 ${config.sops.secrets."luks/middenKeyFile".path} luks,discard,nofail
-    '' + lib.optionalString hasArrayKey ''
+
       # ── ZFS array `tank` — LUKS-under-ZFS members (MANUAL-STEPS.md §9) ────────
       # Opened in stage-2 (not initrd — data disks, not root, DECISIONS.md §7),
       # all keyed by the one sops arrayKeyFile. Mapper names match what `zpool
@@ -299,25 +259,23 @@ in
 
   # ── sops-nix ────────────────────────────────────────────────────────────────
   # x86_64, builds its own closure (unlike hopper/hamilton, which need
-  # memory-alpha as aarch64 build+validation host) — so per DECISIONS.md §4,
-  # this needs *admin only until first boot, then *galactica is added and
-  # `sops updatekeys secrets/galactica.yaml` re-run.
-  sops = lib.mkIf hasSops {
+  # memory-alpha as aarch64 build+validation host) — so per DECISIONS.md §4
+  # the recipients are *admin + *galactica, both in .sops.yaml since first boot.
+  sops = {
     defaultSopsFile = ../../secrets/galactica.yaml;
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
-    # Raw keyfile for midden (see the crypttab block above) — not
-    # a passphrase, generated once with `head -c 4096 /dev/urandom` and
-    # registered against the LUKS header with `cryptsetup luksAddKey`.
     secrets = {
+      # Raw keyfile for midden (see the crypttab block above) — not
+      # a passphrase, generated once with `head -c 4096 /dev/urandom` and
+      # registered against the LUKS header with `cryptsetup luksAddKey`.
       "luks/middenKeyFile" = { };
-    } // lib.optionalAttrs hasArrayKey {
       # Raw 4096-byte keyfile unlocking all seven ZFS-array LUKS members
       # (slot 0; each disk also carries the fleet recovery passphrase in slot
       # 1, so the boot never depends solely on this). Stored as a dedicated
       # `format = "binary"` sops file rather than a value inside galactica.yaml
       # — binary format is the reliable byte-exact round-trip for raw key
-      # material. Verify the decrypted path's sha256 == 6fbbd614…fca930 (the
-      # hash recorded at luksFormat) before trusting a cold-boot unlock.
+      # material. sha256 verified against the luksFormat-time hash
+      # (6fbbd614…fca930) and proven across a cold boot, 2026-09-01.
       "luks/arrayKeyFile" = {
         format = "binary";
         sopsFile = ../../secrets/galactica-array.key;

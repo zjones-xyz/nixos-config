@@ -217,20 +217,20 @@
             };
           };
 
-          # The REAL /boot — added live, 2026-08-31, after discovering the
-          # NVMe's own ESP (disk.main) is unusable on this firmware (see the
-          # warning at the top of this file). Deliberately temporary: midden
-          # is the one disk in this design explicitly expected to fail
-          # within about a year (that's the entire premise behind giving it
-          # only disposable data), so tying the machine's ability to boot at
-          # all to it is a worse outcome than what midden's failure was
-          # originally supposed to cost. Plan (MANUAL-STEPS.md §9): migrate
-          # this to MX100 (the largest of the four special-vdev candidate
-          # disks) once those are reconnected for the array build — MX100
-          # has room for both a 1G ESP and its eventual 420G special-vdev
-          # partition, so this doesn't need to be undone later, just moved.
-          # Not on the special-vdev disks from the start only because they
-          # weren't reconnected yet at this point in the install.
+          # The FALLBACK /boot — no longer the real one. Added live
+          # 2026-08-31 after discovering the NVMe's own ESP (disk.main) is
+          # unusable on this firmware (see the warning at the top of this
+          # file); the real /boot moved again on 2026-09-01, to a 1G ESP on
+          # the WD Blue special-vdev disk (by-uuid 0B82-159C — carved
+          # imperatively during the array build, not via this disko spec),
+          # after midden's ~1-year life expectancy made it a bad home for
+          # the only bootable ESP. The planned MX100 destination died on its
+          # first write, and the WD Blue had to be recabled to the onboard
+          # C204 first — hardware-configuration.nix's header has the story.
+          # This partition is deliberately kept as a known-bootable fallback
+          # (it still carries a systemd-boot install + the "midden" NVRAM
+          # entry); no mountpoint changes here since disko.nix isn't re-run
+          # against the live host.
           ESP = {
             size = "100%";
             type = "EF00";

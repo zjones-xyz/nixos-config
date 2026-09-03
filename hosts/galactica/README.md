@@ -1,15 +1,13 @@
 # galactica — Tower's NixOS identity
 
-**Supermicro X9SCM-F, Xeon E3-1230 v2, 32 GB.** Was running Unraid 7.3.2 on
-bare metal for years; migrating to bare-metal NixOS with a native ZFS RAIDZ1
-array (LUKS underneath, not SnapRAID + mergerfs — see the "Blocking item"
-section below, this replaced the original plan outside this repo).
-
-`configuration.nix`, `disko.nix`, and `home.nix` now exist (root: LUKS +
-btrfs, matching the fleet), and `nixosConfigurations.galactica` is wired into
-`flake.nix` against a real, disko-reconciled `hardware-configuration.nix`. See
-`MANUAL-STEPS.md` for what's still outstanding (the array rebuild, an
-unconfirmed DNS fix, NUT/UPS, Beszel agent, NFS re-export cutover).
+**Supermicro X9SCM-F, Xeon E3-1230 v2, 32 GB.** Ran Unraid 7.3.2 on bare
+metal for years; now bare-metal NixOS. Root is LUKS + btrfs on the NVMe
+(fleet-standard); the media array is `tank` — ZFS RAIDZ1 across the four
+12 TB spinners plus a 3-way-mirror SSD special vdev, LUKS underneath —
+**built live and cold-boot-verified 2026-09-01**, with the Unraid data copied
+back from the `sidepool` staging pool on 2026-09-02. See `MANUAL-STEPS.md`
+for what's still outstanding (NUT/UPS, Beszel agent, NFS re-export cutover,
+the nixarr media import from `tank/media_staging`).
 
 ## The five documents
 
@@ -40,15 +38,12 @@ reads like a MITM attack. `DECISIONS.md` §1.
 hopper rather than via the hostname, so the fleet name and the service name stay
 decoupled. `DECISIONS.md` §2.
 
-## Blocking item
+## Doc status
 
-⚠ **The storage design below (`DESIGN.md`, `DECISIONS.md`) has been
-superseded outside this repo, and this section is stale.** As of 2026-08-31
-the live plan is native ZFS RAIDZ1 across the four 12 TB drives (LUKS
-underneath, not ZFS-native encryption — matches this host's existing
-LUKS-everywhere convention), staged via a temporary btrfs pool
-(`sidepool`) built on an LSI HBA, not SnapRAID + mergerfs. Reconciling
-`DESIGN.md`/`DECISIONS.md` with that decision is a real rewrite that hasn't
-happened yet — treat the storage-layout discussion below as historical
-context for *why bare metal* and *why not SnapRAID as originally scoped*,
-not as the current plan.
+The storage sections of `DESIGN.md`/`DECISIONS.md` describe the retired
+SnapRAID + mergerfs plan and were **reconciled 2026-09-02 (PR #87)**: each
+carries a superseded-banner pointing at what was actually built (the ZFS
+`tank` array above), with the original prose kept as provenance. The
+platform-level verdicts (why bare metal, why not VFIO) still stand. Read the
+banners before trusting any storage detail in those two files;
+`MANUAL-STEPS.md` §9 is the build record.
