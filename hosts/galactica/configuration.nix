@@ -22,6 +22,8 @@
     ../../modules/nixos/btrfs-snapshots.nix
     ../../modules/nixos/serial-console.nix
     ../../modules/nixos/luks-remote-unlock.nix
+    ../../modules/nixos/beszel-agent.nix
+    ../../modules/nixos/arcane-agent.nix
   ];
 
   networking.hostName = "galactica";
@@ -195,16 +197,35 @@
   # other host's initrd-NIC fix in this fleet.
   boot.initrd.availableKernelModules = lib.mkAfter [ "e1000e" ];
 
-  # ── Beszel agent — NOT YET WIRED ────────────────────────────────────────────
-  # DESIGN.md's Phase 2 step 8 calls for "a Beszel agent (modules/nixos/beszel.nix
-  # — the hub already runs on hopper)", but that file turns out to be hopper's
-  # own hub+agent bundle: hardcoded `beszel.hopper.internal` Traefik hostnames
-  # and a dependency on hopper's own `docker-proxy-network`/`traefik-docker`
-  # units. Importing it here would try to stand up a second, redundant hub
-  # rather than just an agent pointed at hopper's existing one. Needs a real
-  # agent-only unit (same `henrygd/beszel-agent` container, host network mode,
-  # KEY env pointed at hopper's hub) written for this host specifically — see
-  # MANUAL-STEPS.md. Left undone rather than guessed at.
+  # ── Monitoring agents — report galactica to memory-alpha ────────────────────
+  # Both hubs run on memory-alpha: the Beszel hub as a Docker stack
+  # (homelab-stacks memory-alpha/monitoring, beszel.monitor.zjones.dev) and the
+  # Arcane manager via NixOS (modules/nixos/arcane.nix, arcane.memory-alpha
+  # .internal). Neither is on hopper — the old modules/nixos/{beszel,ntfy}.nix
+  # are hopper-shaped and unused. So both agents here dial memory-alpha, which
+  # is always-on; nothing depends on backburnered hopper.
+  #
+  # ⚠ OWNER STEPS before this activates (add the secrets, then `nrs`):
+  #   Beszel: on memory-alpha's hub, "Add system" → copy the shared KEY and the
+  #     per-agent TOKEN. `sops secrets/galactica.yaml`: add `beszel/hubKey`
+  #     (the KEY) and `beszel/agentToken` (the TOKEN), raw values, no prefixes.
+  #   Arcane: on the memory-alpha manager, Settings → Environments → add
+  #     galactica → copy the AGENT_TOKEN. Add it as `arcane/agentToken`.
+  services.beszelAgent = {
+    enable = true;
+    keyFile = config.sops.secrets."beszel/hubKey".path;
+    tokenFile = config.sops.secrets."beszel/agentToken".path;
+    # hubUrl / port / image default to the fleet's values — see beszel-agent.nix.
+  };
+
+  # Edge mode: dials out to the manager, no inbound port needed. The .zjones.dev
+  # name carries a valid LE cert (vs. the self-signed .internal one), so the
+  # agent's TLS to the manager just works over split-horizon DNS.
+  services.arcaneAgent = {
+    enable = true;
+    managerUrl = "https://arcane.memory-alpha.zjones.dev";
+    tokenFile = config.sops.secrets."arcane/agentToken".path;
+  };
 
   # ── NUT — galactica is the server, UPS attached directly ───────────────────
   # DECISIONS.md's "Reversed by the move to bare metal": under bare metal the
@@ -269,6 +290,12 @@
       # a passphrase, generated once with `head -c 4096 /dev/urandom` and
       # registered against the LUKS header with `cryptsetup luksAddKey`.
       "luks/middenKeyFile" = { };
+      # Monitoring-agent secrets (see the services.beszelAgent/arcaneAgent
+      # blocks). owner = "z" so each agent's compose invocation can read them;
+      # created by the owner after registering galactica in each memory-alpha hub.
+      "beszel/hubKey".owner = "z";
+      "beszel/agentToken".owner = "z";
+      "arcane/agentToken".owner = "z";
       # Raw 4096-byte keyfile unlocking all seven ZFS-array LUKS members
       # (slot 0; each disk also carries the fleet recovery passphrase in slot
       # 1, so the boot never depends solely on this). Stored as a dedicated
