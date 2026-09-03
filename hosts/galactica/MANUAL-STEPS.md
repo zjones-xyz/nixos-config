@@ -276,11 +276,17 @@ against the source, plus the Unraid flash+config insurance into
 
 **Still to do:**
 
-1. [ ] Sweep the media datasets into `tank/media_staging/*` (zfs renames) so
+1. [x] Sweep the media datasets into `tank/media_staging/*` (zfs renames) so
    nixarr gets a clean `/tank/media`; collections re-enter via *arr imports.
-2. [ ] Retire sidepool: unmount, close the four LUKS mappers, physically
-   disconnect; disks return to the drawer after a cooling-off period.
-3. [ ] **NFS re-exports** (§8, fsids 100–103) — and re-point memory-alpha's
+   ✅ 2026-09-02 — all seven (8.94 T) staged; `tank/media`/`tank/books` empty.
+2. [x] Retire sidepool *logically*: unmounted + all four LUKS mappers closed
+   2026-09-02 — disks are inert (LUKS-closed, nothing references them).
+3. [ ] Pull sidepool's drives during the next in-case session (deliberately
+   deferred with other case cleanup: the dead MX100 wants pulling too, the
+   WD Blue's cable label is stale post-recable, and HARDWARE-MAP §3/§7's
+   cage/port enumeration needs eyes-in-the-case anyway). Disks return to
+   the drawer after a cooling-off period.
+4. [ ] **NFS re-exports** (§8, fsids 100–103) — and re-point memory-alpha's
    mounts, which still reference the dead Unraid paths
    (`tower.internal:/mnt/user/...`).
 
