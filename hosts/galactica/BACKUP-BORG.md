@@ -199,35 +199,39 @@ proven live. First scheduled run against a tagged dataset settles it.
 
 ## What the owner must create (nothing here invents secret values)
 
-1. [ ] **BorgBase account + one repo** (`galactica-offsite`). Choose
-       `repokey-blake2` encryption in BorgBase's UI at creation — it cannot be
-       set through the NixOS `repositories` submodule (path/label only), and it
-       is irreversible after creation.
-2. [ ] **Two keys:** an **append-only** SSH key for galactica, and a **separate,
-       prunable** key kept off galactica (on the admin machine) for retention.
-       Verify the append-only key actually refuses a `prune` from galactica
-       before trusting it (`docs/BACKUP.md` §3 — the property the whole design
-       rests on).
-3. [ ] **Set the repo URL:** `homelab.borgmatic.repository =
-       "ssh://…@…​.repo.borgbase.com/./galactica-offsite";` (module default is
-       `REPLACE`). This is build-time, not a sops secret — see the module header
-       for why the URL genuinely cannot be a `sops.secrets.*.path`.
-4. [ ] **Two sops secrets** in `secrets/galactica.yaml` (`sops
-       secrets/galactica.yaml`):
-       - `borgmatic/passphrase` — the Borg repo passphrase (also copy to the
-         fireproof-box paper per `docs/BACKUP.md` §5; sops → admin key → machine
-         is a circular trust chain, so one copy must depend on no machine).
-       - `borgmatic/ssh_key` — the **private** half of the append-only key
-         (materialised at `/var/lib/borgmatic/ssh/id_ed25519`, 0400).
-       Then `sops updatekeys secrets/galactica.yaml`.
-5. [ ] **`known_hosts`:** `ssh-keyscan` BorgBase's host into
-       `/var/lib/borgmatic/ssh/known_hosts` once on galactica (not secret;
-       `StrictHostKeyChecking=yes` in the module depends on it).
-6. [ ] **Tag the datasets** once the array exists — the `zfs set` block above.
-7. [ ] **Turn on BorgBase inactivity alerting** for the repo (`docs/BACKUP.md`
-       §3, §3b) — a heartbeat independent of hopper/ntfy.
-8. [ ] **If ntfy on hopper is locked down** (`auth-default-access = "deny-all"`),
-       give the ntfy hook a token/credentials, or failures will not publish.
+> **✅ LIVE as of 2026-09-03.** First backup ran clean: ~208 G of source
+> (tank/documents + tank/photos/*) → 104.6 G uploaded after dedup+zstd (~21% of
+> the repo's 500 G quota), 1h53m wall, archive consistency check passed. The ZFS
+> snapshot hook fired correctly under the hardened systemd unit (the one
+> live-only unknown). Repo `kentmevx` on BorgBase, `repokey-blake2`, galactica's
+> key back to **append-only** after init. The old ntfy hook was dropped (item 8
+> is moot) in favour of BorgBase inactivity alerting. Module + this doc landed on
+> the galactica branch; PR #90 superseded.
 
-Until 1–5 are done the borgmatic timer fires on schedule and fails loudly against
-the `REPLACE` URL — expected, not a bug.
+1. [x] **BorgBase account + one repo.** Created; `repokey-blake2`. Repo URL
+       `ssh://kentmevx@kentmevx.repo.borgbase.com/./repo`.
+2. [~] **Two keys:** the **append-only** key for galactica is created, verified
+       against BorgBase, and materialised via sops. The repo was initialised by
+       *temporarily* toggling that same key to full-access, running
+       `borgmatic repo-create`, then toggling it back to append-only (no second
+       key needed for init). ⏳ Still TODO: a **separate prunable key** kept off
+       galactica (admin machine) for retention runs — not needed until the first
+       prune. Verify it actually refuses a `prune` from galactica before trusting.
+3. [x] **Set the repo URL** — `homelab.borgmatic.repository`, set in
+       hosts/galactica/configuration.nix.
+4. [x] **Two sops secrets** (`borgmatic/passphrase`, `borgmatic/ssh_key`) in
+       `secrets/galactica.yaml`. ⏳ Insurance still TODO: passphrase on paper for
+       the fireproof box + `borgmatic borg key export --paper` (repokey ⇒ the key
+       lives in the repo; an offline copy is the recovery path — docs/BACKUP.md §5).
+5. [x] **`known_hosts`** pinned at `/var/lib/borgmatic/ssh/known_hosts`.
+6. [x] **Tag the datasets** — `org.torsion.borgmatic:backup=auto` on
+       `tank/documents` (critical) + `tank/photos` (precious; inherits to
+       immich/immich_archived). Protected/other tiers deliberately excluded.
+7. [ ] **Turn on BorgBase inactivity alerting** for the repo (`docs/BACKUP.md`
+       §3, §3b) — the heartbeat that catches a silently-stopped backup.
+8. [x] ~~ntfy token if locked down~~ — moot: the ntfy hook was removed from the
+       module (BorgBase inactivity alerting covers this, per pegasus's precedent).
+
+Still open beyond the checklist: the **Immich Postgres dump hook** (§ above) — the
+current backup is photo *files*, not a one-click full Immich restore — and the
+hot/cold retention split, both deliberately deferred.
