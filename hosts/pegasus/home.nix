@@ -53,6 +53,11 @@
     # service/physical-box name are deliberately decoupled (DECISIONS.md §2),
     # and these aliases are about the physical box.
     unlock-tower = ''~/nixos-config/scripts/luks-unlock-remote.sh tower.internal "op://System Keys/tower luks/password"'';
+    # unlock-memory-alpha (2026-09-02): mirror of serenity's alias, now that the
+    # shared luks-remote-unlock.nix module authorizes *both* admin keys in
+    # memory-alpha's initrd (previously serenity-only) — so pegasus can recover
+    # it too when serenity's down. `~/nixos-config` path, not serenity's ~/Code.
+    unlock-memory-alpha = ''~/nixos-config/scripts/luks-unlock-remote.sh memory-alpha.internal "op://System Keys/memory-alpha luks/password"'';
     dms-settings-snapshot = "~/nixos-config/scripts/dms-settings.sh snapshot";
     dms-settings-restore = "~/nixos-config/scripts/dms-settings.sh restore";
     dms-settings-diff = "~/nixos-config/scripts/dms-settings.sh diff";
