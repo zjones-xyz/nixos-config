@@ -20,6 +20,7 @@ in
     ../../modules/nixos/dankcalendar.nix
     # Settles which of the two Secret Service providers the desktop modules
     # above each drag in silently is the one that actually runs.
+    ../../modules/nixos/scrutiny-collector.nix
     ../../modules/nixos/keyring.nix
     ../../modules/nixos/gaming.nix
     ../../modules/nixos/performance.nix
@@ -235,6 +236,10 @@ in
   # find nothing to report on it. Harmless, but do not read its silence as a
   # disk being healthy — it is not a disk.
   homelab.smart.monitor = true;
+
+  # Same disks, reported to the Scrutiny hub on memory-alpha for trend history
+  # alongside smartd's local alerting.
+  services.scrutinyCollector.enable = true;
 
   # Internet-facing? No — LAN/tailnet only. Traefik/LE machinery lives on
   # memory-alpha; pegasus does not import it.

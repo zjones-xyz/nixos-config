@@ -24,6 +24,7 @@
     ../../modules/nixos/luks-remote-unlock.nix
     ../../modules/nixos/beszel-agent.nix
     ../../modules/nixos/arcane-agent.nix
+    ../../modules/nixos/scrutiny-collector.nix
     ./borgmatic.nix
   ];
 
@@ -227,6 +228,11 @@
     enable = true;
     tokenFile = config.sops.secrets."arcane/agentToken".path;
   };
+
+  # SMART history for the array's 12 disks -> the Scrutiny hub on memory-alpha.
+  # Complements homelab.smart.monitor (smartd alerts locally); this is the
+  # trend history and the web view smartd does not give.
+  services.scrutinyCollector.enable = true;
 
   # ── NUT — galactica is the server, UPS attached directly ───────────────────
   # DECISIONS.md's "Reversed by the move to bare metal": under bare metal the
