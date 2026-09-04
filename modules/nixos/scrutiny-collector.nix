@@ -75,11 +75,13 @@ in
 
     image = lib.mkOption {
       type = lib.types.str;
-      default = "ghcr.io/analogj/scrutiny:master-collector";
-      description = ''
-        Collector image. `master-collector` to match the hub's
-        `master-omnibus` tag, so both ends track the same release.
-      '';
+      # ⚠ Must match the RUNNING hub, which is v0.9.3-omnibus — not the
+      # master-omnibus its compose file claims (memory-alpha's monitoring stack
+      # has drifted from homelab-stacks). A master collector against a v0.9.3
+      # hub POSTs its device list, gets accepted, and silently collects nothing.
+      # Re-check the hub's actual tag (docker ps) before bumping this.
+      default = "ghcr.io/analogj/scrutiny:v0.9.3-collector";
+      description = "Collector image, pinned to match the running Scrutiny hub.";
     };
   };
 
