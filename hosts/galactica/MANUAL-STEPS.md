@@ -518,7 +518,7 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
 1. [ ] **Create the datasets.**
    ```bash
    zfs create tank/nixflix_media
-   mkdir -p /tank/nixflix_media/{media/{tv,movies},downloads}
+   mkdir -p /tank/nixflix_media/{media/{tv,movies,anime},downloads}
    mkdir -p /tank/appdata/nixflix          # inherits appdata's special-vdev placement
    ```
    `tank/appdata` already exists (§9/§10) and is forced onto the special
@@ -531,7 +531,7 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    | Secret | How to produce it |
    |---|---|
    | `protonWgConf` | The whole wg-quick file from Proton's portal, as a multi-line YAML value. ⚠ Must be a **P2P server that supports port forwarding**, or the NAT-PMP sidecar below has nothing to map. |
-   | `prowlarrApiKey`, `sonarrApiKey`, `radarrApiKey` | `openssl rand -hex 16` each |
+   | `prowlarrApiKey`, `sonarrApiKey`, `sonarrAnimeApiKey`, `radarrApiKey` | `openssl rand -hex 16` each |
    | `sabnzbdApiKey`, `sabnzbdNzbKey` | `openssl rand -hex 16` each |
    | `arrPassword` | Any strong password — shared web-UI login (`admin`) for all three *arrs |
    | `qbittorrentPassword` | Any strong password — **plain text**, and must match the hash in step 3 |
@@ -562,7 +562,7 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
 
 5. [ ] **Then switch**, and verify the pieces that can only be checked live:
    ```bash
-   systemctl status wg.service qbittorrent sabnzbd sonarr radarr prowlarr
+   systemctl status wg.service qbittorrent sabnzbd sonarr sonarr-anime radarr prowlarr
    ip netns exec wg curl -s ifconfig.me        # ← Proton's IP, NOT the house IP
    curl -s ifconfig.me                          # ← the house IP (host is untunnelled)
    journalctl -u protonvpn-natpmp -f            # ← "published forwarded port NNNNN"
@@ -580,9 +580,32 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    the fork's `main`. Leaving it pinned to a PR branch means a force-push or
    branch deletion breaks evaluation fleet-wide.
 
+### Anime
+
+`sonarr-anime` is enabled — a second Sonarr on port 8990 with its own root
+folder (`media/anime`), which nixflix treats as a first-class service:
+Prowlarr registers it as its own application and both download clients get a
+matching category, so anime stays separated end to end.
+
+**There is no `radarr-anime`, and adding one is not symmetric.** nixflix ships
+no such module. The generic builder would happily produce one — it defines its
+own systemd unit rather than wrapping nixpkgs' single-instance
+`services.radarr`, so a second instance is architecturally fine — but the
+*name* `sonarr-anime` is enumerated by hand in about fifteen places (Prowlarr's
+application list, the qBittorrent and SABnzbd category maps, Recyclarr's
+profiles, the UID table in `globals.nix`). A `radarr-anime` would run and be
+reachable, and would be wired into none of them without local patches to each.
+
+So anime films start in the **existing Radarr**, using their own root folder
+(e.g. `media/anime-movies`) and an anime quality profile — the common
+arrangement, since anime films are a far smaller category than series and
+Radarr applies profiles per-movie. If that proves insufficient, a local
+`radarr-anime` module plus the category/application wiring is the next step,
+and would be a good upstream contribution: it fills a real asymmetry.
+
 **Not enabled, deliberately, each a few lines when wanted:** `lidarr`
 (SHARES.md marks `music` 🛡 Protected — a curated library, so automating it
-is its own decision), `sonarr-anime`, and `recyclarr` (TRaSH profile sync).
+is its own decision) and `recyclarr` (TRaSH profile sync).
 SABnzbd is deliberately **outside** the VPN — usenet is already TLS to a paid
 provider, so the tunnel would only cap throughput; `nixflix.nix` says so at
 the option.

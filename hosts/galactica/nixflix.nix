@@ -126,12 +126,43 @@ in
       };
     };
 
+    # ── Anime (series) ──────────────────────────────────────────────────────
+    # A second Sonarr instance rather than a profile inside the one above:
+    # anime needs its own quality profiles, release-group handling and
+    # absolute-numbering behaviour, and nixflix treats `sonarr-anime` as a
+    # first-class service — Prowlarr registers it as its own application, and
+    # qBittorrent/SABnzbd each get a matching download category automatically,
+    # so downloads stay separated end to end without hand-wiring.
+    #
+    # Port 8990 (module default; the main Sonarr is 8989) and its own state
+    # directory under stateDir, so the two instances share nothing but the
+    # media group.
+    sonarr-anime = {
+      enable = true;
+      mediaDirs = [ "${mediaDir}/anime" ];
+      config = {
+        apiKey._secret = config.sops.secrets."nixflix/sonarrAnimeApiKey".path;
+        rootFolders = [ { path = "${mediaDir}/anime"; } ];
+        hostConfig = {
+          username = "admin";
+          password._secret = config.sops.secrets."nixflix/arrPassword".path;
+        };
+      };
+    };
+
     # Deliberately NOT enabled yet: `lidarr` (SHARES.md marks `music` 🛡
     # Protected — a curated, non-re-acquirable library, so pointing an
-    # automation tool at it is its own decision, not a default), and
-    # `sonarr-anime` / `recyclarr` (both easy adds once the base stack has
-    # actually run). Enabling any of them is a few lines here plus its own
-    # sops API key.
+    # automation tool at it is its own decision, not a default) and
+    # `recyclarr` (an easy add once the base stack has actually run).
+    # Enabling either is a few lines here plus its own sops API key.
+    #
+    # There is no `radarr-anime` to enable: nixflix ships no such module, and
+    # unlike `sonarr-anime` it would not be a thin wrapper — the service name
+    # is enumerated by hand in Prowlarr's application list, the qBittorrent
+    # and SABnzbd category maps and Recyclarr's profiles, so a second Radarr
+    # would run but would not be wired into any of them. Anime *films* are
+    # handled in the Radarr above via their own root folder and quality
+    # profile, which is the common arrangement; see MANUAL-STEPS.md §12.
 
     # ── Usenet ──────────────────────────────────────────────────────────────
     usenetClients.sabnzbd = {
@@ -292,6 +323,7 @@ in
     # pushed into each service's database by nixflix's config services.
     "nixflix/prowlarrApiKey" = { };
     "nixflix/sonarrApiKey" = { };
+    "nixflix/sonarrAnimeApiKey" = { };
     "nixflix/radarrApiKey" = { };
     "nixflix/sabnzbdApiKey" = { };
     "nixflix/sabnzbdNzbKey" = { };
