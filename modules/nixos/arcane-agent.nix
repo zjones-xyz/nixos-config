@@ -24,7 +24,10 @@ in
 
     managerUrl = lib.mkOption {
       type = lib.types.str;
-      example = "https://arcane.monitor.zjones.dev";
+      # Defaults to the fleet manager (modules/nixos/arcane.nix on memory-alpha,
+      # behind Traefik), so an agent host normally sets only enable + tokenFile —
+      # same shape as beszel-agent.nix's hubUrl. Overridable per host.
+      default = "https://arcane.monitor.zjones.dev";
       description = "URL of the Arcane manager this agent reports to.";
     };
 

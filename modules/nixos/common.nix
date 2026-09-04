@@ -120,6 +120,29 @@
     age
     ssh-to-age
     sops
+
+    # ── sops-hostkey ─────────────────────────────────────────────────────────
+    # Edit THIS host's own secrets/<host>.yaml from the host itself, using its
+    # SSH host key as the age identity — no admin key, no second machine.
+    # Fleet-wide because .sops.yaml lists every host's own key as a recipient of
+    # its own file, and /etc/ssh/ssh_host_ed25519_key is root-only, so plain
+    # `sops` never finds it. Usage is identical to sops:
+    #     sops-hostkey secrets/galactica.yaml
+    #
+    # ⚠ Do NOT fold this back into sops's own SOPS_AGE_SSH_PRIVATE_KEY_FILE.
+    # That path does not convert the ed25519 key on this sops build — verified
+    # live on galactica 2026-09-03: sops read the file, derived no usable
+    # identity, fell through to /root/.ssh, and failed to decrypt a file its own
+    # host key is a recipient of. Converting with `ssh-to-age -private-key` is
+    # what sops-nix itself does at boot; the age secret is passed in the
+    # environment so it never lands on disk. The trailing `sops-hostkey` is
+    # argv[0] for `bash -c` and is load-bearing — without it bash swallows the
+    # first user argument into $0 instead of passing it through "$@".
+    (writeShellScriptBin "sops-hostkey" ''
+      exec sudo env EDITOR="$EDITOR" ${bash}/bin/bash -c \
+        'SOPS_AGE_KEY=$(${ssh-to-age}/bin/ssh-to-age -private-key < /etc/ssh/ssh_host_ed25519_key) exec ${sops}/bin/sops "$@"' \
+        sops-hostkey "$@"
+    '')
   ];
 
   services.openssh = {

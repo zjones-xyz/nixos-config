@@ -61,26 +61,6 @@
     dms-settings-snapshot = "~/nixos-config/scripts/dms-settings.sh snapshot";
     dms-settings-restore = "~/nixos-config/scripts/dms-settings.sh restore";
     dms-settings-diff = "~/nixos-config/scripts/dms-settings.sh diff";
-
-    # Ad-hoc `sops secrets/pegasus.yaml` edits from pegasus itself, without
-    # needing Serenity's admin age key. `.sops.yaml` already lists pegasus's
-    # own host SSH key (&pegasus) as a recipient for that file — the only
-    # real blocker is that /etc/ssh/ssh_host_ed25519_key is root-only, and
-    # plain `sops` doesn't know to look there. z already has passwordless
-    # sudo (wheel, security.sudo.wheelNeedsPassword in common.nix), so this
-    # runs sops as root with the right identity pointed out, forwarding
-    # $EDITOR through explicitly since sudo resets the environment by
-    # default. Usage is identical to plain sops, e.g.
-    # `sops-hostkey secrets/pegasus.yaml`.
-    #
-    # NB (2026-09-03): this used to point sops at the key via
-    # SOPS_AGE_SSH_PRIVATE_KEY_FILE, but that path does NOT convert the ed25519
-    # key on this sops build (confirmed on galactica: sops read the file,
-    # derived no usable identity, and fell through to /root/.ssh). Convert the
-    # key ourselves with `ssh-to-age -private-key` — the same thing sops-nix
-    # does at boot — and feed the age secret via SOPS_AGE_KEY, in-process so it
-    # never hits disk.
-    sops-hostkey = ''sudo env EDITOR="$EDITOR" bash -c 'SOPS_AGE_KEY=$(ssh-to-age -private-key < /etc/ssh/ssh_host_ed25519_key) sops "$@"' sops-hostkey'';
   };
 
   # ── Desktop apps ────────────────────────────────────────────────────────────
