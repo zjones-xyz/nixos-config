@@ -580,9 +580,9 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
 4. [ ] **Then switch**, and verify the pieces that can only be checked live:
    ```bash
    systemctl status wg.service qbittorrent sabnzbd sonarr sonarr-anime radarr lidarr prowlarr flaresolverr navidrome
-   sudo ip netns exec wg curl -s ifconfig.me   # ← Proton's IP, NOT the house IP
-   curl -s ifconfig.me                          # ← the house IP (host is untunnelled)
-   journalctl -u protonvpn-natpmp -f            # ← "published forwarded port NNNNN"
+   sudo ip netns exec wg curl -s -4 ifconfig.me  # ← Proton's IP, NOT the house IP
+   curl -s -4 ifconfig.me                        # ← the house IP (host is untunnelled)
+   journalctl -u protonvpn-natpmp -f             # ← "published forwarded port NNNNN"
    ```
    The second and third lines together are the kill-switch check: torrent
    traffic leaves via Proton while NFS/SSH/monitoring stay on the LAN.
@@ -590,6 +590,12 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    ⚠ `ip netns exec` needs root — without `sudo` it fails with `setting the
    network namespace "wg" failed: Operation not permitted`, which reads like
    a broken namespace and isn't. The other three lines are fine unprivileged.
+
+   ⚠ `-4` is not decoration. Without it curl inside the namespace prefers
+   IPv6 and reports a `2a02:6ea0:…` Proton address — reassuring, but it
+   answers the wrong question: BitTorrent peer connections and the NAT-PMP
+   forward are both IPv4, so IPv4 is the path the kill-switch check has to
+   cover. Pin the family on *both* lines so the two results are comparable.
 
 5. [ ] **Import the staged media** — point Sonarr/Radarr at
    `tank/media_staging/*` and run their import, which hardlinks into
