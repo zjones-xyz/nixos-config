@@ -90,6 +90,13 @@ in
     };
 
     # ── Indexers ────────────────────────────────────────────────────────────
+    # FlareSolverr solves the Cloudflare challenges several public indexers
+    # sit behind; Prowlarr reaches it over the host loopback (both run
+    # unconfined — only qBittorrent is in the VPN namespace, so there is no
+    # cross-namespace problem here). Two upstream behaviours are corrected
+    # below the `nixflix` block; read that comment before touching either.
+    flaresolverr.enable = true;
+
     prowlarr = {
       enable = true;
       config = {
@@ -199,6 +206,57 @@ in
       # a PBKDF2 hash the owner generates once (MANUAL-STEPS.md §12).
       password._secret = config.sops.secrets."nixflix/qbittorrentPassword".path;
     };
+  };
+
+  # ── FlareSolverr: two corrections to upstream's wiring ────────────────────
+  # Both of these are local because galactica tracks upstream nixflix, which
+  # has neither fix (flake.nix's input comment explains why we are on upstream).
+  # Delete both if upstream ever adopts them.
+  #
+  # (1) The readiness probe. Upstream's ExecStartPost polls FlareSolverr for
+  #     30 seconds, and FlareSolverr's startup includes a COLD CHROMIUM LAUNCH.
+  #     Measured on a modern cloud runner: 43s on the first try, 30.2s on the
+  #     second — i.e. the 30s budget is already marginal on hardware far
+  #     faster than this Xeon E3-1230 v2 (2012). An ExecStartPost failure
+  #     fails the whole unit and kills the process, so on a machine that
+  #     consistently misses the window FlareSolverr does not merely stumble:
+  #     it restart-loops forever and is never usable. 180s is generous enough
+  #     that a cold first boot on this box is not a coin flip.
+  #
+  # (2) The dependency direction. Upstream puts `flaresolverr.service` in
+  #     prowlarr-indexer-proxies' `requires`. With `requires` + `after`, a
+  #     single failed FlareSolverr start makes systemd CANCEL the queued
+  #     indexer-proxies job with result 'dependency' — and that is a cancelled
+  #     *job*, not a failed service, so its own `Restart = on-failure` never
+  #     fires. FlareSolverr's restart then succeeds and nothing re-queues the
+  #     dependent: Prowlarr silently comes up with no proxy configured, and
+  #     stays that way until someone restarts the unit by hand.
+  #
+  #     `wants` is the correct relation and costs nothing, because the
+  #     indexer-proxies script never talks to FlareSolverr at all — every
+  #     request it makes goes to Prowlarr's own API, and it writes the proxy
+  #     record with `?forceSave=true`, which tells Prowlarr to skip validating
+  #     (i.e. contacting) the proxy on save. `after` is left as upstream set
+  #     it, so ordering is unchanged; only the failure propagation differs.
+  systemd.services.flaresolverr.serviceConfig.ExecStartPost = lib.mkForce (
+    pkgs.writeShellScript "wait-for-flaresolverr" ''
+      for i in $(seq 1 180); do
+        if ${pkgs.curl}/bin/curl -sf http://127.0.0.1:${toString config.nixflix.flaresolverr.port}/ >/dev/null 2>&1; then
+          exit 0
+        fi
+        sleep 1
+      done
+      echo "FlareSolverr did not become ready within 180s" >&2
+      exit 1
+    ''
+  );
+
+  systemd.services.prowlarr-indexer-proxies = {
+    requires = lib.mkForce [
+      "prowlarr-config.service"
+      "prowlarr-tags.service"
+    ];
+    wants = [ "flaresolverr.service" ];
   };
 
   # ── ProtonVPN NAT-PMP → qBittorrent listen port ───────────────────────────

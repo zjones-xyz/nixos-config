@@ -555,7 +555,7 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
 
 4. [ ] **Then switch**, and verify the pieces that can only be checked live:
    ```bash
-   systemctl status wg.service qbittorrent sabnzbd sonarr sonarr-anime radarr prowlarr
+   systemctl status wg.service qbittorrent sabnzbd sonarr sonarr-anime radarr prowlarr flaresolverr
    ip netns exec wg curl -s ifconfig.me        # ← Proton's IP, NOT the house IP
    curl -s ifconfig.me                          # ← the house IP (host is untunnelled)
    journalctl -u protonvpn-natpmp -f            # ← "published forwarded port NNNNN"
@@ -598,6 +598,25 @@ arrangement, since anime films are a far smaller category than series and
 Radarr applies profiles per-movie. If that proves insufficient, a local
 `radarr-anime` module plus the category/application wiring is the next step,
 and would be a good upstream contribution: it fills a real asymmetry.
+
+### FlareSolverr
+
+Enabled, with two local corrections to upstream's wiring that
+`hosts/galactica/nixflix.nix` explains at length. In short: upstream gives the
+readiness probe 30 seconds, but FlareSolverr's startup includes a cold
+Chromium launch measured at 43s on a *modern* cloud runner — and a failed
+`ExecStartPost` kills the unit, so on this 2012 Xeon the stock timeout risks a
+permanent restart-loop rather than a stumble. The probe is raised to 180s.
+Separately, upstream makes `prowlarr-indexer-proxies` *require*
+`flaresolverr.service`, so one failed start cancels the proxy-configuration
+job outright and nothing ever re-queues it — Prowlarr comes up with no proxy
+and stays that way silently. That is relaxed to `wants`, which is safe because
+the script only ever calls Prowlarr's own API and saves with `forceSave=true`
+(no validation call to the proxy).
+
+Worth confirming on first boot: `journalctl -u flaresolverr` should show it
+becoming ready once, not looping, and Prowlarr's Settings → Indexer Proxies
+should list a `FlareSolverr` entry tagged `flaresolverr`.
 
 **Not enabled, deliberately, each a few lines when wanted:** `lidarr`
 (SHARES.md marks `music` 🛡 Protected — a curated library, so automating it
