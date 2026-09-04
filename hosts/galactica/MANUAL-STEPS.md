@@ -580,12 +580,16 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
 4. [ ] **Then switch**, and verify the pieces that can only be checked live:
    ```bash
    systemctl status wg.service qbittorrent sabnzbd sonarr sonarr-anime radarr lidarr prowlarr flaresolverr navidrome
-   ip netns exec wg curl -s ifconfig.me        # ← Proton's IP, NOT the house IP
+   sudo ip netns exec wg curl -s ifconfig.me   # ← Proton's IP, NOT the house IP
    curl -s ifconfig.me                          # ← the house IP (host is untunnelled)
    journalctl -u protonvpn-natpmp -f            # ← "published forwarded port NNNNN"
    ```
    The second and third lines together are the kill-switch check: torrent
    traffic leaves via Proton while NFS/SSH/monitoring stay on the LAN.
+
+   ⚠ `ip netns exec` needs root — without `sudo` it fails with `setting the
+   network namespace "wg" failed: Operation not permitted`, which reads like
+   a broken namespace and isn't. The other three lines are fine unprivileged.
 
 5. [ ] **Import the staged media** — point Sonarr/Radarr at
    `tank/media_staging/*` and run their import, which hardlinks into
