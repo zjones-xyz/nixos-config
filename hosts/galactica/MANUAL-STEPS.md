@@ -543,9 +543,10 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    | Secret | How to produce it |
    |---|---|
    | `protonWgConf` | The whole wg-quick file from Proton's portal, as a multi-line YAML value. ⚠ Must be a **P2P server that supports port forwarding**, or the NAT-PMP sidecar below has nothing to map. |
-   | `prowlarrApiKey`, `sonarrApiKey`, `sonarrAnimeApiKey`, `radarrApiKey` | `openssl rand -hex 16` each |
+   | `prowlarrApiKey`, `sonarrApiKey`, `sonarrAnimeApiKey`, `radarrApiKey`, `lidarrApiKey` | `openssl rand -hex 16` each |
    | `sabnzbdApiKey`, `sabnzbdNzbKey` | `openssl rand -hex 16` each |
-   | `arrPassword` | Any strong password — shared web-UI login (`admin`) for all three *arrs |
+   | `arrPassword` | Any strong password — shared web-UI login (`admin`) across the *arrs |
+   | `navidromePassword` | Any strong password — Navidrome's `z` admin login. ⚠ Applied at user **creation** only; changing it later needs Navidrome's own UI, not this secret. |
    | `qbittorrentPassword` | Any strong password — **plain text**, and must match the hash in step 3 |
 
 3. [ ] **Set qBittorrent's own WebUI credentials.** The `qbittorrentPassword`
@@ -567,7 +568,7 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
 
 4. [ ] **Then switch**, and verify the pieces that can only be checked live:
    ```bash
-   systemctl status wg.service qbittorrent sabnzbd sonarr sonarr-anime radarr prowlarr flaresolverr
+   systemctl status wg.service qbittorrent sabnzbd sonarr sonarr-anime radarr lidarr prowlarr flaresolverr navidrome
    ip netns exec wg curl -s ifconfig.me        # ← Proton's IP, NOT the house IP
    curl -s ifconfig.me                          # ← the house IP (host is untunnelled)
    journalctl -u protonvpn-natpmp -f            # ← "published forwarded port NNNNN"
@@ -610,6 +611,38 @@ arrangement, since anime films are a far smaller category than series and
 Radarr applies profiles per-movie. If that proves insufficient, a local
 `radarr-anime` module plus the category/application wiring is the next step,
 and would be a good upstream contribution: it fills a real asymmetry.
+
+### Music — Lidarr and Navidrome, and the one real hazard
+
+Navidrome (port 4533) streams the library; Lidarr (8686) acquires into it.
+Navidrome runs *here* rather than on memory-alpha, unlike Jellyfin: audio
+transcoding is cheap enough for this CPU, so the no-GPU argument that exiles
+video playback does not apply, and serving from local disk skips an NFS hop.
+Navidrome's `MusicFolder` follows Lidarr's root folder automatically, so the
+two cannot drift apart.
+
+⚠ **The existing music collection is the one genuinely irreplaceable thing in
+this migration.** SHARES.md marks `music` 🛡 Protected, and the re-acquirable
+table deliberately omits it — unlike `arr_media`, it cannot be re-downloaded.
+Lidarr is not a read-only cataloguer: within its root folder it renames,
+moves, and on upgrade deletes files.
+
+So the config points Lidarr at a **fresh** `media/music`, and the old
+collection stays where it is in `tank/media_staging`. When you do bring it
+across, copy rather than move, and keep the staging copy until Lidarr has
+matched the library and you have listened to a few albums:
+
+```bash
+# copy, do not move — the staging copy is the undo
+rsync -a --info=progress2 /tank/media_staging/music/ /tank/nixflix_media/media/music/
+```
+
+Navidrome only ever reads the folder, so pointing *it* at the library is
+risk-free; all the write authority is Lidarr's. If you would rather have
+streaming now and defer the acquisition question, set
+`nixflix.lidarr.enable = false` and give Navidrome an explicit
+`settings.MusicFolder` pointing at the staging path — it does not need Lidarr
+to work.
 
 ### FlareSolverr
 

@@ -160,11 +160,63 @@ in
       };
     };
 
-    # Deliberately NOT enabled yet: `lidarr` (SHARES.md marks `music` 🛡
-    # Protected — a curated, non-re-acquirable library, so pointing an
-    # automation tool at it is its own decision, not a default) and
-    # `recyclarr` (an easy add once the base stack has actually run).
-    # Enabling either is a few lines here plus its own sops API key.
+    # ── Music: acquisition ──────────────────────────────────────────────────
+    # ⚠ Read this before pointing Lidarr at the OLD library. SHARES.md marks
+    # `music` 🛡 Protected, and DECISIONS.md §'s re-acquirable table
+    # deliberately omits it — unlike `arr_media`, this collection cannot simply
+    # be re-downloaded. Lidarr is not a read-only cataloguer: it renames, moves
+    # and (on upgrade) deletes files under its root folder.
+    #
+    # So this points at a FRESH `media/music`, consistent with the clean
+    # rebuild everywhere else, and the existing collection stays untouched in
+    # `tank/media_staging` until you deliberately import it. Do that import
+    # with the staging copy still intact, not as a move — see MANUAL-STEPS §12.
+    lidarr = {
+      enable = true;
+      mediaDirs = [ "${mediaDir}/music" ];
+      config = {
+        apiKey._secret = config.sops.secrets."nixflix/lidarrApiKey".path;
+        hostConfig = {
+          username = "admin";
+          password._secret = config.sops.secrets."nixflix/arrPassword".path;
+        };
+      };
+      # `rootFolders` is left at the module default, unlike the other *arrs
+      # above: Lidarr's /rootfolder API needs more than a path
+      # (defaultQualityProfileId, defaultMetadataProfileId, monitor options),
+      # and nixflix already derives all of that from `mediaDirs`. Overriding it
+      # by hand here would mean restating those IDs for no gain.
+    };
+
+    # ── Music: playback ─────────────────────────────────────────────────────
+    # Navidrome is a Subsonic-compatible streaming server, and unlike Jellyfin
+    # it belongs on this host: audio transcoding is cheap enough for the
+    # E3-1230 v2 (the no-GPU reasoning that exiles video playback to
+    # memory-alpha simply does not apply), and serving from local disk avoids
+    # bouncing the library over NFS.
+    #
+    # `MusicFolder` is left implicit: it defaults to the head of
+    # `lidarr.mediaDirs`, so the two stay pointed at the same place by
+    # construction. Navidrome only ever reads it. Port 4533, bound 0.0.0.0
+    # (no reverse proxy and not VPN-confined here), state under stateDir.
+    navidrome = {
+      enable = true;
+      users.z = {
+        # Required, and NOT inferred from the attribute name — the module
+        # defaults it to null, which fails the type check rather than falling
+        # back to "z".
+        userName = "z";
+        isAdmin = true;
+        password._secret = config.sops.secrets."nixflix/navidromePassword".path;
+        # ⚠ Passwords are applied at user CREATION only and never updated
+        # declaratively — changing this secret later does not change the
+        # login. Use Navidrome's own UI for that.
+      };
+    };
+
+    # Deliberately NOT enabled yet: `recyclarr` (TRaSH profile sync — an easy
+    # add once the base stack has actually run), a few lines here plus its own
+    # sops API key.
     #
     # There is no `radarr-anime` to enable: nixflix ships no such module, and
     # unlike `sonarr-anime` it would not be a thin wrapper — the service name
@@ -257,6 +309,25 @@ in
       "prowlarr-tags.service"
     ];
     wants = [ "flaresolverr.service" ];
+  };
+
+  # ── navidrome-setup: make it survive a slow first start ───────────────────
+  # This oneshot creates Navidrome's first admin user, and upstream gives it
+  # no Restart at all — so if its 60s readiness wait ever times out, the unit
+  # fails and the admin account is simply never created. Nothing retries it;
+  # you would find out at the login screen, and the fix would be a manual
+  # `systemctl start navidrome-setup`.
+  #
+  # Navidrome is a Go binary that serves /ping almost immediately, so 60s
+  # should be ample even here — this is cheap insurance against the one boot
+  # where the array mount, the *arr databases and Chromium are all competing
+  # for this 2012 CPU at once. Restart is safe on a RemainAfterExit oneshot:
+  # the script is idempotent (it checks whether the user already exists), and
+  # a genuinely broken config just retries slowly and visibly rather than
+  # failing once and going quiet.
+  systemd.services.navidrome-setup.serviceConfig = {
+    Restart = "on-failure";
+    RestartSec = 30;
   };
 
   # ── ProtonVPN NAT-PMP → qBittorrent listen port ───────────────────────────
@@ -386,8 +457,13 @@ in
     "nixflix/sonarrApiKey" = { };
     "nixflix/sonarrAnimeApiKey" = { };
     "nixflix/radarrApiKey" = { };
+    "nixflix/lidarrApiKey" = { };
     "nixflix/sabnzbdApiKey" = { };
     "nixflix/sabnzbdNzbKey" = { };
+
+    # Navidrome's admin login. Applied at user creation only — see the option
+    # comment above; rotating this value later does not change the password.
+    "nixflix/navidromePassword" = { };
 
     # Shared *arr web UI password (username `admin` on all three). One value
     # rather than three: single-user homelab, all three equally trusted, and
