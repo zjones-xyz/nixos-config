@@ -279,6 +279,8 @@ against the source, plus the Unraid flash+config insurance into
 1. [x] Sweep the media datasets into `tank/media_staging/*` (zfs renames) so
    nixarr gets a clean `/tank/media`; collections re-enter via *arr imports.
    ✅ 2026-09-02 — all seven (8.94 T) staged; `tank/media`/`tank/books` empty.
+   ⚠ `tank/media` was since renamed to `tank/nixarr_media` (2026-09-03,
+   `media.nix` updated to match) — `tank/books` is unaffected.
 2. [x] Retire sidepool *logically*: unmounted + all four LUKS mappers closed
    2026-09-02 — disks are inert (LUKS-closed, nothing references them).
 3. [ ] Pull sidepool's drives during the next in-case session (deliberately
@@ -312,13 +314,13 @@ actually useful:
    best guess from SHARES.md's old Unraid classification, not verified
    against what the 2026-09-02 dataset-tree build actually created.
 2. [ ] Reconcile Shelfmark's fixed library path
-   (`/tank/media/library/{books,audiobooks}`) with the real `tank/books`
-   dataset — mountpoint override or symlink, owner's call.
+   (`/tank/nixarr_media/library/{books,audiobooks}`) with the real
+   `tank/books` dataset — mountpoint override or symlink, owner's call.
 3. [ ] Decide the real download-client inbox path — nixarr hardcodes
-   `${mediaDir}/torrents` and `${mediaDir}/usenet`, neither configurable.
+   `${mediaDir}/qbittorrent` and `${mediaDir}/usenet`, neither configurable.
 4. [ ] Generate a ProtonVPN WireGuard config (P2P-tagged server), add it to
    `secrets/galactica.yaml` under `vpn/wgConf`, then flip `vpnReady = true`
-   in `media.nix` to bring up Transmission/SABnzbd inside the VPN-Confinement
+   in `media.nix` to bring up qBittorrent/SABnzbd inside the VPN-Confinement
    netns.
 5. [ ] Flesh out `recyclarr.configuration` with real TRaSH-guide
    `quality_definition`/`custom_formats`/`quality_profiles` blocks — the

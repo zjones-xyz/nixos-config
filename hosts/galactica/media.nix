@@ -38,7 +38,7 @@ let
   # missing sops key) until the owner adds the wgConf and flips this to true.
   #
   # ⚠ OWNER: set this to `true` ONLY after `vpn.wgConf` is in galactica.yaml
-  # (see the sops block below). Turning it on runs Transmission confined to the
+  # (see the sops block below). Turning it on runs qBittorrent confined to the
   # ProtonVPN netns; leaving it off runs the *arr apps with no download client
   # at all — never an unconfined torrent client.
   vpnReady = false;
@@ -66,13 +66,14 @@ in
 
     # ── Paths → the `tank` array ─────────────────────────────────────────────
     # mediaDir is nixarr's media root: it takes `media`-group ownership of the
-    # tree and expects the shared library at `${mediaDir}/library` and the
-    # download client's dir at `${mediaDir}/torrents`. `tank/media` was staged
-    # empty specifically for this on 2026-09-02 (MANUAL-STEPS.md §9.1 — the
-    # seven pre-existing media datasets were swept aside into
-    # `tank/media_staging/*` first so nixarr would get a clean tree; those
-    # collections re-enter via *arr imports, not a straight copy-back).
-    mediaDir = "/tank/media";
+    # tree and expects the shared library at `${mediaDir}/library` and each
+    # download client's dir nested under it. `tank/media` was staged empty
+    # specifically for nixarr on 2026-09-02 (MANUAL-STEPS.md §9.1 — the seven
+    # pre-existing media datasets were swept aside into `tank/media_staging/*`
+    # first so nixarr would get a clean tree); this now points at
+    # `tank/nixarr_media` instead (owner rename, 2026-09-03) — confirm the
+    # dataset itself was renamed/recreated to match before first activation.
+    mediaDir = "/tank/nixarr_media";
 
     # State/config for every service. ⚠ UNCONFIRMED PATH: the 2026-09-02
     # dataset-tree build (MANUAL-STEPS.md §9) organizes datasets by content
@@ -119,8 +120,9 @@ in
     # Audiobook + podcast server. Native nixarr module → nixpkgs
     # `services.audiobookshelf` / `pkgs.audiobookshelf`. State/config lands
     # under stateDir like the *arr apps; the audiobook *media* lives on the
-    # `tank/media/audiobooks` dataset (part of the 2026-09-02 tree), which you
-    # point Audiobookshelf's library at in its web UI — nixarr exposes only
+    # `tank/nixarr_media/audiobooks` dataset (part of the 2026-09-02 tree,
+    # under its current name), which you point Audiobookshelf's library at in
+    # its web UI — nixarr exposes only
     # stateDir, not a library-path option. Not VPN-confined (user-facing
     # server; ingress via the homelab_stacks tsdproxy entry).
     audiobookshelf.enable = true;
@@ -128,13 +130,14 @@ in
     # ── Shelfmark (ebook / audiobook manager — the Readarr successor) ─────────
     # The *arr-family manager for books, replacing the retired Readarr. Native
     # nixarr module. nixarr fixes its library at
-    # `${mediaDir}/library/{books,audiobooks}` (= /tank/media/library/books and
-    # /tank/media/library/audiobooks); there's no per-library path override.
+    # `${mediaDir}/library/{books,audiobooks}` (= /tank/nixarr_media/library/books
+    # and /tank/nixarr_media/library/audiobooks); there's no per-library path
+    # override.
     #
     # ⚠ RECONCILE with the real dataset: `tank/books` is its own top-level
     # dataset (also staged empty 2026-09-02), not nested under
-    # `tank/media/library`. Either set `tank/books`'s mountpoint to
-    # `/tank/media/library/books`, or symlink. Not VPN-confined.
+    # `tank/nixarr_media/library`. Either set `tank/books`'s mountpoint to
+    # `/tank/nixarr_media/library/books`, or symlink. Not VPN-confined.
     shelfmark.enable = true;
 
     # ── TRaSH-guides sync: recyclarr, not configarr ──────────────────────────
@@ -180,28 +183,35 @@ in
       wgConf = lib.mkIf vpnReady config.sops.secrets."vpn/wgConf".path;
     };
 
-    # ── Download client (Transmission), VPN-confined ─────────────────────────
+    # ── Download client (qBittorrent), VPN-confined ──────────────────────────
     # Only enabled once the VPN is (vpnReady) — never an unconfined torrent
     # client. `vpn.enable = true` is unconditional here but only takes effect
     # when the client itself is enabled, i.e. exactly when the netns is up.
     #
     # ⚠ DOWNLOAD DIR IS A TODO: nixarr hardcodes the download dir to
-    # `${mediaDir}/torrents` (= /tank/media/torrents) — it's not an option.
-    # Decide the real inbox location (e.g. a dedicated dataset, kept on the
-    # same filesystem as the library so imports stay atomic hardlinks) and
-    # reconcile with nixarr's fixed layout.
+    # `${mediaDir}/qbittorrent` (= /tank/nixarr_media/qbittorrent) — it's not
+    # an option. Decide the real inbox location (e.g. a dedicated dataset,
+    # kept on the same filesystem as the library so imports stay atomic
+    # hardlinks) and reconcile with nixarr's fixed layout.
     #
-    # peerPort must be a concrete value: nixarr feeds it straight into the
-    # VPN-Confinement netns port map, and its own default (null) is rejected
-    # there as a non-port. 51413 is Transmission's default.
+    # peerPort: unlike Transmission, qBittorrent's own default (6881) is
+    # already a concrete port, so this isn't strictly required — set
+    # explicitly for the same reason as before: it's fed straight into the
+    # VPN-Confinement netns port map either way.
     # ⚠ With ProtonVPN, inbound peers only arrive on the *forwarded* port,
     # which Proton hands out dynamically (NAT-PMP) rather than letting you pick
     # — so treat this as a placeholder and reconcile with Proton port
     # forwarding (nixarr/VPN-Confinement port-forwarding) when going live.
-    transmission = {
+    #
+    # ⚠ nixarr's qbittorrent module fronts qBittorrent with **qui** (a
+    # separate modern WebUI proxy) by default (`qui.enable = true`), listening
+    # on `webuiPort` (5252) rather than qBittorrent's traditional 8080 —
+    # that's the port the homelab_stacks ingress entry needs to point at, not
+    # 8080.
+    qbittorrent = {
       enable = vpnReady;
       vpn.enable = true;
-      peerPort = 51413;
+      peerPort = 6881;
     };
 
     # ── Usenet download client (SABnzbd), VPN-confined ───────────────────────
