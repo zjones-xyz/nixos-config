@@ -317,14 +317,8 @@
   homelab.smart.monitor = true;
 
   # ── NFS server (re-exports the array to memory-alpha) ──────────────────────
-  # Enabling the server and opening its port don't depend on the array
-  # existing, so this lands now — the actual `services.nfs.server.exports`
-  # content is still blocked on the array's dataset paths and lands with
-  # that config. See MANUAL-STEPS.md §8 for the fsid-preservation plan this
-  # is in service of.
-  #
-  # 2049 only: both of memory-alpha's mounts specify nfsvers=4, and NFSv4
-  # doesn't need the rpcbind/mountd/statd port spread NFSv3 requires.
+  # `exports` still to come with the §8 cutover (fsids 100-103). 2049 only:
+  # memory-alpha mounts nfsvers=4, which needs no rpcbind/mountd/statd spread.
   services.nfs.server.enable = true;
   networking.firewall.allowedTCPPorts = [ 2049 ];
 

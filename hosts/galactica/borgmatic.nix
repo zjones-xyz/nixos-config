@@ -7,13 +7,6 @@
 # both sops secrets, and the dataset tags all exist, and the first archive
 # verified clean.
 #
-# Own file rather than inline in configuration.nix for the same reason
-# hosts/pegasus/borgmatic.nix is one: dense enough, and one concern. NOT in
-# modules/nixos/ — every varying part below (the ZFS hook, property-driven
-# selection, append-only skip_actions, retention) is galactica-shaped, and
-# docs/BACKUP.md's planned `memory-alpha-hot` is a different-enough shape that
-# it would need its own file too, not options bolted onto this one.
-#
 # ⭐ WHY property-driven, and how borgmatic actually selects datasets.
 # borgmatic's ZFS hook (verified against the packaged borgmatic 2.1.5 source,
 # borgmatic/hooks/data_source/zfs.py) snapshots a dataset if EITHER:
@@ -83,33 +76,24 @@ in
       exclude_caches = true;
       exclude_if_present = [ ".nobackup" ];
 
-      # ⭐ Skip `compact` ONLY — NOT `prune`. Same correction pegasus's
-      # borgmatic.nix already carries (2026-08-26), which this file originally
-      # got wrong by inheriting PR #90's draft. Borg's append-only semantics:
-      # prune/delete SUCCEED under an append-only key — they mark archives
-      # deleted in the manifest, which needs no server-side delete permission.
-      # It is `compact` specifically that is a silent no-op under append-only,
-      # because reclaiming the segment space is a real delete BorgBase forbids;
-      # BorgBase exposes a manual "More > Compact repo" dashboard action for
-      # exactly that. So prune runs here nightly and the keep_* policy below is
-      # actually enforced; only the client-side compact that would never do
-      # anything is skipped.
+      # Skip `compact`, NOT `prune`. Under an append-only key prune succeeds —
+      # it only marks archives deleted in the manifest — so the keep_* policy
+      # below is enforced here nightly. `compact` is the silent no-op, because
+      # reclaiming segment space is a real delete; BorgBase exposes that as a
+      # manual "More > Compact repo" action. Same call as pegasus's borgmatic.
       skip_actions = [ "compact" ];
 
       # ⟨Proposal, not decided — a single uniform policy for the mixed
       # Critical (documents: small, high-churn, wants depth) + Precious
       # (photos: large, near-immutable) set. The hot/cold split that would
       # tune these per-tier needs two explicitly-scoped configs and is
-      # deferred — see BACKUP-BORG.md.⟩ Enforced nightly by the prune above,
-      # so these bound the archive count (~30) rather than being inert inputs
-      # to a prune that happens somewhere else.
+      # deferred — see BACKUP-BORG.md.⟩ Enforced nightly, so these also bound the
+      # archive count (~30) that the checks below walk.
       keep_daily = 7;
       keep_weekly = 8;
       keep_monthly = 12;
       keep_yearly = 3;
 
-      # No check_last: prune above bounds the archive count, so the monthly
-      # archives check stays cheap while still verifying everything.
       checks = [
         { name = "repository"; frequency = "2 weeks"; }
         { name = "archives"; frequency = "1 month"; }
