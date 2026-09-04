@@ -138,7 +138,21 @@ lib.optionalAttrs enabled
   # unit whose credential target is absent. The single empty-string element
   # renders the bare `LoadCredentialEncrypted=` reset line — mkForce [] would
   # render nothing and leave the packaged line in force. Same as pegasus.
-  systemd.services.borgmatic.serviceConfig.LoadCredentialEncrypted = lib.mkForce [ "" ];
+  systemd.services.borgmatic.serviceConfig = {
+    LoadCredentialEncrypted = lib.mkForce [ "" ];
+
+    # CAP_DAC_OVERRIDE is REQUIRED for the SQLite hook, and its absence is not
+    # obvious: the packaged unit ships CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+    # CAP_NET_RAW, and root's power to ignore file modes comes from
+    # CAP_DAC_OVERRIDE specifically. Without it borgmatic runs as a root that can
+    # READ anything but WRITE only what it owns by mode bits — and `sqlite3 .dump`
+    # is not read-only: opening a WAL-mode database creates -shm/-wal sidecars
+    # next to it. /var/lib/jellyfin/data is owned by jellyfin, so the dump failed
+    # with "attempt to write a readonly database (8)". It would have hit all
+    # seven DBs; jellyfin.db was simply first. Drop-in list directives union, so
+    # naming the upstream two alongside keeps all three.
+    CapabilityBoundingSet = [ "CAP_DAC_READ_SEARCH" "CAP_NET_RAW" "CAP_DAC_OVERRIDE" ];
+  };
 
   # ── Bring-up checklist (owner) ───────────────────────────────────────────────
   # 1. Create a BorgBase repo (repokey-blake2) + an append-only SSH key.
