@@ -327,7 +327,20 @@ actually useful:
    scaffold is a no-op until then.
 6. [ ] Ingress: point the `homelab_stacks` tsdproxy List-provider entries at
    the new localhost ports (Sonarr 8989, Radarr 7878, Prowlarr 9696, Bazarr
-   6767, Audiobookshelf, Shelfmark) — out of scope for this repo.
+   6767, Audiobookshelf, Shelfmark, sonarr-anime 8990, radarr-anime 7879) —
+   out of scope for this repo.
+7. [ ] `sonarr-anime`/`radarr-anime` (anime.nix) start with empty state —
+   same first-run setup as the main pair (indexers via Prowlarr sync,
+   download client, anime-tuned quality profiles/naming — TRaSH's
+   anime-specific guides, not the movie/TV ones the main instances use) plus
+   pointing each at `${mediaDir}/library/anime`.
+8. [ ] `recyclarr.configuration` in media.nix only targets the main Sonarr/
+   Radarr — extending it to sonarr-anime/radarr-anime needs their API keys
+   added by hand (nixarr's automatic key extraction only covers its own
+   `nixarr.sonarr`/`nixarr.radarr`, not the hand-rolled instances).
+9. [ ] Shoko (AniDB-based library organizer) was evaluated and deferred —
+   see anime.nix's header. Revisit only alongside packaging its Jellyfin
+   plugin (not in nixpkgs) as cross-host work with memory-alpha.
 
 The original forward-looking notes below are now mostly satisfied; kept for
 provenance.
