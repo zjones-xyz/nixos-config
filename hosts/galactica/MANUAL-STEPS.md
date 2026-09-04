@@ -300,6 +300,33 @@ against the source, plus the Unraid flash+config insurance into
    mounts, which still reference the dead Unraid paths
    (`tower.internal:/mnt/user/...`).
 
+## 10. nixarr — declarative media stack (media.nix, scaffolded)
+
+`hosts/galactica/media.nix` is now wired into `configuration.nix` and
+evaluates/activates cleanly as-is (Sonarr/Radarr/Prowlarr/Bazarr/
+Audiobookshelf/Shelfmark/recyclarr, no VPN/download client yet). Before it's
+actually useful:
+
+1. [ ] Confirm `stateDir = "/tank/appdata/arr_config"` against the real
+   dataset tree (`zfs list -r tank/appdata` on galactica) — the path is a
+   best guess from SHARES.md's old Unraid classification, not verified
+   against what the 2026-09-02 dataset-tree build actually created.
+2. [ ] Reconcile Shelfmark's fixed library path
+   (`/tank/media/library/{books,audiobooks}`) with the real `tank/books`
+   dataset — mountpoint override or symlink, owner's call.
+3. [ ] Decide the real download-client inbox path — nixarr hardcodes
+   `${mediaDir}/torrents` and `${mediaDir}/usenet`, neither configurable.
+4. [ ] Generate a ProtonVPN WireGuard config (P2P-tagged server), add it to
+   `secrets/galactica.yaml` under `vpn/wgConf`, then flip `vpnReady = true`
+   in `media.nix` to bring up Transmission/SABnzbd inside the VPN-Confinement
+   netns.
+5. [ ] Flesh out `recyclarr.configuration` with real TRaSH-guide
+   `quality_definition`/`custom_formats`/`quality_profiles` blocks — the
+   scaffold is a no-op until then.
+6. [ ] Ingress: point the `homelab_stacks` tsdproxy List-provider entries at
+   the new localhost ports (Sonarr 8989, Radarr 7878, Prowlarr 9696, Bazarr
+   6767, Audiobookshelf, Shelfmark) — out of scope for this repo.
+
 The original forward-looking notes below are now mostly satisfied; kept for
 provenance.
 
