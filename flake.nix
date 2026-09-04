@@ -103,11 +103,21 @@
     # comment above for why.
     # ⚠ Pinned to the feature branch, not `main`: the fork's `main` is still
     # byte-identical to upstream (no 26.05 pin, none of the fixes) because
-    # zjones-xyz/nixflix-exp#1 is open. Drop the `?ref=` once that merges —
-    # tracking `main` is the intended steady state, and leaving this pointed
-    # at a PR branch means a force-push or a branch deletion breaks eval.
+    # zjones-xyz/nixflix-exp#1 is open. Drop the `?ref=`/`allRefs` once that
+    # merges — tracking `main` is the intended steady state, and leaving this
+    # pointed at a PR branch means a force-push or a branch deletion breaks
+    # eval.
+    #
+    # `allRefs=1` is not decoration: without it CI failed with "Cannot find
+    # Git revision … in ref …" while this evaluated fine locally. The remote
+    # ref is correct and carries exactly the locked rev — the difference is
+    # the Nix version. Newer Nix (2.35 here) resolves a rev inside a named
+    # ref; the older Nix that cachix/install-nix-action@v27 installs on the
+    # runner fetches that ref too narrowly to see the rev and fails. allRefs
+    # makes the fetch cover every ref, which both versions handle, and is the
+    # remedy Nix's own error message names. Moot once this tracks `main`.
     nixflix = {
-      url = "git+https://github.com/zjones-xyz/nixflix-exp.git?ref=claude/nixflix-galactica-fork-43d4mo";
+      url = "git+https://github.com/zjones-xyz/nixflix-exp.git?ref=claude/nixflix-galactica-fork-43d4mo&allRefs=1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
