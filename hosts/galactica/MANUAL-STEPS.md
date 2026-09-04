@@ -515,15 +515,27 @@ them and nothing errors, imports just silently become full copies (double
 disk for anything seeding, and slow). Do not "tidy up" by creating
 `tank/nixflix_media/downloads` later.
 
-1. [ ] **Create the datasets.**
+1. [ ] **Create the one dataset.** That is the whole step — one command:
    ```bash
-   zfs create tank/nixflix_media
-   mkdir -p /tank/nixflix_media/{media/{tv,movies,anime},downloads}
-   mkdir -p /tank/appdata/nixflix          # inherits appdata's special-vdev placement
+   sudo zfs create tank/nixflix_media
    ```
-   `tank/appdata` already exists (§9/§10) and is forced onto the special
-   vdev's SSD mirror — the *arr databases live there deliberately, per
-   DESIGN.md naming them among the genuinely irreplaceable data.
+   **Do not `mkdir` the directories underneath it.** nixflix creates every one
+   of them at activation via systemd-tmpfiles, with ownership that a manual
+   `mkdir` gets wrong (`root:media 0775` for the library and downloads roots,
+   then per-service subdirectories owned `sonarr:media`, `qbittorrent:media`,
+   `sabnzbd:media` and so on). A hand-made `root:root 0755` has no group write
+   for `media`; tmpfiles does correct that on the next switch, so it is not
+   destructive, just pointless work that obscures the real state if something
+   misbehaves later. `/tank/appdata/nixflix` is likewise created for you —
+   `tank/appdata` already exists (§9/§10) and is forced onto the special vdev's
+   SSD mirror, which is why the *arr databases live there.
+
+   The dataset itself is the exception because it is the one thing nixflix
+   *cannot* make: the modules create directories, not ZFS datasets. Skip this
+   and tmpfiles would quietly create `/tank/nixflix_media` as a plain directory
+   inside the `tank` root dataset — which puts the library and downloads on
+   different filesystems from each other only if you later split them, but
+   more importantly loses the dataset's own properties and snapshot boundary.
 
 2. [ ] **Add the secrets** — `sops secrets/galactica.yaml`, all under a
    `nixflix:` key:
