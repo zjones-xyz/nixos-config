@@ -83,36 +83,37 @@ in
       exclude_caches = true;
       exclude_if_present = [ ".nobackup" ];
 
-      # ⭐ Skip prune/compact ON THIS HOST. galactica's BorgBase key is
-      # append-only (docs/BACKUP.md §3), so prune/compact CANNOT run from here by
-      # construction — the default `borgmatic` action would try them every run
-      # and fail against the server's refusal. Pruning runs deliberately and
-      # rarely from the admin machine, with the separate prunable key, against
-      # this same config. The keep_* numbers below are that policy's input;
-      # they do nothing on galactica itself.
-      skip_actions = [ "prune" "compact" ];
+      # ⭐ Skip `compact` ONLY — NOT `prune`. Same correction pegasus's
+      # borgmatic.nix already carries (2026-08-26), which this file originally
+      # got wrong by inheriting PR #90's draft. Borg's append-only semantics:
+      # prune/delete SUCCEED under an append-only key — they mark archives
+      # deleted in the manifest, which needs no server-side delete permission.
+      # It is `compact` specifically that is a silent no-op under append-only,
+      # because reclaiming the segment space is a real delete BorgBase forbids;
+      # BorgBase exposes a manual "More > Compact repo" dashboard action for
+      # exactly that. So prune runs here nightly and the keep_* policy below is
+      # actually enforced; only the client-side compact that would never do
+      # anything is skipped.
+      skip_actions = [ "compact" ];
 
       # ⟨Proposal, not decided — a single uniform policy for the mixed
       # Critical (documents: small, high-churn, wants depth) + Precious
       # (photos: large, near-immutable) set. The hot/cold split that would
       # tune these per-tier needs two explicitly-scoped configs and is
-      # deferred — see BACKUP-BORG.md.⟩
+      # deferred — see BACKUP-BORG.md.⟩ Enforced nightly by the prune above,
+      # so these bound the archive count (~30) rather than being inert inputs
+      # to a prune that happens somewhere else.
       keep_daily = 7;
       keep_weekly = 8;
       keep_monthly = 12;
       keep_yearly = 3;
 
+      # No check_last: prune above bounds the archive count, so the monthly
+      # archives check stays cheap while still verifying everything.
       checks = [
         { name = "repository"; frequency = "2 weeks"; }
         { name = "archives"; frequency = "1 month"; }
       ];
-      # Bound the archives check. It runs client-side and pulls each archive's
-      # metadata over the WAN, and borgmatic's default is ALL archives — but this
-      # host never prunes (skip_actions above), so the archive count grows without
-      # limit and the check's cost grows linearly with it. Verifying the most
-      # recent few is the archives check's real job; whole-repo corruption is what
-      # the (server-side, cheap) repository check above is for.
-      check_last = 3;
 
       # Failure/heartbeat monitoring is deferred to BorgBase's own inactivity
       # alerting (docs/BACKUP.md §6), the fleet-wide decision — same stance as

@@ -2,9 +2,9 @@
 
 How borgmatic selects ZFS datasets to back up, and how galactica is wired to use
 it. Companion to `docs/BACKUP.md` (fleet policy: scope, budget, provider, key
-custody) and `modules/nixos/borgmatic.nix` (the config this documents). Drafts —
-nothing has run yet; the array does not exist and the BorgBase repo is not
-created.
+custody) and `hosts/galactica/borgmatic.nix` (the config this documents).
+**Live since 2026-09-03** — the array, the BorgBase repo, the tags, and the
+first verified archive all exist; see the checklist at the end for current state.
 
 ---
 
@@ -57,7 +57,7 @@ accident.
 
 ## Recommendation for galactica: property-driven (mechanism 1)
 
-`modules/nixos/borgmatic.nix` sets `source_directories = [ ]` and relies purely
+`hosts/galactica/borgmatic.nix` sets `source_directories = [ ]` and relies purely
 on the property. **Why this over an explicit path list:**
 
 - **The tier boundary lives on the pool, not in Nix.** The offsite boundary is
@@ -71,7 +71,8 @@ on the property. **Why this over an explicit path list:**
 - **One place to add scope later.** Bringing `tank/appdata` subtrees in becomes
   one `zfs set`, with no Nix change and no redeploy.
 
-### The one-time tagging (owner, once the array exists)
+### The one-time tagging — DONE 2026-09-03 (`tank/documents` + `tank/photos`, the
+latter inheriting to both immich children; verified `local`/`inherited`)
 
 ```
 zfs set org.torsion.borgmatic:backup=auto tank/documents           # 🔴 Critical
@@ -171,7 +172,7 @@ up, add it — and mind the two footguns already verified in the fleet's notes:
 ## Runtime footguns in the systemd unit (the load-bearing overrides)
 
 The packaged `borgmatic.service` (2.1.5) is hardened in ways that **break the ZFS
-hook** until overridden. `modules/nixos/borgmatic.nix` sets all three; they are
+hook** until overridden. `hosts/galactica/borgmatic.nix` sets all three; they are
 verified against the unit file and its own inline comments:
 
 1. **`LoadCredentialEncrypted=borgmatic.pw`** — the unit's default
@@ -210,13 +211,20 @@ proven live. First scheduled run against a tagged dataset settles it.
 
 1. [x] **BorgBase account + one repo.** Created; `repokey-blake2`. Repo URL
        `ssh://kentmevx@kentmevx.repo.borgbase.com/./repo`.
-2. [~] **Two keys:** the **append-only** key for galactica is created, verified
+2. [x] **Key:** the **append-only** key for galactica is created, verified
        against BorgBase, and materialised via sops. The repo was initialised by
        *temporarily* toggling that same key to full-access, running
        `borgmatic repo-create`, then toggling it back to append-only (no second
-       key needed for init). ⏳ Still TODO: a **separate prunable key** kept off
-       galactica (admin machine) for retention runs — not needed until the first
-       prune. Verify it actually refuses a `prune` from galactica before trusting.
+       key needed for init).
+       **No separate prunable key is required for retention** — corrected
+       2026-09-03, matching `hosts/pegasus/borgmatic.nix`'s 2026-08-26 note:
+       `prune` SUCCEEDS under an append-only key (it marks archives deleted in
+       the manifest, needing no server-side delete right), so galactica prunes
+       itself nightly and `keep_*` is genuinely enforced. Only `compact` — the
+       actual reclaiming of segment space — is forbidden, and BorgBase exposes
+       that as a manual "More > Compact repo" dashboard action. So the repo's
+       on-disk size only shrinks when you run that (or use a full-access key);
+       archive *count* is bounded automatically.
 3. [x] **Set the repo URL** — `homelab.borgmatic.repository`, set in
        hosts/galactica/configuration.nix.
 4. [x] **Two sops secrets** (`borgmatic/passphrase`, `borgmatic/ssh_key`) in
