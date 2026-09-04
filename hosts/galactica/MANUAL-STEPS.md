@@ -549,22 +549,33 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    | `navidromePassword` | Any strong password — Navidrome's `z` admin login. ⚠ Applied at user **creation** only; changing it later needs Navidrome's own UI, not this secret. |
    | `qbittorrentPassword` | Any strong password — **plain text**, and must match the hash in step 3 |
 
-3. [ ] **Set qBittorrent's own WebUI credentials.** The `qbittorrentPassword`
-   secret is what the *arrs and the NAT-PMP sidecar authenticate *with*; it
-   does not set qBittorrent's password. Generate the hash:
+   `openssl` is not installed everywhere in the fleet (serenity, notably).
+   Where it is missing, these need nothing but coreutils:
+   ```bash
+   head -c 4000 /dev/urandom | LC_ALL=C tr -dc 'a-f0-9'    | head -c 32   # a 32-char hex API key
+   head -c 4000 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 24   # a 24-char password
+   ```
+   The 4000-byte input is deliberate: `tr -dc` keeps only ~6% of random
+   bytes for the hex class, so a smaller read silently yields a *short*
+   key rather than failing.
+
+3. [ ] **Check qBittorrent's WebUI hash against the secret.** The
+   `qbittorrentPassword` secret is what the *arrs and the NAT-PMP sidecar
+   authenticate *with*; qBittorrent's own login is set separately, by
+   `serverConfig.Preferences.WebUI.Password_PBKDF2` in `nixflix.nix`. That
+   hash is **already committed** — it only needs regenerating if you change
+   `qbittorrentPassword`:
    ```bash
    nix run git+https://codeberg.org/feathecutie/qbittorrent_password -- --password '<the same password>'
    ```
-   then add to `nixflix.nix` under `torrentClients.qbittorrent`:
-   ```nix
-   serverConfig.Preferences.WebUI = {
-     Username = "admin";
-     Password_PBKDF2 = "@ByteArray(<output from above>)";
-   };
-   ```
+   (Codeberg has been flaky; the same digest is PBKDF2-HMAC-SHA512, 100000
+   iterations, 64-byte key, random 16-byte salt, formatted
+   `@ByteArray(<base64 salt>:<base64 key>)` — a dozen lines of Python's
+   `hashlib` if the flake is unreachable.)
+
    ⚠ If the hash and the secret disagree, every *arr grab fails
    authentication and the sidecar never publishes a port — and neither
-   failure is loud.
+   failure is loud. Regenerate *both together* or neither.
 
 4. [ ] **Then switch**, and verify the pieces that can only be checked live:
    ```bash

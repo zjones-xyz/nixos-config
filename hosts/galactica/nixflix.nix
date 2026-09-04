@@ -257,6 +257,23 @@ in
       # password — that is `serverConfig.Preferences.WebUI.Password_PBKDF2`,
       # a PBKDF2 hash the owner generates once (MANUAL-STEPS.md §12).
       password._secret = config.sops.secrets."nixflix/qbittorrentPassword".path;
+
+      # qBittorrent's OWN WebUI credentials. These cannot come from sops: the
+      # value is rendered into qBittorrent.conf at build time and reinstalled
+      # over the live file on every start (`install -Dm600` in the nixpkgs
+      # module's ExecStartPre), so anything set through the WebUI by hand is
+      # erased on the next restart. Declarative is the only form that sticks.
+      #
+      # Password_PBKDF2 is a PBKDF2-HMAC-SHA512 digest — 100k iterations,
+      # random 16-byte salt, salt and key both base64 — of the same plaintext
+      # held in sops as `nixflix/qbittorrentPassword`. The two must move
+      # together: the hash is what qBittorrent verifies, the sops value is
+      # what the *arrs and the NAT-PMP sidecar present. Regenerating one
+      # without the other locks every client out (MANUAL-STEPS.md §12).
+      serverConfig.Preferences.WebUI = {
+        Username = "admin";
+        Password_PBKDF2 = "@ByteArray(qLRngRuEr+F6yTqp9dj6/g==:m2eO3yy7JkTxaK0DoEiVA8hjNMOAn5qomGyBhTBCQYIR7UDQc+e/l8uQwCw+kvBDNO4BZ1K+J5FosAunqRw4KA==)";
+      };
     };
   };
 
