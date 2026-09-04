@@ -14,10 +14,13 @@
 # stays on memory-alpha, which mounts this host's library over NFS (§8).
 # galactica is the *acquisition and storage* half of the media stack only.
 #
-# The module set comes from zjones-xyz/nixflix-exp — upstream nixflix plus a
-# nixos-26.05 pin and seven robustness fixes (flake.nix's input comment has
-# the full story). Upstream tracks nixos-unstable; the fork's CI proves each
-# revision against 26.05 before this host's lock is bumped to it.
+# The module set comes from upstream nixflix, pinned to an exact revision that
+# our zjones-xyz/nixflix-exp fork has already proven against nixos-26.05 in its
+# own CI. Upstream tracks nixos-unstable and commits most days; the fork is the
+# canary that rehearses each revision against the channel this fleet actually
+# deploys, and only a revision it has cleared gets pinned here. flake.nix's
+# input comment carries the full reasoning, including the one fork fix that
+# would matter if FlareSolverr is ever enabled on this host.
 
 let
   # ── One ZFS dataset, two plain subdirectories ─────────────────────────────

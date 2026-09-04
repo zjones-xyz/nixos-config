@@ -553,14 +553,7 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    authentication and the sidecar never publishes a port — and neither
    failure is loud.
 
-4. [ ] **Give this host credentials for the fork.** `zjones-xyz/nixflix-exp`
-   is private, so galactica (and the Mac, for eval) need read access to it —
-   a deploy key, or switch the flake input to `git+ssh://` and use the host
-   key. **Making the repo public removes this step entirely** and costs
-   nothing: it holds upstream's MPL-2.0 code, seven bug fixes and a channel
-   pin, no secrets.
-
-5. [ ] **Then switch**, and verify the pieces that can only be checked live:
+4. [ ] **Then switch**, and verify the pieces that can only be checked live:
    ```bash
    systemctl status wg.service qbittorrent sabnzbd sonarr sonarr-anime radarr prowlarr
    ip netns exec wg curl -s ifconfig.me        # ← Proton's IP, NOT the house IP
@@ -570,15 +563,18 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    The second and third lines together are the kill-switch check: torrent
    traffic leaves via Proton while NFS/SSH/monitoring stay on the LAN.
 
-6. [ ] **Import the staged media** — point Sonarr/Radarr at
+5. [ ] **Import the staged media** — point Sonarr/Radarr at
    `tank/media_staging/*` and run their import, which hardlinks into
    `/tank/nixflix_media/media/{tv,movies}`. Only destroy the staging datasets
    once the libraries look right; that is the last undo.
 
-7. [ ] **Simplify the flake input** once zjones-xyz/nixflix-exp#1 merges:
-   drop the `?ref=claude/nixflix-galactica-fork-43d4mo` so the input tracks
-   the fork's `main`. Leaving it pinned to a PR branch means a force-push or
-   branch deletion breaks evaluation fleet-wide.
+6. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
+   `nix flake update`. The input is pinned to an exact upstream revision that
+   the fork's CI has cleared against 26.05. To move it: merge upstream into
+   `zjones-xyz/nixflix-exp`, let its CI go green against the 26.05 pin, then
+   set that same upstream rev here. A bare branch URL would let a routine
+   update pull an unrehearsed revision into the fleet, which is precisely
+   what the canary exists to prevent.
 
 ### Anime
 

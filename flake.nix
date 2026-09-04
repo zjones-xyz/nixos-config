@@ -79,45 +79,55 @@
     };
 
     # nixflix (used on galactica) — the declarative *arr media stack. Points
-    # at our fork rather than upstream `kiriwalawren/nixflix` for two reasons:
-    # the fork pins nixpkgs to nixos-26.05 so its CI proves each revision
-    # against the same package set this fleet deploys (upstream tracks
-    # nixos-unstable), and it carries seven robustness fixes not yet
-    # upstreamed — most consequentially a FlareSolverr readiness-probe fix,
-    # without which one slow boot leaves prowlarr-indexer-proxies permanently
-    # unconfigured (systemd cancels it with result 'dependency' and never
-    # re-queues it). See hosts/galactica/nixflix.nix.
+    # at UPSTREAM, not at our zjones-xyz/nixflix-exp fork, and that is the
+    # canary-pattern split rather than an accident: the fork's job is to merge
+    # each upstream revision, prove it against nixos-26.05 in its own CI, and
+    # only then is this lock bumped to the matching upstream rev. The fork
+    # validates; upstream is what actually deploys.
     #
-    # `follows` on nixpkgs is what actually governs galactica's packages: a
-    # NixOS module always evaluates against the *consuming* host's pkgs, so the
-    # fork's own pin only ever affects its own CI. Both agree on 26.05 here by
-    # construction, which is the point.
+    # This did briefly point at the fork, to pick up seven robustness fixes it
+    # carries that upstream has not taken yet. Two things sent it back here:
     #
-    # ⚠ The fork is currently a PRIVATE repo, so every machine that evaluates
-    # this flake (galactica, and the Mac) needs credentials for it — see
-    # hosts/galactica/MANUAL-STEPS.md §11. Making it public removes that
-    # friction entirely and costs nothing: it holds upstream's own MPL-2.0
-    # code, seven bug fixes and a channel pin, and no secrets.
+    #  1. The fork is a PRIVATE repo, so CI — a bare actions/checkout runner
+    #     whose token is scoped to this repository — cannot fetch it at all.
+    #     Older Nix reports that inaccessible remote as "Cannot find Git
+    #     revision ... in ref ...", which reads like a stale pin and is not:
+    #     the ref is correct and carries exactly that rev, the runner simply
+    #     has no access. (`allRefs=1` does not help, for the same reason.)
+    #  2. Checked against galactica's actual configuration, not one of those
+    #     seven fixes changes what this host deploys. Every one is either
+    #     confined to the fork's `tests/` tree or gated behind a service this
+    #     host does not enable — jellyfin, seerr, navidrome, flaresolverr and
+    #     recyclarr are all `false` in hosts/galactica/nixflix.nix. They are
+    #     what makes the *canary's* CI reliable, which is where they belong.
+    #
+    # ⚠ The one to remember is the FlareSolverr readiness-probe fix. If
+    # `nixflix.flaresolverr.enable` is ever turned on here while upstream
+    # still lacks it, one slow boot can fail the 30s probe and leave
+    # prowlarr-indexer-proxies permanently unconfigured — systemd cancels it
+    # with result 'dependency' and never re-queues it, so it presents as
+    # indexer proxies that simply never appear. Upstream that fix (or point
+    # back at the fork, public by then) before enabling FlareSolverr.
+    #
+    # `follows` on nixpkgs is what governs galactica's packages either way: a
+    # NixOS module always evaluates against the *consuming* host's pkgs, so
+    # upstream tracking nixos-unstable is irrelevant here — these modules get
+    # this fleet's 26.05 pin, which is exactly what the fork's CI rehearses.
+    #
+    # Pinned to an exact rev rather than tracking `main`, and the rev is not
+    # upstream's tip: `c5b5944` is the revision the canary has actually proven
+    # against 26.05 (zjones-xyz/nixflix-exp#1 is that tree, CI green). Upstream
+    # commits most days, so a bare branch URL would let `nix flake update` pull
+    # an unvalidated revision into the fleet — which is the exact failure the
+    # canary exists to prevent. Bumping this is a deliberate step: merge
+    # upstream into the fork, let its CI prove the result against 26.05, then
+    # move this rev to match. Same rev-pinning shape as the two standalone
+    # nixpkgs inputs below.
     #
     # git+https rather than github: — see the claude-desktop-debian input
     # comment above for why.
-    # ⚠ Pinned to the feature branch, not `main`: the fork's `main` is still
-    # byte-identical to upstream (no 26.05 pin, none of the fixes) because
-    # zjones-xyz/nixflix-exp#1 is open. Drop the `?ref=`/`allRefs` once that
-    # merges — tracking `main` is the intended steady state, and leaving this
-    # pointed at a PR branch means a force-push or a branch deletion breaks
-    # eval.
-    #
-    # `allRefs=1` is not decoration: without it CI failed with "Cannot find
-    # Git revision … in ref …" while this evaluated fine locally. The remote
-    # ref is correct and carries exactly the locked rev — the difference is
-    # the Nix version. Newer Nix (2.35 here) resolves a rev inside a named
-    # ref; the older Nix that cachix/install-nix-action@v27 installs on the
-    # runner fetches that ref too narrowly to see the rev and fails. allRefs
-    # makes the fetch cover every ref, which both versions handle, and is the
-    # remedy Nix's own error message names. Moot once this tracks `main`.
     nixflix = {
-      url = "git+https://github.com/zjones-xyz/nixflix-exp.git?ref=claude/nixflix-galactica-fork-43d4mo&allRefs=1";
+      url = "git+https://github.com/kiriwalawren/nixflix.git?rev=c5b5944791ecbc2a434fbf6d8d95859aee47b3b9&shallow=1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

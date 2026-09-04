@@ -219,20 +219,19 @@
         "vpn-confinement": "vpn-confinement"
       },
       "locked": {
-        "allRefs": true,
-        "lastModified": 1788508682,
-        "narHash": "sha256-HIAaO2tb8Tp0F66gHSEPt5hkhYCOK/XGEXBMRMQqoyg=",
-        "ref": "claude/nixflix-galactica-fork-43d4mo",
-        "rev": "052e6a23ac5baaab492a8f7295183215008278e2",
-        "revCount": 421,
+        "lastModified": 1788467266,
+        "narHash": "sha256-tdYoQgPbcyGdYUfJVhJUzLgXRybqj6U6+BktmTp7GLM=",
+        "ref": "refs/heads/main",
+        "rev": "c5b5944791ecbc2a434fbf6d8d95859aee47b3b9",
+        "shallow": true,
         "type": "git",
-        "url": "https://github.com/zjones-xyz/nixflix-exp.git"
+        "url": "https://github.com/kiriwalawren/nixflix.git"
       },
       "original": {
-        "allRefs": true,
-        "ref": "claude/nixflix-galactica-fork-43d4mo",
+        "rev": "c5b5944791ecbc2a434fbf6d8d95859aee47b3b9",
+        "shallow": true,
         "type": "git",
-        "url": "https://github.com/zjones-xyz/nixflix-exp.git"
+        "url": "https://github.com/kiriwalawren/nixflix.git"
       }
     },
     "nixos-hardware": {
