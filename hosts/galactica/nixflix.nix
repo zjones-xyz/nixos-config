@@ -408,14 +408,26 @@ in
 
       published=""
 
+      # Backoff for the failure paths below. A Proton outage does not stop
+      # this loop — natpmpc simply fails against a black-holed gateway
+      # forever — so a fixed 10s retry writes ~6 journal lines a minute for
+      # the whole outage (~8.6k a day) onto midden. Doubling to a 5-minute
+      # ceiling keeps a short blip responsive while a long one costs ~12
+      # lines an hour. Reset to the floor on every success so a recovered
+      # tunnel is picked up at full speed.
+      backoff_min=10
+      backoff_max=300
+      backoff=$backoff_min
+
       while :; do
         # Both protocols must be mapped and renewed; the TCP reply carries the
         # port we hand to qBittorrent. Proton grants the same number for both.
         natpmpc -a 1 0 udp 60 -g "$GATEWAY" >/dev/null 2>&1 || true
 
         if ! reply=$(natpmpc -a 1 0 tcp 60 -g "$GATEWAY" 2>&1); then
-          echo "natpmpc failed (tunnel still coming up?); retrying" >&2
-          sleep 10
+          echo "natpmpc failed (tunnel down or still coming up?); retrying in ''${backoff}s" >&2
+          sleep "$backoff"
+          backoff=$(( backoff * 2 > backoff_max ? backoff_max : backoff * 2 ))
           continue
         fi
 
@@ -424,10 +436,15 @@ in
           | head -n1)
 
         if [ -z "$port" ]; then
-          echo "no port in natpmpc reply; retrying" >&2
-          sleep 10
+          echo "no port in natpmpc reply; retrying in ''${backoff}s" >&2
+          sleep "$backoff"
+          backoff=$(( backoff * 2 > backoff_max ? backoff_max : backoff * 2 ))
           continue
         fi
+
+        # natpmpc answered with a usable port, so the tunnel is carrying
+        # traffic again — drop straight back to the fast retry.
+        backoff=$backoff_min
 
         # Only talk to qBittorrent when the port actually changed — this loop
         # runs every 45s and the port is usually stable for days.
@@ -452,6 +469,116 @@ in
         sleep 45
       done
     '';
+  };
+
+  # ── ProtonVPN tunnel health check ─────────────────────────────────────────
+  # The gap this closes: `wg.service` is a `Type=oneshot` with
+  # RemainAfterExit, so it builds the namespace, exits, and never looks at the
+  # tunnel again. If Proton goes down *after* boot, systemd keeps reporting it
+  # `active (exited)`, qBittorrent keeps running, and its packets are simply
+  # black-holed by the namespace's wg0 default route. Nothing is logged as an
+  # error and nothing fails — the failure is invisible until someone notices
+  # downloads stopped. (An outage at boot IS loud: wg-up pings the endpoint
+  # five times, exits non-zero, and `BindsTo = wg.service` then keeps
+  # qBittorrent and the sidecar from starting at all.)
+  #
+  # Handshake age, not reachability, is the signal. Proton's gateway is not
+  # guaranteed to answer ICMP, so a failed ping proves nothing; what a live
+  # tunnel cannot fake is a recent WireGuard handshake. The ping is here only
+  # to *generate* the outbound packet that makes WireGuard rekey — its exit
+  # status is deliberately ignored.
+  systemd.services.protonvpn-healthcheck = {
+    description = "Check the ProtonVPN tunnel is still carrying traffic";
+
+    # Not confined: `wg show` is a netlink query needing CAP_NET_ADMIN, which
+    # a DynamicUser inside the namespace does not have. Running as root on the
+    # host and reaching in with `ip netns exec` is simpler than granting caps.
+    # Ordered after wg.service but deliberately NOT bound to it. `BindsTo` +
+    # `after` would make a failed wg.service *cancel* this job with result
+    # 'dependency' — a cancelled job, not a failed unit, so it would never
+    # appear in `systemctl --failed`. That is the same trap the FlareSolverr
+    # comment above documents. Left unbound, a missing namespace fails the
+    # check loudly instead, which is the whole point of having it.
+    after = [ "wg.service" ];
+
+    path = with pkgs; [
+      iproute2
+      wireguard-tools
+      iputils
+      coreutils
+      gawk
+      gnugrep
+    ];
+
+    script = ''
+      set -uo pipefail
+
+      # Distinguish "namespace never came up" from "tunnel went quiet" — the
+      # two have different fixes, and the handshake test below cannot tell
+      # them apart on its own.
+      if ! ip netns list | grep -qw wg; then
+        echo "protonvpn: the wg namespace does not exist — check wg.service" >&2
+        exit 1
+      fi
+
+      # Force one packet into the tunnel. WireGuard only rekeys when it has
+      # something to send, so without this an idle tunnel ages out and reads
+      # as dead. -W 3 doubles as the settling time for the handshake to land
+      # when the gateway does not reply.
+      ip netns exec wg ping -c 1 -W 3 10.2.0.1 >/dev/null 2>&1 || true
+      sleep 2
+
+      # One peer, but take the newest defensively rather than assuming.
+      # Done entirely in awk rather than `sort -rn | head -n1`: NixOS prepends
+      # `set -e` to this script, and with `pipefail` a `head` that closes the
+      # pipe early can SIGPIPE its producer and kill the check with no message
+      # of its own. `|| hs=""` catches the remaining case — the namespace
+      # exists but wg0 does not — so the branch below reports it.
+      hs=$(ip netns exec wg wg show wg0 latest-handshakes \
+        | awk '{ if ($2 > m) m = $2 } END { print m + 0 }') || hs=""
+
+      if [ -z "$hs" ] || [ "$hs" -eq 0 ]; then
+        echo "protonvpn: wg0 has never completed a handshake — tunnel is down" >&2
+        exit 1
+      fi
+
+      age=$(( $(date +%s) - hs ))
+
+      # WireGuard rekeys after 120s of traffic and a session expires at 180s,
+      # so a healthy tunnel — kept warm by the ping above even with no
+      # torrents running — never reads much past 180s. 240s is that ceiling
+      # plus margin, which puts detection about four minutes behind an outage.
+      if [ "$age" -gt 240 ]; then
+        echo "protonvpn: last wg0 handshake was ''${age}s ago (>240s) — tunnel is down" >&2
+        exit 1
+      fi
+
+      echo "protonvpn: tunnel healthy (last handshake ''${age}s ago)"
+    '';
+
+    serviceConfig.Type = "oneshot";
+
+    # ⟨Follow-up: route this to ntfy.⟩ Same reasoning as the identical note in
+    # modules/nixos/smart.nix, and deliberately the same answer: the fleet's
+    # ntfy runs on hopper, nut.nix posts to 127.0.0.1:2586 because it runs on
+    # that host, and the cross-host URL galactica would need has not been
+    # verified from here. A guessed endpoint means alerts that fail silently,
+    # which is worse than alerts that visibly do not exist yet. Until then the
+    # signal is a failed unit: it shows in `systemctl --failed` for as long as
+    # the outage lasts, and clears itself on the first run that passes.
+  };
+
+  systemd.timers.protonvpn-healthcheck = {
+    description = "Periodic ProtonVPN tunnel health check";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      # 3 minutes after boot: past the tunnel coming up, and past the first
+      # handshake the sidecar's own natpmpc call provokes.
+      OnBootSec = "3min";
+      OnUnitActiveSec = "60s";
+      AccuracySec = "10s";
+      Unit = "protonvpn-healthcheck.service";
+    };
   };
 
   # ── sops-nix ──────────────────────────────────────────────────────────────

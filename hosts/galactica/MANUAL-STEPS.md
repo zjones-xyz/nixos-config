@@ -591,6 +591,18 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    network namespace "wg" failed: Operation not permitted`, which reads like
    a broken namespace and isn't. The other three lines are fine unprivileged.
 
+   After that, `protonvpn-healthcheck` is the standing answer to the same
+   question — a timer that reads wg0's last handshake age every 60s and
+   fails the unit once it passes 240s:
+   ```bash
+   systemctl status protonvpn-healthcheck.timer
+   systemctl start protonvpn-healthcheck && journalctl -u protonvpn-healthcheck -n 5
+   ```
+   A tunnel that dies *after* boot is otherwise silent: `wg.service` is a
+   `RemainAfterExit` oneshot, so it keeps reporting `active (exited)` while
+   qBittorrent's traffic is black-holed. The check turns that into a unit
+   in `systemctl --failed`, which clears itself on the first run that passes.
+
    ⚠ `-4` is not decoration. Without it curl inside the namespace prefers
    IPv6 and reports a `2a02:6ea0:…` Proton address — reassuring, but it
    answers the wrong question: BitTorrent peer connections and the NAT-PMP
