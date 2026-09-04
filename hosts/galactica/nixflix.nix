@@ -482,9 +482,10 @@ in
     # comment above; rotating this value later does not change the password.
     "nixflix/navidromePassword" = { };
 
-    # Shared *arr web UI password (username `admin` on all three). One value
-    # rather than three: single-user homelab, all three equally trusted, and
-    # three near-identical secrets is friction without a security gain.
+    # Shared *arr web UI password (username `admin` on all five — Prowlarr,
+    # Sonarr, sonarr-anime, Radarr, Lidarr). One value rather than five:
+    # single-user homelab, all of them equally trusted, and five
+    # near-identical secrets is friction without a security gain.
     "nixflix/arrPassword" = { };
 
     # qBittorrent's API password, in plain text — consumed both by the *arrs
