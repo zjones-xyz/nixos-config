@@ -9,6 +9,24 @@
   home.username = "z";
   home.homeDirectory = "/home/z";
 
+  # sops' age identity for this workstation — the same arrangement as
+  # hosts/serenity/home.nix, and for the same reason: without it sops probes
+  # its default locations (~/.ssh/id_ed25519 and friends), finds this user's
+  # SSH key, and fails with "identity did not match any of the recipients"
+  # because that key is not one.
+  #
+  # Deliberately a SEPARATE key from serenity's rather than a copy of it
+  # (`&admin-pegasus` in .sops.yaml, generated with `age-keygen` here). Two
+  # identities mean retiring or re-imaging this box is one `sops updatekeys`
+  # away, instead of a rotation of the admin key across every host and file.
+  #
+  # ⚠ NOT the same thing as `&pegasus` in .sops.yaml — that is this machine's
+  # *host* key, used by sops-nix at activation to read secrets/pegasus.yaml,
+  # and readable only by root. This one is the user-level editing identity.
+  home.sessionVariables = {
+    SOPS_AGE_KEY_FILE = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
+  };
+
   # Host-specific rebuild aliases (layered on top of the shared portable ones
   # from modules/home/common.nix's home.shellAliases).
   #
