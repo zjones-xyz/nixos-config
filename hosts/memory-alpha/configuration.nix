@@ -42,6 +42,7 @@ in
     ../../modules/nixos/arcane.nix
     ../../modules/nixos/nut-client.nix
     ../../modules/nixos/luks-remote-unlock.nix
+    ./borgmatic.nix
   ];
 
   networking.hostName = "memory-alpha";
