@@ -26,6 +26,7 @@
     ../../modules/nixos/arcane-agent.nix
     ../../modules/nixos/scrutiny-collector.nix
     ./borgmatic.nix
+    ./nixflix.nix
   ];
 
   networking.hostName = "galactica";

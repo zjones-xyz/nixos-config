@@ -312,7 +312,9 @@ against the source, plus the Unraid flash+config insurance into
 **Still to do:**
 
 1. [x] Sweep the media datasets into `tank/media_staging/*` (zfs renames) so
-   nixarr gets a clean `/tank/media`; collections re-enter via *arr imports.
+   the media stack gets a clean library root; collections re-enter via *arr
+   imports. (Said "nixarr" when written — the stack chosen since is nixflix,
+   and the library root landed on `/tank/nixflix_media/media`; see §12.)
    ✅ 2026-09-02 — all seven (8.94 T) staged; `tank/media`/`tank/books` empty.
 2. [x] Retire sidepool *logically*: unmounted + all four LUKS mappers closed
    2026-09-02 — disks are inert (LUKS-closed, nothing references them).
@@ -490,3 +492,97 @@ nameserver fd2e:7702:f2a4::1                                # ← real, NM-gener
 No manual `nameserver` workaround needed anymore. Lesson for the rest of the
 fleet: any `boot.initrd.systemd.services.*` script that calls a non-systemd,
 non-`ip` binary must add that binary to `storePaths` or it silently no-ops.
+
+## 12. The *arr media stack (nixflix) — owner steps before first switch
+
+Declared in `hosts/galactica/nixflix.nix` and wired into the flake, but
+**nothing here activates until the secrets below exist** — sops-nix fails
+activation on a missing secret, so `nrs` will refuse until step 2 is done.
+
+Deliberately a **clean rebuild**: the old Unraid `arr_config` appdata is not
+restored (it stays in `tank/backups/` as insurance only). Indexers, quality
+profiles and download-client settings are re-entered through each service's
+own UI; collections re-enter via *arr imports from `tank/media_staging`
+(§9). Jellyfin and Seerr stay OFF on this host — no GPU, so playback remains
+memory-alpha's job over the §8 NFS mounts.
+
+### The one layout rule that matters
+
+`media/` and `downloads/` must be **plain directories inside a single
+dataset**, not datasets of their own. Hardlinks cannot cross a ZFS dataset
+boundary, and the *arrs hardlink completed downloads into the library — split
+them and nothing errors, imports just silently become full copies (double
+disk for anything seeding, and slow). Do not "tidy up" by creating
+`tank/nixflix_media/downloads` later.
+
+1. [ ] **Create the datasets.**
+   ```bash
+   zfs create tank/nixflix_media
+   mkdir -p /tank/nixflix_media/{media/{tv,movies},downloads}
+   mkdir -p /tank/appdata/nixflix          # inherits appdata's special-vdev placement
+   ```
+   `tank/appdata` already exists (§9/§10) and is forced onto the special
+   vdev's SSD mirror — the *arr databases live there deliberately, per
+   DESIGN.md naming them among the genuinely irreplaceable data.
+
+2. [ ] **Add the secrets** — `sops secrets/galactica.yaml`, all under a
+   `nixflix:` key:
+
+   | Secret | How to produce it |
+   |---|---|
+   | `protonWgConf` | The whole wg-quick file from Proton's portal, as a multi-line YAML value. ⚠ Must be a **P2P server that supports port forwarding**, or the NAT-PMP sidecar below has nothing to map. |
+   | `prowlarrApiKey`, `sonarrApiKey`, `radarrApiKey` | `openssl rand -hex 16` each |
+   | `sabnzbdApiKey`, `sabnzbdNzbKey` | `openssl rand -hex 16` each |
+   | `arrPassword` | Any strong password — shared web-UI login (`admin`) for all three *arrs |
+   | `qbittorrentPassword` | Any strong password — **plain text**, and must match the hash in step 3 |
+
+3. [ ] **Set qBittorrent's own WebUI credentials.** The `qbittorrentPassword`
+   secret is what the *arrs and the NAT-PMP sidecar authenticate *with*; it
+   does not set qBittorrent's password. Generate the hash:
+   ```bash
+   nix run git+https://codeberg.org/feathecutie/qbittorrent_password -- --password '<the same password>'
+   ```
+   then add to `nixflix.nix` under `torrentClients.qbittorrent`:
+   ```nix
+   serverConfig.Preferences.WebUI = {
+     Username = "admin";
+     Password_PBKDF2 = "@ByteArray(<output from above>)";
+   };
+   ```
+   ⚠ If the hash and the secret disagree, every *arr grab fails
+   authentication and the sidecar never publishes a port — and neither
+   failure is loud.
+
+4. [ ] **Give this host credentials for the fork.** `zjones-xyz/nixflix-exp`
+   is private, so galactica (and the Mac, for eval) need read access to it —
+   a deploy key, or switch the flake input to `git+ssh://` and use the host
+   key. **Making the repo public removes this step entirely** and costs
+   nothing: it holds upstream's MPL-2.0 code, seven bug fixes and a channel
+   pin, no secrets.
+
+5. [ ] **Then switch**, and verify the pieces that can only be checked live:
+   ```bash
+   systemctl status wg.service qbittorrent sabnzbd sonarr radarr prowlarr
+   ip netns exec wg curl -s ifconfig.me        # ← Proton's IP, NOT the house IP
+   curl -s ifconfig.me                          # ← the house IP (host is untunnelled)
+   journalctl -u protonvpn-natpmp -f            # ← "published forwarded port NNNNN"
+   ```
+   The second and third lines together are the kill-switch check: torrent
+   traffic leaves via Proton while NFS/SSH/monitoring stay on the LAN.
+
+6. [ ] **Import the staged media** — point Sonarr/Radarr at
+   `tank/media_staging/*` and run their import, which hardlinks into
+   `/tank/nixflix_media/media/{tv,movies}`. Only destroy the staging datasets
+   once the libraries look right; that is the last undo.
+
+7. [ ] **Simplify the flake input** once zjones-xyz/nixflix-exp#1 merges:
+   drop the `?ref=claude/nixflix-galactica-fork-43d4mo` so the input tracks
+   the fork's `main`. Leaving it pinned to a PR branch means a force-push or
+   branch deletion breaks evaluation fleet-wide.
+
+**Not enabled, deliberately, each a few lines when wanted:** `lidarr`
+(SHARES.md marks `music` 🛡 Protected — a curated library, so automating it
+is its own decision), `sonarr-anime`, and `recyclarr` (TRaSH profile sync).
+SABnzbd is deliberately **outside** the VPN — usenet is already TLS to a paid
+provider, so the tunnel would only cap throughput; `nixflix.nix` says so at
+the option.

@@ -78,6 +78,39 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # nixflix (used on galactica) — the declarative *arr media stack. Points
+    # at our fork rather than upstream `kiriwalawren/nixflix` for two reasons:
+    # the fork pins nixpkgs to nixos-26.05 so its CI proves each revision
+    # against the same package set this fleet deploys (upstream tracks
+    # nixos-unstable), and it carries seven robustness fixes not yet
+    # upstreamed — most consequentially a FlareSolverr readiness-probe fix,
+    # without which one slow boot leaves prowlarr-indexer-proxies permanently
+    # unconfigured (systemd cancels it with result 'dependency' and never
+    # re-queues it). See hosts/galactica/nixflix.nix.
+    #
+    # `follows` on nixpkgs is what actually governs galactica's packages: a
+    # NixOS module always evaluates against the *consuming* host's pkgs, so the
+    # fork's own pin only ever affects its own CI. Both agree on 26.05 here by
+    # construction, which is the point.
+    #
+    # ⚠ The fork is currently a PRIVATE repo, so every machine that evaluates
+    # this flake (galactica, and the Mac) needs credentials for it — see
+    # hosts/galactica/MANUAL-STEPS.md §11. Making it public removes that
+    # friction entirely and costs nothing: it holds upstream's own MPL-2.0
+    # code, seven bug fixes and a channel pin, and no secrets.
+    #
+    # git+https rather than github: — see the claude-desktop-debian input
+    # comment above for why.
+    # ⚠ Pinned to the feature branch, not `main`: the fork's `main` is still
+    # byte-identical to upstream (no 26.05 pin, none of the fixes) because
+    # zjones-xyz/nixflix-exp#1 is open. Drop the `?ref=` once that merges —
+    # tracking `main` is the intended steady state, and leaving this pointed
+    # at a PR branch means a force-push or a branch deletion breaks eval.
+    nixflix = {
+      url = "git+https://github.com/zjones-xyz/nixflix-exp.git?ref=claude/nixflix-galactica-fork-43d4mo";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # A second, standalone nixpkgs — deliberately NOT inputs.nixpkgs.follows,
     # unlike every other input above — pinned only to pull a newer
     # `orca-slicer` (used on pegasus) than the one in the main `nixpkgs`
@@ -103,7 +136,7 @@
     nixpkgs-bambu-studio.url = "git+https://github.com/NixOS/nixpkgs.git?rev=13b979d75662827615c1de6dd22f87e6296ba71d&shallow=1";
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, niri-flake, nixpkgs-orca-slicer, nixpkgs-bambu-studio, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, niri-flake, nixflix, nixpkgs-orca-slicer, nixpkgs-bambu-studio, ... }:
   {
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
@@ -186,6 +219,13 @@
           ./hosts/galactica/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
+          # Brings in nixflix's own modules AND vpn-confinement (nixflix's
+          # nixosModules.default imports it), which is what provides the
+          # `vpnNamespaces` options and the per-service `vpnConfinement`
+          # option that hosts/galactica/nixflix.nix uses for the NAT-PMP
+          # sidecar. The stack's own configuration lives in that file, which
+          # configuration.nix imports.
+          nixflix.nixosModules.default
         ];
       };
 

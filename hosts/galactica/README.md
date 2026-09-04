@@ -7,7 +7,7 @@ metal for years; now bare-metal NixOS. Root is LUKS + btrfs on the NVMe
 **built live and cold-boot-verified 2026-09-01**, with the Unraid data copied
 back from the `sidepool` staging pool on 2026-09-02. See `MANUAL-STEPS.md`
 for what's still outstanding (NUT/UPS, Beszel agent, NFS re-export cutover,
-the nixarr media import from `tank/media_staging`).
+the nixflix media stack and its import from `tank/media_staging`).
 
 ## The five documents
 
