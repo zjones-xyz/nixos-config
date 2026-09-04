@@ -52,22 +52,17 @@ in
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # ── aarch64 emulation (build host for the Pis) ──────────────────────────────
-  # Registers QEMU user-mode emulation for aarch64-linux via binfmt_misc, so
-  # this x86_64 box can build aarch64 derivations. The Mac's linux-builder VM
-  # is broken on macOS 26, and the Pis themselves are slow, so memory-alpha
-  # becomes the aarch64 build host for hopper/hamilton.
-  #
-  # Use it as a remote build host when deploying a Pi:
-  #   nixos-rebuild switch --flake .#hopper \
-  #     --target-host z@hopper.internal \
-  #     --build-host z@memory-alpha.internal \
-  #     --use-remote-sudo
-  #
-  # Emulated builds are slower than native, but memory-alpha is far faster than
-  # a Pi 4 even with the QEMU overhead — and it spares the Pi's SD card the
-  # write churn of compiling.
-  boot.binfmt.emulatedSystems = [ "aarch64-linux" ];
+  # ── aarch64 emulation — MOVED to pegasus (2026-08-31) ───────────────────────
+  # memory-alpha used to be the aarch64 build host for hopper/hamilton
+  # (QEMU binfmt emulation, `boot.binfmt.emulatedSystems`) — see this file's
+  # git history for the original writeup, and HARDWARE-MAP.md §"swap" for why
+  # that workload mattered enough here to need a swap-OOM fix of its own.
+  # Colmena now delegates that build role to pegasus instead (it has the most
+  # CPU/RAM in the fleet) via colmena.nix's `meta.machinesFile` — see
+  # hosts/pegasus/configuration.nix's own aarch64-emulation section. Nothing
+  # in this repo still expects memory-alpha to build aarch64 derivations; the
+  # manual `--build-host z@memory-alpha.internal` fallback documented in
+  # hopper/hamilton's DEPLOY.md has likewise been repointed at pegasus.
 
   # Legacy iptables kernel modules required by Tailscale's kernel-mode router
   # (TS_USERSPACE=false). NixOS defaults to nftables but does not load these

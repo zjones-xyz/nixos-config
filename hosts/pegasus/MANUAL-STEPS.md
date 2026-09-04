@@ -615,3 +615,31 @@ and reading the packaging, not from a real login.
    Whether that session gets an empty keyring each login or inherits the
    already-running daemon from the shared user manager wasn't determined —
    check with step 2 from inside that session if it matters.
+
+## 20. Colmena — pegasus as the fleet's aarch64 remote builder
+
+Added when `colmena.nix` (repo root) landed, moving the aarch64-emulation
+build-host role from memory-alpha to pegasus. `nix flake check` and a real
+`colmena build --on <host>` both evaluate cleanly, but the following were
+not verified against the physical machine and its actual SSH/network setup:
+
+1. [ ] **Confirm the real core count** and adjust `max-jobs` in
+   `colmena-builders.machines` (currently a conservative `4`) to match — it's
+   currently a guess, not read off the Ryzen's actual thread count.
+2. [ ] **Run a real `colmena apply --on hopper`** (or `hamilton`) from
+   pegasus itself, end to end, once this lands — everything here was
+   validated by evaluating/building the hive in a sandbox with no real SSH
+   access to the fleet, not by an actual deploy.
+3. [ ] **Confirm `nix.settings.trusted-users` actually satisfies the
+   `meta.machinesFile` requirement** when `colmena apply` is run as `z` on
+   pegasus — a sandboxed dry run reproduced Nix's
+   `ignoring the client-specified setting 'builders', because ... you are
+   not a trusted user` warning for an untrusted user, which is the failure
+   mode `trusted-users = [ "root" "z" ]` (`modules/nixos/common.nix`) is
+   meant to prevent, but that fix itself was only reasoned through, not
+   exercised against a real sshd/nix-daemon pair.
+4. [ ] **If `colmena apply` is ever run from serenity instead of pegasus**,
+   it needs its own `nix.settings.trusted-users` — Determinate Nix there has
+   `nix.enable = false` (`hosts/serenity/configuration.nix`), so this repo
+   can't set it declaratively. Configure it out-of-band, or just always run
+   `colmena apply` from pegasus.

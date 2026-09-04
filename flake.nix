@@ -178,13 +178,16 @@
       # profile plus nixpkgs' generic sd-image-aarch64 builder (mainline kernel,
       # cached — see the nixos-hardware input comment above).
       #
-      # Bootstrap: build the SD image on memory-alpha (aarch64 via binfmt) and
+      # Bootstrap: build the SD image on pegasus (aarch64 via binfmt) and
       # flash it — boots straight into this config. See hosts/hopper/DEPLOY.md.
       #   nix build .#nixosConfigurations.hopper.config.system.build.sdImage
-      # Routine deploys, with memory-alpha as the aarch64 build host:
+      # Routine deploys: `colmena apply --on hopper` (see colmena.nix) is now
+      # the standard path — it delegates the aarch64 build to pegasus via
+      # meta.machinesFile automatically. The manual fallback, with pegasus as
+      # the aarch64 build host:
       #   nixos-rebuild switch --flake .#hopper \
       #     --target-host z@hopper.internal \
-      #     --build-host z@memory-alpha.internal --use-remote-sudo
+      #     --build-host z@pegasus.internal --use-remote-sudo
       hopper = nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
         specialArgs = { inherit self; };
@@ -201,13 +204,16 @@
       # Same approach as hopper: nixos-hardware's rpi-3 profile plus nixpkgs'
       # sd-image-aarch64 builder (SD-card boot).
       #
-      # Bootstrap: build the SD image on memory-alpha (aarch64 via binfmt) and
+      # Bootstrap: build the SD image on pegasus (aarch64 via binfmt) and
       # flash it — boots straight into this config. See hosts/hamilton/DEPLOY.md.
       #   nix build .#nixosConfigurations.hamilton.config.system.build.sdImage
-      # Routine deploys, with memory-alpha as the aarch64 build host:
+      # Routine deploys: `colmena apply --on hamilton` (see colmena.nix) is now
+      # the standard path — it delegates the aarch64 build to pegasus via
+      # meta.machinesFile automatically. The manual fallback, with pegasus as
+      # the aarch64 build host:
       #   nixos-rebuild switch --flake .#hamilton \
       #     --target-host z@hamilton.internal \
-      #     --build-host z@memory-alpha.internal --use-remote-sudo
+      #     --build-host z@pegasus.internal --use-remote-sudo
       hamilton = nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
         specialArgs = { inherit self; };
@@ -233,6 +239,22 @@
           ./hosts/galactica/live-iso.nix
         ];
       };
+    };
+
+    # ── Colmena ─────────────────────────────────────────────────────────────
+    # Deployment layer on top of the `nixosConfigurations` above — see
+    # colmena.nix for the hive itself (per-host `deployment.targetHost` and
+    # the aarch64-via-pegasus distributed-build wiring — plus the
+    # not-yet-active galactica LUKS-locked exclusion tag, staged there ready
+    # for when galactica gets a real `nixosConfigurations.galactica`) and
+    # colmena-builders.machines for the build delegation. `nix flake check`
+    # does not evaluate this output (colmena isn't a recognized flake output
+    # type to Nix itself, just a convention the `colmena` CLI looks for) —
+    # validate hive changes with `colmena build --on <host>` instead.
+    colmena = import ./colmena.nix {
+      inherit self nixpkgs home-manager sops-nix nixos-hardware
+        dank-material-shell plasma-manager niri-flake claude-desktop-debian
+        nixpkgs-orca-slicer nixpkgs-bambu-studio;
     };
 
     # ── Darwin (macOS) ──────────────────────────────────────────────────────

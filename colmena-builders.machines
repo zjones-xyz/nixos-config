@@ -1,0 +1,19 @@
+# Nix "machines" file (the classic /etc/nix/machines format), read by
+# colmena.nix's `meta.machinesFile`. One builder per line:
+#
+#   <ssh-uri> <system-types> <ssh-key> <max-jobs> <speed-factor> <supported-features> <mandatory-features>
+#
+# - ssh-key is "-": use whatever SSH already resolves for this connection
+#   (agent / ~/.ssh/config), not a hardcoded path — the machine actually
+#   running `colmena apply` varies (pegasus itself, or serenity), and both
+#   already have a key authorized on pegasus via modules/nixos/common.nix's
+#   fleet-wide authorized_keys list.
+# - system-types is aarch64-linux ONLY: pegasus is a native x86_64-linux
+#   builder for everything else already (it's the box `colmena apply` is
+#   most likely run from, or is itself in the fleet), so the only thing worth
+#   forwarding here is hopper/hamilton's aarch64 builds, via the QEMU binfmt
+#   emulation registered in hosts/pegasus/configuration.nix.
+# - max-jobs is 4 — ⚠ NOT CONFIRMED against pegasus's actual core count, just
+#   a conservative starting point. Bump it once you know the Ryzen's real
+#   thread count; see hosts/pegasus/HARDWARE-MAP.md.
+ssh://z@pegasus.internal aarch64-linux - 4 1 - -

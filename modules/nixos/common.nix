@@ -11,6 +11,15 @@
     settings = {
       experimental-features = [ "nix-command" "flakes" ];
       auto-optimise-store = true;
+      # Needed for Colmena's distributed-build delegation to pegasus
+      # (colmena.nix's `meta.machinesFile`) — Nix refuses to honor a
+      # `--builders`/machines-file override for a non-trusted user, so
+      # whichever fleet host `colmena apply` gets run from (most likely
+      # pegasus itself) needs `z` trusted locally to even attempt the
+      # aarch64-to-pegasus forwarding for hopper/hamilton. Not a real
+      # escalation in practice — `z` already has passwordless sudo and
+      # `docker` group membership fleet-wide, both already root-equivalent.
+      trusted-users = [ "root" "z" ];
     };
     gc = {
       automatic = true;
