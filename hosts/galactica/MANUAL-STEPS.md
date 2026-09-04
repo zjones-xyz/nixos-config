@@ -515,7 +515,7 @@ them and nothing errors, imports just silently become full copies (double
 disk for anything seeding, and slow). Do not "tidy up" by creating
 `tank/nixflix_media/downloads` later.
 
-1. [ ] **Create the one dataset.** That is the whole step — one command:
+1. [x] **Create the one dataset.** That is the whole step — one command:
    ```bash
    sudo zfs create tank/nixflix_media
    ```
@@ -537,7 +537,7 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    different filesystems from each other only if you later split them, but
    more importantly loses the dataset's own properties and snapshot boundary.
 
-2. [ ] **Add the secrets** — `sops secrets/galactica.yaml`, all under a
+2. [x] **Add the secrets** — `sops secrets/galactica.yaml`, all under a
    `nixflix:` key:
 
    | Secret | How to produce it |
@@ -559,7 +559,7 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    bytes for the hex class, so a smaller read silently yields a *short*
    key rather than failing.
 
-3. [ ] **Check qBittorrent's WebUI hash against the secret.** The
+3. [x] **Check qBittorrent's WebUI hash against the secret.** The
    `qbittorrentPassword` secret is what the *arrs and the NAT-PMP sidecar
    authenticate *with*; qBittorrent's own login is set separately, by
    `serverConfig.Preferences.WebUI.Password_PBKDF2` in `nixflix.nix`. That
@@ -577,7 +577,7 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    authentication and the sidecar never publishes a port — and neither
    failure is loud. Regenerate *both together* or neither.
 
-4. [ ] **Then switch**, and verify the pieces that can only be checked live:
+4. [x] **Then switch**, and verify the pieces that can only be checked live:
    ```bash
    systemctl status wg.service qbittorrent sabnzbd sonarr sonarr-anime radarr lidarr prowlarr flaresolverr navidrome
    sudo ip netns exec wg curl -s -4 ifconfig.me  # ← Proton's IP, NOT the house IP
