@@ -146,6 +146,13 @@ in
   #
   # The package unit's Nice=19 / CPUSchedulingPolicy=batch / IOSchedulingClass
   # tuning is deliberately left intact — right for a box that also serves media.
+  # 01:30 nightly instead of the packaged unit's midnight. OnCalendar is a
+  # systemd LIST directive, so a drop-in ADDS to the packaged value rather than
+  # replacing it — the leading "" resets it first, or the timer fires twice.
+  # Same reset mechanic as LoadCredentialEncrypted below. RandomizedDelaySec=10m
+  # and Persistent=true are left to the package.
+  systemd.timers.borgmatic.timerConfig.OnCalendar = [ "" "01:30" ];
+
   systemd.services.borgmatic.serviceConfig = {
     LoadCredentialEncrypted = lib.mkForce [ "" ];
     PrivateDevices = lib.mkForce false;
