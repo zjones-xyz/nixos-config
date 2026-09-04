@@ -8,16 +8,16 @@
 # anywhere else. Same shape as hosts/pegasus/borgmatic.nix (path-driven, no ZFS
 # hook: this host is btrfs), not galactica's property-driven config.
 #
-# ⚠ Gated OFF until the BorgBase repo and the two sops secrets exist — turning
-# it on before the secret VALUES are in secrets/memory-alpha.yaml makes sops-nix
-# activation fail. See the checklist at the bottom of this file.
+# The `enabled` switch below gates the whole module: while false it contributes
+# nothing at all, so the sops secrets are not declared and a switch before their
+# values exist cannot fail activation.
 
 let
   # ⚠ THE one switch. false = this module contributes nothing at all (important:
   # the sops secrets below are only declared when enabled, so a switch before
   # their values exist in secrets/memory-alpha.yaml cannot fail activation).
-  # Flip to true once the bring-up checklist at the bottom is done.
-  enabled = false;
+  # Live since 2026-09-04.
+  enabled = true;
 
   repoLabel = "memory-alpha";
 
