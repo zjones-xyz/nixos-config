@@ -55,13 +55,9 @@
     LC_TIME           = "en_US.UTF-8";
   };
 
-  # ── Terminal terminfo for the whole fleet ───────────────────────────────────
-  # Installs the terminfo entries — not the emulators themselves, just the
-  # compiled terminfo (a few KB each) — for kitty/wezterm/alacritty/foot/etc.,
-  # so SSHing *into* any fleet host from a modern terminal doesn't hit
-  # "'xterm-kitty': unknown terminal type" the moment anything pages (git log,
-  # systemctl, less). A handful of tiny cached derivations; nothing at runtime.
-  # Hit live on galactica 2026-09-01, which is what prompted this.
+  # Terminfo entries only (a few KB each), not the emulators — so SSHing into a
+  # fleet host from kitty/wezterm/etc. doesn't hit "unknown terminal type" the
+  # moment anything pages.
   environment.enableAllTerminfo = true;
 
   # ── FHS-style shebangs ───────────────────────────────────────────────────────
@@ -115,10 +111,25 @@
     wget
     curl
     htop
+    screen
     vim
     age
     ssh-to-age
     sops
+
+    # Edit this host's own secrets/<host>.yaml using its SSH host key as the age
+    # identity: `sops-hostkey secrets/galactica.yaml`. The key is root-only, so
+    # plain `sops` never finds it.
+    #
+    # ⚠ Not sops's own SOPS_AGE_SSH_PRIVATE_KEY_FILE — that path derives no
+    # usable identity from an ed25519 key on this sops build. Convert it
+    # ourselves, as sops-nix does at boot. The trailing `sops-hostkey` is
+    # argv[0]; without it `bash -c` swallows the first argument.
+    (writeShellScriptBin "sops-hostkey" ''
+      exec sudo env EDITOR="$EDITOR" ${bash}/bin/bash -c \
+        'SOPS_AGE_KEY=$(${ssh-to-age}/bin/ssh-to-age -private-key < /etc/ssh/ssh_host_ed25519_key) exec ${sops}/bin/sops "$@"' \
+        sops-hostkey "$@"
+    '')
   ];
 
   services.openssh = {

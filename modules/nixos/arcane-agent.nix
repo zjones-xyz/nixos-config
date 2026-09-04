@@ -24,7 +24,10 @@ in
 
     managerUrl = lib.mkOption {
       type = lib.types.str;
-      example = "https://arcane.memory-alpha.zjones.dev";
+      # Defaults to the fleet manager (modules/nixos/arcane.nix on memory-alpha,
+      # behind Traefik), so an agent host normally sets only enable + tokenFile —
+      # same shape as beszel-agent.nix's hubUrl. Overridable per host.
+      default = "https://arcane.monitor.zjones.dev";
       description = "URL of the Arcane manager this agent reports to.";
     };
 
@@ -40,14 +43,14 @@ in
 
     image = lib.mkOption {
       type = lib.types.str;
-      default = "ghcr.io/getarcaneapp/arcane-headless:v2.3.2";
+      default = "ghcr.io/getarcaneapp/arcane-headless:v2.10.1";
       description = ''
-        Pinned Arcane agent image. As of v2.3.2 the published manifest only
-        covers amd64 + riscv64 — arm64 support exists in newer `next`
-        pre-release builds but hasn't reached a stable tag yet (confirmed by
-        inspecting the GHCR manifest list directly, not assumed). Any
-        aarch64 host needs a build that actually publishes an arm64 variant;
-        re-check before pointing a Pi-class host at a pinned tag here.
+        Pinned Arcane agent image. Keep this in lockstep with memory-alpha's
+        manager tag (modules/nixos/arcane.nix) — the edge-agent protocol tracks
+        the manager release, so a mismatched agent can fail to attach. As of
+        v2.10.1 the manifest publishes arm64 alongside amd64 (the old v2.3.2
+        amd64/riscv64-only limitation is gone), so Pi-class hosts can share this
+        tag; still re-check the GHCR manifest before pinning a new tag.
       '';
     };
   };

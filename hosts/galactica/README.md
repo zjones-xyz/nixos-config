@@ -1,15 +1,13 @@
 # galactica — Tower's NixOS identity
 
-**Supermicro X9SCM-F, Xeon E3-1230 v2, 32 GB.** Currently running Unraid 7.3.2
-on bare metal, as it has for years. The plan is to replace that with bare-metal
-NixOS running SnapRAID + mergerfs.
-
-⚠ **There is no `configuration.nix` in this directory, and that is deliberate.**
-This host is documented before it is configured, because almost every line of its
-eventual config is downstream of a storage layout that has not been decided yet.
-See `DECISIONS.md` decision 3. Consequently there is no
-`nixosConfigurations.galactica` in the flake and no `secrets/galactica.yaml`
-staging in `.sops.yaml` — both land together with the config.
+**Supermicro X9SCM-F, Xeon E3-1230 v2, 32 GB.** Ran Unraid 7.3.2 on bare
+metal for years; now bare-metal NixOS. Root is LUKS + btrfs on the NVMe
+(fleet-standard); the media array is `tank` — ZFS RAIDZ1 across the four
+12 TB spinners plus a 3-way-mirror SSD special vdev, LUKS underneath —
+**built live and cold-boot-verified 2026-09-01**, with the Unraid data copied
+back from the `sidepool` staging pool on 2026-09-02. See `MANUAL-STEPS.md`
+for what's still outstanding (NUT/UPS, Beszel agent, NFS re-export cutover,
+the nixarr media import from `tank/media_staging`).
 
 ## The five documents
 
@@ -40,14 +38,12 @@ reads like a MITM attack. `DECISIONS.md` §1.
 hopper rather than via the hostname, so the fleet name and the service name stay
 decoupled. `DECISIONS.md` §2.
 
-## Blocking item
+## Doc status
 
-**The storage layout, which has not caught up to the data.** `SHARES.md` §5 now
-puts a tier on all 34 shares — twenty-two owner-confirmed, twelve still
-proposals. That was the blocking item and it is closed.
-
-What blocks now is `DESIGN.md` §5: it was written around a **two-way** split and
-faces **eight** tiers, it provides no versioning (which the Critical tier
-requires), and Protected turned out to span both the array and the SSD pools —
-so it is a policy rather than a place, and needs implementing in two mechanisms.
-`DECISIONS.md` `## Still open` has the detail.
+The storage sections of `DESIGN.md`/`DECISIONS.md` describe the retired
+SnapRAID + mergerfs plan and were **reconciled 2026-09-02 (PR #87)**: each
+carries a superseded-banner pointing at what was actually built (the ZFS
+`tank` array above), with the original prose kept as provenance. The
+platform-level verdicts (why bare metal, why not VFIO) still stand. Read the
+banners before trusting any storage detail in those two files;
+`MANUAL-STEPS.md` §9 is the build record.

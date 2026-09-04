@@ -174,6 +174,21 @@
         ];
       };
 
+      # galactica — Tower, bare-metal NixOS (replacing Unraid). Root: LUKS +
+      # btrfs on the NVMe, installed via hosts/galactica/disko.nix (2026-08-31).
+      # The RAIDZ1 media array is a separate, later addition once it's built
+      # live — not part of this closure yet. See hosts/galactica/README.md
+      # and MANUAL-STEPS.md for what's still outstanding.
+      galactica = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = { inherit self; };
+        modules = [
+          ./hosts/galactica/configuration.nix
+          home-manager.nixosModules.home-manager
+          sops-nix.nixosModules.sops
+        ];
+      };
+
       # hopper — Raspberry Pi 4, network-core node. Uses nixos-hardware's rpi-4
       # profile plus nixpkgs' generic sd-image-aarch64 builder (mainline kernel,
       # cached — see the nixos-hardware input comment above).

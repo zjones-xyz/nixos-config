@@ -27,6 +27,23 @@
 
   networking.hostName = "galactica-live";
 
+  # Silences an eval warning: the base installer profile pulls in ZFS
+  # support generically (so the installer can handle ZFS targets), which
+  # defaults `forceImportRoot` to `true`. This ISO has no ZFS root of its
+  # own to import, so there's nothing to force — same setting galactica's
+  # real configuration.nix already sets, for the same reason.
+  boot.zfs.forceImportRoot = false;
+
+  # Packaging `disko` directly (below) didn't fully sidestep needing flakes
+  # the way it looked like it would — its CLI wrapper shells out through the
+  # new-style `nix` commands internally regardless of how it's invoked, and
+  # this installer profile has neither `nix-command` nor `flakes` on by
+  # default. Discovered 2026-08-31 running disko live rather than caught
+  # ahead of time — the workaround at that moment was
+  # `NIX_CONFIG="extra-experimental-features = nix-command flakes"` on the
+  # invocation; this makes it unnecessary on the next rebuild.
+  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+
   # lsiutil/storcli/megacli (below) are all unfree — Broadcom/Avago vendor
   # tooling, same as every other proprietary LSI utility.
   nixpkgs.config.allowUnfree = true;
@@ -91,6 +108,18 @@
     lsiutil
     storcli
     megacli
+
+    # This ISO now also drives the actual install (MANUAL-STEPS.md), not
+    # just hardware diagnosis — `disko` packaged directly rather than `nix
+    # run github:nix-community/disko`, which needs flakes enabled (this
+    # profile doesn't have them on) and a live GitHub fetch at the single
+    # least-recoverable step in the whole migration. The repo itself gets
+    # onto this ISO via `rsync` from pegasus/serenity (which already have
+    # standing SSH access here — see authorizedKeys above), not a git clone,
+    # so this ISO never needs outbound GitHub credentials. `git` is still
+    # included for convenience once the repo's local.
+    disko
+    git
 
     (pkgs.writeShellScriptBin "capture-hardware-profile" ''
       set -euo pipefail
