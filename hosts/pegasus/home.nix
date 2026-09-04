@@ -41,6 +41,23 @@
     ipmi-tower = ''~/nixos-config/scripts/ipmi-remote.sh run towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-open-tty = ''~/nixos-config/scripts/ipmi-remote.sh console towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-set-bios-next-boot = ''~/nixos-config/scripts/ipmi-remote.sh bios-next-boot towerbmc.internal "op://System Keys/tower ipmi/password"'';
+    # unlock-tower (2026-08-31): same generic scripts/luks-unlock-remote.sh
+    # binding as serenity's unlock-pegasus/unlock-memory-alpha, but carried
+    # on both machines like the ipmi-tower-* trio above rather than just
+    # serenity — Tower/galactica is the one host both pegasus's and
+    # serenity's initrd SSH keys are actually authorized on (this session's
+    # install hit that directly: pegasus unlocked it once, serenity another
+    # time), so neither machine being down should block recovering it.
+    # "tower", not "galactica", to match every other alias for this host
+    # (ipmi-tower-*, towerbmc.internal) — the fleet name and the
+    # service/physical-box name are deliberately decoupled (DECISIONS.md §2),
+    # and these aliases are about the physical box.
+    unlock-tower = ''~/nixos-config/scripts/luks-unlock-remote.sh tower.internal "op://System Keys/tower luks/password"'';
+    # unlock-memory-alpha (2026-09-02): mirror of serenity's alias, now that the
+    # shared luks-remote-unlock.nix module authorizes *both* admin keys in
+    # memory-alpha's initrd (previously serenity-only) — so pegasus can recover
+    # it too when serenity's down. `~/nixos-config` path, not serenity's ~/Code.
+    unlock-memory-alpha = ''~/nixos-config/scripts/luks-unlock-remote.sh memory-alpha.internal "op://System Keys/memory-alpha luks/password"'';
     dms-settings-snapshot = "~/nixos-config/scripts/dms-settings.sh snapshot";
     dms-settings-restore = "~/nixos-config/scripts/dms-settings.sh restore";
     dms-settings-diff = "~/nixos-config/scripts/dms-settings.sh diff";
@@ -60,8 +77,6 @@
     google-chrome
     firefox
     vivaldi
-    _1password-gui
-    _1password-cli
     claude-code
 
     discord
@@ -116,6 +131,8 @@
     # See hosts/galactica/PLATFORM.md §2 for the invocations and the
     # FreeIPMI-not-ipmitool rationale.
     freeipmi
+
+    expect
 
     # Desktop GUI for Borg.
     vorta
@@ -190,7 +207,9 @@
 
     # ── Found on Serenity's /Applications, not yet replicated (2026-07-12) ────
     calibre # ebook library management
-    makemkv # disc ripping, pairs with the jellyfin/vlc media stack
+    # makemkv disabled 2026-08-25: makemkv.com origin returning Cloudflare 525
+    # (SSL handshake failed), blocking nrs. Re-enable once it's reachable again.
+    # makemkv # disc ripping, pairs with the jellyfin/vlc media stack
     filebot # media file renaming/organizing, same media stack
     arduino-ide
     proton-vpn # renamed from protonvpn-gui upstream

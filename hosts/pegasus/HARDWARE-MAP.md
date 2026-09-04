@@ -17,9 +17,9 @@ file exists because `h-XDAS` is about to take a fleet role, and the convention
 says that is the moment to write the row.
 
 **Extended 2026-08-10** with the board, firmware, SATA port map, M.2 topology and
-the corrected NIC (§4) — all read remotely over SSH. **Physical bays (§3) and SMART
-health (§7) remain unrecorded** and are marked as such; both need someone at the
-machine, which nothing here did.
+the corrected NIC (§4), plus `h-XDAS`'s health verification (§1) — all read
+remotely over SSH; nothing here required anyone at the machine. **Physical bays
+(§3) remain unrecorded**, because that one genuinely does need the case open.
 
 Dates are UTC.
 
@@ -77,28 +77,63 @@ tier, so it should happen *before* the copy or not at all.
 entirely. That is method 1 of the two in `DISK-LABELLING.md` §1 — a model-number
 lookup — so it means "not on any SMR list I checked", not "measured".
 
-⚠ **Never health-tested.** This is a ~13-year-old drive with no SMART reading on
-record. `DISK-DRAWER.md`'s standing rule applies: *an untested spare is a guess,
-and the moment you discover it is bad is the worst possible one.*
+### ✅ Health-verified 2026-08-10 — passive attributes *and* a full surface scan
 
-`smartmontools` entered this host's closure in #44 (merged 2026-08-09), which also
-turns on `smartd` here — so once pegasus is rebuilt, `smartctl` is on `$PATH` and
-the daemon logs attributes on a timer:
+**Both readings passed.** They are recorded separately because they are not the
+same kind of evidence, and the difference is the whole point.
 
-```sh
-sudo smartctl -a /dev/sdb
+**Passive attributes** (`smartctl -a`, 14:39 PDT). Overall `PASSED`, no errors
+logged, link negotiated at full SATA 6.0 Gb/s:
+
+| Attribute | Raw |
+|---|---|
+| `Power_On_Hours` | **26,571** |
+| `Reallocated_Sector_Ct` | 0 |
+| `Current_Pending_Sector` | 0 |
+| `UDMA_CRC_Error_Count` | 0 |
+| `Offline_Uncorrectable` | 0 |
+| `Seek_Error_Rate` / `Spin_Retry_Count` | 0 / 0 |
+
+⭐ **The age was misleading.** 26,571 hours is ~3.0 years of *spinning*, not the
+~13 years of calendar age the model implies. Start/stop 1829 and load cycles 2002
+are trivially low. It has spent most of its life powered off.
+
+⚠ **But those numbers were nearly meaningless on their own**, and this is the
+trap worth naming: SMART's passive counters only reflect sectors the drive has
+actually *touched*. `h-XDAS` holds 320 KiB on a 2.34 TiB filesystem (§1) — almost
+none of that platter had been read in years. Zero reallocations was therefore
+equally consistent with "healthy" and with "nobody has looked". For a disk whose
+entire job is *being readable after everything else has gone wrong*, that is not
+a distinction to leave open.
+
+**Extended surface scan** (`smartctl -t long`, 366 min, completed 20:47 PDT):
+
+```
+Num  Test_Description   Status                   Remaining  LifeTime(hours)  LBA_of_first_error
+# 1  Extended offline   Completed without error        00%            26577  -
 ```
 
-⚠ **Merged is not deployed** — every `switch` happens on the target host. Until
-pegasus is rebuilt, use the one-off form, which needs no config change:
+**All 3 TB read end to end, no error, no first-error LBA.** `LifeTime 26577`
+against the 26,571 at start confirms the full ~6 h run rather than an early exit.
+That converts "no bad sectors recorded" into "the whole surface was read", which
+is the claim the parachute role actually needs.
+
+⟨Method note for future disks: run the long test *before* trusting a disk that
+has been sitting idle. The passive read costs seconds and tells you little; the
+scan costs 6 unattended hours and is the one that counts.⟩
+
+**Re-reading it later.** `smartmontools` entered this host's closure in #44
+(merged 2026-08-09) along with `smartd`, so once pegasus is rebuilt `smartctl` is
+on `$PATH`. ⚠ **Merged is not deployed** — the running system dates from 2026-08-07
+and predates that merge, which is why both readings above used the one-off form:
 
 ```sh
-nix shell nixpkgs#smartmontools -c smartctl -a /dev/sdb
+sudo nix shell nixpkgs#smartmontools -c smartctl -a /dev/sdb
+sudo nix shell nixpkgs#smartmontools -c smartctl -l selftest /dev/sdb
 ```
 
-Power-on hours, `Reallocated_Sector_Ct`, `Current_Pending_Sector` and
-`UDMA_CRC_Error_Count` are the four that decide whether it is trusted with the
-only offline copy of 2.1 TiB.
+⚠ **512e geometry** — 512-byte logical, 4096-byte physical. Align partitions to
+4K when `sdb1` is reformatted as LUKS (§7).
 
 ### The other three
 
@@ -333,7 +368,6 @@ inventory has to learn to filter it back out.
 
 | Item | Source | Blocks |
 |---|---|---|
-| ⚠ **SMART health on `h-XDAS`** | `smartctl -a /dev/sdb` — see §1 for the pre-rebuild form | Trusting it with the parachute |
 | ⚠ **LUKS `sdb1` before any copy** | A decision, then `cryptsetup` | Protected-tier data leaving Tower unencrypted |
 | **Reclaim `sdb2`?** | A decision | Only if 10% headroom is judged too thin |
 | **NIC *negotiated* link speed** | `cat /sys/class/net/enp42s0/speed` (§4) | Parachute copy-time estimate |
@@ -342,6 +376,11 @@ inventory has to learn to filter it back out.
 | M.2/SATA port sharing on the free slot | Board manual | Whether populating it evicts a disk (§4) |
 | SATA silkscreen ↔ `ata-N` reconciliation | Case open | Printing cable labels (§5) |
 | Whether bay identifiers are warranted at all | A decision | §3 |
+
+✅ **Closed 2026-08-10:** *SMART health on `h-XDAS`* — passive attributes clean
+**and** a full 366-minute extended surface scan completed without error (§1). The
+disk is cleared for the parachute role on health grounds. ⚠ **`sdb1` is still
+plaintext**, which is now the only thing standing between it and service.
 
 ✅ **Closed 2026-08-10:** *Board model and SATA port mapping* — read over SSH via
 `dmidecode`/`lspci`/`by-path`, no case opening needed. §4 now carries the board,

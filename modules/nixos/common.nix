@@ -55,6 +55,18 @@
     LC_TIME           = "en_US.UTF-8";
   };
 
+  # Terminfo entries only (a few KB each), not the emulators — so SSHing into a
+  # fleet host from kitty/wezterm/etc. doesn't hit "unknown terminal type" the
+  # moment anything pages.
+  environment.enableAllTerminfo = true;
+
+  # ── FHS-style shebangs ───────────────────────────────────────────────────────
+  # NixOS has no /bin or /usr/bin, so scripts with a hardcoded shebang
+  # (#!/bin/bash, #!/usr/bin/env python3) fail outright. envfs mounts a
+  # synthetic /usr/bin (bind-mounted to /bin) that resolves each lookup
+  # dynamically against the calling process's PATH.
+  services.envfs.enable = true;
+
   security.sudo.wheelNeedsPassword = false;
 
   users.users.z = {
@@ -99,10 +111,25 @@
     wget
     curl
     htop
+    screen
     vim
     age
     ssh-to-age
     sops
+
+    # Edit this host's own secrets/<host>.yaml using its SSH host key as the age
+    # identity: `sops-hostkey secrets/galactica.yaml`. The key is root-only, so
+    # plain `sops` never finds it.
+    #
+    # ⚠ Not sops's own SOPS_AGE_SSH_PRIVATE_KEY_FILE — that path derives no
+    # usable identity from an ed25519 key on this sops build. Convert it
+    # ourselves, as sops-nix does at boot. The trailing `sops-hostkey` is
+    # argv[0]; without it `bash -c` swallows the first argument.
+    (writeShellScriptBin "sops-hostkey" ''
+      exec sudo env EDITOR="$EDITOR" ${bash}/bin/bash -c \
+        'SOPS_AGE_KEY=$(${ssh-to-age}/bin/ssh-to-age -private-key < /etc/ssh/ssh_host_ed25519_key) exec ${sops}/bin/sops "$@"' \
+        sops-hostkey "$@"
+    '')
   ];
 
   services.openssh = {

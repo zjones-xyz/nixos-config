@@ -115,6 +115,22 @@ ipmiconsole -h 192.168.8.191 -u ADMIN -P              # serial-over-LAN console
 ipmipower   -h 192.168.8.191 -u ADMIN -P --stat       # --off / --reset also
 ```
 
+⚠ **SOL confirmed non-functional, 2026-08-31 — root cause still open.** Tested
+during the `galactica-live-iso` boot test: BIOS's `SOL → Console Redirection`
+was `Enabled` at 115200-8-N-1 with `Redirection After BIOS POST: Always
+Enable`, and the NixOS side had a matching `console=ttyS1,115200n8` kernel
+parameter (`homelab.serialConsole.device`, `modules/nixos/serial-console.nix`)
+— but SOL showed **nothing at all**, not even during POST, before any OS code
+ran. Writing directly to `/dev/ttyS0`, `/dev/ttyS1`, and `/dev/ttyS2` from a
+booted shell produced no output on SOL either, and a fresh `ipmiconsole`
+session didn't help. Since the blackout starts before POST, this rules out
+the OS/kernel config as the cause (already confirmed correct) — the fault is
+somewhere below that, most likely the BMC itself (stuck SOL payload, a
+firmware quirk given this BMC's already-documented FreeIPMI-specific
+handling above). **Not yet root-caused** — SSH stayed reliable throughout, so
+this didn't block testing, but don't rely on SOL to catch a POST hang (§7b's
+warning about the LSI's option ROM) until this is actually fixed.
+
 Three argument-parsing traps, each of which reads as a broken BMC:
 
 - **`-p` and `-P` collide** in FreeIPMI's parser. Use `-P` alone and let it
@@ -1408,6 +1424,30 @@ the trap, and it is already out.
 validation is a sustained load test, and a boot-and-see proves nothing about a
 card that fails hot.
 
+### ✅ In-machine confirmation — run 2026-08-31
+
+Card seated in Tower for a live NixOS boot-test (`hosts/galactica/live-iso.nix`,
+`galactica-live-iso`), not just bench-tested — and driving **all eight** 3.5"
+spinners at once (the main array's four plus `sidepool`'s four), none left on
+onboard SATA at the time. Full capture in
+`hardware-profile-2026-08-31.txt`.
+
+| Check | Result |
+|---|---|
+| Device ID | `1000:0072` — MPT firmware, identical to the cold pass ✅ |
+| Driver / firmware | `mpt3sas`, `20.00.07.00` — identical to the cold pass ✅ |
+| Subsystem | `1734:1177` Fujitsu D2607 — identical ✅ |
+| SAS address | `500605b007e41650` — identical to the cold pass and the Step 3b sticker ✅ |
+| `storcli show` | `Number of Controllers = 0` — the negative test now passes live, not just on the bench ✅ |
+| `MegaCli64` | not run this time — `capture-hardware-profile` invoked it as `megacli`, which isn't the binary nixpkgs' `megacli` package installs (it's `MegaCli64`); fixed in the script for next time |
+| All 8 disks | enumerate individually, `smartctl -a` returns full data with no `-d megaraid,N`, no RAID abstraction anywhere ✅ |
+| SMART health | all 8 disks report `PASSED`. One data point worth a watch, not urgent: the Parity disk (`8CJZX4WE`) now shows `Reallocated_Sector_Ct` = 1, where the 2026-08-07 Unraid-side reading (`HARDWARE-MAP.md` §1) had it at 0 |
+
+**Still open from Step 4's plan:** this was incidental to an array/`sidepool`
+mount test, not a dedicated burn-in — no sustained-load run, no thermal
+check. The card's real-world enumeration and identity are now about as
+confirmed as they can be; whether it runs hot under load is still unmeasured.
+
 ---
 
 ## 8. Bus speeds: what this machine can actually move
@@ -1583,6 +1623,27 @@ NVMe namespace as a boot target, because the standard postdates the firmware. So
 **ESP on a SATA device, root and `/nix` on the NVMe.** It costs no port, and
 systemd-boot only needs firmware to reach the ESP; the initrd loads `nvme` and
 pivots.
+
+#### ✅ Answered 2026-08-31 — the NVMe does not enumerate as a UEFI boot target
+
+Tested during the actual install with the adapter physically installed: UEFI
+itself works fine on this firmware (`UEFI: USB` boots the install media
+successfully, confirmed as boot option #1), but the boot-option filesystem
+browser never listed the NVMe as a candidate, across multiple attempts —
+only the USB stick. The predicted failure mode landed exactly as described
+above: a working UEFI implementation with no NVMe boot driver behind it.
+
+**§5.5's workaround is now the actual layout, not a contingency.** ESP
+moved onto a SATA-attached disk (`hosts/galactica/disko.nix`,
+`hosts/galactica/MANUAL-STEPS.md` §2b) — root and `/nix` stay on the NVMe,
+initrd loads `nvme` and pivots, exactly as anticipated. One refinement the
+original workaround didn't specify: *which* SATA disk matters. It initially
+landed on `midden` (the disk repurposed for disposable logs/build-scratch,
+already connected at install time) as a stopgap, with a planned migration
+to one of the special-vdev candidate disks once those are reconnected —
+`midden` is explicitly expected to fail within about a year, and a disk
+that's supposed to be safely disposable shouldn't also be the one thing the
+whole machine's ability to boot depends on.
 
 **The fallback that matters: the Unraid flash still boots this machine bare
 metal.** Nothing in any NixOS install touches the flash or its boot entry. Keep

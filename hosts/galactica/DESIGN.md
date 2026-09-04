@@ -1,6 +1,41 @@
 # Abandoning Unraid for SnapRAID + mergerfs on bare-metal NixOS
 
-**This is galactica's design of record.** It was commissioned as an *alternative* — a
+> ## ⚠ SUPERSEDED for storage — the array that got built is ZFS, not SnapRAID + mergerfs
+>
+> **Read this first.** This document's *platform* verdict still holds — bare-metal
+> NixOS beat the VFIO/Unraid-guest plan, and everything about why is below and
+> remains the record. But its **storage** design (SnapRAID parity + mergerfs pool,
+> btrfs-per-disk, the photo tier as a separate mirror, and the whole "no-parity
+> conversion window") was **abandoned before anything was built**, in favour of a
+> single ZFS pool. The array was then **built live and cold-boot-verified on
+> 2026-09-01**. Do not implement §§4–6 as written.
+>
+> **The storage design of record now lives in** `MANUAL-STEPS.md` §9,
+> `DECISIONS.md` §7 (its ✅ banner), `HARDWARE-MAP.md` §1, and
+> `hosts/galactica/configuration.nix`. In brief, what exists:
+>
+> - **Pool `tank`** — **RAIDZ1** across the four 12 TB HGST spinners + a **3-way
+>   mirror special vdev** across three SSDs (WD Blue + two Crucial BX500), every
+>   member **LUKS-under-ZFS** (one fleet unlock story; avoids ZFS-native-crypto
+>   `send`/`recv` corruption bugs). `ashift=12` forced, `compression` lz4/zstd,
+>   `atime=off`, `xattr=sa`, `acltype=posixacl`. ~31.6 TiB usable. The intended
+>   4th special-vdev SSD (Crucial MX100) failed on first write, so the special
+>   vdev is 3-way rather than 2×2; a `zpool detach` + `add` path to 2×2 remains.
+> - **ZFS gives what SnapRAID was chosen to avoid needing:** real (not up-to-24 h
+>   stale) parity, read-time checksums with self-healing, and one snapshot story —
+>   at the cost of RAIDZ's damage-confinement property, knowingly traded
+>   (`DECISIONS.md` §7). No `snapraid sync`, no mergerfs pool, no per-disk btrfs.
+> - **Datasets by content** carry a `homelab:tier` ZFS user property encoding the
+>   `SHARES.md` backup tier; `tank/appdata` is forced onto the special vdev.
+> - **Boot:** `/boot` moved to the WD Blue's ESP (recabled to onboard `ata1`);
+>   `HARDWARE-MAP.md` §1 and `hardware-configuration.nix` carry the ESP saga.
+>
+> Everything below is retained as provenance — the argument against the VFIO plan,
+> and the SnapRAID/mergerfs research that was later itself set aside. Where a
+> storage section is acutely misleading now, it carries its own inline marker.
+
+**This was galactica's design of record — for the platform choice, still is; for
+storage, see the banner above.** It was commissioned as an *alternative* — a
 challenge to the then-in-flight plan of running Unraid as a KVM guest with VFIO
 passthrough — and it won the argument. The hypervisor host (`liskov`) has since been
 retired and this document became the plan rather than the objection to one. The
@@ -770,6 +805,11 @@ declarative model inverts the usual severity ordering, in your favour.
 
 ## 5. Storage layout: solving the array-wide-parity problem
 
+> ⚠ **Superseded — see the banner at the top of this file.** The whole
+> array-wide-parity problem this section solves is a SnapRAID property; the built
+> array is ZFS RAIDZ1, which does not have it. The layout of record is
+> `DECISIONS.md` §7 and `MANUAL-STEPS.md` §9. Kept for provenance.
+
 ### 5.1 The structural constraint, restated
 
 SnapRAID parity is array-wide. You cannot mix parity levels within one array. Parity disks
@@ -976,6 +1016,13 @@ only under virtualization. Measured port speeds are in `PLATFORM.md §8`.
 
 #### ⚠ Under SnapRAID the parity disk must be encrypted too — Unraid's property does not carry over
 
+> ⚠ **Superseded in mechanism, honoured in conclusion.** There is no SnapRAID
+> parity disk. The underlying worry — never leave array-derived data as plaintext
+> at rest — is met by **LUKS underneath ZFS on all seven `tank` members**, spinners
+> and special-vdev SSDs alike (`DECISIONS.md` §7). So the "encrypt the parity too"
+> conclusion holds; the reasoning below about a plaintext SnapRAID parity file is
+> historical.
+
 Confirmed 2026-08-07: Tower's data disks and SSD pools are LUKS-encrypted, and
 **the two 12TB parity disks are not — because under Unraid they cannot be.** Unraid
 parity is raw block-level parity with no filesystem on it. There is nothing to
@@ -1026,6 +1073,13 @@ ASM1166 does not appear at Auto, set it back to Gen2 and nothing is lost.
 
 ## 6. Migration
 
+> ⚠ **Superseded — see the banner at the top of this file.** This chapter plans an
+> *in-place* SnapRAID + mergerfs conversion. That is not what happened: contents
+> were copied to `sidepool`, `tank` was built **fresh** as ZFS, and the data is
+> being copied back (`HARDWARE-MAP.md` §1, `DECISIONS.md` §8's ✅ banner). The
+> Phase-0 backup discipline and the parachute reasoning still applied; the
+> in-place mechanics (steps 9–14, the exposure table in §6.3) did not. Provenance.
+
 ### 6.1 The key realisation: this is mostly not a data migration
 
 Unraid does not stripe. Every data disk is a **standalone XFS or btrfs filesystem holding
@@ -1045,9 +1099,15 @@ Two things to verify on the machine before committing `[unverified]`:
   LUKS per disk, so `cryptsetup open` works from NixOS — you need the passphrase and
   `/etc/crypttab` entries, and it changes the boot sequence. ⚠ The parity asymmetry does
   **not** carry over; see step 12.
-- **Partition layout.** Unraid partitions array disks itself; check `lsblk`/`parted` and
-  confirm the filesystem mounts cleanly read-only from a Linux live environment *before* you
-  plan around it.
+- ~~**Partition layout.**~~ ✅ **Substantially answered 2026-08-31** via a live
+  NixOS boot test (`hosts/galactica/live-iso.nix`, `HARDWARE-MAP.md`'s new
+  `sidepool` section): a `cryptsetup luksOpen` + read-only mount of an
+  Unraid-built, multi-device LUKS+btrfs pool worked cleanly and completely
+  from a bare Linux live environment, no Unraid involved — `btrfs filesystem
+  show` reported all members present, nothing missing. That's a harder case
+  than the main array's two *single-disk* data disks, which were identified
+  by serial (`8CG7T97E` = Disk 1, `8DJPNS3Y` = Disk 2) but not yet
+  mount-tested themselves — a quick follow-up, not a real unknown anymore.
 
 ### 6.2 Recommended sequence
 
@@ -1196,11 +1256,23 @@ The original three, still valid:
   rest on a machine in another room. Same shape as the parity-disk trap in §5.5.
   Free now, while the partition is empty.
 
-  ⚠ **It has never been health-tested**, and it is now the single point of failure
-  for the whole Protected tier during the window. `smartmontools` reached pegasus's
-  closure in #44, so `smartctl -a /dev/sdb` works there once the host is rebuilt;
-  before then `nix shell nixpkgs#smartmontools -c smartctl -a /dev/sdb` costs
-  nothing. `DISK-DRAWER.md`'s rule stands: an untested spare is a guess.
+  ✅ **Health-verified 2026-08-10** — this used to read *"it has never been
+  health-tested"*, and it was the single point of failure for the whole Protected
+  tier during the window. Both readings now pass: passive attributes clean (0
+  reallocated, 0 pending, 0 CRC, `PASSED`) **and** a full 366-minute extended
+  surface scan `Completed without error` with no first-error LBA. Details in
+  `hosts/pegasus/HARDWARE-MAP.md` §1.
+
+  ⭐ **The scan is the part that counts**, and it is worth knowing why for the
+  other disks in this plan. `h-XDAS` was empty, so its passive counters described
+  a platter nothing had read in years — clean-because-healthy and
+  clean-because-untouched look identical. Only the surface scan distinguishes
+  them. `DISK-DRAWER.md`'s rule — *an untested spare is a guess* — is satisfied by
+  the long test, not by `smartctl -a`.
+
+  ⚠ **Health was never the only gate.** `sdb1` is still plaintext; see the LUKS
+  warning above, which is now the one thing left before this disk can take the
+  role.
 
   **⭐ Revised 2026-08-10 — pegasus is 2.5 GbE, so this is now disk-bound.** The
   NIC was read as an RTL8125 (`hosts/pegasus/HARDWARE-MAP.md` §4), not the 1 GbE

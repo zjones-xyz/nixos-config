@@ -174,6 +174,21 @@
         ];
       };
 
+      # galactica — Tower, bare-metal NixOS (replacing Unraid). Root: LUKS +
+      # btrfs on the NVMe, installed via hosts/galactica/disko.nix (2026-08-31).
+      # The RAIDZ1 media array is a separate, later addition once it's built
+      # live — not part of this closure yet. See hosts/galactica/README.md
+      # and MANUAL-STEPS.md for what's still outstanding.
+      galactica = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = { inherit self; };
+        modules = [
+          ./hosts/galactica/configuration.nix
+          home-manager.nixosModules.home-manager
+          sops-nix.nixosModules.sops
+        ];
+      };
+
       # hopper — Raspberry Pi 4, network-core node. Uses nixos-hardware's rpi-4
       # profile plus nixpkgs' generic sd-image-aarch64 builder (mainline kernel,
       # cached — see the nixos-hardware input comment above).
@@ -217,6 +232,20 @@
           ./hosts/hamilton/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
+        ];
+      };
+
+      # galactica-live-iso — throwaway live ISO for Tower's bare metal, built
+      # to de-risk the migration plan (boot test, mounting the Unraid array
+      # read-only, hardware profile) BEFORE galactica has a real config — see
+      # hosts/galactica/README.md (no configuration.nix yet, deliberately) and
+      # hosts/galactica/live-iso.nix for the build/flash commands. This is not
+      # nixosConfigurations.galactica and never becomes the real host.
+      galactica-live-iso = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+          ./hosts/galactica/live-iso.nix
         ];
       };
     };

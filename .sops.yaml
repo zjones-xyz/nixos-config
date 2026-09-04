@@ -21,6 +21,7 @@ keys:
   #   *hamilton to the hamilton rule below and run: sops updatekeys secrets/hamilton.yaml
   - &hamilton age1placeholderreplacewithhamiltonsrealagekeyafterfirstboot00000000000000
   - &pegasus age1p4gelxhaxllpw0d8whdn2wfdqxml0y7tm3md3n8yface2zvlgqnschegth
+  - &galactica age1a6uz3vznsrxc7xlsnqp7jr265fptuv2mjk0c44heg7tvlplpk4fs2rtn20
 
 creation_rules:
   - path_regex: secrets/memory-alpha\.yaml$
@@ -47,3 +48,20 @@ creation_rules:
       - age:
           - *admin
           - *pegasus
+  # galactica's real age key, added 2026-08-31 after first boot — the file
+  # itself doesn't exist yet, so it gets created directly with both keys
+  # rather than needing a separate `sops updatekeys` pass the way
+  # hopper/hamilton's pre-existing files did.
+  - path_regex: secrets/galactica\.yaml$
+    key_groups:
+      - age:
+          - *admin
+          - *galactica
+  # galactica's ZFS-array LUKS keyfile — a dedicated binary sops file (raw
+  # 4096-byte key), consumed via sops.secrets."luks/arrayKeyFile".format =
+  # "binary". Same recipients as galactica.yaml.
+  - path_regex: secrets/galactica-array\.key$
+    key_groups:
+      - age:
+          - *admin
+          - *galactica

@@ -46,16 +46,19 @@ in
       exclude_patterns = [
         "/home/z/.local/share/Steam"
         "/home/z/.steam"
+        "/home/z/.config/discord"
+        "/home/z/.lmstudio" # model weights
+        "*.gguf"
       ];
 
       repositories = [
         {
-          # ⟨REPLACE — pegasus's own BorgBase repo. BACKUP.md §4b: borg wants
-          # one client per repository, so this is NOT tower-hot/tower-cold;
-          # it's a new repo against the same 950 GB budget. Append-only key
-          # for pegasus, separate prunable key on the admin machine, same
-          # shape as Tower's.⟩
-          path = "ssh://REPLACE@REPLACE.repo.borgbase.com/./pegasus-home";
+          # pegasus's own BorgBase repo (created 2026-08-26). BACKUP.md §4b:
+          # borg wants one client per repository, so this is NOT
+          # tower-hot/tower-cold; it's its own repo against the same 950 GB
+          # budget. Append-only key for pegasus, separate prunable key on the
+          # admin machine, same shape as Tower's.
+          path = "ssh://gtsko72z@gtsko72z.repo.borgbase.com/./repo";
           label = "pegasus-home";
           # ⚠ No `encryption:` here, unlike Tower's YAML files. The nixpkgs
           # module's `repository` submodule only declares `path`/`label` (no
@@ -91,10 +94,25 @@ in
 
       # ⟨Proposal, not decided — same status as Tower's numbers. A desktop's
       # home directory churns less than Tower's documents share but is worth
-      # more than zero versioning.⟩
+      # more than zero versioning.⟩ Actually enforced nightly — prune runs
+      # fine over the append-only key (see skip_actions below).
       keep_daily = 7;
       keep_weekly = 4;
       keep_monthly = 6;
+
+      # NOT `prune` — corrected 2026-08-26. Confirmed against Borg's own
+      # append-only semantics: prune/delete succeed under an append-only key,
+      # they just mark archives as deleted in the manifest without freeing
+      # disk space (no server-side write access needed for that). It's
+      # `compact` specifically that's a no-op under append-only — silently,
+      # no error, per Borg's docs — because reclaiming the actual segment
+      # space is a real delete BorgBase's append-only restriction forbids.
+      # BorgBase's own dashboard has a manual "More > Compact repo" action
+      # per repository for exactly this reason. So: let prune run
+      # automatically every night to keep the retention policy above
+      # actually enforced, and only skip the client-side compact attempt
+      # that would never do anything anyway.
+      skip_actions = [ "compact" ];
 
       checks = [
         { name = "repository"; frequency = "2 weeks"; }
@@ -125,9 +143,17 @@ in
   # Extends the existing sops block in configuration.nix (same hasSops gate,
   # same pattern as the tailscale authKey / z's SSH key already there).
   sops = lib.mkIf hasSops {
-    secrets."borgmatic/passphrase" = { };
+    # owner = "z" (rather than the default root) so Vorta — a GUI Vorta runs
+    # as z, not root — can read the same passphrase and key borgmatic's
+    # systemd service uses, instead of provisioning a second BorgBase
+    # identity just for browsing/restoring what the first one already wrote.
+    # Root still reads both fine regardless of file ownership: the packaged
+    # borgmatic.service runs as root with CAP_DAC_READ_SEARCH retained in its
+    # CapabilityBoundingSet, which bypasses the read permission check.
+    secrets."borgmatic/passphrase" = { owner = "z"; };
     secrets."borgmatic/ssh_key" = {
       path = "/var/lib/borgmatic/ssh/id_ed25519";
+      owner = "z";
       mode = "0400";
     };
   };
@@ -155,20 +181,22 @@ in
   # failure mode, so it costs nothing to have it fail closed regardless.
   systemd.services.borgmatic.unitConfig.RequiresMountsFor = [ "/home" ];
 
-  # ⚠ Needs a human, same shape as hosts/pegasus/SECRETS-TODO.md's existing
-  # entries — not created here:
-  #   1. Generate a dedicated ed25519 keypair for this repo (do NOT reuse
-  #      Tower's or z's own SSH key): ssh-keygen -t ed25519 -f pegasus-borgmatic
-  #   2. Register the public half as BorgBase's append-only key for
-  #      pegasus-home; add the private half to secrets/pegasus.yaml under
-  #      borgmatic.ssh_key (sops secrets/pegasus.yaml), and a passphrase under
-  #      borgmatic.passphrase.
-  #   3. ssh-keyscan the BorgBase host into /var/lib/borgmatic/ssh/known_hosts
-  #      on pegasus once (not secret, doesn't need sops).
-  #   4. sops updatekeys secrets/pegasus.yaml, commit, deploy.
-  #   5. Turn on BorgBase's own inactivity alerting for this repo in its UI
-  #      (docs/BACKUP.md §6) — the monitoring signal this config relies on,
-  #      since no ntfy/Kuma hook is wired here.
-  # Until all steps are done, the systemd timer will fire on schedule and fail
-  # loudly against a REPLACE repository URL — that's expected, not a bug.
+  # Upstream's borgmatic.timer already runs daily with a 10-minute
+  # RandomizedDelaySec and Persistent=true (catches up a missed run) — this
+  # only pins the time of day to 1 AM instead of midnight. Same list-element
+  # trick as the LoadCredentialEncrypted override above and for the same
+  # reason: OnCalendar= is a repeatable systemd directive, so a drop-in's
+  # OnCalendar=01:00 would just ADD a second daily trigger alongside the
+  # upstream OnCalendar=daily rather than replacing it. The leading empty
+  # string renders a bare `OnCalendar=` clearing line first.
+  systemd.timers.borgmatic.timerConfig.OnCalendar = lib.mkForce [
+    ""
+    "01:00"
+  ];
+
+  # Provisioning status: keypair generated, pegasus-home repo created on
+  # BorgBase with the append-only key registered, and the passphrase/ssh_key
+  # secrets are in secrets/pegasus.yaml (2026-08-26). Remaining steps tracked
+  # in hosts/pegasus/SECRETS-TODO.md — ssh-keyscan into known_hosts, turn on
+  # BorgBase's inactivity alerting, and run the first backup by hand.
 }
