@@ -616,6 +616,27 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    for the dashboard. The firewall opens **only 80 and 443**; the service
    ports are not reachable directly, by design.
 
+   ⚠ **The usernames are not all the same.** Eight of the nine log in as
+   `admin`; Navidrome logs in as **`z`**. That is deliberate — Navidrome is a
+   personal listening account, with playlists, favourites and play counts
+   bound to the user, rather than a service admin — but it is exactly the kind
+   of difference that reads as a wrong password.
+
+   | Service | User | Secret under `nixflix:` |
+   |---|---|---|
+   | Prowlarr, Sonarr, sonarr-anime, Radarr, Lidarr | `admin` | `arrPassword` (one value, shared) |
+   | qBittorrent | `admin` | `qbittorrentPassword` |
+   | **Navidrome** | **`z`** | `navidromePassword` |
+   | SABnzbd | *(no login)* | API key only |
+   | Traefik dashboard | *(no auth)* | — |
+
+   Read any of them without opening the editor:
+   ```bash
+   sudo cat /run/secrets/nixflix/navidromePassword; echo
+   ```
+   The `echo` matters — the values carry no trailing newline, so the prompt
+   lands on the same line and it is easy to copy one character short.
+
    Two prerequisites, neither of which the switch can do for itself:
 
    1. [x] `sops secrets/galactica.yaml` → add `cloudflare/apiToken`, the same
