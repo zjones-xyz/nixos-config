@@ -63,7 +63,10 @@ for _ in 1 2 3; do
   sleep 1
 done
 
-if age=$(handshake_age); then
+# $age still holds the loop's last read (a number, or empty when the interface
+# is missing or has never handshaken) — re-reading it here would cost another
+# netns round-trip on every failing run, for a value at most 1s fresher.
+if [ -n "$age" ]; then
   echo "protonvpn: last $WG_IFACE handshake was ${age}s ago (>${MAX_AGE}s) — tunnel is down" >&2
 else
   echo "protonvpn: $WG_IFACE has never completed a handshake — tunnel is down" >&2

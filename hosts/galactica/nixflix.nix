@@ -43,6 +43,12 @@ let
   # claiming to be "the one value to change".
   netns = "wg";
   gateway = "10.2.0.1";
+
+  # One login for all five *arrs — the sops block explains why one value.
+  arrHostConfig = {
+    username = "admin";
+    password._secret = config.sops.secrets."nixflix/arrPassword".path;
+  };
 in
 
 {
@@ -107,10 +113,7 @@ in
       enable = true;
       config = {
         apiKey._secret = config.sops.secrets."nixflix/prowlarrApiKey".path;
-        hostConfig = {
-          username = "admin";
-          password._secret = config.sops.secrets."nixflix/arrPassword".path;
-        };
+        hostConfig = arrHostConfig;
       };
     };
 
@@ -120,11 +123,7 @@ in
       mediaDirs = [ "${mediaDir}/tv" ];
       config = {
         apiKey._secret = config.sops.secrets."nixflix/sonarrApiKey".path;
-        rootFolders = [ { path = "${mediaDir}/tv"; } ];
-        hostConfig = {
-          username = "admin";
-          password._secret = config.sops.secrets."nixflix/arrPassword".path;
-        };
+        hostConfig = arrHostConfig;
       };
     };
 
@@ -134,11 +133,7 @@ in
       mediaDirs = [ "${mediaDir}/movies" ];
       config = {
         apiKey._secret = config.sops.secrets."nixflix/radarrApiKey".path;
-        rootFolders = [ { path = "${mediaDir}/movies"; } ];
-        hostConfig = {
-          username = "admin";
-          password._secret = config.sops.secrets."nixflix/arrPassword".path;
-        };
+        hostConfig = arrHostConfig;
       };
     };
 
@@ -158,11 +153,7 @@ in
       mediaDirs = [ "${mediaDir}/anime" ];
       config = {
         apiKey._secret = config.sops.secrets."nixflix/sonarrAnimeApiKey".path;
-        rootFolders = [ { path = "${mediaDir}/anime"; } ];
-        hostConfig = {
-          username = "admin";
-          password._secret = config.sops.secrets."nixflix/arrPassword".path;
-        };
+        hostConfig = arrHostConfig;
       };
     };
 
@@ -221,16 +212,12 @@ in
       mediaDirs = [ "${mediaDir}/music" ];
       config = {
         apiKey._secret = config.sops.secrets."nixflix/lidarrApiKey".path;
-        hostConfig = {
-          username = "admin";
-          password._secret = config.sops.secrets."nixflix/arrPassword".path;
-        };
+        hostConfig = arrHostConfig;
       };
-      # `rootFolders` is left at the module default, unlike the other *arrs
-      # above: Lidarr's /rootfolder API needs more than a path
-      # (defaultQualityProfileId, defaultMetadataProfileId, monitor options),
-      # and nixflix already derives all of that from `mediaDirs`. Overriding it
-      # by hand here would mean restating those IDs for no gain.
+      # `rootFolders` stays at the module default (derived from `mediaDirs`)
+      # like every *arr here — and overriding Lidarr's would cost most: its
+      # /rootfolder API needs quality/metadata profile IDs and monitor
+      # options beyond the path, all of which nixflix derives.
     };
 
     # ── Music: playback ─────────────────────────────────────────────────────
@@ -270,10 +257,6 @@ in
       };
     };
 
-    # Deliberately NOT enabled yet: `recyclarr` (TRaSH profile sync — an easy
-    # add once the base stack has actually run), a few lines here plus its own
-    # sops API key.
-    #
     # There is no `radarr-anime` to enable: nixflix ships no such module, and
     # unlike `sonarr-anime` it would not be a thin wrapper — the service name
     # is enumerated by hand in Prowlarr's application list, the qBittorrent
@@ -416,24 +399,27 @@ in
   #     record with `?forceSave=true`, which tells Prowlarr to skip validating
   #     (i.e. contacting) the proxy on save. `after` is left as upstream set
   #     it, so ordering is unchanged; only the failure propagation differs.
-  systemd.services.flaresolverr.serviceConfig.ExecStartPost = lib.mkForce (
-    pkgs.writeShellScript "wait-for-flaresolverr" ''
-      for i in $(seq 1 180); do
-        if ${pkgs.curl}/bin/curl -sf http://127.0.0.1:${toString config.nixflix.flaresolverr.port}/ >/dev/null 2>&1; then
-          exit 0
-        fi
-        sleep 1
-      done
-      echo "FlareSolverr did not become ready within 180s" >&2
-      exit 1
-    ''
-  );
+  systemd.services.flaresolverr.serviceConfig = {
+    # One curl retrying internally rather than a fork of curl+sleep every
+    # second for up to 3 minutes — the spawns would land exactly while the CPU
+    # is saturated launching Chromium, the thing being waited for.
+    ExecStartPost = lib.mkForce (
+      pkgs.writeShellScript "wait-for-flaresolverr" ''
+        ${pkgs.curl}/bin/curl -sf --retry 180 --retry-delay 1 --retry-all-errors --retry-connrefused \
+          --max-time 5 --retry-max-time 180 \
+          http://127.0.0.1:${toString config.nixflix.flaresolverr.port}/ >/dev/null 2>&1 || {
+          echo "FlareSolverr did not become ready within 180s" >&2
+          exit 1
+        }
+      ''
+    );
 
-  # The other half of (1) — see the ⚠ above. 240s rather than exactly 180s so
-  # the probe's own failure path is what reports a slow start, with its
-  # message, rather than systemd killing the unit mid-poll with a generic
-  # timeout. Upstream leaves this unset, so this is a plain set, not a force.
-  systemd.services.flaresolverr.serviceConfig.TimeoutStartSec = 240;
+    # The other half of (1) — see the ⚠ above. 240s rather than exactly 180s
+    # so the probe's own failure path is what reports a slow start, with its
+    # message, rather than systemd killing the unit mid-poll with a generic
+    # timeout. Upstream leaves this unset, so a plain set, not a force.
+    TimeoutStartSec = 240;
+  };
 
   systemd.services.prowlarr-indexer-proxies = {
     requires = lib.mkForce [

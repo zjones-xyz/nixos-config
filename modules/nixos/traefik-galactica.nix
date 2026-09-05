@@ -33,15 +33,11 @@
 # rename of every bookmark, Prowlarr application URL and *arr cross-reference.
 
 let
-  # Let's Encrypt CA + storage, switched by config.homelab.letsencryptStaging.
-  # Staging and production certs live in separate files so flipping the flag
-  # never requires deleting cached certs. Same contract as the other three
-  # Traefik modules; only the paths differ, because a native Traefik keeps
-  # state in its own dataDir rather than a bind-mounted host directory.
-  acmeCaServer =
-    if config.homelab.letsencryptStaging
-    then "https://acme-staging-v02.api.letsencrypt.org/directory"
-    else "https://acme-v02.api.letsencrypt.org/directory";
+  # Staging and production certs live in separate files so flipping
+  # homelab.letsencryptStaging never requires deleting cached certs. The CA
+  # URL itself is the derived homelab.letsencryptCaServer; only the storage
+  # path is this module's own, because a native Traefik keeps state in its
+  # dataDir rather than a bind-mounted host directory.
   acmeStorage =
     if config.homelab.letsencryptStaging
     then "/var/lib/traefik/acme-staging.json"
@@ -83,7 +79,7 @@ let
       "lidarr"
     ] arrUrl
     // {
-      navidrome = svcUrl nixflix.navidrome config.services.navidrome.settings.Port;
+      navidrome = svcUrl nixflix.navidrome nixflix.navidrome.settings.Port;
       sabnzbd = svcUrl nixflix.usenetClients.sabnzbd nixflix.usenetClients.sabnzbd.settings.misc.port;
       qbittorrent = svcUrl nixflix.torrentClients.qbittorrent nixflix.torrentClients.qbittorrent.webuiPort;
     }
@@ -212,7 +208,7 @@ in
           # account rather than creating a fourth.
           email = "zoejonestx91@gmail.com";
           storage = acmeStorage;
-          caServer = acmeCaServer;
+          caServer = config.homelab.letsencryptCaServer;
           dnsChallenge = {
             provider = "cloudflare";
             resolvers = [
@@ -266,12 +262,10 @@ in
       };
     };
 
-    # Ordering only, deliberately not a dependency: if the socket proxy is down
-    # (image pull failed, Docker itself broken) Traefik still starts and every
-    # file-provider route below still serves — it just logs that the Docker
-    # provider is unreachable. Binding them would trade nine working web UIs for
-    # a container that today proxies nothing.
-    systemd.services.traefik.after = [ "docker-docker-socket-proxy.service" ];
+    # Deliberately NO ordering or dependency on the socket proxy: Traefik's
+    # Docker provider retries on its own, and waiting out docker.service plus
+    # a container start on every boot would hold nine file-provider routes
+    # hostage to a container that today proxies nothing.
 
     # The shared network future containers join to become visible to Traefik.
     # Mirrors hopper's docker-proxy-network unit; `docker network create` is not

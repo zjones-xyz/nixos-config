@@ -105,7 +105,7 @@
     # by hand in hosts/galactica/nixflix.nix instead — the readiness probe
     # (plus the TimeoutStartSec that makes it effective), the
     # prowlarr-indexer-proxies `requires`→`wants` relaxation, and a bounded
-    # Restart on navidrome-setup.
+    # Restart on navidrome-create-admin.
     #
     # That is the cost of reason 1, and it is real: `lib.mkForce` on an
     # upstream unit is silent on drift, and these three are precisely the

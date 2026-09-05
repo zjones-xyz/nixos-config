@@ -108,21 +108,6 @@ in
       # The download tree only — never the library, which is the *arrs' write.
       ReadWritePaths = [ torrentPath ];
 
-      NoNewPrivileges = true;
-      PrivateTmp = true;
-      PrivateDevices = true;
-      ProtectControlGroups = true;
-      ProtectHome = true;
-      ProtectHostname = true;
-      ProtectKernelLogs = true;
-      ProtectKernelModules = true;
-      ProtectKernelTunables = true;
-      ProtectSystem = "strict";
-      RestrictNamespaces = true;
-      RestrictRealtime = true;
-      RestrictSUIDSGID = true;
-      SystemCallArchitectures = "native";
-      LockPersonality = true;
-    };
+    } // import ./service-hardening.nix;
   };
 }

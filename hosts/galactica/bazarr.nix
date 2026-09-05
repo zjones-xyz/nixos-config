@@ -30,25 +30,9 @@ let
   animePaths = nixflix.sonarr-anime.mediaDirs;
 
   # The nixpkgs module ships none. Conservative on purpose — Bazarr is a large
-  # Python app that shells out to ffmpeg and unar. No MemoryDenyWriteExecute:
-  # CPython and its native extensions do not survive it.
-  hardening = {
-    NoNewPrivileges = true;
-    PrivateDevices = true;
-    PrivateTmp = true;
-    ProtectControlGroups = true;
-    ProtectHome = true;
-    ProtectHostname = true;
-    ProtectKernelLogs = true;
-    ProtectKernelModules = true;
-    ProtectKernelTunables = true;
-    ProtectSystem = "strict";
-    RestrictNamespaces = true;
-    RestrictRealtime = true;
-    RestrictSUIDSGID = true;
-    SystemCallArchitectures = "native";
-    LockPersonality = true;
-
+  # Python app that shells out to ffmpeg and unar; the shared set deliberately
+  # omits MemoryDenyWriteExecute, which CPython does not survive.
+  hardening = import ./service-hardening.nix // {
     # ⚠ Load-bearing. Subtitles land beside the video in a library the *arrs
     # rename around; at the default 0022 a later rename cannot take them along.
     UMask = "0002";
@@ -98,20 +82,13 @@ in
     wantedBy = [ "multi-user.target" ];
     unitConfig.RequiresMountsFor = [ animeDataDir ];
 
-    serviceConfig = hardening // {
-      Type = "simple";
-      User = config.services.bazarr.user;
-      Group = mediaGroup;
+    # Inherit the primary's evaluated serviceConfig — nixpkgs' settings plus
+    # the hardening above — so the two cannot diverge across a channel bump.
+    # Only what genuinely differs is overridden; the command line is restated
+    # because nixpkgs bakes dataDir and listenPort into its ExecStart.
+    serviceConfig = config.systemd.services.bazarr.serviceConfig // {
       SyslogIdentifier = "bazarr-anime";
-      ExecStart = pkgs.writeShellScript "start-bazarr-anime" ''
-        ${lib.getExe config.services.bazarr.package} \
-          --config '${animeDataDir}' \
-          --port ${toString animePort} \
-          --no-update True
-      '';
-      Restart = "on-failure";
-      KillSignal = "SIGINT";
-      SuccessExitStatus = "0 156";
+      ExecStart = "${lib.getExe config.services.bazarr.package} --config ${animeDataDir} --port ${toString animePort} --no-update True";
       ReadWritePaths = [ animeDataDir ] ++ animePaths;
     };
   };
