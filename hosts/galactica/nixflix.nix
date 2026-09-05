@@ -400,8 +400,6 @@ in
     wants = [ "qbittorrent.service" ];
     wantedBy = [ "multi-user.target" ];
 
-    path = with pkgs; [ libnatpmp curl coreutils gnused gnugrep ];
-
     serviceConfig = {
       # A supervised forever-loop, not a oneshot: the lease dies in ~60s and
       # the port changes across reconnects, so this must keep running.
@@ -411,88 +409,40 @@ in
       LoadCredential = [
         "qbPassword:${config.sops.secrets."nixflix/qbittorrentPassword".path}"
       ];
+
+      # Everything host-specific the script needs, so the script itself stays a
+      # plain shell file with no Nix interpolation in it.
+      Environment = [
+        # NOT 127.0.0.1 — when confined, nixflix binds qBittorrent's WebUI to
+        # the namespace address rather than loopback, so a localhost URL here
+        # would connect-refuse forever and silently never publish a port.
+        # `connectionAddress` is the module's own read-only derivation of that
+        # value, so this follows automatically if the VPN is ever turned off
+        # (it becomes 127.0.0.1) or the address changes.
+        "QB_URL=http://${config.nixflix.torrentClients.qbittorrent.connectionAddress}:${toString config.nixflix.torrentClients.qbittorrent.webuiPort}"
+        "QB_USER=admin"
+        # Proton's WireGuard gateway. Fixed across their infrastructure; if a
+        # future config uses a different subnet this is the one value to change.
+        "GATEWAY=10.2.0.1"
+      ];
+
+      # writeShellApplication rather than an inline `script`: the body lives in
+      # hosts/galactica/protonvpn-natpmp.sh, which means shellcheck runs over it
+      # at build time and an editor treats it as shell rather than a Nix string.
+      ExecStart = lib.getExe (
+        pkgs.writeShellApplication {
+          name = "protonvpn-natpmp";
+          runtimeInputs = with pkgs; [
+            libnatpmp
+            curl
+            coreutils
+            gnused
+            gnugrep
+          ];
+          text = builtins.readFile ./protonvpn-natpmp.sh;
+        }
+      );
     };
-
-    script = ''
-      set -uo pipefail
-
-      # Proton's WireGuard gateway. Fixed across their infrastructure; if a
-      # future config uses a different subnet this is the one value to change.
-      GATEWAY=10.2.0.1
-
-      # NOT 127.0.0.1 — when confined, nixflix binds qBittorrent's WebUI to
-      # the namespace address (192.168.15.1) rather than loopback, so a
-      # localhost URL here would connect-refuse forever and silently never
-      # publish a port. `connectionAddress` is the module's own read-only
-      # derivation of that value, so this follows automatically if the VPN is
-      # ever turned off (it becomes 127.0.0.1) or the address changes.
-      QB_URL="http://${config.nixflix.torrentClients.qbittorrent.connectionAddress}:${toString config.nixflix.torrentClients.qbittorrent.webuiPort}"
-      QB_USER="admin"
-      QB_PASS="$(cat "$CREDENTIALS_DIRECTORY/qbPassword")"
-
-      published=""
-
-      # Backoff for the failure paths below. A Proton outage does not stop
-      # this loop — natpmpc simply fails against a black-holed gateway
-      # forever — so a fixed 10s retry writes ~6 journal lines a minute for
-      # the whole outage (~8.6k a day) onto midden. Doubling to a 5-minute
-      # ceiling keeps a short blip responsive while a long one costs ~12
-      # lines an hour. Reset to the floor on every success so a recovered
-      # tunnel is picked up at full speed.
-      backoff_min=10
-      backoff_max=300
-      backoff=$backoff_min
-
-      while :; do
-        # Both protocols must be mapped and renewed; the TCP reply carries the
-        # port we hand to qBittorrent. Proton grants the same number for both.
-        natpmpc -a 1 0 udp 60 -g "$GATEWAY" >/dev/null 2>&1 || true
-
-        if ! reply=$(natpmpc -a 1 0 tcp 60 -g "$GATEWAY" 2>&1); then
-          echo "natpmpc failed (tunnel down or still coming up?); retrying in ''${backoff}s" >&2
-          sleep "$backoff"
-          backoff=$(( backoff * 2 > backoff_max ? backoff_max : backoff * 2 ))
-          continue
-        fi
-
-        port=$(printf '%s\n' "$reply" \
-          | sed -n 's/.*Mapped public port \([0-9][0-9]*\).*/\1/p' \
-          | head -n1)
-
-        if [ -z "$port" ]; then
-          echo "no port in natpmpc reply; retrying in ''${backoff}s" >&2
-          sleep "$backoff"
-          backoff=$(( backoff * 2 > backoff_max ? backoff_max : backoff * 2 ))
-          continue
-        fi
-
-        # natpmpc answered with a usable port, so the tunnel is carrying
-        # traffic again — drop straight back to the fast retry.
-        backoff=$backoff_min
-
-        # Only talk to qBittorrent when the port actually changed — this loop
-        # runs every 45s and the port is usually stable for days.
-        if [ "$port" != "$published" ]; then
-          jar=$(mktemp)
-          if curl -sf -c "$jar" \
-               --data-urlencode "username=$QB_USER" \
-               --data-urlencode "password=$QB_PASS" \
-               "$QB_URL/api/v2/auth/login" >/dev/null \
-             && curl -sf -b "$jar" \
-                  --data-urlencode "json={\"listen_port\":$port}" \
-                  "$QB_URL/api/v2/app/setPreferences" >/dev/null; then
-            echo "published forwarded port $port to qBittorrent"
-            published="$port"
-          else
-            echo "failed to publish port $port to qBittorrent; will retry" >&2
-          fi
-          rm -f "$jar"
-        fi
-
-        # Lease is 60s; renew with headroom.
-        sleep 45
-      done
-    '';
   };
 
   # ── ProtonVPN tunnel health check ─────────────────────────────────────────
@@ -525,62 +475,42 @@ in
     # check loudly instead, which is the whole point of having it.
     after = [ "wg.service" ];
 
-    path = with pkgs; [
-      iproute2
-      wireguard-tools
-      iputils
-      coreutils
-      gawk
-      gnugrep
-    ];
+    serviceConfig = {
+      Type = "oneshot";
 
-    script = ''
-      set -uo pipefail
+      # Thresholds and names the script reads, kept here so the script itself
+      # is plain shell with no Nix interpolation.
+      #
+      # MAX_AGE: WireGuard rekeys after 120s of traffic and a session expires
+      # at 180s, so a healthy tunnel — kept warm by the script's own ping even
+      # with no torrents running — never reads much past 180s. 240 is that
+      # ceiling plus margin, putting detection about four minutes behind an
+      # outage.
+      Environment = [
+        "NETNS=wg"
+        "WG_IFACE=wg0"
+        "GATEWAY=10.2.0.1"
+        "MAX_AGE=240"
+      ];
 
-      # Distinguish "namespace never came up" from "tunnel went quiet" — the
-      # two have different fixes, and the handshake test below cannot tell
-      # them apart on its own.
-      if ! ip netns list | grep -qw wg; then
-        echo "protonvpn: the wg namespace does not exist — check wg.service" >&2
-        exit 1
-      fi
-
-      # Force one packet into the tunnel. WireGuard only rekeys when it has
-      # something to send, so without this an idle tunnel ages out and reads
-      # as dead. -W 3 doubles as the settling time for the handshake to land
-      # when the gateway does not reply.
-      ip netns exec wg ping -c 1 -W 3 10.2.0.1 >/dev/null 2>&1 || true
-      sleep 2
-
-      # One peer, but take the newest defensively rather than assuming.
-      # Done entirely in awk rather than `sort -rn | head -n1`: NixOS prepends
-      # `set -e` to this script, and with `pipefail` a `head` that closes the
-      # pipe early can SIGPIPE its producer and kill the check with no message
-      # of its own. `|| hs=""` catches the remaining case — the namespace
-      # exists but wg0 does not — so the branch below reports it.
-      hs=$(ip netns exec wg wg show wg0 latest-handshakes \
-        | awk '{ if ($2 > m) m = $2 } END { print m + 0 }') || hs=""
-
-      if [ -z "$hs" ] || [ "$hs" -eq 0 ]; then
-        echo "protonvpn: wg0 has never completed a handshake — tunnel is down" >&2
-        exit 1
-      fi
-
-      age=$(( $(date +%s) - hs ))
-
-      # WireGuard rekeys after 120s of traffic and a session expires at 180s,
-      # so a healthy tunnel — kept warm by the ping above even with no
-      # torrents running — never reads much past 180s. 240s is that ceiling
-      # plus margin, which puts detection about four minutes behind an outage.
-      if [ "$age" -gt 240 ]; then
-        echo "protonvpn: last wg0 handshake was ''${age}s ago (>240s) — tunnel is down" >&2
-        exit 1
-      fi
-
-      echo "protonvpn: tunnel healthy (last handshake ''${age}s ago)"
-    '';
-
-    serviceConfig.Type = "oneshot";
+      # Externalised for the same reason as the sidecar above: shellcheck runs
+      # over hosts/galactica/protonvpn-healthcheck.sh at build time, and the
+      # eight-case test harness can exercise the file directly.
+      ExecStart = lib.getExe (
+        pkgs.writeShellApplication {
+          name = "protonvpn-healthcheck";
+          runtimeInputs = with pkgs; [
+            iproute2
+            wireguard-tools
+            iputils
+            coreutils
+            gawk
+            gnugrep
+          ];
+          text = builtins.readFile ./protonvpn-healthcheck.sh;
+        }
+      );
+    };
 
     # ⟨Follow-up: route this to ntfy.⟩ Same reasoning as the identical note in
     # modules/nixos/smart.nix, and deliberately the same answer: the fleet's
