@@ -52,7 +52,9 @@ let
     ] arrUrl
     // {
       navidrome = svcUrl nixflix.navidrome nixflix.navidrome.settings.Port;
-      sabnzbd = svcUrl nixflix.usenetClients.sabnzbd nixflix.usenetClients.sabnzbd.settings.misc.port;
+      # "usenet", not the service's own name — sabnzbd is a typo trap.
+      # Must stay in step with its host_whitelist (hosts/galactica/nixflix.nix).
+      usenet = svcUrl nixflix.usenetClients.sabnzbd nixflix.usenetClients.sabnzbd.settings.misc.port;
       qbittorrent = svcUrl nixflix.torrentClients.qbittorrent nixflix.torrentClients.qbittorrent.webuiPort;
     }
     # Host-local services nixflix does not know about; they register

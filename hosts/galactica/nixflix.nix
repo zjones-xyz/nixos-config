@@ -168,7 +168,8 @@ in
         # SABnzbd refuses Host headers not listed here, and the module only
         # fills this from its own (unused) reverseProxy option. An omission
         # presents as a Traefik-looking 403 while loopback keeps working.
-        host_whitelist = "sabnzbd.arr.internal,sabnzbd.arr.zjones.dev";
+        # `usenet`, matching the Traefik subdomain (traefik-galactica.nix).
+        host_whitelist = "usenet.arr.internal,usenet.arr.zjones.dev";
       };
     };
 
