@@ -253,9 +253,20 @@ in
         userName = "z";
         isAdmin = true;
         password._secret = config.sops.secrets."nixflix/navidromePassword".path;
-        # ⚠ Passwords are applied at user CREATION only and never updated
-        # declaratively — changing this secret later does not change the
-        # login. Use Navidrome's own UI for that.
+        # ⚠ Applied at user CREATION only. nixflix's navidrome-users-config
+        # does have an update path, but its PUT payload carries userName,
+        # name, email and isAdmin — no password field; only the create payload
+        # has one. So changing this secret cannot change an existing login,
+        # `mutable = false` included.
+        #
+        # ⚠⚠ And it is worse than a no-op if done alone: that same unit logs
+        # INTO Navidrome as this admin, with this value, to make its API calls,
+        # and exits non-zero when the login fails. Changing the secret without
+        # changing the real password therefore breaks navidrome-users-config on
+        # the next switch.
+        #
+        # To rotate: change it in Navidrome's own UI FIRST, then update the
+        # secret to match. That order, not the reverse.
       };
     };
 
@@ -665,8 +676,10 @@ in
     "nixflix/sabnzbdApiKey" = { };
     "nixflix/sabnzbdNzbKey" = { };
 
-    # Navidrome's admin login. Applied at user creation only — see the option
-    # comment above; rotating this value later does not change the password.
+    # Navidrome's admin login. Applied at user creation only, AND used by
+    # navidrome-users-config to authenticate to Navidrome on every switch — so
+    # it must keep matching the real password or that unit fails. Rotate in
+    # Navidrome's UI first, then here; see the option comment above.
     "nixflix/navidromePassword" = { };
 
     # Shared *arr web UI password (username `admin` on all five — Prowlarr,
