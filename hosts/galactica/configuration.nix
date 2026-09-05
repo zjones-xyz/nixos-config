@@ -323,51 +323,24 @@
   homelab.smart.monitor = true;
 
   # ── NFS server (re-exports the array to memory-alpha) ──────────────────────
-  # The §8 cutover. 2049 only: memory-alpha mounts nfsvers=4, which needs no
-  # rpcbind/mountd/statd spread. No export carries `fsid=0`, so there is no
-  # NFSv4 pseudo-root and clients mount the full path — the same shape the
-  # Unraid exports had, so nothing about the client-side mount syntax changes
-  # beyond the path itself.
+  # 2049 only: memory-alpha mounts nfsvers=4. No export carries `fsid=0`, so
+  # there is no pseudo-root and clients mount the full path, as under Unraid.
   #
-  # Scope is the LAN subnet rather than memory-alpha alone (§8's decision) and
-  # rather than a bare `*`, so it cannot reach past the LAN if the firewall
-  # posture ever changes. `rw` follows §8's recorded template; the *arr library
-  # is arguably a candidate for `ro` now that galactica owns every write to it,
-  # but that is a change of decision, not a transcription of one.
-  #
-  # ⚠ Two of the four recorded fsids are deliberately NOT exported. Preserving
-  # an fsid means never reusing the number for different content — a wrong one
-  # hands a client ESTALE instead of a clean remount — so an unexported fsid
-  # stays reserved rather than being recycled:
-  #
-  #   100  arr_media          No dataset carries this name after the migration,
-  #                           and SHARES.md §3 still has the open question of
-  #                           which of arr_media/arr_managed_data was the
-  #                           library and which the downloads. Pointing 100 at
-  #                           a guess is how a client gets silently wrong data.
-  #   102  arr_managed_data   `tank/media_staging/arr_managed_data` exists, but
-  #                           its only known consumer was memory-alpha's *arr
-  #                           stack — which now runs HERE. Exporting galactica's
-  #                           own working set back to a host that no longer
-  #                           manages it invites two writers. Left for review.
-  #
-  # The new *arr library is a NEW export on a new fsid rather than inheriting
-  # 100, for the same reason: 100's content is unconfirmed, and a number that
-  # might still mean something to an unconfirmed consumer is not free to take.
+  # ⚠ fsids 100 (`arr_media`) and 102 (`arr_managed_data`) are deliberately NOT
+  # exported and stay reserved — reusing a number for different content hands a
+  # client ESTALE. MANUAL-STEPS §8 has the table and the reasoning; scope and
+  # `rw` are transcribed from the decision there, not re-decided here.
   services.nfs.server.enable = true;
   services.nfs.server.exports = ''
-    # The *arr library galactica now manages — what memory-alpha's Jellyfin
-    # plays. It fills as the staged media is imported into the *arr library, so
-    # a thin library here early is that import pending, not a broken mount.
+    # The *arr library. Thin until the staged media is imported — that is the
+    # import pending, not a broken mount.
     /tank/nixflix_media/media     192.168.8.0/24(rw,sync,no_subtree_check,fsid=104)
 
-    # The hand-curated library the *arrs do not manage — hence memory-alpha's
-    # mountpoint name, `/mnt/unmanaged`. Same share and same consumer as under
-    # Unraid, so it keeps fsid 101; only the path moved.
+    # The hand-curated library the *arrs do not manage — hence the client's
+    # mountpoint name. Same share and consumer as under Unraid; path moved.
     /tank/media_staging/jellyfin  192.168.8.0/24(rw,sync,no_subtree_check,fsid=101)
 
-    # Consumer still unconfirmed (SHARES.md §4), which is exactly why §8 chose
-    # LAN-wide scope over naming memory-alpha: the consumer may be elsewhere.
+    # Consumer unconfirmed (SHARES.md §4) — why the scope is LAN-wide.
     /tank/bambuddy_library        192.168.8.0/24(rw,sync,no_subtree_check,fsid=103)
   '';
   networking.firewall.allowedTCPPorts = [ 2049 ];

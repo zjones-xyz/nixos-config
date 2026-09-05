@@ -124,45 +124,30 @@ in
   };
 
   # ── NFS mounts (galactica's array) ─────────────────────────────────────────
-  # LIVE as of the §8 cutover — galactica exports these now, so
-  # `x-systemd.automount` is restored. It was dropped while the exports did not
-  # exist because a consumer touching the mountpoint during a switch (jellyfin
-  # restarting, say) fires a synchronous mount, and a mount that fails lands the
-  # .mount unit in `failed`, which makes `nixos-rebuild switch` exit non-zero.
-  # `soft` + `nofail` stay for the case galactica is simply down: degrade, don't
-  # hang, don't fail the switch.
+  # LIVE as of the §8 cutover, so `x-systemd.automount` is restored — it was
+  # dropped while the exports did not exist because a failing synchronous mount
+  # lands the .mount unit in `failed` and makes `nixos-rebuild switch` exit
+  # non-zero. `soft` + `nofail` stay for the case galactica is simply down.
   #
-  # ⚠ ORDER MATTERS. galactica must switch first — these are `access denied`
-  # until its `services.nfs.server.exports` is live. MANUAL-STEPS §8 has the
-  # sequence.
-  #
-  # `tower.internal` is kept rather than moved to `galactica.internal`:
-  # DECISIONS.md §2 made that name an AdGuard rewrite that follows the machine
-  # precisely so clients need no edit. The paths changed (Unraid's `/mnt/user/…`
-  # is gone); the name did not have to.
+  # ⚠ galactica must switch FIRST — these are `access denied` until its exports
+  # are live. MANUAL-STEPS §8 has the sequence, and why `tower.internal` stays.
 
-  # The *arr library galactica manages. `/mnt/media` is the path
-  # `modules/nixos/jellyfin.nix` already documents as its expectation.
+  # `/mnt/media` is the path modules/nixos/jellyfin.nix already documents.
   fileSystems."/mnt/media" = {
     device = "tower.internal:/tank/nixflix_media/media";
     fsType = "nfs";
     options = [ "nfsvers=4" "soft" "timeo=30" "noauto" "nofail" "x-systemd.automount" "rsize=131072" "wsize=131072" "async" "nconnect=4" "noatime" ];
   };
 
-  # The hand-curated library the *arrs do not manage — the mountpoint name is
-  # the distinction. Same share (fsid 101) as under Unraid, new path.
+  # The library the *arrs do not manage — the mountpoint name is the point.
   fileSystems."/mnt/unmanaged" = {
     device = "tower.internal:/tank/media_staging/jellyfin";
     fsType = "nfs";
     options = [ "nfsvers=4" "soft" "timeo=30" "noauto" "nofail" "x-systemd.automount" "rsize=131072" "wsize=131072" "async" "nconnect=4" "noatime" ];
   };
 
-  # `/mnt/arr_managed_data` (fsid 102) is deliberately GONE rather than
-  # re-pointed. It existed because this host ran the *arr stack; that stack now
-  # runs on galactica with its state on the special vdev, so the only consumer
-  # of that mount no longer exists here. The dataset survives as
-  # `tank/media_staging/arr_managed_data` and galactica does not export it —
-  # see the fsid note in `hosts/galactica/configuration.nix`.
+  # `/mnt/arr_managed_data` (fsid 102) is GONE, not re-pointed: it served the
+  # *arr stack, which now runs on galactica. Dataset kept, not exported.
 
   # ── home-manager ──────────────────────────────────────────────────────────
   home-manager = {
