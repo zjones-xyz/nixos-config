@@ -30,6 +30,14 @@ documents the repo's structure and patterns.)
 - Module signature `{ config, pkgs, lib, ... }:`. 2-space indent.
 - Lead non-obvious blocks with a `# ── Section ──` banner and a comment explaining
   *why*, not just what. Match the density of the surrounding files.
+- **Comment budget.** A banner gets ~5 lines. If the reasoning needs more, it
+  belongs in the host's `DECISIONS.md` or `MANUAL-STEPS.md`, and the comment is
+  one line pointing there. Beware the ratchet: "surrounding files" means the
+  repo's established density, not the last file the same author wrote.
+- **No incident narrative in `.nix` files.** Dates, journal excerpts, error
+  strings and "observed on the hardware" go in the run book and the commit
+  message. Comment the surprise — the thing a reader would otherwise undo — not
+  the story of finding it.
 - Each host sets `system.stateVersion`; don't bump it casually.
 
 ## Secrets (sops-nix)
