@@ -324,6 +324,17 @@
   # the package fleet-wide regardless; this turns on monitoring.
   homelab.smart.monitor = true;
 
+  # Staging issuance was proven on real hardware before this flipped, which is
+  # what the flag is for: the first run showed Traefik issuing per-subdomain
+  # certificates alongside the wildcard, and the re-run after the fix showed a
+  # single bundled SAN cert for `arr.zjones.dev` + `*.arr.zjones.dev` and
+  # nothing else. Finding that against production instead would have spent ten
+  # of the fifty certificates per registered domain per week.
+  #
+  # Production uses `acme.json`, a different file from `acme-staging.json`, so
+  # this switch needs nothing deleted and is reversible by flipping it back.
+  homelab.letsencryptStaging = false;
+
   # ── NFS server (re-exports the array to memory-alpha) ──────────────────────
   # 2049 only: memory-alpha mounts nfsvers=4. No export carries `fsid=0`, so
   # there is no pseudo-root and clients mount the full path, as under Unraid.

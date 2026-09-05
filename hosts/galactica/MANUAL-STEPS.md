@@ -653,7 +653,7 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    done
    ```
 
-6. [ ] **Prove one wildcard issuance, then leave staging.** The first switch
+6. [x] **Prove one wildcard issuance, then leave staging.** The first switch
    issued per-subdomain certificates alongside the wildcard, because Traefik
    skips a domain only once a covering cert is already stored — so on a cold
    start the subdomain routers won the race. Every `-dev` router now names the
@@ -664,10 +664,17 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    journalctl -u traefik -f
    ```
    Exactly one issuance for `arr.zjones.dev` + `*.arr.zjones.dev`, and no
-   per-subdomain requests, means it holds. Then set
-   `homelab.letsencryptStaging = false` for this host — production uses
-   `acme.json`, a separate file, so nothing needs deleting at that point.
-   Worth getting right first: production allows 50 certificates per
+   per-subdomain requests, means it holds.
+
+   Confirmed on 2026-09-04: one `Obtaining bundled SAN certificate` for the
+   pair, two DNS-01 challenges (the base name and the wildcard each need
+   their own TXT), one `Server responded with a certificate`, and no
+   per-subdomain issuance at all — against the first run, where `lidarr` and
+   `sonarr-anime` were issued individually before the wildcard arrived.
+   `homelab.letsencryptStaging = false` is now set in `configuration.nix`.
+   Production uses `acme.json`, a separate file from `acme-staging.json`, so
+   the switch needs nothing deleted and flipping back is enough to undo it.
+   Worth having got right first: production allows 50 certificates per
    registered domain per week, and the un-deduped form spent ten.
 
 7. [ ] **Import the staged media** — point Sonarr/Radarr at
