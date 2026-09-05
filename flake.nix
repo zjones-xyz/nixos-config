@@ -101,9 +101,23 @@
     # replaces the hand-rolled overrideAttrs fix with the real thing, plus
     # picks up two extra version bumps (02.04.00.70, 02.05.00.67).
     nixpkgs-bambu-studio.url = "git+https://github.com/NixOS/nixpkgs.git?rev=13b979d75662827615c1de6dd22f87e6296ba71d&shallow=1";
+
+    # nixarr — declarative *arr / media-server stack for galactica (Tower).
+    # Upstream moved org: it's `nix-media-server/nixarr` now, not the older
+    # `rasmus-kirk/nixarr`. Module to import is `nixarr.nixosModules.default`
+    # (bundles VPN-Confinement). Its own nixpkgs is pinned to 25.11 upstream;
+    # we `follows` ours (26.05) like every other input, to keep one nixpkgs
+    # fleet-wide — nixarr's modules are version-aware (e.g. its seerr module
+    # switches package on `lib.version >= 26.05pre`).
+    # git+https rather than github: for the same sandboxed-GitHub-access
+    # reason as claude-desktop-debian / dank-material-shell above.
+    nixarr = {
+      url = "git+https://github.com/nix-media-server/nixarr.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, niri-flake, nixpkgs-orca-slicer, nixpkgs-bambu-studio, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, niri-flake, nixpkgs-orca-slicer, nixpkgs-bambu-studio, nixarr, ... }:
   {
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
@@ -176,9 +190,9 @@
 
       # galactica — Tower, bare-metal NixOS (replacing Unraid). Root: LUKS +
       # btrfs on the NVMe, installed via hosts/galactica/disko.nix (2026-08-31).
-      # The RAIDZ1 media array is a separate, later addition once it's built
-      # live — not part of this closure yet. See hosts/galactica/README.md
-      # and MANUAL-STEPS.md for what's still outstanding.
+      # The RAIDZ1 media array was built live 2026-09-01 and is declared in
+      # configuration.nix. See hosts/galactica/README.md and MANUAL-STEPS.md
+      # for what's still outstanding.
       galactica = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         specialArgs = { inherit self; };
@@ -186,6 +200,7 @@
           ./hosts/galactica/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
+          nixarr.nixosModules.default
         ];
       };
 

@@ -279,6 +279,8 @@ against the source, plus the Unraid flash+config insurance into
 1. [x] Sweep the media datasets into `tank/media_staging/*` (zfs renames) so
    nixarr gets a clean `/tank/media`; collections re-enter via *arr imports.
    ✅ 2026-09-02 — all seven (8.94 T) staged; `tank/media`/`tank/books` empty.
+   ⚠ `tank/media` was since renamed to `tank/nixarr_media` (2026-09-03,
+   `media.nix` updated to match) — `tank/books` is unaffected.
 2. [x] Retire sidepool *logically*: unmounted + all four LUKS mappers closed
    2026-09-02 — disks are inert (LUKS-closed, nothing references them).
 3. [ ] Pull sidepool's drives during the next in-case session (deliberately
@@ -299,6 +301,46 @@ against the source, plus the Unraid flash+config insurance into
 4. [ ] **NFS re-exports** (§8, fsids 100–103) — and re-point memory-alpha's
    mounts, which still reference the dead Unraid paths
    (`tower.internal:/mnt/user/...`).
+
+## 10. nixarr — declarative media stack (media.nix, scaffolded)
+
+`hosts/galactica/media.nix` is now wired into `configuration.nix` and
+evaluates/activates cleanly as-is (Sonarr/Radarr/Prowlarr/Bazarr/
+Audiobookshelf/Shelfmark/recyclarr, no VPN/download client yet). Before it's
+actually useful:
+
+1. [ ] Confirm `stateDir = "/tank/appdata/arr_config"` against the real
+   dataset tree (`zfs list -r tank/appdata` on galactica) — the path is a
+   best guess from SHARES.md's old Unraid classification, not verified
+   against what the 2026-09-02 dataset-tree build actually created.
+2. [ ] Reconcile Shelfmark's fixed library path
+   (`/tank/nixarr_media/library/{books,audiobooks}`) with the real
+   `tank/books` dataset — mountpoint override or symlink, owner's call.
+3. [ ] Decide the real download-client inbox path — nixarr hardcodes
+   `${mediaDir}/qbittorrent` and `${mediaDir}/usenet`, neither configurable.
+4. [ ] Generate a ProtonVPN WireGuard config (P2P-tagged server), add it to
+   `secrets/galactica.yaml` under `vpn/wgConf`, then flip `vpnReady = true`
+   in `media.nix` to bring up qBittorrent/SABnzbd inside the VPN-Confinement
+   netns.
+5. [ ] Flesh out `recyclarr.configuration` with real TRaSH-guide
+   `quality_definition`/`custom_formats`/`quality_profiles` blocks — the
+   scaffold is a no-op until then.
+6. [ ] Ingress: point the `homelab_stacks` tsdproxy List-provider entries at
+   the new localhost ports (Sonarr 8989, Radarr 7878, Prowlarr 9696, Bazarr
+   6767, Audiobookshelf, Shelfmark, sonarr-anime 8990, radarr-anime 7879) —
+   out of scope for this repo.
+7. [ ] `sonarr-anime`/`radarr-anime` (anime.nix) start with empty state —
+   same first-run setup as the main pair (indexers via Prowlarr sync,
+   download client, anime-tuned quality profiles/naming — TRaSH's
+   anime-specific guides, not the movie/TV ones the main instances use) plus
+   pointing each at `${mediaDir}/library/anime`.
+8. [ ] `recyclarr.configuration` in media.nix only targets the main Sonarr/
+   Radarr — extending it to sonarr-anime/radarr-anime needs their API keys
+   added by hand (nixarr's automatic key extraction only covers its own
+   `nixarr.sonarr`/`nixarr.radarr`, not the hand-rolled instances).
+9. [ ] Shoko (AniDB-based library organizer) was evaluated and deferred —
+   see anime.nix's header. Revisit only alongside packaging its Jellyfin
+   plugin (not in nixpkgs) as cross-host work with memory-alpha.
 
 The original forward-looking notes below are now mostly satisfied; kept for
 provenance.
