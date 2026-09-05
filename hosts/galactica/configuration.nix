@@ -28,6 +28,7 @@
     ../../modules/nixos/traefik-galactica.nix
     ./borgmatic.nix
     ./nixflix.nix
+    ./unpackerr.nix
   ];
 
   networking.hostName = "galactica";
