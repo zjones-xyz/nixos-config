@@ -58,6 +58,10 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
   items get a checkbox.
 - `.nix`/config changes → feature branch + PR, title prefixed with the host scope
   in brackets, e.g. `[memory-alpha] …`, `[pegasus] …`, `[all] …`.
+- **Branch names carry no agent prefix.** `nfs-cutover`, not `claude/nfs-cutover`
+  — name the branch for the work, not for who did it. Where a session is handed
+  a prefixed branch by its harness, that one is out of our hands; every branch
+  created from inside the repo follows this.
 - Validate with `nix flake check` / `nix eval`. On the Mac (aarch64-darwin) the
   Linux closures can be *evaluated* but not *built* (no Linux builder); building
   and every `switch` happen on the target host.
