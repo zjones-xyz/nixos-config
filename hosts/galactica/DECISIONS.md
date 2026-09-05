@@ -278,6 +278,12 @@ three 1 TB CMR disks** (`h-5N8F`, `h-NYXN`, `h-6D0X`). 1 TB usable, tolerates
 root, app state and the media array; SnapRAID parity still on XFS or ext4, for the
 `chattr +C` reason above, which no change here touches. This is not "ZFS now".
 
+> ⚠ **Superseded in scope by §9 (2026-08-10).** The nine-device plan puts ZFS on
+> the media array and the flash pool as well, so "this is not 'ZFS now'" no longer
+> describes the layout — btrfs is left holding root and app state. The *reasoning*
+> in this section is unaffected and is what §9 builds on; only its scope claim is
+> stale.
+
 ⚠ **Neither documented reversal condition fired**, and that is worth recording
 rather than glossing. The offsite path is still borg reading files, and the photo
 tier did not outgrow a two-disk mirror — it got *smaller*. Both conditions above
@@ -433,6 +439,150 @@ Consequences, all of which follow from the one number:
 unchanged: an untested spare is a guess, and the moment you discover it is bad is
 the worst possible one. It is now the single point of failure for the whole
 Protected tier during the window, which raises rather than lowers the bar.
+
+---
+
+## 9. The nine-device plan — ZFS throughout, and the LSI may stop being necessary
+
+**Owner, 2026-08-10:** *"I'm tempted to say screw this."* What followed is a
+simplification rather than a retreat: it deletes most of the hardware problems the
+preceding week had been pricing.
+
+**Decision: nine SATA devices plus an optical drive, ZFS at every tier.**
+— *alt:* the thirteen-device layout as designed (§7, `DESIGN.md` §5); SnapRAID +
+mergerfs retained for the media array; the drawer's 1 TB trio retained for the
+photo tier.
+
+| Tier | Old (§7, `DESIGN.md` §5) | **New** |
+|---|---|---|
+| Media array | 4× 12 TB, SnapRAID + mergerfs, dual parity | 4× 12 TB, **ZFS RAID-Z**, winnowed to ~12 TB |
+| Critical + Precious | 3× 1 TB ZFS three-way mirror on LUKS | **4× 480 GB SSD, ZFS RAID-Z** |
+| Churn | `h-3V35` 4 TB — qBittorrent incomplete | **1× 3 TB** — torrent incomplete **+ ARM rip staging** |
+| Services | Services pool (SSD) + Fastservices | **NVMe**, fully |
+| Optical | pulled to free a port | **BD drive returns** |
+| **SATA devices** | **13** | **9** (+1 optical) |
+
+### The arithmetic, which is the whole argument
+
+| | Old | New |
+|---|---:|---:|
+| Ports required | 14 | 10 |
+| Idle draw (DC) | ~125 W | ~100 W |
+| Active draw (DC) | ~199 W | ~163 W |
+| **Cold-boot 12 V surge** | **~18.1 A** | **~9.8 A** |
+| Running cost @ $0.30/kWh | ~$394/yr | ~$315/yr |
+
+⟨Component figures are spec-sheet and era-typical, **not measured**. A $15 wall
+meter settles all of them and belongs in the same trip as the IR thermometer.⟩
+
+**Three consequences follow from the device count, and they are the point:**
+
+- ⭐ **The LSI may stop being necessary.** Ten devices against onboard 6 +
+  ASM1166 6 = 12. Dropping the card deletes the thermal work `PLATFORM.md` §7b
+  still owes, the IR-thermometer session, the Gen2-x4 slot-relocation question,
+  the SFF-8087 forward/reverse cable hazard, and ~12 W of constant heat.
+- ⭐ **The PSU stops being load-bearing.** ~9.8 A of surge is ~188 W transient —
+  47 % of the installed 400 W unit. Replacing a 2011-era PSU is still right, but
+  it reverts from *blocker* to *hygiene* and can happen on its own schedule.
+- **The decade-old 1 TB disks leave a tier that matters**, which was a live
+  concern the moment they were assigned to the photo pool.
+
+### The quad SSD array is a straight upgrade on the 1 TB trio
+
+| | 3× 1 TB three-way mirror | 4× 480 GB RAID-Z2 |
+|---|---|---|
+| Usable | ~1 TB | ~960 GB |
+| Survives | **2 failures** | **2 failures** |
+| Media | 2015–2017 spinners, never health-tested | flash |
+
+**Near-identical capacity and redundancy, on drives that are not ten years old.**
+The Precious tier is 215.6 GiB measured (`BACKUP.md` §3), so ~960 GB remains
+~4.5× oversized — capacity is still not the deciding variable, exactly as §7's
+reversal found.
+
+### ⚠ Two RAID-Z levels are open, and the arithmetic favours Z2 both times
+
+**Owner left the SSD array as "Z1 or Z2" and specified Z1 for the HDD array.**
+Recorded as proposed; the recommendation below is mine and is not owner-confirmed.
+
+**On the 12 TB array, Z1 is a downgrade from today.** Tower runs **dual parity**
+now. RAID-Z1 is single parity — and it lands on the tier least able to absorb it:
+
+> Once `documents` moves to flash, that array holds `music`, `books`, `public`,
+> `bambuddy_library`, `webdav`, `podcasts_audiobookshelf`,
+> `serenity_time_machine`, `archived_disks` and `calibre_books`. That is the
+> **Protected** tier, and `SHARES.md` §5 defines Protected as *"Parity. No
+> offsite."* Parity is not one layer of protection for those shares. **It is the
+> only one.**
+
+And Z2 costs nothing you need:
+
+| | Usable | Survives | vs. 12 TB payload |
+|---|---:|---:|---:|
+| RAID-Z1 | ~36 TB | 1 failure | 3.0× |
+| **RAID-Z2** | **~24 TB** | **2 failures** | **2.0×** |
+
+Resilver supports it: ZFS rebuilds only *allocated* data, so ~12 TB across four
+disks is ~4 TB per drive — roughly 9 hours, not the multi-day exposure the
+RAID-5-is-dead arguments assume. Z2 makes a second failure inside that window
+survivable rather than terminal.
+
+⚠ **Check whether the four 12 TB drives are one batch before settling on Z1.**
+This log already treats batch correlation as load-bearing — §7's reversal stars
+*"three different models from three different years, so unlike `h-QUTK`/`h-0X2T`
+there is no correlated-batch risk"* as a deciding point. Four same-batch drives
+in a Z1 vdev is precisely where that reasoning bites.
+
+⚠ **On the SSD array, Z2 is only safe because the databases went to NVMe.**
+RAID-Z handles small random writes badly — no partial-stripe writes, real write
+amplification. Large-file tiers are what it is good at. **If anything
+database-shaped later lands on the quad array, Z2 becomes the wrong topology**
+and the answer is striped mirrors instead. Same reasoning puts torrent and rip
+churn on the 3 TB rather than on either parity array.
+
+### ⚠ Risks accepted, or to be accepted deliberately
+
+- ⚠ **A single NVMe holds all of Services, with no local redundancy.** Previously
+  a mirrored pool. This is a **recovery-time** cost rather than a data-loss one —
+  `appdata` backs up nightly to `tower-hot` (`hosts/galactica/borgmatic/appdata.yaml`)
+  — but an NVMe failure becomes "restore ~76 GiB from BorgBase over the wire"
+  instead of a resilver. ⟨The alternative is the quad array as *striped mirrors*
+  holding `appdata`, NVMe as scratch: buys redundancy and IOPS for the databases,
+  costs Z2's second parity.⟩
+- ⚠ **Winnowing is the irreversible part.** 17.1 TB → ~12 TB is ~5 TB deleted.
+  Softer than it sounds — `arr_media`, `arr_managed_data` and `jellyfin` are all
+  **Re-acquirable**, and four array shares (`SHARE`, `manyfold_library`,
+  `syncthing`, `minishare`) are already owner-confirmed drops. ⚠ **`du -sh` them
+  before deleting**; measuring afterwards is not an option and `SHARES.md` §3
+  wants the number.
+- **ZFS gives up spin-down.** SnapRAID + mergerfs would let individual media
+  disks idle; ZFS keeps all four spinning. ~16 W ≈ **$42/yr** spent to buy
+  real-time parity in place of 24-hour-lag snapshot parity. A trade, not an
+  oversight.
+- ⚠ **The parachute needs a tenth port during the window.** Nine devices is the
+  steady state; an in-chassis copy makes it ten, eleven with the optical drive.
+  Onboard 6 + ASM1166 6 = 12 still covers it — but it is an unpleasant thing to
+  discover with the case closed.
+
+### What this supersedes
+
+- **§7's "btrfs everywhere" is now the minority case.** Its 2026-08-09 reversal
+  was explicitly *"scoped to the photo tier… This is not 'ZFS now'."* Under this
+  plan it effectively is: ZFS holds the media array, the flash pool and the photo
+  tier, leaving btrfs for root and app state.
+- **§8's parachute arithmetic still holds**, since the 2.1 TiB Protected figure is
+  a property of the data rather than the layout. But §8 assumed an *in-place
+  SnapRAID conversion*; a ZFS pool cannot be built in place over existing data, so
+  `DESIGN.md` §6.1's conversion path needs rereading rather than inheriting.
+- **`DESIGN.md` §5's storage layout was drawn for a different disk population.**
+  Reread rather than inherit.
+- **Several `Still open` items go moot** if the LSI and ASM1064 both leave: the
+  ASM1064's x1 link, the 4 TB CMR-vs-SMR question for the photo tier (it moves to
+  flash), and the Samsung 2 TB's HD204UI defect.
+
+⚠ **Owner-proposed 2026-08-10, not yet exercised on hardware.** The RAID-Z levels
+and the LSI-versus-ASM1166 question are open; everything else above is the plan as
+stated.
 
 ---
 

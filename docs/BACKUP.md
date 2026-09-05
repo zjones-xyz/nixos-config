@@ -833,6 +833,27 @@ than by the date arriving.
 Serenity is under no pressure in any of this: it has three working offsite paths
 and is the best-covered machine in the fleet (§2).
 
+### ✅ Decided 2026-08-15 — serenity's tool is Vorta, not borgmatic
+
+Serenity's Borg-based path was wired up ahead of the deferral above (see
+`hosts/serenity/BACKUP.md`), and when it was, the tool chosen was **Vorta** — a
+GUI Borg client — rather than borgmatic. The repository is unaffected
+(`serenity-home` on BorgBase, same append-only key-custody shape as every
+other host); what changed is who schedules the backup. The deciding factor:
+Vorta has native per-Wi-Fi-network scheduling and a "skip on metered
+networks" toggle, checked directly in its source rather than assumed — borgmatic
+has no equivalent, and would need a hand-rolled hook to get the same thing on
+a machine that isn't always on the home network. `hosts/pegasus/borgmatic.nix`
+is unaffected by this — pegasus stays on borgmatic, matching this section's
+original reasoning (it's a stationary desktop with no offsite copy to begin
+with, where the declarative-config argument for borgmatic still holds).
+
+This does not retire the ~2027-02 reminder's *purpose* so much as resolve it
+early and differently than planned: the reminder existed to gather enough
+borgmatic operational evidence to decide serenity's tool, and instead the
+tool got decided directly. Nothing here says iDrive or the Time Machine
+drives are retired — that's still a separate, open decision.
+
 ## 4c. Can bind mounts be tagged for backup handling in Compose?
 
 **Evaluated 2026-08-07. Directly: no. Usefully: yes, one indirection away — and
