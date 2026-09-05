@@ -15,12 +15,10 @@
 > `hosts/galactica/configuration.nix`. In brief, what exists:
 >
 > - **Pool `tank`** — **RAIDZ1** across the four 12 TB HGST spinners + a **3-way
->   mirror special vdev** across three SSDs (WD Blue + two Crucial BX500), every
->   member **LUKS-under-ZFS** (one fleet unlock story; avoids ZFS-native-crypto
->   `send`/`recv` corruption bugs). `ashift=12` forced, `compression` lz4/zstd,
->   `atime=off`, `xattr=sa`, `acltype=posixacl`. ~31.6 TiB usable. The intended
->   4th special-vdev SSD (Crucial MX100) failed on first write, so the special
->   vdev is 3-way rather than 2×2; a `zpool detach` + `add` path to 2×2 remains.
+>   mirror special vdev** across three SSDs, every member **LUKS-under-ZFS**
+>   (one fleet unlock story; avoids ZFS-native-crypto `send`/`recv` corruption
+>   bugs). ~31.6 TiB usable; member disks, pool properties and vdev layout are
+>   inventoried in `HARDWARE-MAP.md` §1.
 > - **ZFS gives what SnapRAID was chosen to avoid needing:** real (not up-to-24 h
 >   stale) parity, read-time checksums with self-healing, and one snapshot story —
 >   at the cost of RAIDZ's damage-confinement property, knowingly traded

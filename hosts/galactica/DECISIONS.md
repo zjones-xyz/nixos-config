@@ -76,6 +76,9 @@ exactly the coupling that made the previous plan awkward.
 
 ## 3. Why there is no config here yet
 
+> ✅ **Superseded 2026-08-31** — `configuration.nix` exists and the host is
+> installed and live. Kept as the record of why it was deferred.
+
 **Documentation-only until the storage layout is settled** — *alt:* scaffold a
 `configuration.nix` now and fill in the disks later.
 
@@ -96,6 +99,9 @@ cannot evaluate anything here, and the `.sops.yaml` staging stanza is absent too
 (see 4).
 
 ## 4. sops staging is deferred with the config
+
+> ✅ **Superseded 2026-08-31** — `secrets/galactica.yaml` and the `.sops.yaml`
+> rule exist, encrypted to `*admin` + `*galactica`, per the shape below.
 
 **No `&galactica` key and no `secrets/galactica.yaml` creation rule until there
 is a host config to gate on it** — *alt:* add the placeholder stanza now, as
@@ -483,9 +489,11 @@ re-derive why it stopped applying.
 - **NUT server duty moving to memory-alpha.** The whole argument was that
   virtualizing Tower puts the UPS USB on the host, leaving the host — which
   physically holds every disk — unable to see the UPS. Bare metal dissolves it:
-  the UPS plugs into the NixOS host, `modules/nixos/nut.nix` makes it the server,
-  and memory-alpha stays a client. **No cable move is needed.** See `DESIGN.md`
-  §4.7.
+  the UPS plugs into the NixOS host, which becomes the server, and memory-alpha
+  stays a client. **No cable move is needed.** (Not via `modules/nixos/nut.nix`
+  as this bullet originally said — that module is hopper's, hardwired to its
+  local ntfy; galactica's server config is inline in `configuration.nix`, see
+  `MANUAL-STEPS.md` §6.)
 - **The array belongs on the ASM1166.** Under passthrough it had to be — onboard
   SATA was never passed through, so an array left there would have been invisible
   to the guest. Under bare metal the reasoning inverts: the onboard SATA 2.0
