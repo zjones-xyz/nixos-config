@@ -20,7 +20,7 @@ let
           # NixOS stores docker in the Nix store, not at a standard path.
           # Dockge spawns `docker compose` as a child process and needs the
           # binary visible inside the container at a standard PATH location.
-          - ${pkgs.docker}/bin/docker:/usr/local/bin/docker:ro
+          - ${config.virtualisation.docker.package}/bin/docker:/usr/local/bin/docker:ro
         environment:
           - DOCKGE_STACKS_DIR=/opt/stacks
         networks:
@@ -60,11 +60,11 @@ in
       # Create bind-mount source dirs as z before the container starts.
       # `+` runs the command as root so it can mkdir under /home/z and chown.
       ExecStartPre = "+${pkgs.bash}/bin/bash -c 'mkdir -p /home/z/dockge/data /home/z/homelab-stacks/memory-alpha && chown -R z:users /home/z/dockge /home/z/homelab-stacks'";
-      ExecStop = "${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name dockge down";
+      ExecStop = "${config.virtualisation.docker.package}/bin/docker compose -f ${composeFile} --project-name dockge down";
     };
 
     script = ''
-      exec ${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name dockge up --remove-orphans
+      exec ${config.virtualisation.docker.package}/bin/docker compose -f ${composeFile} --project-name dockge up --remove-orphans
     '';
   };
 }

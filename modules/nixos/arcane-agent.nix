@@ -65,12 +65,12 @@ in
       serviceConfig = {
         Restart = "on-failure";
         RestartSec = "10s";
-        ExecStop = "${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name arcane-agent down";
+        ExecStop = "${config.virtualisation.docker.package}/bin/docker compose -f ${composeFile} --project-name arcane-agent down";
       };
 
       script = ''
         export AGENT_TOKEN="$(cat ${cfg.tokenFile})"
-        exec ${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name arcane-agent up --remove-orphans
+        exec ${config.virtualisation.docker.package}/bin/docker compose -f ${composeFile} --project-name arcane-agent up --remove-orphans
       '';
     };
   };

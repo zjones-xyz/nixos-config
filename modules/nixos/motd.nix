@@ -27,17 +27,6 @@ in
     generation="''${link#system-}"
     generation="''${generation%-link}"
 
-    # Best-effort: only works if this host has a local checkout at the
-    # conventional ~/nixos-config path (see hosts/*/DEPLOY.md) with HEAD at
-    # the revision that was actually built — silently omitted otherwise.
-    subject=""
-    if [ -d /home/z/nixos-config/.git ]; then
-      subject="$(${pkgs.git}/bin/git -C /home/z/nixos-config log -1 --format='%s' 2>/dev/null || true)"
-    fi
-
-    {
-      echo "NixOS generation $generation (rev ${shortRevision})"
-      [ -n "$subject" ] && echo "Last commit: $subject"
-    } > /etc/nixos-motd
+    echo "NixOS generation $generation (rev ${shortRevision})" > /etc/nixos-motd
   '';
 }
