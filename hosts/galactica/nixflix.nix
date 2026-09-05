@@ -449,41 +449,23 @@ in
       RestartSec = 30;
     };
 
-    # Bounded, or "retries visibly" is false. NixOS defaults are burst 5 over
-    # 10s; at RestartSec = 30 the attempts are 90s apart, so that limiter never
-    # trips and the unit retries forever — and a unit perpetually cycling
-    # through `activating` never lands in `failed`, so it never appears in
-    # `systemctl --failed`. That is LESS visible than failing once. Five tries
-    # over half an hour rides out a slow boot, then it gives up somewhere a
-    # person can see it.
+    # Bounded, or "retries visibly" is false: the NixOS default burst (5 over
+    # 10s) never trips at RestartSec = 30, and a unit cycling through
+    # `activating` forever never reaches `failed` — less visible than failing
+    # once. Five tries over half an hour rides out a slow boot, then stops.
     startLimitIntervalSec = 1800;
     startLimitBurst = 5;
   };
 
   # ── SABnzbd's per-category complete directories ───────────────────────────
-  # A fourth local correction to upstream, and the same shape as the others:
-  # nixflix's qBittorrent module creates a tmpfiles entry for every download
-  # category, and its SABnzbd module does not — it creates `complete_dir` and
-  # stops, even though it configures the categories themselves over SABnzbd's
-  # API with a `dir` each.
+  # nixflix's qBittorrent module makes a tmpfiles entry per category; its
+  # SABnzbd module stops at `complete_dir`. So `complete/<category>` does not
+  # exist until the first finished download there, and the *arrs report that as
+  # "cannot see this directory… adjust the folder's permissions" — a misleading
+  # guess, since they cannot tell missing from unreadable.
   #
-  # So `complete/<category>` does not exist until SABnzbd's first finished
-  # download in that category, and every *arr reports it the same way:
-  #
-  #   Download client SABnzbd places downloads in
-  #   /tank/nixflix_media/downloads/usenet/complete/sonarr-anime but Sonarr
-  #   cannot see this directory. You may need to adjust the folder's
-  #   permissions.
-  #
-  # Which is a misleading guess on the *arr's part — it cannot distinguish
-  # "missing" from "unreadable", and permissions were never the problem: both
-  # services run in the `media` group. Creating the directories up front also
-  # pins their ownership rather than leaving it to whatever umask SABnzbd
-  # happens to have when it first writes there.
-  #
-  # Derived from the evaluated category list, so adding an *arr cannot leave a
-  # category without a directory. The catch-all `*` category has an empty dir
-  # and is skipped — it means "default", not a subdirectory.
+  # Derived from the evaluated category list, so a new *arr cannot be left
+  # without one. `*` is skipped: it means "default", not a subdirectory.
   systemd.tmpfiles.settings."11-sabnzbd-categories" = lib.mergeAttrsList (
     map
       (cat: {
@@ -499,35 +481,10 @@ in
   );
 
   # ── qBittorrent's umask ───────────────────────────────────────────────────
-  # A fifth local correction, and the first one that has actually bitten in
-  # production rather than been caught in review.
-  #
-  # nixflix sets `UMask = "0002"` for every *arr (arr-common/
-  # mkArrServiceModule.nix) and SABnzbd's own settings default `permissions =
-  # "775"` — but the qBittorrent module sets neither, and neither does
-  # nixpkgs'. So the one download client that is not an *arr runs at systemd's
-  # default 0022 and creates each release directory `0755 qbittorrent:media`.
-  #
-  # Every other service here is in the `media` group, which therefore gets
-  # read-and-traverse but NOT write inside those directories. Observed
-  # 2026-09-05: Unpackerr extracted sixteen RAR'd Sonarr grabs perfectly well
-  # into `<release>_unpackerred/` — a sibling in the category directory, which
-  # tmpfiles creates 0775, so that half worked — and then failed every move
-  # back into the release directory:
-  #
-  #   rename …/Shetland.S09E02…_unpackerred/….mkv
-  #       →  …/Shetland.S09E02…/….mkv: permission denied
-  #
-  # `drwxrwxr-x` on the category directory, `drwxr-xr-x` on the release
-  # directories inside it. That one difference is the whole bug, and it would
-  # equally have blocked a Sonarr import that needed to write there.
-  #
-  # ⚠ A umask applies only to newly created files, so this fixes new downloads
-  # and does nothing for what is already on disk. MANUAL-STEPS §12 step 10
-  # carries the one-time repair.
-  #
-  # Good upstream contribution: nixflix is internally inconsistent here, not
-  # wrong on purpose — its *arrs and its usenet client both get this right.
+  # nixflix sets this for every *arr and SABnzbd defaults `permissions = 775`,
+  # but its qBittorrent module sets neither and nor does nixpkgs' — so release
+  # directories land 0755 and nothing else in `media` can write inside one.
+  # ⚠ A umask covers new files only; MANUAL-STEPS §12 step 10 repairs the rest.
   systemd.services.qbittorrent.serviceConfig.UMask = "0002";
 
 

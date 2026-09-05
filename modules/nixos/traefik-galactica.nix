@@ -87,10 +87,8 @@ let
       sabnzbd = svcUrl nixflix.usenetClients.sabnzbd nixflix.usenetClients.sabnzbd.settings.misc.port;
       qbittorrent = svcUrl nixflix.torrentClients.qbittorrent nixflix.torrentClients.qbittorrent.webuiPort;
     }
-    # Host-local services that nixflix does not know about, so their address
-    # cannot be derived above. They register themselves instead of being listed
-    # here, which keeps each port written exactly once, in the module that owns
-    # the service. `hosts/galactica/bazarr.nix` is the first user.
+    # Host-local services nixflix does not know about; they register
+    # themselves so each port stays written once, where the service is defined.
     // config.homelab.arrExtraUpstreams;
 
   # FlareSolverr is deliberately absent. It has no UI worth reaching, it is an
@@ -159,9 +157,8 @@ in
     example = lib.literalExpression ''{ bazarr = "http://127.0.0.1:6767"; }'';
     description = ''
       Extra subdomain → upstream-URL pairs to publish under `arr.internal` and
-      `arr.zjones.dev`, for services on this host that nixflix does not manage
-      and whose address therefore cannot be derived. Each entry gets the same
-      router pair as a nixflix service, wildcard certificate included.
+      `arr.zjones.dev`, for services nixflix does not manage. Each gets the
+      same router pair as a nixflix service, wildcard certificate included.
     '';
   };
 
