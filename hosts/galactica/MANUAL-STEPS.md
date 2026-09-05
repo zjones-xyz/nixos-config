@@ -613,7 +613,8 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    UIs are reachable at `https://<service>.arr.internal` and
    `https://<service>.arr.zjones.dev` — `prowlarr`, `sonarr`, `sonarr-anime`,
    `radarr`, `lidarr`, `navidrome`, `sabnzbd`, `qbittorrent`, and `traefik`
-   for the dashboard. The firewall opens **only 80 and 443**; the service
+   for the dashboard — plus `bazarr` and `bazarr-anime`, added after this step
+   was done (step 9). The firewall opens **only 80 and 443**; the service
    ports are not reachable directly, by design.
 
    ⚠ **The usernames are not all the same.** Eight of the nine log in as
@@ -732,7 +733,61 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    `/tank/nixflix_media/media/{tv,movies}`. Only destroy the staging datasets
    once the libraries look right; that is the last undo.
 
-9. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
+9. [ ] **Wire up the two Bazarrs.** Both are running after the switch but
+   neither knows about anything yet — Bazarr keeps its configuration in its
+   own database, not in Nix, so this part is genuinely by hand.
+
+   | Instance | URL | Talks to |
+   |---|---|---|
+   | `bazarr` | `https://bazarr.arr.internal` | Sonarr (`127.0.0.1:8989`) + Radarr (`127.0.0.1:7878`) |
+   | `bazarr-anime` | `https://bazarr-anime.arr.internal` | sonarr-anime (`127.0.0.1:8990`) only |
+
+   ⚠ **There are two because Bazarr only speaks to one Sonarr and one
+   Radarr.** Its config schema has scalar `sonarr.ip` / `radarr.ip` keys, and
+   upstream has closed the multi-instance request as "won't happen" — the
+   sanctioned answer is a second instance. `hosts/galactica/bazarr.nix`
+   records the alternatives that were weighed and why none of them fit.
+
+   1. [ ] **Set a login first, on both.** Settings → General → Security.
+      Bazarr ships with authentication **off**, so until this is done anything
+      that can reach the name can drive it. None of the other services on this
+      host behave that way, which is exactly why it is easy to miss.
+   2. [ ] **Point each at its *arr(s).** Settings → Sonarr / Settings → Radarr:
+      host `127.0.0.1`, the port from the table, SSL off, and the API key.
+      Read the keys without opening the editor:
+      ```bash
+      for k in sonarrApiKey sonarrAnimeApiKey radarrApiKey; do
+        printf '%-20s %s\n' "$k" "$(sudo cat /run/secrets/nixflix/$k)"
+      done
+      ```
+      On `bazarr-anime`, leave Radarr **disabled** — enabling it there would
+      have two instances managing the same films.
+   3. [ ] **Leave path mappings empty.** This is the classic Bazarr
+      misconfiguration, and it does not apply here: Bazarr runs on the same
+      host and the same filesystem as the *arrs, so the path Sonarr reports is
+      the path Bazarr opens. Mappings are for the split-container case.
+   4. [ ] **Add providers and a languages profile.** Settings → Providers
+      needs your own subtitle-site accounts; Settings → Languages defines a
+      profile, which then has to be set as the default for series/movies or it
+      applies to nothing new.
+   5. [ ] **Check what it writes**, once one subtitle has landed:
+      ```bash
+      ls -l /tank/nixflix_media/media/tv/*/*/*.srt | head
+      ```
+      Expect `bazarr media` and mode `-rw-rw-r--`. Group-writable is the point
+      — a subtitle the *arrs cannot move is one a later rename leaves behind.
+      That comes from `UMask=0002` plus `media` as Bazarr's primary group;
+      both are in `bazarr.nix` and both are load-bearing.
+
+   Reachability re-check, no DNS needed:
+   ```bash
+   for h in bazarr bazarr-anime; do
+     printf '%-14s %s\n' "$h" \
+       "$(curl -k -sS -o /dev/null -w '%{http_code}' --max-time 5 "https://$h.arr.internal/" 2>&1)"
+   done
+   ```
+
+10. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
    `nix flake update`. The input is pinned to an exact upstream revision that
    the fork's CI has cleared against 26.05. To move it: merge upstream into
    `zjones-xyz/nixflix-exp`, let its CI go green against the 26.05 pin, then
@@ -814,9 +869,10 @@ Worth confirming on first boot: `journalctl -u flaresolverr` should show it
 becoming ready once, not looping, and Prowlarr's Settings → Indexer Proxies
 should list a `FlareSolverr` entry tagged `flaresolverr`.
 
-**Not enabled, deliberately, each a few lines when wanted:** `lidarr`
-(SHARES.md marks `music` 🛡 Protected — a curated library, so automating it
-is its own decision) and `recyclarr` (TRaSH profile sync).
+**Both since enabled:** `lidarr` (SHARES.md marks `music` 🛡 Protected, so
+automating it was its own decision — taken, with `media/music` starting empty
+and the existing collection imported rather than migrated in place) and
+`recyclarr` (TRaSH profile sync, step 7).
 SABnzbd is deliberately **outside** the VPN — usenet is already TLS to a paid
 provider, so the tunnel would only cap throughput; `nixflix.nix` says so at
 the option.

@@ -29,6 +29,7 @@
     ./borgmatic.nix
     ./nixflix.nix
     ./unpackerr.nix
+    ./bazarr.nix
   ];
 
   networking.hostName = "galactica";
