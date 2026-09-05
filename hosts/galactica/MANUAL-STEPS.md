@@ -392,6 +392,40 @@ forward-looking rather than blocking now:
     small-disk failure costs part of a recoverable copy, not the pool. Use
     them as a copy, never as a member.
   - Weekly scrub + SMART (both on) to catch a second disk degrading early.
+- **A candidate successor for `midden`, not a decision — noted 2026-09-05.**
+  `midden` (`s-9545`, generic 224 GB SATA SSD) is the one disk in this design
+  explicitly expected to fail within about a year (§2b), and when it does, its
+  two roles need a home: `/var/log/journal` and `nix.settings.build-dir`.
+  `h25-8SRC` — a 2.5" 7 mm WD Black WD5000LPLX, 500 GB, 7200 rpm CMR, now in
+  `docs/DISK-DRAWER.md` — fits that slot on every axis except speed:
+  - **Sized comfortably.** `midden`'s split is 48 G logs / ~175 G scratch;
+    500 GB is roomy for both.
+  - **Mounting is already solved.** `HARDWARE-MAP.md` §3 records five stock
+    2.5" positions in the chassis floor, owner-observed 2026-08-09 and
+    currently unused — the SSDs all sit in the owner-printed cage instead. It
+    inherits `midden`'s SATA port rather than costing a new one.
+  - **The roles tolerate a low-trust disk**, which is the entire reason
+    `midden` is a no-name SSD in the first place. Both datasets are disposable
+    by design.
+  - ⚠ **The real cost is build scratch on a spinner.** journald will not
+    notice; a kernel or large-package build does a lot of small scattered I/O
+    and will. This trades build speed for expected remaining service life, and
+    which side wins depends on how often heavy derivations actually get built
+    on this host — which nobody has measured yet.
+  - ⚠ **Blocked on SMART, not on the decision.** Manufacture date is 2018 but
+    the wear figures are unread; a mobile WD Black's `Load_Cycle_Count` can
+    disqualify it outright. See that disk's section in `DISK-DRAWER.md` for
+    the three attributes to read. **Do not plan around this disk until they
+    are.**
+
+  Explicitly **not** a role for it: anything on `tank`. A spinner cannot
+  supplement the SSD special vdev — as a fourth mirror leg it becomes the
+  write-latency floor for all pool metadata, and as a second special vdev it
+  becomes a non-redundant single point of failure for the whole pool. Neither
+  is undoable: ZFS does not support top-level vdev removal from a pool that
+  contains a raidz vdev, so a mistaken `zpool add tank special <disk>` here is
+  permanent short of destroy-and-restore. L2ARC and SLOG are separately ruled
+  out above.
 - **Migrate `/boot`'s ESP from `midden` to MX100** (see §2b — this is not
   optional cleanup, `midden` is expected to fail within about a year and
   currently hosts the only way this machine boots at all). Once the four
