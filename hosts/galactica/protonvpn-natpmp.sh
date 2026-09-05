@@ -65,11 +65,14 @@ while :; do
   # every 45s and the port is usually stable for days.
   if [ "$port" != "$published" ]; then
     jar=$(mktemp)
-    if curl -sf -c "$jar" \
+    # Bounded: a WebUI that accepts the TCP connection and then stalls (what a
+    # half-dead namespace looks like) would otherwise wedge this loop forever
+    # with the unit still active — the lease then expires silently.
+    if curl -sf --connect-timeout 5 --max-time 15 -c "$jar" \
          --data-urlencode "username=$QB_USER" \
          --data-urlencode "password=$QB_PASS" \
          "$QB_URL/api/v2/auth/login" >/dev/null \
-       && curl -sf -b "$jar" \
+       && curl -sf --connect-timeout 5 --max-time 15 -b "$jar" \
             --data-urlencode "json={\"listen_port\":$port}" \
             "$QB_URL/api/v2/app/setPreferences" >/dev/null; then
       echo "published forwarded port $port to qBittorrent"

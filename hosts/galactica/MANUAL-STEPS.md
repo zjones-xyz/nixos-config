@@ -748,10 +748,12 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    sanctioned answer is a second instance. `hosts/galactica/bazarr.nix`
    records the alternatives that were weighed and why none of them fit.
 
-   1. [ ] **Set a login first, on both.** Settings → General → Security.
-      Bazarr ships with authentication **off**, so until this is done anything
-      that can reach the name can drive it. None of the other services on this
-      host behave that way, which is exactly why it is easy to miss.
+   1. [ ] ⚠ **BLOCKING — set a login first, on both.** Settings → General →
+      Security. Bazarr ships with authentication **off**, so from the moment
+      the routes are live, anyone on the LAN can drive both instances through
+      Traefik — and Bazarr's settings page shows the Sonarr/Radarr API keys in
+      cleartext. None of the other services here behave this way. Do this
+      before anything else in this step.
    2. [ ] **Point each at its *arr(s).** Settings → Sonarr / Settings → Radarr:
       host `127.0.0.1`, the port from the table, SSL off, and the API key.
       Read the keys without opening the editor:

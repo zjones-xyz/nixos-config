@@ -96,7 +96,7 @@ in
     ];
     wantedBy = [ "multi-user.target" ];
 
-    serviceConfig = {
+    serviceConfig = import ./service-hardening.nix // {
       Type = "simple";
       User = "unpackerr";
       Group = "unpackerr";
@@ -107,7 +107,6 @@ in
 
       # The download tree only — never the library, which is the *arrs' write.
       ReadWritePaths = [ torrentPath ];
-
-    } // import ./service-hardening.nix;
+    };
   };
 }

@@ -399,7 +399,11 @@ in
   #     record with `?forceSave=true`, which tells Prowlarr to skip validating
   #     (i.e. contacting) the proxy on save. `after` is left as upstream set
   #     it, so ordering is unchanged; only the failure propagation differs.
-  systemd.services.flaresolverr.serviceConfig = {
+  # Guarded: with the service off, an unguarded override would CREATE a bare
+  # unit systemd refuses — the phantom-unit failure mode this branch has
+  # already paid for once.
+  systemd.services.flaresolverr = lib.mkIf config.nixflix.flaresolverr.enable {
+    serviceConfig = {
     # One curl retrying internally rather than a fork of curl+sleep every
     # second for up to 3 minutes — the spawns would land exactly while the CPU
     # is saturated launching Chromium, the thing being waited for.
@@ -419,9 +423,10 @@ in
     # message, rather than systemd killing the unit mid-poll with a generic
     # timeout. Upstream leaves this unset, so a plain set, not a force.
     TimeoutStartSec = 240;
+    };
   };
 
-  systemd.services.prowlarr-indexer-proxies = {
+  systemd.services.prowlarr-indexer-proxies = lib.mkIf config.nixflix.prowlarr.enable {
     requires = lib.mkForce [
       "prowlarr-config.service"
       "prowlarr-tags.service"
@@ -452,7 +457,7 @@ in
   # databases and Chromium all compete for this 2012 CPU. Restart is safe on a
   # RemainAfterExit oneshot: the script is idempotent — it skips when the user
   # already exists.
-  systemd.services.navidrome-create-admin = {
+  systemd.services.navidrome-create-admin = lib.mkIf config.nixflix.navidrome.enable {
     serviceConfig = {
       Restart = "on-failure";
       RestartSec = 30;
@@ -494,7 +499,9 @@ in
   # but its qBittorrent module sets neither and nor does nixpkgs' — so release
   # directories land 0755 and nothing else in `media` can write inside one.
   # ⚠ A umask covers new files only; MANUAL-STEPS §12 step 10 repairs the rest.
-  systemd.services.qbittorrent.serviceConfig.UMask = "0002";
+  systemd.services.qbittorrent = lib.mkIf config.nixflix.torrentClients.qbittorrent.enable {
+    serviceConfig.UMask = "0002";
+  };
 
 
   # ── ProtonVPN NAT-PMP → qBittorrent listen port ───────────────────────────

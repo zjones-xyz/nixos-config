@@ -87,19 +87,28 @@
     interval = "weekly";
   };
 
-  # ── tank import ordering (LUKS-under-ZFS) — the three gotchas the opus
-  # review flagged for this exact moment (MANUAL-STEPS.md §9) ─────────────────
-  # tank's members live under /dev/mapper (dm-crypt), opened in stage-2 by the
-  # crypttab above — so import must (a) scan /dev/mapper, not the by-id default,
-  # or it finds nothing; (b) run only AFTER cryptsetup.target, or on a cold
-  # boot it races the seven LUKS opens and imports a degraded/absent pool; and
-  # (c) be driven by extraPools, because tank's datasets use native ZFS
-  # mountpoints (/tank/*) rather than fileSystems.* entries, so nothing else
-  # would trigger the import at boot. Cold-boot verified 2026-09-01.
+  # ── tank import ordering (LUKS-under-ZFS) ──────────────────────────────────
+  # (a) scan /dev/mapper, not the by-id default, or import finds nothing;
+  # (b) order after each mapper unit BY NAME — `nofail` crypttab entries are
+  #     not pulled in by cryptsetup.target, so that target alone can be reached
+  #     with zero mappers open and only nixpkgs' 60s import-retry loop would
+  #     save a slow cold boot;
+  # (c) extraPools, because tank's datasets use native ZFS mountpoints, so
+  #     nothing else triggers the import at boot.
   boot.zfs.devNodes = "/dev/mapper";
   boot.zfs.extraPools = [ "tank" ];
   systemd.services."zfs-import-tank" = {
-    after = [ "cryptsetup.target" ];
+    # Names must match the crypttab above; `-` escapes to \x2d in unit names.
+    after = [ "cryptsetup.target" ] ++ map
+      (n: "systemd-cryptsetup@${lib.replaceString "-" "\\x2d" n}.service") [
+        "array-HJDH"
+        "array-NS3Y"
+        "array-X4WE"
+        "array-T97E"
+        "special-3255"
+        "special-768C"
+        "special-8162"
+      ];
   };
 
   # Low-swappiness swap partition (disko.nix) — a pressure release valve, not

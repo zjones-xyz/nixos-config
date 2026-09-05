@@ -159,6 +159,15 @@ in
   };
 
   config = {
+    # The dashboard pair claims the router names `dashboard`/`dashboard-dev`
+    # and the host `traefik`; an upstream taking either would silently lose.
+    assertions = [
+      {
+        assertion = !(upstreams ? dashboard) && !(upstreams ? traefik);
+        message = "traefik-galactica: the upstream names `dashboard` and `traefik` are reserved for the dashboard router pair.";
+      }
+    ];
+
     # ── The Cloudflare DNS-01 token ───────────────────────────────────────────
     # A twelfth secret for this host. DNS-01 rather than HTTP-01 because these
     # names never resolve publicly — the challenge is answered by writing a TXT
@@ -241,12 +250,16 @@ in
     # module reopened.
     virtualisation.oci-containers = {
       # ⚠ NixOS defaults this to podman, against a host running rootful Docker
-      # (and a Beszel agent watching a Docker socket). DESIGN.md §6.5 flags the
+      # (and a Beszel agent watching a Docker socket). ARCHIVE-DESIGN-snapraid.md
+      # §6.5 flags the
       # same trap. Set explicitly.
       backend = "docker";
 
       containers.docker-socket-proxy = {
-        image = "tecnativa/docker-socket-proxy:latest";
+        # Pinned: with the oci-containers default pull="missing", :latest is
+      # resolved once on first start and then NEVER updated — the worst of both
+      # directions, on the component brokering /run/docker.sock.
+      image = "tecnativa/docker-socket-proxy:v0.5.0";
         environment = {
           CONTAINERS = "1"; # Traefik reads container labels/state
           NETWORKS = "1"; # …and resolves the `proxy` network

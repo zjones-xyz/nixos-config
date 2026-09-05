@@ -58,7 +58,10 @@ in
     after = [ "sonarr.service" "radarr.service" ];
     wants = [ "sonarr.service" "radarr.service" ];
 
-    serviceConfig = hardening // {
+    # mkForce: these land in a unit nixpkgs also defines, and scalar
+    # serviceConfig keys have no last-wins merge — a future nixpkgs hardening
+    # pass would otherwise turn the first conflicting key into an eval error.
+    serviceConfig = lib.mapAttrs (_: lib.mkForce) hardening // {
       ReadWritePaths = [ dataDir ] ++ mainPaths;
     };
   };
@@ -83,14 +86,26 @@ in
     unitConfig.RequiresMountsFor = [ animeDataDir ];
 
     # Inherit the primary's evaluated serviceConfig — nixpkgs' settings plus
-    # the hardening above — so the two cannot diverge across a channel bump.
-    # Only what genuinely differs is overridden; the command line is restated
-    # because nixpkgs bakes dataDir and listenPort into its ExecStart.
-    serviceConfig = config.systemd.services.bazarr.serviceConfig // {
-      SyslogIdentifier = "bazarr-anime";
-      ExecStart = "${lib.getExe config.services.bazarr.package} --config ${animeDataDir} --port ${toString animePort} --no-update True";
-      ReadWritePaths = [ animeDataDir ] ++ animePaths;
-    };
+    # the hardening above — so the twin tracks nixpkgs across channel bumps.
+    # The removed keys are the ones that would carry the PRIMARY's dataDir or
+    # port if upstream ever adds them; better absent than pointed at the wrong
+    # instance. The command line is restated because nixpkgs bakes dataDir and
+    # listenPort into its ExecStart.
+    serviceConfig =
+      builtins.removeAttrs config.systemd.services.bazarr.serviceConfig [
+        "ExecStart"
+        "ExecStartPre"
+        "ExecStartPost"
+        "Environment"
+        "EnvironmentFile"
+        "StateDirectory"
+        "ReadWritePaths"
+      ]
+      // {
+        SyslogIdentifier = "bazarr-anime";
+        ExecStart = "${lib.getExe config.services.bazarr.package} --config ${animeDataDir} --port ${toString animePort} --no-update True";
+        ReadWritePaths = [ animeDataDir ] ++ animePaths;
+      };
   };
 
   # ── Routes ────────────────────────────────────────────────────────────────

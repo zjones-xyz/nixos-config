@@ -1,7 +1,7 @@
 # The systemd hardening shared by galactica's host-local media services
 # (unpackerr.nix, bazarr.nix — anything that talks to the *arrs and writes the
-# shared trees). Plain attrset, not a module: consumers `import` it and merge
-# their own ExecStart/ReadWritePaths (and UMask where load-bearing) with `//`.
+# shared trees). Plain attrset, not a module. Merge contract: this set goes on
+# the LEFT of `//` so a consumer's own keys always win.
 {
   NoNewPrivileges = true;
   PrivateDevices = true;
