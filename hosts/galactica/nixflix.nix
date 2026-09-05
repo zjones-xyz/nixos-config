@@ -440,6 +440,44 @@ in
     startLimitBurst = 5;
   };
 
+  # ── SABnzbd's per-category complete directories ───────────────────────────
+  # A fourth local correction to upstream, and the same shape as the others:
+  # nixflix's qBittorrent module creates a tmpfiles entry for every download
+  # category, and its SABnzbd module does not — it creates `complete_dir` and
+  # stops, even though it configures the categories themselves over SABnzbd's
+  # API with a `dir` each.
+  #
+  # So `complete/<category>` does not exist until SABnzbd's first finished
+  # download in that category, and every *arr reports it the same way:
+  #
+  #   Download client SABnzbd places downloads in
+  #   /tank/nixflix_media/downloads/usenet/complete/sonarr-anime but Sonarr
+  #   cannot see this directory. You may need to adjust the folder's
+  #   permissions.
+  #
+  # Which is a misleading guess on the *arr's part — it cannot distinguish
+  # "missing" from "unreadable", and permissions were never the problem: both
+  # services run in the `media` group. Creating the directories up front also
+  # pins their ownership rather than leaving it to whatever umask SABnzbd
+  # happens to have when it first writes there.
+  #
+  # Derived from the evaluated category list, so adding an *arr cannot leave a
+  # category without a directory. The catch-all `*` category has an empty dir
+  # and is skipped — it means "default", not a subdirectory.
+  systemd.tmpfiles.settings."11-sabnzbd-categories" = lib.mergeAttrsList (
+    map
+      (cat: {
+        "${config.nixflix.usenetClients.sabnzbd.settings.misc.complete_dir}/${cat.dir}".d = {
+          inherit (config.nixflix.usenetClients.sabnzbd) user group;
+          mode = "0775";
+        };
+      })
+      (
+        lib.filter (cat: (cat.dir or "") != "")
+          config.nixflix.usenetClients.sabnzbd.settings.categories
+      )
+  );
+
   # ── ProtonVPN NAT-PMP → qBittorrent listen port ───────────────────────────
   # Why this exists: nixflix's `vpn.openVPNPorts` declares a STATIC forwarded
   # port, which is how AirVPN and IVPN work. ProtonVPN does not do static
