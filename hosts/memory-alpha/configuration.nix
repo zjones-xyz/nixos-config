@@ -123,28 +123,31 @@ in
     # secrets.example = {};
   };
 
-  # ── NFS mounts (Tower media) ───────────────────────────────────────────────
-  # INERT until the §8 NFS cutover. Tower is galactica/ZFS now and these old
-  # Unraid share paths (/mnt/user/…) aren't exported yet, so every mount
-  # attempt gets `access denied`. `x-systemd.automount` is deliberately dropped
-  # for now: with it, a consumer touching the mountpoint during a switch (e.g.
-  # jellyfin restarting) fires a synchronous mount that fails and lands the
-  # .mount unit in `failed` — which makes `nixos-rebuild switch` exit non-zero.
-  # Without the automount and with `noauto`, nothing ever triggers them, so they
-  # stay inert placeholders (no failed units) rather than hard errors. `nofail`
-  # keeps them non-critical for good measure. The §8 cutover restores
-  # `x-systemd.automount` and re-points device= at the real ZFS export paths.
-  fileSystems."/mnt/unmanaged" = {
-    device = "tower.internal:/mnt/user/jellyfin";
+  # ── NFS mounts (galactica's array) ─────────────────────────────────────────
+  # LIVE as of the §8 cutover, so `x-systemd.automount` is restored — it was
+  # dropped while the exports did not exist because a failing synchronous mount
+  # lands the .mount unit in `failed` and makes `nixos-rebuild switch` exit
+  # non-zero. `soft` + `nofail` stay for the case galactica is simply down.
+  #
+  # ⚠ galactica must switch FIRST — these are `access denied` until its exports
+  # are live. MANUAL-STEPS §8 has the sequence, and why `tower.internal` stays.
+
+  # `/mnt/media` is the path modules/nixos/jellyfin.nix already documents.
+  fileSystems."/mnt/media" = {
+    device = "tower.internal:/tank/nixflix_media/media";
     fsType = "nfs";
-    options = [ "nfsvers=4" "soft" "timeo=30" "noauto" "nofail" "rsize=131072" "wsize=131072" "async" "nconnect=4" "noatime" ];
+    options = [ "nfsvers=4" "soft" "timeo=30" "noauto" "nofail" "x-systemd.automount" "rsize=131072" "wsize=131072" "async" "nconnect=4" "noatime" ];
   };
 
-  fileSystems."/mnt/arr_managed_data" = {
-    device = "tower.internal:/mnt/user/arr_managed_data";
+  # The library the *arrs do not manage — the mountpoint name is the point.
+  fileSystems."/mnt/unmanaged" = {
+    device = "tower.internal:/tank/media_staging/jellyfin";
     fsType = "nfs";
-    options = [ "nfsvers=4" "soft" "timeo=30" "noauto" "nofail" "rsize=131072" "wsize=131072" "nconnect=4" "noatime" ];
+    options = [ "nfsvers=4" "soft" "timeo=30" "noauto" "nofail" "x-systemd.automount" "rsize=131072" "wsize=131072" "async" "nconnect=4" "noatime" ];
   };
+
+  # `/mnt/arr_managed_data` (fsid 102) is GONE, not re-pointed: it served the
+  # *arr stack, which now runs on galactica. Dataset kept, not exported.
 
   # ── home-manager ──────────────────────────────────────────────────────────
   home-manager = {

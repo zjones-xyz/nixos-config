@@ -323,9 +323,26 @@
   homelab.smart.monitor = true;
 
   # ── NFS server (re-exports the array to memory-alpha) ──────────────────────
-  # `exports` still to come with the §8 cutover (fsids 100-103). 2049 only:
-  # memory-alpha mounts nfsvers=4, which needs no rpcbind/mountd/statd spread.
+  # 2049 only: memory-alpha mounts nfsvers=4. No export carries `fsid=0`, so
+  # there is no pseudo-root and clients mount the full path, as under Unraid.
+  #
+  # ⚠ fsids 100 (`arr_media`) and 102 (`arr_managed_data`) are deliberately NOT
+  # exported and stay reserved — reusing a number for different content hands a
+  # client ESTALE. MANUAL-STEPS §8 has the table and the reasoning; scope and
+  # `rw` are transcribed from the decision there, not re-decided here.
   services.nfs.server.enable = true;
+  services.nfs.server.exports = ''
+    # The *arr library. Thin until the staged media is imported — that is the
+    # import pending, not a broken mount.
+    /tank/nixflix_media/media     192.168.8.0/24(rw,sync,no_subtree_check,fsid=104)
+
+    # The hand-curated library the *arrs do not manage — hence the client's
+    # mountpoint name. Same share and consumer as under Unraid; path moved.
+    /tank/media_staging/jellyfin  192.168.8.0/24(rw,sync,no_subtree_check,fsid=101)
+
+    # Consumer unconfirmed (SHARES.md §4) — why the scope is LAN-wide.
+    /tank/bambuddy_library        192.168.8.0/24(rw,sync,no_subtree_check,fsid=103)
+  '';
   networking.firewall.allowedTCPPorts = [ 2049 ];
 
   # ── home-manager ──────────────────────────────────────────────────────────
