@@ -50,6 +50,16 @@ let
   internalDomain = "arr.internal";
   publicDomain = "arr.zjones.dev";
 
+  # The one certificate every *.arr.zjones.dev router requests. Declared once
+  # and shared so no router can drift into asking for a different SAN set,
+  # which would defeat the deduplication described at mkRouters below.
+  domains = [
+    {
+      main = publicDomain;
+      sans = [ "*.${publicDomain}" ];
+    }
+  ];
+
   nixflix = config.nixflix;
 
   # Every routed service, as subdomain → upstream URL.
@@ -87,11 +97,25 @@ let
       tls = { };
       service = "${name}-svc";
     };
-    # *.arr.zjones.dev — the Let's Encrypt wildcard anchored below.
+    # *.arr.zjones.dev — every one of these asks for the SAME wildcard, so
+    # Traefik dedupes them into a single issuance.
+    #
+    # Naming only the router's own host here instead (the obvious form, and
+    # what traefik-local.nix does) does not work on a cold start: Traefik
+    # skips a domain only once a covering certificate is already in the ACME
+    # store, so on the very first run the per-subdomain routers race ahead of
+    # the wildcard and each get their own certificate. Observed on galactica's
+    # first switch — lidarr and sonarr-anime were issued individually before
+    # `arr.zjones.dev` + `*.arr.zjones.dev` arrived. Harmless against staging,
+    # but against production it burns ~9 of the 50-per-week allowance on
+    # certificates the wildcard makes redundant.
     "${name}-dev" = {
       rule = "Host(`${name}.${publicDomain}`)";
       entrypoints = [ "websecure" ];
-      tls.certResolver = "letsencrypt";
+      tls = {
+        certResolver = "letsencrypt";
+        inherit domains;
+      };
       service = "${name}-svc";
     };
   }) upstreams;
@@ -173,23 +197,15 @@ in
           tls = { };
           service = "api@internal";
         };
-        # The wildcard anchor. One router requests
-        # `arr.zjones.dev` + `*.arr.zjones.dev` once, and every other
-        # *.arr.zjones.dev router above reuses that cert — same trick as
-        # traefik-local.nix's `traefik-dev`. Without it each subdomain would
-        # request its own cert and walk straight into Let's Encrypt's rate
-        # limits.
+        # Same wildcard as every other -dev router (see mkRouters): they all
+        # name one certificate rather than one router anchoring it for the
+        # rest, because the anchor form loses the race on a cold start.
         dashboard-dev = {
           rule = "Host(`traefik.${publicDomain}`)";
           entrypoints = [ "websecure" ];
           tls = {
             certResolver = "letsencrypt";
-            domains = [
-              {
-                main = publicDomain;
-                sans = [ "*.${publicDomain}" ];
-              }
-            ];
+            inherit domains;
           };
           service = "api@internal";
         };
