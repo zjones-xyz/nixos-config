@@ -2,35 +2,12 @@
 
 # Traefik for galactica's media stack.
 #
-# ── Why this one is native, when the other three are Docker ────────────────
-# `traefik.nix` (memory-alpha), `traefik-local.nix` (hopper) and
-# `traefik-hamilton.nix` all run Traefik as a Docker Compose stack. Those hosts
-# serve Docker workloads, so Traefik lives next to the things it proxies.
-#
-# galactica is the opposite shape: every service it proxies — the five *arrs,
-# SABnzbd, qBittorrent, Navidrome — is a native systemd unit from nixflix, and
-# it runs no containers today. Wrapping Traefik in Docker there would mean
-# enabling rootless Docker beside the rootful daemon already present, plus
-# compose plumbing, to reach services on the host it is already running on.
-#
-# The Docker *provider* is a separate question from Traefik's own packaging,
-# and it is kept: a native Traefik reads container labels perfectly well, it
-# just needs to reach the Docker API. So containers added to galactica later
-# get exactly the label-based config the other hosts use, with no migration —
-# join the `proxy` network, set `traefik.enable=true`, done.
-#
-# ── Why a socket proxy rather than the docker group ───────────────────────
-# Reaching /run/docker.sock directly would mean putting the traefik user in the
-# `docker` group, which is root-equivalent. `traefik.nix` already rejected that
-# for the same reason, in its own words: "a Traefik compromise can't reach the
-# root-equivalent socket". Same answer here — tecnativa/docker-socket-proxy
-# exposes a read-only slice of the API on loopback, and Traefik talks to that.
-#
-# ── Naming ────────────────────────────────────────────────────────────────
-# `*.arr.internal` / `*.arr.zjones.dev`, NOT `*.galactica.*` like the rest of
-# the fleet. Deliberate, and the owner's call: these names follow the media
-# *stack*, so moving it to another host later is a DNS change rather than a
-# rename of every bookmark, Prowlarr application URL and *arr cross-reference.
+# Native, not the fleet's Docker-compose shape: everything proxied here is a
+# native systemd unit. The Docker *provider* is kept (label-based config for
+# future containers) but talks to a read-only socket proxy on loopback —
+# joining the `docker` group would be root-equivalent, per traefik.nix.
+# Names are `*.arr.*`, not `*.galactica.*`, the owner's call: they follow the
+# media stack, so relocating it is a DNS change, not a rename of every URL.
 
 let
   # Staging and production certs live in separate files so flipping
@@ -58,15 +35,10 @@ let
 
   nixflix = config.nixflix;
 
-  # Every routed service, as subdomain → upstream URL.
-  #
-  # Both halves come from the service's own evaluated options — the port so a
-  # change in hosts/galactica/nixflix.nix cannot strand a route, and the ADDRESS
-  # because every nixflix service exposes a read-only `connectionAddress` that
-  # already resolves to loopback or, for a VPN-confined service, the namespace
-  # address. Hardcoding 127.0.0.1 would silently break any service later moved
-  # into the tunnel — which is exactly what qBittorrent is, and why it needed a
-  # special case before this.
+  # Every routed service, as subdomain → upstream URL. Both halves come from
+  # the service's own evaluated options — ⚠ hardcoding 127.0.0.1 breaks any
+  # service in (or later moved into) the VPN namespace, whose
+  # `connectionAddress` is the namespace address. qBittorrent is that case.
   svcUrl = svc: port: "http://${svc.connectionAddress}:${toString port}";
   arrUrl = name: svcUrl nixflix.${name} nixflix.${name}.config.hostConfig.port;
 
@@ -87,14 +59,12 @@ let
     # themselves so each port stays written once, where the service is defined.
     // config.homelab.arrExtraUpstreams;
 
-  # FlareSolverr is deliberately absent. It has no UI worth reaching, it is an
-  # unauthenticated HTTP endpoint that fetches arbitrary URLs through a real
-  # browser, and its only client (Prowlarr) talks to it on loopback.
+  # ⚠ FlareSolverr is deliberately absent: an unauthenticated endpoint that
+  # fetches arbitrary URLs through a real browser; its only client is local.
 
-  # One pair per service: the `.internal` name on Traefik's own self-signed
-  # cert, and the `.zjones.dev` name on the Let's Encrypt wildcard. The
-  # dashboard uses this too, so the pair — and the `domains` invariant below —
-  # is written once rather than restated for it.
+  # One pair per service: `.internal` on the self-signed cert, `.zjones.dev`
+  # on the LE wildcard. The dashboard reuses it, so the invariant below is
+  # written once.
   mkRouterPair =
     {
       name,
@@ -110,18 +80,11 @@ let
         tls = { };
         inherit service;
       };
-      # *.arr.zjones.dev — every one of these asks for the SAME wildcard, so
-      # Traefik dedupes them into a single issuance.
-      #
-      # Naming only the router's own host here instead (the obvious form, and
-      # what traefik-local.nix does) does not work on a cold start: Traefik
-      # skips a domain only once a covering certificate is already in the ACME
-      # store, so on the very first run the per-subdomain routers race ahead of
-      # the wildcard and each get their own certificate. Observed on galactica's
-      # first switch — lidarr and sonarr-anime were issued individually before
-      # `arr.zjones.dev` + `*.arr.zjones.dev` arrived. Harmless against staging,
-      # but against production it burns ~9 of the 50-per-week allowance on
-      # certificates the wildcard makes redundant.
+      # ⚠ Every -dev router asks for the SAME wildcard, and that is the
+      # dedup: Traefik skips a domain only once a covering cert is already
+      # stored, so per-host `domains` here lose a cold-start race and issue
+      # ~9 individual certs — against production, a fifth of the weekly
+      # allowance.
       "${name}-dev" = {
         rule = "Host(`${host}.${publicDomain}`)";
         entrypoints = [ "websecure" ];
@@ -169,14 +132,8 @@ in
     ];
 
     # ── The Cloudflare DNS-01 token ───────────────────────────────────────────
-    # A twelfth secret for this host. DNS-01 rather than HTTP-01 because these
-    # names never resolve publicly — the challenge is answered by writing a TXT
-    # record, so no inbound path from the internet is needed or wanted.
-    #
-    # Rendered as an EnvironmentFile rather than read in a script: the nixpkgs
-    # Traefik module takes `environmentFiles` and runs envsubst over the static
-    # config before start, which is the supported way to keep the token out of
-    # the world-readable store.
+    # DNS-01 because these names never resolve publicly; `environmentFiles` is
+    # the supported way to keep the token out of the world-readable store.
     sops.secrets."cloudflare/apiToken" = { };
 
     sops.templates."traefik.env" = {

@@ -78,62 +78,16 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # nixflix (used on galactica) — the declarative *arr media stack. Points
-    # at UPSTREAM, not at our zjones-xyz/nixflix-exp fork, and that is the
-    # canary-pattern split rather than an accident: the fork's job is to merge
-    # each upstream revision, prove it against nixos-26.05 in its own CI, and
-    # only then is this lock bumped to the matching upstream rev. The fork
-    # validates; upstream is what actually deploys.
+    # nixflix (galactica) — the declarative *arr media stack. Points at
+    # UPSTREAM, pinned to the exact rev the zjones-xyz/nixflix-exp canary has
+    # proven against 26.05 — never a branch URL, or a routine `nix flake
+    # update` pulls an unrehearsed revision. Bump = merge upstream into the
+    # fork, let its CI go green against 26.05, then move this rev to match.
     #
-    # This did briefly point at the fork, to pick up seven robustness fixes it
-    # carries that upstream has not taken yet. Two things sent it back here:
-    #
-    #  1. The fork is a PRIVATE repo, so CI — a bare actions/checkout runner
-    #     whose token is scoped to this repository — cannot fetch it at all.
-    #     Older Nix reports that inaccessible remote as "Cannot find Git
-    #     revision ... in ref ...", which reads like a stale pin and is not:
-    #     the ref is correct and carries exactly that rev, the runner simply
-    #     has no access. (`allRefs=1` does not help, for the same reason.)
-    #  2. Of those seven fixes, all but the FlareSolverr ones are either
-    #     confined to the fork's `tests/` tree or gated behind a service this
-    #     host does not enable — jellyfin and seerr are both `false` in
-    #     hosts/galactica/nixflix.nix. Those are what makes the *canary's* CI
-    #     reliable, which is where they belong.
-    #
-    # ⚠ FlareSolverr and Navidrome ARE enabled here, so three of the fork's
-    # fixes now matter to what this host runs, and all three are re-applied
-    # by hand in hosts/galactica/nixflix.nix instead — the readiness probe
-    # (plus the TimeoutStartSec that makes it effective), the
-    # prowlarr-indexer-proxies `requires`→`wants` relaxation, and a bounded
-    # Restart on navidrome-create-admin.
-    #
-    # That is the cost of reason 1, and it is real: `lib.mkForce` on an
-    # upstream unit is silent on drift, and these three are precisely the
-    # corrections the canary's CI does NOT rehearse, because the canary is
-    # what we are not using. The exit is to make the fork fetchable from CI
-    # (publish it, or give the workflow a credential — a CI change, not an
-    # architectural one) and point this input back at it, which deletes all
-    # three overrides. Upstreaming them to kiriwalawren/nixflix does the same
-    # job. Until one of those happens this is carried debt, not a settled
-    # design; hosts/galactica/nixflix.nix says the same at each override.
-    #
-    # `follows` on nixpkgs is what governs galactica's packages either way: a
-    # NixOS module always evaluates against the *consuming* host's pkgs, so
-    # upstream tracking nixos-unstable is irrelevant here — these modules get
-    # this fleet's 26.05 pin, which is exactly what the fork's CI rehearses.
-    #
-    # Pinned to an exact rev rather than tracking `main`, and the rev is not
-    # upstream's tip: `c5b5944` is the revision the canary has actually proven
-    # against 26.05 (zjones-xyz/nixflix-exp#1 is that tree, CI green). Upstream
-    # commits most days, so a bare branch URL would let `nix flake update` pull
-    # an unvalidated revision into the fleet — which is the exact failure the
-    # canary exists to prevent. Bumping this is a deliberate step: merge
-    # upstream into the fork, let its CI prove the result against 26.05, then
-    # move this rev to match. Same rev-pinning shape as the two standalone
-    # nixpkgs inputs below.
-    #
-    # git+https rather than github: — see the claude-desktop-debian input
-    # comment above for why.
+    # ⚠ Carried debt: the fork is private, CI cannot fetch it, and three of
+    # its fixes this host needs are therefore re-applied by hand in
+    # hosts/galactica/nixflix.nix. DECISIONS.md §10 has the full argument and
+    # the exit. git+https rather than github: — see claude-desktop-debian.
     nixflix = {
       url = "git+https://github.com/kiriwalawren/nixflix.git?rev=c5b5944791ecbc2a434fbf6d8d95859aee47b3b9&shallow=1";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -236,10 +190,9 @@
       };
 
       # galactica — Tower, bare-metal NixOS (replacing Unraid). Root: LUKS +
-      # btrfs on the NVMe, installed via hosts/galactica/disko.nix (2026-08-31).
-      # The RAIDZ1 media array is a separate, later addition once it's built
-      # live — not part of this closure yet. See hosts/galactica/README.md
-      # and MANUAL-STEPS.md for what's still outstanding.
+      # btrfs on the NVMe (disko.nix); the RAIDZ1 array `tank` and the media
+      # stack are declared in hosts/galactica/. MANUAL-STEPS.md §12 tracks
+      # what's still manual.
       galactica = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         specialArgs = { inherit self; };
@@ -257,17 +210,8 @@
         ];
       };
 
-      # hopper — Raspberry Pi 4, network-core node. Uses nixos-hardware's rpi-4
-      # profile plus nixpkgs' generic sd-image-aarch64 builder (mainline kernel,
-      # cached — see the nixos-hardware input comment above).
-      #
-      # Bootstrap: build the SD image on memory-alpha (aarch64 via binfmt) and
-      # flash it — boots straight into this config. See hosts/hopper/DEPLOY.md.
-      #   nix build .#nixosConfigurations.hopper.config.system.build.sdImage
-      # Routine deploys, with memory-alpha as the aarch64 build host:
-      #   nixos-rebuild switch --flake .#hopper \
-      #     --target-host z@hopper.internal \
-      #     --build-host z@memory-alpha.internal --use-remote-sudo
+      # hopper — Raspberry Pi 4, network-core node (nixos-hardware rpi-4 +
+      # sd-image builder). Build and deploy commands: hosts/hopper/DEPLOY.md.
       hopper = nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
         specialArgs = { inherit self; };
@@ -280,17 +224,8 @@
         ];
       };
 
-      # hamilton — Raspberry Pi 3 (bcm2837), backup AdGuard/Unbound resolver.
-      # Same approach as hopper: nixos-hardware's rpi-3 profile plus nixpkgs'
-      # sd-image-aarch64 builder (SD-card boot).
-      #
-      # Bootstrap: build the SD image on memory-alpha (aarch64 via binfmt) and
-      # flash it — boots straight into this config. See hosts/hamilton/DEPLOY.md.
-      #   nix build .#nixosConfigurations.hamilton.config.system.build.sdImage
-      # Routine deploys, with memory-alpha as the aarch64 build host:
-      #   nixos-rebuild switch --flake .#hamilton \
-      #     --target-host z@hamilton.internal \
-      #     --build-host z@memory-alpha.internal --use-remote-sudo
+      # hamilton — Raspberry Pi 3, backup AdGuard/Unbound resolver (same
+      # shape as hopper). Build and deploy commands: hosts/hamilton/DEPLOY.md.
       hamilton = nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
         specialArgs = { inherit self; };
@@ -303,12 +238,9 @@
         ];
       };
 
-      # galactica-live-iso — throwaway live ISO for Tower's bare metal, built
-      # to de-risk the migration plan (boot test, mounting the Unraid array
-      # read-only, hardware profile) BEFORE galactica has a real config — see
-      # hosts/galactica/README.md (no configuration.nix yet, deliberately) and
-      # hosts/galactica/live-iso.nix for the build/flash commands. This is not
-      # nixosConfigurations.galactica and never becomes the real host.
+      # galactica-live-iso — throwaway live ISO built to de-risk the migration
+      # (hosts/galactica/live-iso.nix has the build/flash commands). Not the
+      # real host and never becomes it.
       galactica-live-iso = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [

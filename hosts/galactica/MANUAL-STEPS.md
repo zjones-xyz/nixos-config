@@ -166,30 +166,61 @@ containers once the *arr stack is running, independent of the size cap.
 
 ## 6. Tower's UPS
 
-`nut-scanner -U` on the real machine to get the real driver/port. The
-commented-out `power.ups` block in `configuration.nix` needs fixing before
-uncommenting, not just filling in — `modules/nixos/nut-client.nix` is
-**already live on memory-alpha** and hardcodes its expectations: it monitors
-`ups@tower.internal` (not `tower@tower.internal`) authenticating as
-`monuser` (not `upsmon`). Rename the server-side UPS to `ups` and the
-monitor user to `monuser` to match, or the client will simply fail to
-connect. Also open the NUT protocol port, which nothing currently does:
-```nix
-networking.firewall.allowedTCPPorts = [ 3493 ];
-```
-Create `secrets/galactica.yaml`'s `nut/upsmonPassword` at the same time
-(`sops secrets/galactica.yaml`), matching whatever password gets set for
-`monuser` — this is shared with memory-alpha's own `nut/upsmonPassword` in
-`secrets/memory-alpha.yaml`, which must hold the identical value.
+galactica is to be the NUT server (the UPS plugs in here; memory-alpha is
+already a live client via `modules/nixos/nut-client.nix`). The config below
+was drafted in `configuration.nix` and moved here until the hardware step is
+done — a wrong driver name fails at service start, not at eval, so nothing is
+guessed.
 
-## 7. Beszel agent
+⚠ **Naming is constrained by the live client.** memory-alpha hardcodes
+`system = "ups@tower.internal"` and `user = "monuser"` — the server-side UPS
+must be named `ups` and the monitor user `monuser`, or the client silently
+fails to connect. (An earlier draft said `tower`/`upsmon`; caught in review.)
 
-No config exists for this yet — `modules/nixos/beszel.nix` turned out to be
-hopper's own hub+agent bundle, not a reusable agent module (see the comment in
-`configuration.nix`, confirmed by the opus review reading the file directly).
-Write a small host-specific unit: the `henrygd/beszel-agent` container, host
-network mode, `KEY` env pointed at hopper's hub. Register galactica as a new
-system in hopper's hub UI first to get that key.
+1. [ ] `nut-scanner -U` on galactica → real `driver`/`port` values.
+2. [ ] Add to `configuration.nix` (filling in the driver):
+   ```nix
+   power.ups = {
+     enable = true;
+     mode = "netserver";
+     ups.ups = {
+       driver = "<from nut-scanner>";
+       port = "auto";
+       description = "Tower UPS";
+     };
+     # memory-alpha needs LAN access, unlike hopper's local-only default.
+     upsd.listen = [ { address = "0.0.0.0"; } ];
+     upsmon.monitor.local = {
+       system = "ups@localhost";
+       type = "primary";
+       user = "monuser";
+       passwordFile = config.sops.secrets."nut/upsmonPassword".path;
+     };
+     users.monuser = {
+       passwordFile = config.sops.secrets."nut/upsmonPassword".path;
+       upsmon = "primary";
+     };
+   };
+   sops.secrets."nut/upsmonPassword" = { };
+   ```
+3. [ ] Open the NUT port by adding `3493` to the **existing**
+   `networking.firewall.allowedTCPPorts` list in the NFS section — a second
+   definition of the same attribute path in one attrset is a hard
+   duplicate-key eval error.
+4. [ ] `sops secrets/galactica.yaml` → `nut/upsmonPassword`, **identical** to
+   `nut/upsmonPassword` in `secrets/memory-alpha.yaml`.
+
+## 7. Monitoring agents (Beszel + Arcane)
+
+Both are configured (`modules/nixos/beszel-agent.nix`, `arcane-agent.nix`,
+wired in `configuration.nix`) and both hubs run on memory-alpha. The owner
+steps, done once per agent before its first activation:
+
+1. [x] **Beszel:** on memory-alpha's hub, "Add system" → copy the shared KEY
+   and the per-agent TOKEN → `sops secrets/galactica.yaml`: `beszel/hubKey`,
+   `beszel/agentToken` (raw values, no prefixes).
+2. [x] **Arcane:** on the memory-alpha manager, Settings → Environments → add
+   galactica → copy the AGENT_TOKEN → add as `arcane/agentToken`.
 
 ## 8. memory-alpha's NFS mounts — the cutover (planned 2026-08-31, written 2026-09-05)
 

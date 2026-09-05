@@ -492,6 +492,39 @@ plus `UMask = "0002"`. Anything not group-writable is left behind by the next
 *arr rename. The qBittorrent umask bug in `MANUAL-STEPS.md` §12 step 10 is the
 same lesson from the other end of the pipeline.
 
+## 10. nixflix rides upstream; the private fork is the canary — at the cost of three hand-applied fixes
+
+**The flake input points at upstream `kiriwalawren/nixflix`, pinned to the
+exact revision the `zjones-xyz/nixflix-exp` fork's CI has proven against
+nixos-26.05. The fork validates; upstream deploys.**
+
+*Why not the fork directly:* it is a private repo, and CI — a bare
+`actions/checkout` runner whose token is scoped to this repository — cannot
+fetch it. (Older Nix reports the inaccessible remote as "Cannot find Git
+revision … in ref …", which reads like a stale pin and is not; `allRefs=1`
+does not help either.) Of the seven robustness fixes the fork carries, all
+but three are confined to its `tests/` tree or gated behind services this
+host disables.
+
+*The cost, and it is real:* FlareSolverr and Navidrome are enabled, so three
+fork fixes matter to what runs, and all three are re-applied by hand in
+`hosts/galactica/nixflix.nix` — the readiness probe (with the TimeoutStartSec
+that makes it effective), the `requires`→`wants` relaxation on
+prowlarr-indexer-proxies, and a bounded Restart on navidrome-create-admin.
+`lib.mkForce` on an upstream unit is silent on drift, and these are precisely
+the corrections the canary's CI does not rehearse — the phantom
+`navidrome-setup` unit (MANUAL-STEPS.md §12) is what that costs, concretely.
+
+*The exit:* make the fork fetchable from CI (publish it, or give the workflow
+a credential) and point the input back at it — or upstream the three fixes.
+Either deletes the overrides. Until then this is carried debt, not a settled
+design.
+
+*Why never a branch URL:* upstream commits most days, and `follows` on
+nixpkgs already governs packages (modules evaluate against the consuming
+host's pkgs) — the pin exists so a routine `nix flake update` cannot pull an
+unrehearsed module revision into the fleet.
+
 ## Carried forward from the VFIO plan
 
 Constraints and findings that were established under the previous design and
