@@ -64,61 +64,84 @@ let
 
   # Every routed service, as subdomain → upstream URL.
   #
-  # Ports are read from the evaluated nixflix config rather than written out,
-  # so changing a port in hosts/galactica/nixflix.nix cannot leave a stale
-  # route pointing at nothing.
-  upstreams = {
-    prowlarr = "http://127.0.0.1:${toString nixflix.prowlarr.config.hostConfig.port}";
-    sonarr = "http://127.0.0.1:${toString nixflix.sonarr.config.hostConfig.port}";
-    sonarr-anime = "http://127.0.0.1:${toString nixflix.sonarr-anime.config.hostConfig.port}";
-    radarr = "http://127.0.0.1:${toString nixflix.radarr.config.hostConfig.port}";
-    lidarr = "http://127.0.0.1:${toString nixflix.lidarr.config.hostConfig.port}";
-    navidrome = "http://127.0.0.1:${toString config.services.navidrome.settings.Port}";
-    sabnzbd = "http://127.0.0.1:${toString config.services.sabnzbd.settings.misc.port}";
+  # Both halves come from the service's own evaluated options — the port so a
+  # change in hosts/galactica/nixflix.nix cannot strand a route, and the ADDRESS
+  # because every nixflix service exposes a read-only `connectionAddress` that
+  # already resolves to loopback or, for a VPN-confined service, the namespace
+  # address. Hardcoding 127.0.0.1 would silently break any service later moved
+  # into the tunnel — which is exactly what qBittorrent is, and why it needed a
+  # special case before this.
+  svcUrl = svc: port: "http://${svc.connectionAddress}:${toString port}";
+  arrUrl = name: svcUrl nixflix.${name} nixflix.${name}.config.hostConfig.port;
 
-    # NOT 127.0.0.1. qBittorrent is confined to the wg namespace and binds the
-    # namespace address; the host reaches it directly over the wg-br bridge
-    # (host side 192.168.15.5), which is why no port mapping is involved here.
-    qbittorrent = "http://${nixflix.torrentClients.qbittorrent.connectionAddress}:${
-      toString nixflix.torrentClients.qbittorrent.webuiPort
-    }";
-  };
+  upstreams =
+    lib.genAttrs [
+      "prowlarr"
+      "sonarr"
+      "sonarr-anime"
+      "radarr"
+      "lidarr"
+    ] arrUrl
+    // {
+      navidrome = svcUrl nixflix.navidrome config.services.navidrome.settings.Port;
+      sabnzbd = svcUrl nixflix.usenetClients.sabnzbd nixflix.usenetClients.sabnzbd.settings.misc.port;
+      qbittorrent = svcUrl nixflix.torrentClients.qbittorrent nixflix.torrentClients.qbittorrent.webuiPort;
+    };
 
   # FlareSolverr is deliberately absent. It has no UI worth reaching, it is an
   # unauthenticated HTTP endpoint that fetches arbitrary URLs through a real
   # browser, and its only client (Prowlarr) talks to it on loopback.
 
-  mkRouters = lib.concatMapAttrs (name: _: {
-    # *.arr.internal — Traefik's own self-signed cert. No ACME, so these work
-    # on a LAN with no outbound path and no DNS provider.
-    ${name} = {
-      rule = "Host(`${name}.${internalDomain}`)";
-      entrypoints = [ "websecure" ];
-      tls = { };
-      service = "${name}-svc";
-    };
-    # *.arr.zjones.dev — every one of these asks for the SAME wildcard, so
-    # Traefik dedupes them into a single issuance.
-    #
-    # Naming only the router's own host here instead (the obvious form, and
-    # what traefik-local.nix does) does not work on a cold start: Traefik
-    # skips a domain only once a covering certificate is already in the ACME
-    # store, so on the very first run the per-subdomain routers race ahead of
-    # the wildcard and each get their own certificate. Observed on galactica's
-    # first switch — lidarr and sonarr-anime were issued individually before
-    # `arr.zjones.dev` + `*.arr.zjones.dev` arrived. Harmless against staging,
-    # but against production it burns ~9 of the 50-per-week allowance on
-    # certificates the wildcard makes redundant.
-    "${name}-dev" = {
-      rule = "Host(`${name}.${publicDomain}`)";
-      entrypoints = [ "websecure" ];
-      tls = {
-        certResolver = "letsencrypt";
-        inherit domains;
+  # One pair per service: the `.internal` name on Traefik's own self-signed
+  # cert, and the `.zjones.dev` name on the Let's Encrypt wildcard. The
+  # dashboard uses this too, so the pair — and the `domains` invariant below —
+  # is written once rather than restated for it.
+  mkRouterPair =
+    {
+      name,
+      host,
+      service,
+    }:
+    {
+      # *.arr.internal — no ACME, so these work on a LAN with no outbound path
+      # and no DNS provider.
+      ${name} = {
+        rule = "Host(`${host}.${internalDomain}`)";
+        entrypoints = [ "websecure" ];
+        tls = { };
+        inherit service;
       };
-      service = "${name}-svc";
+      # *.arr.zjones.dev — every one of these asks for the SAME wildcard, so
+      # Traefik dedupes them into a single issuance.
+      #
+      # Naming only the router's own host here instead (the obvious form, and
+      # what traefik-local.nix does) does not work on a cold start: Traefik
+      # skips a domain only once a covering certificate is already in the ACME
+      # store, so on the very first run the per-subdomain routers race ahead of
+      # the wildcard and each get their own certificate. Observed on galactica's
+      # first switch — lidarr and sonarr-anime were issued individually before
+      # `arr.zjones.dev` + `*.arr.zjones.dev` arrived. Harmless against staging,
+      # but against production it burns ~9 of the 50-per-week allowance on
+      # certificates the wildcard makes redundant.
+      "${name}-dev" = {
+        rule = "Host(`${host}.${publicDomain}`)";
+        entrypoints = [ "websecure" ];
+        tls = {
+          certResolver = "letsencrypt";
+          inherit domains;
+        };
+        inherit service;
+      };
     };
-  }) upstreams;
+
+  mkRouters = lib.concatMapAttrs (
+    name: _:
+    mkRouterPair {
+      inherit name;
+      host = name;
+      service = "${name}-svc";
+    }
+  ) upstreams;
 
   mkServices = lib.concatMapAttrs (name: url: {
     "${name}-svc".loadBalancer.servers = [ { inherit url; } ];
@@ -190,26 +213,13 @@ in
     };
 
     dynamicConfigOptions.http = {
-      routers = mkRouters // {
-        dashboard = {
-          rule = "Host(`traefik.${internalDomain}`)";
-          entrypoints = [ "websecure" ];
-          tls = { };
+      routers =
+        mkRouters
+        // mkRouterPair {
+          name = "dashboard";
+          host = "traefik";
           service = "api@internal";
         };
-        # Same wildcard as every other -dev router (see mkRouters): they all
-        # name one certificate rather than one router anchoring it for the
-        # rest, because the anchor form loses the race on a cold start.
-        dashboard-dev = {
-          rule = "Host(`traefik.${publicDomain}`)";
-          entrypoints = [ "websecure" ];
-          tls = {
-            certResolver = "letsencrypt";
-            inherit domains;
-          };
-          service = "api@internal";
-        };
-      };
       services = mkServices;
     };
   };
@@ -226,7 +236,6 @@ in
 
     containers.docker-socket-proxy = {
       image = "tecnativa/docker-socket-proxy:latest";
-      autoStart = true;
       environment = {
         CONTAINERS = "1"; # Traefik reads container labels/state
         NETWORKS = "1"; # …and resolves the `proxy` network

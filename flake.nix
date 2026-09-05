@@ -94,20 +94,28 @@
     #     revision ... in ref ...", which reads like a stale pin and is not:
     #     the ref is correct and carries exactly that rev, the runner simply
     #     has no access. (`allRefs=1` does not help, for the same reason.)
-    #  2. Checked against galactica's actual configuration, not one of those
-    #     seven fixes changes what this host deploys. Every one is either
+    #  2. Of those seven fixes, all but the FlareSolverr ones are either
     #     confined to the fork's `tests/` tree or gated behind a service this
-    #     host does not enable — jellyfin, seerr, navidrome, flaresolverr and
-    #     recyclarr are all `false` in hosts/galactica/nixflix.nix. They are
-    #     what makes the *canary's* CI reliable, which is where they belong.
+    #     host does not enable — jellyfin, seerr and recyclarr are all `false`
+    #     in hosts/galactica/nixflix.nix. Those are what makes the *canary's*
+    #     CI reliable, which is where they belong.
     #
-    # ⚠ The one to remember is the FlareSolverr readiness-probe fix. If
-    # `nixflix.flaresolverr.enable` is ever turned on here while upstream
-    # still lacks it, one slow boot can fail the 30s probe and leave
-    # prowlarr-indexer-proxies permanently unconfigured — systemd cancels it
-    # with result 'dependency' and never re-queues it, so it presents as
-    # indexer proxies that simply never appear. Upstream that fix (or point
-    # back at the fork, public by then) before enabling FlareSolverr.
+    # ⚠ FlareSolverr and Navidrome ARE enabled here, so three of the fork's
+    # fixes now matter to what this host runs, and all three are re-applied
+    # by hand in hosts/galactica/nixflix.nix instead — the readiness probe
+    # (plus the TimeoutStartSec that makes it effective), the
+    # prowlarr-indexer-proxies `requires`→`wants` relaxation, and a bounded
+    # Restart on navidrome-setup.
+    #
+    # That is the cost of reason 1, and it is real: `lib.mkForce` on an
+    # upstream unit is silent on drift, and these three are precisely the
+    # corrections the canary's CI does NOT rehearse, because the canary is
+    # what we are not using. The exit is to make the fork fetchable from CI
+    # (publish it, or give the workflow a credential — a CI change, not an
+    # architectural one) and point this input back at it, which deletes all
+    # three overrides. Upstreaming them to kiriwalawren/nixflix does the same
+    # job. Until one of those happens this is carried debt, not a settled
+    # design; hosts/galactica/nixflix.nix says the same at each override.
     #
     # `follows` on nixpkgs is what governs galactica's packages either way: a
     # NixOS module always evaluates against the *consuming* host's pkgs, so

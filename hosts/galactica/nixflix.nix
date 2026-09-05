@@ -37,6 +37,12 @@ let
   # tank/nixflix_media/downloads` would quietly re-introduce exactly this bug.
   base = "/tank/nixflix_media";
   mediaDir = "${base}/media";
+
+  # Shared by the two ProtonVPN units below, which would otherwise each carry
+  # their own copy — the gateway literal was written twice, under a comment
+  # claiming to be "the one value to change".
+  netns = "wg";
+  gateway = "10.2.0.1";
 in
 
 {
@@ -316,6 +322,12 @@ in
   #     it restart-loops forever and is never usable. 180s is generous enough
   #     that a cold first boot on this box is not a coin flip.
   #
+  #     ⚠ TimeoutStartSec has to move with it. ExecStartPost runs INSIDE the
+  #     start phase, and neither upstream nor nixpkgs sets a timeout on this
+  #     unit, so systemd's 90s default applies — a 180s probe under a 90s
+  #     start timeout is killed at 90s and the extra budget never exists. The
+  #     probe and the timeout are one change, not two.
+  #
   # (2) The dependency direction. Upstream puts `flaresolverr.service` in
   #     prowlarr-indexer-proxies' `requires`. With `requires` + `after`, a
   #     single failed FlareSolverr start makes systemd CANCEL the queued
@@ -344,6 +356,12 @@ in
     ''
   );
 
+  # The other half of (1) — see the ⚠ above. 240s rather than exactly 180s so
+  # the probe's own failure path is what reports a slow start, with its
+  # message, rather than systemd killing the unit mid-poll with a generic
+  # timeout. Upstream leaves this unset, so this is a plain set, not a force.
+  systemd.services.flaresolverr.serviceConfig.TimeoutStartSec = 240;
+
   systemd.services.prowlarr-indexer-proxies = {
     requires = lib.mkForce [
       "prowlarr-config.service"
@@ -366,9 +384,21 @@ in
   # the script is idempotent (it checks whether the user already exists), and
   # a genuinely broken config just retries slowly and visibly rather than
   # failing once and going quiet.
-  systemd.services.navidrome-setup.serviceConfig = {
-    Restart = "on-failure";
-    RestartSec = 30;
+  systemd.services.navidrome-setup = {
+    serviceConfig = {
+      Restart = "on-failure";
+      RestartSec = 30;
+    };
+
+    # Bounded, or the "visibly" above is false. NixOS defaults are burst 5 over
+    # 10s; at RestartSec = 30 the attempts are 90s apart, so that limiter never
+    # trips and the unit retries forever — and a unit perpetually cycling
+    # through `activating` never lands in `failed`, so it never appears in
+    # `systemctl --failed`. That is LESS visible than failing once. Five tries
+    # over half an hour is enough to ride out a slow boot, then it gives up
+    # somewhere a person can see it.
+    startLimitIntervalSec = 1800;
+    startLimitBurst = 5;
   };
 
   # ── ProtonVPN NAT-PMP → qBittorrent listen port ───────────────────────────
@@ -393,7 +423,7 @@ in
     # namespace address, not loopback) is reachable at all.
     vpnConfinement = {
       enable = true;
-      vpnNamespace = "wg";
+      vpnNamespace = netns;
     };
 
     after = [ "qbittorrent.service" ];
@@ -421,9 +451,7 @@ in
         # (it becomes 127.0.0.1) or the address changes.
         "QB_URL=http://${config.nixflix.torrentClients.qbittorrent.connectionAddress}:${toString config.nixflix.torrentClients.qbittorrent.webuiPort}"
         "QB_USER=admin"
-        # Proton's WireGuard gateway. Fixed across their infrastructure; if a
-        # future config uses a different subnet this is the one value to change.
-        "GATEWAY=10.2.0.1"
+        "GATEWAY=${gateway}"
       ];
 
       # writeShellApplication rather than an inline `script`: the body lives in
@@ -432,12 +460,12 @@ in
       ExecStart = lib.getExe (
         pkgs.writeShellApplication {
           name = "protonvpn-natpmp";
+          # No gnused/gnugrep: the port is parsed with bash's own regex now,
+          # and the script never grepped.
           runtimeInputs = with pkgs; [
             libnatpmp
             curl
             coreutils
-            gnused
-            gnugrep
           ];
           text = builtins.readFile ./protonvpn-natpmp.sh;
         }
@@ -487,9 +515,9 @@ in
       # ceiling plus margin, putting detection about four minutes behind an
       # outage.
       Environment = [
-        "NETNS=wg"
+        "NETNS=${netns}"
         "WG_IFACE=wg0"
-        "GATEWAY=10.2.0.1"
+        "GATEWAY=${gateway}"
         "MAX_AGE=240"
       ];
 
@@ -499,13 +527,14 @@ in
       ExecStart = lib.getExe (
         pkgs.writeShellApplication {
           name = "protonvpn-healthcheck";
+          # No gnugrep: the namespace test reads /run/netns directly. coreutils
+          # stays for `sleep` — `date` is gone in favour of $EPOCHSECONDS.
           runtimeInputs = with pkgs; [
             iproute2
             wireguard-tools
             iputils
             coreutils
             gawk
-            gnugrep
           ];
           text = builtins.readFile ./protonvpn-healthcheck.sh;
         }

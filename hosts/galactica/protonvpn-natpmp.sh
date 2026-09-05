@@ -26,26 +26,34 @@ backoff_min=10
 backoff_max=300
 backoff=$backoff_min
 
+# Log, wait out the current backoff, then double it up to the ceiling. Both
+# failure paths below use this rather than repeating the doubling arithmetic.
+retry() {
+  echo "$1; retrying in ${backoff}s" >&2
+  sleep "$backoff"
+  backoff=$(( backoff * 2 > backoff_max ? backoff_max : backoff * 2 ))
+}
+
 while :; do
   # Both protocols must be mapped and renewed; the TCP reply carries the port
   # we hand to qBittorrent. Proton grants the same number for both.
   natpmpc -a 1 0 udp 60 -g "$GATEWAY" >/dev/null 2>&1 || true
 
   if ! reply=$(natpmpc -a 1 0 tcp 60 -g "$GATEWAY" 2>&1); then
-    echo "natpmpc failed (tunnel down or still coming up?); retrying in ${backoff}s" >&2
-    sleep "$backoff"
-    backoff=$(( backoff * 2 > backoff_max ? backoff_max : backoff * 2 ))
+    retry "natpmpc failed (tunnel down or still coming up?)"
     continue
   fi
 
-  port=$(printf '%s\n' "$reply" \
-    | sed -n 's/.*Mapped public port \([0-9][0-9]*\).*/\1/p' \
-    | head -n1)
+  # Bash's own regex rather than `sed … | head -n1`: under the
+  # `set -euo pipefail` writeShellApplication supplies, a `head` that closes
+  # the pipe early can SIGPIPE its producer and kill this loop with no message.
+  # The sibling healthcheck avoids the same shape for the same reason. This
+  # also spawns nothing, and takes the first match for free.
+  port=""
+  [[ $reply =~ Mapped\ public\ port\ ([0-9]+) ]] && port=${BASH_REMATCH[1]}
 
   if [ -z "$port" ]; then
-    echo "no port in natpmpc reply; retrying in ${backoff}s" >&2
-    sleep "$backoff"
-    backoff=$(( backoff * 2 > backoff_max ? backoff_max : backoff * 2 ))
+    retry "no port in natpmpc reply"
     continue
   fi
 
