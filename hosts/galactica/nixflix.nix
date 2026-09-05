@@ -364,6 +364,9 @@ in
 
         Session = {
           ExcludedFileNames = "*.exe";
+
+          # KiB/s. Not a throttle — ~244 MiB/s is roughly a third of the link,
+          # so it bounds a runaway without touching normal use.
           GlobalDLSpeedLimit = 250000;
           GlobalUPSpeedLimit = 250000;
 
