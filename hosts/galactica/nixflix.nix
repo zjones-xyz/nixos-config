@@ -354,6 +354,26 @@ in
         ReverseProxySupportEnabled = true;
         TrustedReverseProxiesList = "192.168.15.5";
       };
+
+      # Declared so they survive: the module reinstalls qBittorrent.conf from
+      # the store on every start, so a UI change lasts until the next restart.
+      serverConfig.Preferences.General.StatusbarExternalIPDisplayed = true;
+
+      serverConfig.BitTorrent = {
+        ExcludedFileNamesEnabled = true;
+
+        Session = {
+          ExcludedFileNames = "*.exe";
+          GlobalDLSpeedLimit = 250000;
+          GlobalUPSpeedLimit = 250000;
+
+          # Queueing is off, so the two Max* values are inert until it is
+          # turned back on — kept so they survive rather than reset.
+          QueueingSystemEnabled = false;
+          MaxActiveDownloads = 2000;
+          MaxActiveTorrents = 200;
+        };
+      };
     };
   };
 
