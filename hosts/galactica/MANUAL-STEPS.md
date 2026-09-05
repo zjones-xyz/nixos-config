@@ -609,7 +609,7 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    forward are both IPv4, so IPv4 is the path the kill-switch check has to
    cover. Pin the family on *both* lines so the two results are comparable.
 
-5. [ ] **Add the twelfth secret and the DNS records, for Traefik.** The web
+5. [x] **Add the twelfth secret and the DNS records, for Traefik.** The web
    UIs are reachable at `https://<service>.arr.internal` and
    `https://<service>.arr.zjones.dev` — `prowlarr`, `sonarr`, `sonarr-anime`,
    `radarr`, `lidarr`, `navidrome`, `sabnzbd`, `qbittorrent`, and `traefik`
@@ -618,12 +618,12 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
 
    Two prerequisites, neither of which the switch can do for itself:
 
-   1. [ ] `sops secrets/galactica.yaml` → add `cloudflare/apiToken`, the same
+   1. [x] `sops secrets/galactica.yaml` → add `cloudflare/apiToken`, the same
       DNS-edit token the other three Traefik hosts already use. Activation
       fails without it, like any other missing secret. Only the
       `*.arr.zjones.dev` certificates need it; `*.arr.internal` is served
       from Traefik's own self-signed cert and works with no token at all.
-   2. [ ] In AdGuard on hopper, point `*.arr.internal` and `*.arr.zjones.dev`
+   2. [x] In AdGuard on hopper, point `*.arr.internal` and `*.arr.zjones.dev`
       at **192.168.8.190**. Until then the names do not resolve and nothing
       loads — which looks exactly like Traefik being broken.
 
@@ -639,12 +639,43 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    is a DNS change instead of re-entering every URL in Prowlarr's
    application list and each *arr's cross-references.
 
-6. [ ] **Import the staged media** — point Sonarr/Radarr at
+   Verified live once both were in place — all nine names answer through
+   Traefik, `302` for the *arrs, Navidrome and the dashboard, `303` for
+   SABnzbd, `200` for qBittorrent. The last two are the ones worth noting:
+   SABnzbd would have returned `403 Access denied - Hostname verification
+   failed` without its `host_whitelist`, and qBittorrent `401 Unauthorized`
+   without `HostHeaderValidation = false`, so those two settings are
+   confirmed rather than assumed. Handy re-check, no DNS needed:
+   ```bash
+   for h in prowlarr sonarr sonarr-anime radarr lidarr navidrome sabnzbd qbittorrent traefik; do
+     printf '%-14s %s\n' "$h" \
+       "$(curl -k -sS -o /dev/null -w '%{http_code}' --max-time 5 "https://$h.arr.internal/" 2>&1)"
+   done
+   ```
+
+6. [ ] **Prove one wildcard issuance, then leave staging.** The first switch
+   issued per-subdomain certificates alongside the wildcard, because Traefik
+   skips a domain only once a covering cert is already stored — so on a cold
+   start the subdomain routers won the race. Every `-dev` router now names the
+   same `main`+`sans`, which dedupes them. To confirm before the CA changes:
+   ```bash
+   sudo rm /var/lib/traefik/acme-staging.json
+   sudo systemctl restart traefik
+   journalctl -u traefik -f
+   ```
+   Exactly one issuance for `arr.zjones.dev` + `*.arr.zjones.dev`, and no
+   per-subdomain requests, means it holds. Then set
+   `homelab.letsencryptStaging = false` for this host — production uses
+   `acme.json`, a separate file, so nothing needs deleting at that point.
+   Worth getting right first: production allows 50 certificates per
+   registered domain per week, and the un-deduped form spent ten.
+
+7. [ ] **Import the staged media** — point Sonarr/Radarr at
    `tank/media_staging/*` and run their import, which hardlinks into
    `/tank/nixflix_media/media/{tv,movies}`. Only destroy the staging datasets
    once the libraries look right; that is the last undo.
 
-7. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
+8. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
    `nix flake update`. The input is pinned to an exact upstream revision that
    the fork's CI has cleared against 26.05. To move it: merge upstream into
    `zjones-xyz/nixflix-exp`, let its CI go green against the 26.05 pin, then
