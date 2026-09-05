@@ -191,7 +191,7 @@ Write a small host-specific unit: the `henrygd/beszel-agent` container, host
 network mode, `KEY` env pointed at hopper's hub. Register galactica as a new
 system in hopper's hub UI first to get that key.
 
-## 8. memory-alpha's NFS mounts — the cutover plan (decided 2026-08-31)
+## 8. memory-alpha's NFS mounts — the cutover (planned 2026-08-31, written 2026-09-05)
 
 `hosts/memory-alpha/configuration.nix` mounts `tower.internal:/mnt/user/jellyfin`
 and `tower.internal:/mnt/user/arr_managed_data` over NFSv4, and `README.md`
@@ -200,39 +200,74 @@ confirms `tower.internal` keeps resolving to this box. The mounts are `soft`
 hangs when Unraid goes away — but Jellyfin's library and the *arr stack's
 managed data stay empty until galactica exports the equivalent paths again.
 
-**`services.nfs.server.enable` and firewall port 2049 are already live** in
-`configuration.nix` (don't depend on the array existing). What's still
-blocked on the array's dataset paths:
+**Now written**, in `hosts/galactica/configuration.nix` (exports) and
+`hosts/memory-alpha/configuration.nix` (mounts). What the plan above could not
+decide — the pool name and dataset paths — is decided; what it recorded as an
+open question is still open, and that shaped the result.
 
-- **Preserve all four recorded `fsid`s**, not just the two with a confirmed
-  consumer — `SHARES.md` §4's own reasoning: it costs nothing, and a wrong
-  or missing `fsid` hands a client `ESTALE` instead of a clean remount.
+### What is exported, and what is not
 
-  | fsid | Share | Consumer |
-  |---|---|---|
-  | 100 | `arr_media` | unconfirmed |
-  | 101 | `jellyfin` | memory-alpha, `/mnt/unmanaged` |
-  | 102 | `arr_managed_data` | memory-alpha, `/mnt/arr_managed_data` |
-  | 103 | `bambuddy_library` | unconfirmed |
+| fsid | Path | Consumer |
+|---|---|---|
+| 104 | `/tank/nixflix_media/media` | memory-alpha `/mnt/media` — the *arr library galactica now manages |
+| 101 | `/tank/media_staging/jellyfin` | memory-alpha `/mnt/unmanaged` — the hand-curated library the *arrs don't touch |
+| 103 | `/tank/bambuddy_library` | unconfirmed; LAN-wide, which is why §8 chose LAN scope |
+| ~~100~~ | `arr_media` | **not exported** — reserved |
+| ~~102~~ | `arr_managed_data` | **not exported** — reserved |
 
-- **Export scope: LAN-wide**, not restricted to memory-alpha specifically —
-  decided over the tighter option since the two unconfirmed consumers might
-  be elsewhere on the LAN. Use the actual subnet (`192.168.8.0/24`,
-  confirmed from live host addresses this session), not a bare `*`, so this
-  doesn't reach past the LAN if the firewall posture ever changes.
-- **Template**, to fill in once the array's dataset paths and pool name are
-  chosen (neither decided yet — that's its own open item, see §9):
-  ```nix
-  services.nfs.server.exports = ''
-    /<pool>/arr_media          192.168.8.0/24(rw,sync,no_subtree_check,fsid=100)
-    /<pool>/jellyfin           192.168.8.0/24(rw,sync,no_subtree_check,fsid=101)
-    /<pool>/arr_managed_data   192.168.8.0/24(rw,sync,no_subtree_check,fsid=102)
-    /<pool>/bambuddy_library   192.168.8.0/24(rw,sync,no_subtree_check,fsid=103)
-  '';
-  ```
-Plan this as an explicit cutover step alongside §9, not an afterthought once
-the array exists — memory-alpha's Jellyfin/`*arr` stack has no working
-media the entire time between "Unraid goes away" and "this lands."
+**Why two are held back.** Preserving an `fsid` means never reusing the number
+for different content, so an unexported one stays reserved rather than
+recycled. `arr_media` has no dataset of that name after the migration, and
+SHARES.md §3's open question — which of `arr_media`/`arr_managed_data` was the
+library and which the downloads — was never answered; pointing 100 at a guess
+is how a client silently gets the wrong tree. `arr_managed_data` still exists
+as `tank/media_staging/arr_managed_data`, but its only known consumer was
+memory-alpha's *arr stack, and that stack runs on galactica now.
+
+**The new library takes a new fsid (104), not 100.** Same reasoning: 100's
+content is unconfirmed, so it is not free to take.
+
+**memory-alpha's `/mnt/arr_managed_data` is removed, not re-pointed** — it
+existed to serve the *arr stack that has moved. Its data is still on the array
+if it turns out to matter.
+
+### Doing the cutover
+
+1. [ ] **galactica first.** The mounts are `access denied` until the exports
+   exist:
+   ```bash
+   sudo nixos-rebuild switch --flake .#galactica
+   sudo exportfs -v          # expect the three paths above, with their fsids
+   ```
+2. [ ] **Then memory-alpha:**
+   ```bash
+   sudo nixos-rebuild switch --flake .#memory-alpha
+   ls /mnt/media /mnt/unmanaged    # automount triggers on access
+   findmnt -t nfs4
+   ```
+3. [ ] **Point Jellyfin at the new paths.** Its libraries are configured in its
+   own UI, not in Nix — the old ones reference the dead
+   `tower.internal:/mnt/user/…` mounts. `/mnt/media` is the path
+   `modules/nixos/jellyfin.nix` already documents.
+4. [ ] **Expect `/mnt/media` to be thin until the staged media is imported.**
+   The *arr library fills from `tank/media_staging` when the media-stack run
+   book's import step runs; that step arrives with the *arr stack, separately
+   from this cutover. A sparse library here is that import pending, not a
+   broken mount — check `/mnt/unmanaged`, which has content today, to tell the
+   two apart.
+
+⚠ `x-systemd.automount` is restored on both mounts, having been dropped while
+the exports did not exist: with it, a consumer touching the mountpoint during a
+switch fires a synchronous mount, and a failing mount lands the `.mount` unit
+in `failed`, which makes `nixos-rebuild switch` exit non-zero. `soft` and
+`nofail` stay for the case galactica is simply down — degrade, don't hang,
+don't fail the switch.
+
+⚠ Scope is `192.168.8.0/24` and mode is `rw`, both transcribed from the
+decision above rather than re-decided. The *arr library is arguably a candidate
+for `ro` now that galactica owns every write to it — Jellyfin only needs write
+there if you turn on saving NFO/artwork beside the media. That is a change of
+decision; make it deliberately or not at all.
 
 ## 9. The array itself
 
@@ -296,9 +331,8 @@ against the source, plus the Unraid flash+config insurance into
    > (silent verify pass). `move_aside/` was confirmed to be only the already
    > migrated array shares. So only the physical case work remains; nothing on
    > sidepool is still needed. Mappers closed again afterward.
-4. [ ] **NFS re-exports** (§8, fsids 100–103) — and re-point memory-alpha's
-   mounts, which still reference the dead Unraid paths
-   (`tower.internal:/mnt/user/...`).
+4. [ ] **NFS re-exports** — written; §8 carries the export table, the two
+   fsids held back and why, and the switch-galactica-first sequence.
 
 The original forward-looking notes below are now mostly satisfied; kept for
 provenance.
