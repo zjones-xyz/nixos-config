@@ -420,33 +420,42 @@ in
     wants = [ "flaresolverr.service" ];
   };
 
-  # ── navidrome-setup: make it survive a slow first start ───────────────────
-  # This oneshot creates Navidrome's first admin user, and upstream gives it
-  # no Restart at all — so if its 60s readiness wait ever times out, the unit
-  # fails and the admin account is simply never created. Nothing retries it;
-  # you would find out at the login screen, and the fix would be a manual
-  # `systemctl start navidrome-setup`.
+  # ── navidrome-create-admin: make it survive a slow first start ────────────
+  # ⚠ The unit is `navidrome-create-admin`. Earlier revisions of this file
+  # named it `navidrome-setup`, which does not exist in nixflix — so instead
+  # of hardening anything, they DEFINED a unit with no ExecStart, and systemd
+  # refused it on every switch:
   #
-  # Navidrome is a Go binary that serves /ping almost immediately, so 60s
-  # should be ample even here — this is cheap insurance against the one boot
-  # where the array mount, the *arr databases and Chromium are all competing
-  # for this 2012 CPU at once. Restart is safe on a RemainAfterExit oneshot:
-  # the script is idempotent (it checks whether the user already exists), and
-  # a genuinely broken config just retries slowly and visibly rather than
-  # failing once and going quiet.
-  systemd.services.navidrome-setup = {
+  #   navidrome-setup.service: Service has no ExecStart=, ExecStop=, or
+  #   SuccessAction=. Refusing.
+  #
+  # A NixOS lesson worth keeping: `systemd.services.<name>` creates a unit
+  # rather than failing when <name> is wrong, so a typo in a name you mean to
+  # *extend* is silent at eval and only shows up in the journal.
+  #
+  # The real oneshot creates Navidrome's first admin user, and upstream gives
+  # it no Restart — so if its readiness wait ever times out, the unit fails,
+  # the admin account is never created, and nothing retries. You find out at
+  # the login screen.
+  #
+  # Navidrome is a Go binary that serves /ping almost immediately, so this is
+  # cheap insurance against the one boot where the array mount, the *arr
+  # databases and Chromium all compete for this 2012 CPU. Restart is safe on a
+  # RemainAfterExit oneshot: the script is idempotent — it skips when the user
+  # already exists.
+  systemd.services.navidrome-create-admin = {
     serviceConfig = {
       Restart = "on-failure";
       RestartSec = 30;
     };
 
-    # Bounded, or the "visibly" above is false. NixOS defaults are burst 5 over
+    # Bounded, or "retries visibly" is false. NixOS defaults are burst 5 over
     # 10s; at RestartSec = 30 the attempts are 90s apart, so that limiter never
     # trips and the unit retries forever — and a unit perpetually cycling
     # through `activating` never lands in `failed`, so it never appears in
     # `systemctl --failed`. That is LESS visible than failing once. Five tries
-    # over half an hour is enough to ride out a slow boot, then it gives up
-    # somewhere a person can see it.
+    # over half an hour rides out a slow boot, then it gives up somewhere a
+    # person can see it.
     startLimitIntervalSec = 1800;
     startLimitBurst = 5;
   };
