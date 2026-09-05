@@ -25,6 +25,7 @@
     ../../modules/nixos/beszel-agent.nix
     ../../modules/nixos/arcane-agent.nix
     ../../modules/nixos/scrutiny-collector.nix
+    ../../modules/nixos/traefik-galactica.nix
     ./borgmatic.nix
     ./nixflix.nix
   ];

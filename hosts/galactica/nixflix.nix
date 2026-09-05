@@ -241,6 +241,16 @@ in
       settings.misc = {
         api_key._secret = config.sops.secrets."nixflix/sabnzbdApiKey".path;
         nzb_key._secret = config.sops.secrets."nixflix/sabnzbdNzbKey".path;
+
+        # SABnzbd verifies the Host header and refuses anything not listed
+        # here. The module's default fills this in from its own reverseProxy
+        # option, which is off — galactica is proxied by the fleet's Traefik
+        # (modules/nixos/traefik-galactica.nix) instead, so nixflix cannot
+        # know these names and the list has to be given explicitly. Miss this
+        # and the proxied UI answers "Access denied - Hostname verification
+        # failed" while direct access on loopback keeps working, which reads
+        # like a Traefik fault and is not one.
+        host_whitelist = "sabnzbd.arr.internal,sabnzbd.arr.zjones.dev";
       };
     };
 
@@ -273,6 +283,20 @@ in
       serverConfig.Preferences.WebUI = {
         Username = "admin";
         Password_PBKDF2 = "@ByteArray(qLRngRuEr+F6yTqp9dj6/g==:m2eO3yy7JkTxaK0DoEiVA8hjNMOAn5qomGyBhTBCQYIR7UDQc+e/l8uQwCw+kvBDNO4BZ1K+J5FosAunqRw4KA==)";
+
+        # qBittorrent rejects requests whose Host header is not its own bind
+        # address, which is exactly what a reverse proxy sends — the UI would
+        # answer "Unauthorized" through Traefik while working fine on
+        # 192.168.15.1:8282 directly. Turned off rather than whitelisted:
+        # the WebUI is not reachable from the LAN except through Traefik (the
+        # firewall opens 80/443 only), so the header buys nothing here.
+        HostHeaderValidation = false;
+
+        # Log the real client rather than the proxy. 192.168.15.5 is the host
+        # side of the wg bridge — the source address Traefik connects from,
+        # since it reaches the confined WebUI over that bridge.
+        ReverseProxySupportEnabled = true;
+        TrustedReverseProxiesList = "192.168.15.5";
       };
     };
   };

@@ -609,12 +609,42 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    forward are both IPv4, so IPv4 is the path the kill-switch check has to
    cover. Pin the family on *both* lines so the two results are comparable.
 
-5. [ ] **Import the staged media** — point Sonarr/Radarr at
+5. [ ] **Add the twelfth secret and the DNS records, for Traefik.** The web
+   UIs are reachable at `https://<service>.arr.internal` and
+   `https://<service>.arr.zjones.dev` — `prowlarr`, `sonarr`, `sonarr-anime`,
+   `radarr`, `lidarr`, `navidrome`, `sabnzbd`, `qbittorrent`, and `traefik`
+   for the dashboard. The firewall opens **only 80 and 443**; the service
+   ports are not reachable directly, by design.
+
+   Two prerequisites, neither of which the switch can do for itself:
+
+   1. [ ] `sops secrets/galactica.yaml` → add `cloudflare/apiToken`, the same
+      DNS-edit token the other three Traefik hosts already use. Activation
+      fails without it, like any other missing secret. Only the
+      `*.arr.zjones.dev` certificates need it; `*.arr.internal` is served
+      from Traefik's own self-signed cert and works with no token at all.
+   2. [ ] In AdGuard on hopper, point `*.arr.internal` and `*.arr.zjones.dev`
+      at **192.168.8.190**. Until then the names do not resolve and nothing
+      loads — which looks exactly like Traefik being broken.
+
+   `homelab.letsencryptStaging` is still `true`, so the first certificates
+   come from Let's Encrypt's **staging** CA and browsers will warn on the
+   `.zjones.dev` names. That is the intended order: prove issuance works,
+   then set it `false` for this host. Staging and production certs use
+   separate storage (`acme-staging.json` / `acme.json`), so flipping never
+   requires deleting anything.
+
+   ⚠ Names are `*.arr.*`, not `*.galactica.*` like the rest of the fleet.
+   They follow the media **stack** rather than the host, so moving it later
+   is a DNS change instead of re-entering every URL in Prowlarr's
+   application list and each *arr's cross-references.
+
+6. [ ] **Import the staged media** — point Sonarr/Radarr at
    `tank/media_staging/*` and run their import, which hardlinks into
    `/tank/nixflix_media/media/{tv,movies}`. Only destroy the staging datasets
    once the libraries look right; that is the last undo.
 
-6. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
+7. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
    `nix flake update`. The input is pinned to an exact upstream revision that
    the fork's CI has cleared against 26.05. To move it: merge upstream into
    `zjones-xyz/nixflix-exp`, let its CI go green against the 26.05 pin, then
