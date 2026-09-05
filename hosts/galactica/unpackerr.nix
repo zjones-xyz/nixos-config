@@ -48,10 +48,21 @@ in
     owner = "unpackerr";
     mode = "0400";
     content = ''
-      # Poll the *arr queues on this interval. Extraction is I/O-bound on a
-      # 2012 Xeon with spinning disks, so `parallel = 1`: two concurrent
-      # multi-gigabyte RAR extractions on the same array is slower than one
-      # after the other, and competes with whatever is importing.
+      # All five are Unpackerr's own defaults, written out rather than left
+      # implicit — pinned, so an upstream default change cannot alter this
+      # host's behaviour through a routine `nix flake update`, and visible, so
+      # the timing is answerable without reading upstream's docs.
+      #
+      # What they mean: poll all four *arr queues every 2m; require an item to
+      # sit in the queue 1m looking complete before touching it, so the
+      # download client has finished moving files; on a failed extraction wait
+      # 5m and try at most 3 times before giving up on that item. Worst case
+      # from "torrent finishes" to "extraction starts" is therefore ~3m.
+      #
+      # `parallel = 1` is the one worth keeping at the default deliberately:
+      # extraction here is I/O-bound on a 2012 Xeon with spinning disks, so two
+      # concurrent multi-gigabyte RARs on the same array finish later than one
+      # after the other and compete with whatever is importing.
       interval = "2m"
       start_delay = "1m"
       retry_delay = "5m"
