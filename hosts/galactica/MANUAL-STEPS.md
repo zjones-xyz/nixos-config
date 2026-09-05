@@ -677,12 +677,41 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    Worth having got right first: production allows 50 certificates per
    registered domain per week, and the un-deduped form spent ten.
 
-7. [ ] **Import the staged media** — point Sonarr/Radarr at
+7. [ ] **Let Recyclarr build the profiles before importing.** It syncs the
+   TRaSH guides into Sonarr, sonarr-anime and Radarr — custom formats, scores,
+   quality definitions, and one quality profile each — so the profiles the
+   import needs are created rather than hand-entered:
+
+   | Instance | Profile it creates |
+   |---|---|
+   | Sonarr | `WEB-1080p (Alternative)` |
+   | sonarr-anime | `[Anime] Remux-1080p` |
+   | Radarr | `[SQP] SQP-1 (1080p)` |
+
+   It runs daily on a timer and once at boot, after each *arr's `-config`
+   service. To do it now rather than wait:
+   ```bash
+   sudo systemctl start recyclarr && journalctl -u recyclarr -n 40
+   ```
+   Then check the profiles exist in each UI before step 8. Indexers still have
+   to be added to Prowlarr by hand — Recyclarr does profiles, not indexers.
+
+   ⚠ Recyclarr takes ownership of custom formats and scores
+   (`delete_old_custom_formats` and `reset_unmatched_scores` are both on), so
+   hand-edits to those are reverted on its next run. Quality profiles you make
+   yourself are safe — `cleanupUnmanagedProfiles` is deliberately off, and
+   turning it on would delete every profile the managed list does not name.
+
+   To move to 4K, set `sonarrQuality`/`radarrQuality` in `nixflix.nix`; the new
+   profile appears on the next run and existing files are untouched, so only
+   newly-grabbed releases follow it.
+
+8. [ ] **Import the staged media** — point Sonarr/Radarr at
    `tank/media_staging/*` and run their import, which hardlinks into
    `/tank/nixflix_media/media/{tv,movies}`. Only destroy the staging datasets
    once the libraries look right; that is the last undo.
 
-8. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
+9. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
    `nix flake update`. The input is pinned to an exact upstream revision that
    the fork's CI has cleared against 26.05. To move it: merge upstream into
    `zjones-xyz/nixflix-exp`, let its CI go green against the 26.05 pin, then

@@ -96,9 +96,9 @@
     #     has no access. (`allRefs=1` does not help, for the same reason.)
     #  2. Of those seven fixes, all but the FlareSolverr ones are either
     #     confined to the fork's `tests/` tree or gated behind a service this
-    #     host does not enable — jellyfin, seerr and recyclarr are all `false`
-    #     in hosts/galactica/nixflix.nix. Those are what makes the *canary's*
-    #     CI reliable, which is where they belong.
+    #     host does not enable — jellyfin and seerr are both `false` in
+    #     hosts/galactica/nixflix.nix. Those are what makes the *canary's* CI
+    #     reliable, which is where they belong.
     #
     # ⚠ FlareSolverr and Navidrome ARE enabled here, so three of the fork's
     # fixes now matter to what this host runs, and all three are re-applied

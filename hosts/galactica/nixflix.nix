@@ -166,6 +166,45 @@ in
       };
     };
 
+    # ── Quality profiles and custom formats (TRaSH guides) ──────────────────
+    # Recyclarr syncs the TRaSH guides into Sonarr, sonarr-anime and Radarr:
+    # custom formats, their scores, quality definitions and one quality profile
+    # per instance. It is the piece that makes a CLEAN REBUILD affordable —
+    # otherwise every custom format and score is re-entered by hand through
+    # three web UIs, which is exactly the work this host's rebuild was going to
+    # have to redo.
+    #
+    # nixflix wires all three instances automatically from the options already
+    # set above, including their API keys. Those keys stay out of the Nix store:
+    # nixpkgs' recyclarr module handles `{ _secret = path; }` natively through
+    # `utils.genJqSecretsReplacement`, substituting at start from
+    # LoadCredential, so the rendered YAML in the store carries paths and not
+    # values. Verified in the evaluated config rather than assumed.
+    #
+    # Runs daily on a timer, and after each *arr's own `-config` service.
+    recyclarr = {
+      enable = true;
+
+      # Pinned rather than left at the module default, which is the same value
+      # today. This decides what actually lands on a 4×12 TB array, so an
+      # upstream default flipping to 4K should not silently quadruple every
+      # grab. Change deliberately, not by `nix flake update`.
+      #
+      # 1080p because galactica cannot transcode (no GPU, 2012 Xeon) and
+      # playback is memory-alpha's job over NFS — 4K would bet every file on
+      # every client direct-playing it. Changing this later is cheap: recyclarr
+      # creates the other profile on the next run and existing files are
+      # untouched; only newly-grabbed releases follow the new profile.
+      sonarrQuality = "1080p";
+      radarrQuality = "1080p";
+
+      # `cleanupUnmanagedProfiles` is left OFF (the module default). Turning it
+      # on deletes every quality profile the managed list does not name —
+      # including the *arrs' stock ones and anything hand-made later. Tempting
+      # on a clean rebuild, but it is a destructive daily job guarding against
+      # mess that does not exist yet.
+    };
+
     # ── Music: acquisition ──────────────────────────────────────────────────
     # ⚠ Read this before pointing Lidarr at the OLD library. SHARES.md marks
     # `music` 🛡 Protected, and DECISIONS.md §'s re-acquirable table
