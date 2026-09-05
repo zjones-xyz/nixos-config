@@ -17,6 +17,12 @@
     btop
     micro
     gh
+
+    # Here as well as modules/nixos/common.nix because this module is the only
+    # one serenity (darwin) shares — nixos/common.nix reaches the six NixOS
+    # hosts, this reaches the Mac too. `jq` above is the same story, predating
+    # the split.
+    openssl
   ];
 
   # Prompt.

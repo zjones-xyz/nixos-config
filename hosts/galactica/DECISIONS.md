@@ -436,6 +436,62 @@ Protected tier during the window, which raises rather than lowers the bar.
 
 ---
 
+## 9. Media-stack services that nixflix does not provide
+
+Two services in `hosts/galactica/` are host-local units rather than nixflix
+modules, because nixpkgs ships the package and nixflix ships no module.
+
+### Unpackerr is torrent-only
+
+A large share of scene torrents arrive as a `.rar` set, qBittorrent does no
+unpacking, and the *arrs cannot import an archive — the item sits in the queue
+as "Found archive file, might need to be extracted" indefinitely.
+
+**It is deliberately not pointed at the usenet path.** SABnzbd unpacks archives
+itself during post-processing, so both would race to extract and delete the
+same files. Hence `protocols = "torrent"` on every block.
+
+Its five timing settings are Unpackerr's own defaults, written out rather than
+left implicit: pinned against an upstream change arriving through a routine
+`nix flake update`, and visible so the cadence is answerable without reading
+upstream's docs. Poll every 2m, require an item to look complete for 1m before
+touching it, retry a failure after 5m at most 3 times — so ~3m worst case from
+a torrent finishing to extraction starting.
+
+### Bazarr runs as two instances
+
+Bazarr connects to exactly one Sonarr and one Radarr — scalar `sonarr.ip` /
+`radarr.ip` keys in its config schema, and upstream has closed the
+multi-instance request as "won't happen" with "run a second instance" as the
+answer. This host has a first-class `sonarr-anime`, so one instance would leave
+the whole anime library without subtitles.
+
+Alternatives were checked first; none was reasonable here:
+
+| Candidate | Why not |
+|---|---|
+| **Bazarr+** (`LavX/bazarr`) | Genuinely solves it — v2.5 manages many instances as one. But a single-maintainer hard fork at ~90 stars, absent from nixpkgs, shipped only as `ghcr.io/lavx/bazarr:latest`, a floating tag. This holds four *arr API keys and writes to the library; unpinned from one maintainer is not a trade this host makes. |
+| **Subliminal** (nixpkgs) | Instance-agnostic, since it walks media paths — one timer would cover everything. But a fetcher, not a manager: no per-series language profiles, no upgrade loop, no sync, no notion of which episodes still lack subtitles. |
+| **Jellyfin's OpenSubtitles plugin** | Playback-side, on demand, and lives on memory-alpha. |
+
+So the nixpkgs module serves the primary instance and a hand-rolled twin serves
+`sonarr-anime`, because `services.bazarr` is a singleton. The twin mirrors the
+module's three odd settings — `SIGINT`, exit status 156, `--no-update True` —
+verbatim rather than diverging quietly. If upstream ever gains multi-instance
+support, the twin is what gets deleted.
+
+Bazarr keeps its configuration in its own database, so the *arr wiring is by
+hand — `MANUAL-STEPS.md` §12 step 9. It also ships with authentication **off**,
+unlike everything else on this host.
+
+### Both write into trees the *arrs own
+
+`media` is the group, and the umask matters. Unpackerr's `file_mode`/`dir_mode`
+override its 0644/0755 defaults; Bazarr takes `media` as its **primary** group
+plus `UMask = "0002"`. Anything not group-writable is left behind by the next
+*arr rename. The qBittorrent umask bug in `MANUAL-STEPS.md` §12 step 10 is the
+same lesson from the other end of the pipeline.
+
 ## Carried forward from the VFIO plan
 
 Constraints and findings that were established under the previous design and

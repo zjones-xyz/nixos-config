@@ -312,7 +312,9 @@ against the source, plus the Unraid flash+config insurance into
 **Still to do:**
 
 1. [x] Sweep the media datasets into `tank/media_staging/*` (zfs renames) so
-   nixarr gets a clean `/tank/media`; collections re-enter via *arr imports.
+   the media stack gets a clean library root; collections re-enter via *arr
+   imports. (Said "nixarr" when written — the stack chosen since is nixflix,
+   and the library root landed on `/tank/nixflix_media/media`; see §12.)
    ✅ 2026-09-02 — all seven (8.94 T) staged; `tank/media`/`tank/books` empty.
 2. [x] Retire sidepool *logically*: unmounted + all four LUKS mappers closed
    2026-09-02 — disks are inert (LUKS-closed, nothing references them).
@@ -490,3 +492,426 @@ nameserver fd2e:7702:f2a4::1                                # ← real, NM-gener
 No manual `nameserver` workaround needed anymore. Lesson for the rest of the
 fleet: any `boot.initrd.systemd.services.*` script that calls a non-systemd,
 non-`ip` binary must add that binary to `storePaths` or it silently no-ops.
+
+## 12. The *arr media stack (nixflix) — owner steps before first switch
+
+Declared in `hosts/galactica/nixflix.nix` and wired into the flake, but
+**nothing here activates until the secrets below exist** — sops-nix fails
+activation on a missing secret, so `nrs` will refuse until step 2 is done.
+
+Deliberately a **clean rebuild**: the old Unraid `arr_config` appdata is not
+restored (it stays in `tank/backups/` as insurance only). Indexers, quality
+profiles and download-client settings are re-entered through each service's
+own UI; collections re-enter via *arr imports from `tank/media_staging`
+(§9). Jellyfin and Seerr stay OFF on this host — no GPU, so playback remains
+memory-alpha's job over the §8 NFS mounts.
+
+### The one layout rule that matters
+
+`media/` and `downloads/` must be **plain directories inside a single
+dataset**, not datasets of their own. Hardlinks cannot cross a ZFS dataset
+boundary, and the *arrs hardlink completed downloads into the library — split
+them and nothing errors, imports just silently become full copies (double
+disk for anything seeding, and slow). Do not "tidy up" by creating
+`tank/nixflix_media/downloads` later.
+
+1. [x] **Create the one dataset.** That is the whole step — one command:
+   ```bash
+   sudo zfs create tank/nixflix_media
+   ```
+   **Do not `mkdir` the directories underneath it.** nixflix creates every one
+   of them at activation via systemd-tmpfiles, with ownership that a manual
+   `mkdir` gets wrong (`root:media 0775` for the library and downloads roots,
+   then per-service subdirectories owned `sonarr:media`, `qbittorrent:media`,
+   `sabnzbd:media` and so on). A hand-made `root:root 0755` has no group write
+   for `media`; tmpfiles does correct that on the next switch, so it is not
+   destructive, just pointless work that obscures the real state if something
+   misbehaves later. `/tank/appdata/nixflix` is likewise created for you —
+   `tank/appdata` already exists (§9/§10) and is forced onto the special vdev's
+   SSD mirror, which is why the *arr databases live there.
+
+   The dataset itself is the exception because it is the one thing nixflix
+   *cannot* make: the modules create directories, not ZFS datasets. Skip this
+   and tmpfiles would quietly create `/tank/nixflix_media` as a plain directory
+   inside the `tank` root dataset — which puts the library and downloads on
+   different filesystems from each other only if you later split them, but
+   more importantly loses the dataset's own properties and snapshot boundary.
+
+2. [x] **Add the secrets** — `sops secrets/galactica.yaml`, all under a
+   `nixflix:` key:
+
+   | Secret | How to produce it |
+   |---|---|
+   | `protonWgConf` | The whole wg-quick file from Proton's portal, as a multi-line YAML value. ⚠ Must be a **P2P server that supports port forwarding**, or the NAT-PMP sidecar below has nothing to map. |
+   | `prowlarrApiKey`, `sonarrApiKey`, `sonarrAnimeApiKey`, `radarrApiKey`, `lidarrApiKey` | `openssl rand -hex 16` each |
+   | `sabnzbdApiKey`, `sabnzbdNzbKey` | `openssl rand -hex 16` each |
+   | `arrPassword` | Any strong password — shared web-UI login (`admin`) across the *arrs |
+   | `navidromePassword` | Any strong password — Navidrome's `z` admin login. ⚠ Applied at user **creation** only; changing it later needs Navidrome's own UI, not this secret. |
+   | `qbittorrentPassword` | Any strong password — **plain text**, and must match the hash in step 3 |
+
+   `openssl` is not installed everywhere in the fleet (serenity, notably).
+   Where it is missing, these need nothing but coreutils:
+   ```bash
+   head -c 4000 /dev/urandom | LC_ALL=C tr -dc 'a-f0-9'    | head -c 32   # a 32-char hex API key
+   head -c 4000 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | head -c 24   # a 24-char password
+   ```
+   The 4000-byte input is deliberate: `tr -dc` keeps only ~6% of random
+   bytes for the hex class, so a smaller read silently yields a *short*
+   key rather than failing.
+
+3. [x] **Check qBittorrent's WebUI hash against the secret.** The
+   `qbittorrentPassword` secret is what the *arrs and the NAT-PMP sidecar
+   authenticate *with*; qBittorrent's own login is set separately, by
+   `serverConfig.Preferences.WebUI.Password_PBKDF2` in `nixflix.nix`. That
+   hash is **already committed** — it only needs regenerating if you change
+   `qbittorrentPassword`:
+   ```bash
+   nix run git+https://codeberg.org/feathecutie/qbittorrent_password -- --password '<the same password>'
+   ```
+   (Codeberg has been flaky; the same digest is PBKDF2-HMAC-SHA512, 100000
+   iterations, 64-byte key, random 16-byte salt, formatted
+   `@ByteArray(<base64 salt>:<base64 key>)` — a dozen lines of Python's
+   `hashlib` if the flake is unreachable.)
+
+   ⚠ If the hash and the secret disagree, every *arr grab fails
+   authentication and the sidecar never publishes a port — and neither
+   failure is loud. Regenerate *both together* or neither.
+
+4. [x] **Then switch**, and verify the pieces that can only be checked live:
+   ```bash
+   systemctl status wg.service qbittorrent sabnzbd sonarr sonarr-anime radarr lidarr prowlarr flaresolverr navidrome
+   sudo ip netns exec wg curl -s -4 ifconfig.me  # ← Proton's IP, NOT the house IP
+   curl -s -4 ifconfig.me                        # ← the house IP (host is untunnelled)
+   journalctl -u protonvpn-natpmp -f             # ← "published forwarded port NNNNN"
+   ```
+   The second and third lines together are the kill-switch check: torrent
+   traffic leaves via Proton while NFS/SSH/monitoring stay on the LAN.
+
+   ⚠ `ip netns exec` needs root — without `sudo` it fails with `setting the
+   network namespace "wg" failed: Operation not permitted`, which reads like
+   a broken namespace and isn't. The other three lines are fine unprivileged.
+
+   After that, `protonvpn-healthcheck` is the standing answer to the same
+   question — a timer that reads wg0's last handshake age every 60s and
+   fails the unit once it passes 240s:
+   ```bash
+   systemctl status protonvpn-healthcheck.timer
+   systemctl start protonvpn-healthcheck && journalctl -u protonvpn-healthcheck -n 5
+   ```
+   A tunnel that dies *after* boot is otherwise silent: `wg.service` is a
+   `RemainAfterExit` oneshot, so it keeps reporting `active (exited)` while
+   qBittorrent's traffic is black-holed. The check turns that into a unit
+   in `systemctl --failed`, which clears itself on the first run that passes.
+
+   ⚠ `-4` is not decoration. Without it curl inside the namespace prefers
+   IPv6 and reports a `2a02:6ea0:…` Proton address — reassuring, but it
+   answers the wrong question: BitTorrent peer connections and the NAT-PMP
+   forward are both IPv4, so IPv4 is the path the kill-switch check has to
+   cover. Pin the family on *both* lines so the two results are comparable.
+
+5. [x] **Add the twelfth secret and the DNS records, for Traefik.** The web
+   UIs are reachable at `https://<service>.arr.internal` and
+   `https://<service>.arr.zjones.dev` — `prowlarr`, `sonarr`, `sonarr-anime`,
+   `radarr`, `lidarr`, `navidrome`, `sabnzbd`, `qbittorrent`, and `traefik`
+   for the dashboard — plus `bazarr` and `bazarr-anime`, added after this step
+   was done (step 9). The firewall opens **only 80 and 443**; the service
+   ports are not reachable directly, by design.
+
+   ⚠ **The usernames are not all the same.** Eight of the nine log in as
+   `admin`; Navidrome logs in as **`z`**. That is deliberate — Navidrome is a
+   personal listening account, with playlists, favourites and play counts
+   bound to the user, rather than a service admin — but it is exactly the kind
+   of difference that reads as a wrong password.
+
+   | Service | User | Secret under `nixflix:` |
+   |---|---|---|
+   | Prowlarr, Sonarr, sonarr-anime, Radarr, Lidarr | `admin` | `arrPassword` (one value, shared) |
+   | qBittorrent | `admin` | `qbittorrentPassword` |
+   | **Navidrome** | **`z`** | `navidromePassword` |
+   | SABnzbd | *(no login)* | API key only |
+   | Traefik dashboard | *(no auth)* | — |
+
+   Read any of them without opening the editor:
+   ```bash
+   sudo cat /run/secrets/nixflix/navidromePassword; echo
+   ```
+   The `echo` matters — the values carry no trailing newline, so the prompt
+   lands on the same line and it is easy to copy one character short.
+
+   Two prerequisites, neither of which the switch can do for itself:
+
+   1. [x] `sops secrets/galactica.yaml` → add `cloudflare/apiToken`, the same
+      DNS-edit token the other three Traefik hosts already use. Activation
+      fails without it, like any other missing secret. Only the
+      `*.arr.zjones.dev` certificates need it; `*.arr.internal` is served
+      from Traefik's own self-signed cert and works with no token at all.
+   2. [x] In AdGuard on hopper, point `*.arr.internal` and `*.arr.zjones.dev`
+      at **192.168.8.190**. Until then the names do not resolve and nothing
+      loads — which looks exactly like Traefik being broken.
+
+   `homelab.letsencryptStaging` is still `true`, so the first certificates
+   come from Let's Encrypt's **staging** CA and browsers will warn on the
+   `.zjones.dev` names. That is the intended order: prove issuance works,
+   then set it `false` for this host. Staging and production certs use
+   separate storage (`acme-staging.json` / `acme.json`), so flipping never
+   requires deleting anything.
+
+   ⚠ Names are `*.arr.*`, not `*.galactica.*` like the rest of the fleet.
+   They follow the media **stack** rather than the host, so moving it later
+   is a DNS change instead of re-entering every URL in Prowlarr's
+   application list and each *arr's cross-references.
+
+   Verified live once both were in place — all nine names answer through
+   Traefik, `302` for the *arrs, Navidrome and the dashboard, `303` for
+   SABnzbd, `200` for qBittorrent. The last two are the ones worth noting:
+   SABnzbd would have returned `403 Access denied - Hostname verification
+   failed` without its `host_whitelist`, and qBittorrent `401 Unauthorized`
+   without `HostHeaderValidation = false`, so those two settings are
+   confirmed rather than assumed. Handy re-check, no DNS needed:
+   ```bash
+   for h in prowlarr sonarr sonarr-anime radarr lidarr navidrome sabnzbd qbittorrent traefik; do
+     printf '%-14s %s\n' "$h" \
+       "$(curl -k -sS -o /dev/null -w '%{http_code}' --max-time 5 "https://$h.arr.internal/" 2>&1)"
+   done
+   ```
+
+6. [x] **Prove one wildcard issuance, then leave staging.** The first switch
+   issued per-subdomain certificates alongside the wildcard, because Traefik
+   skips a domain only once a covering cert is already stored — so on a cold
+   start the subdomain routers won the race. Every `-dev` router now names the
+   same `main`+`sans`, which dedupes them. To confirm before the CA changes:
+   ```bash
+   sudo rm /var/lib/traefik/acme-staging.json
+   sudo systemctl restart traefik
+   journalctl -u traefik -f
+   ```
+   Exactly one issuance for `arr.zjones.dev` + `*.arr.zjones.dev`, and no
+   per-subdomain requests, means it holds.
+
+   Confirmed on 2026-09-04: one `Obtaining bundled SAN certificate` for the
+   pair, two DNS-01 challenges (the base name and the wildcard each need
+   their own TXT), one `Server responded with a certificate`, and no
+   per-subdomain issuance at all — against the first run, where `lidarr` and
+   `sonarr-anime` were issued individually before the wildcard arrived.
+   `homelab.letsencryptStaging = false` is now set in `configuration.nix`.
+   Production uses `acme.json`, a separate file from `acme-staging.json`, so
+   the switch needs nothing deleted and flipping back is enough to undo it.
+   Worth having got right first: production allows 50 certificates per
+   registered domain per week, and the un-deduped form spent ten.
+
+7. [ ] **Let Recyclarr build the profiles before importing.** It syncs the
+   TRaSH guides into Sonarr, sonarr-anime and Radarr — custom formats, scores,
+   quality definitions, and one quality profile each — so the profiles the
+   import needs are created rather than hand-entered:
+
+   | Instance | Profile it creates |
+   |---|---|
+   | Sonarr | `WEB-1080p (Alternative)` |
+   | sonarr-anime | `[Anime] Remux-1080p` |
+   | Radarr | `[SQP] SQP-1 (1080p)` |
+
+   It runs daily on a timer and once at boot, after each *arr's `-config`
+   service. To do it now rather than wait:
+   ```bash
+   sudo systemctl start recyclarr && journalctl -u recyclarr -n 40
+   ```
+   Then check the profiles exist in each UI before step 8. Indexers still have
+   to be added to Prowlarr by hand — Recyclarr does profiles, not indexers.
+
+   ⚠ Recyclarr takes ownership of custom formats and scores
+   (`delete_old_custom_formats` and `reset_unmatched_scores` are both on), so
+   hand-edits to those are reverted on its next run. Quality profiles you make
+   yourself are safe — `cleanupUnmanagedProfiles` is deliberately off, and
+   turning it on would delete every profile the managed list does not name.
+
+   To move to 4K, set `sonarrQuality`/`radarrQuality` in `nixflix.nix`; the new
+   profile appears on the next run and existing files are untouched, so only
+   newly-grabbed releases follow it.
+
+8. [ ] **Import the staged media** — point Sonarr/Radarr at
+   `tank/media_staging/*` and run their import, which hardlinks into
+   `/tank/nixflix_media/media/{tv,movies}`. Only destroy the staging datasets
+   once the libraries look right; that is the last undo.
+
+9. [ ] **Wire up the two Bazarrs.** Both are running after the switch but
+   neither knows about anything yet — Bazarr keeps its configuration in its
+   own database, not in Nix, so this part is genuinely by hand.
+
+   | Instance | URL | Talks to |
+   |---|---|---|
+   | `bazarr` | `https://bazarr.arr.internal` | Sonarr (`127.0.0.1:8989`) + Radarr (`127.0.0.1:7878`) |
+   | `bazarr-anime` | `https://bazarr-anime.arr.internal` | sonarr-anime (`127.0.0.1:8990`) only |
+
+   ⚠ **There are two because Bazarr only speaks to one Sonarr and one
+   Radarr.** Its config schema has scalar `sonarr.ip` / `radarr.ip` keys, and
+   upstream has closed the multi-instance request as "won't happen" — the
+   sanctioned answer is a second instance. `hosts/galactica/bazarr.nix`
+   records the alternatives that were weighed and why none of them fit.
+
+   1. [ ] **Set a login first, on both.** Settings → General → Security.
+      Bazarr ships with authentication **off**, so until this is done anything
+      that can reach the name can drive it. None of the other services on this
+      host behave that way, which is exactly why it is easy to miss.
+   2. [ ] **Point each at its *arr(s).** Settings → Sonarr / Settings → Radarr:
+      host `127.0.0.1`, the port from the table, SSL off, and the API key.
+      Read the keys without opening the editor:
+      ```bash
+      for k in sonarrApiKey sonarrAnimeApiKey radarrApiKey; do
+        printf '%-20s %s\n' "$k" "$(sudo cat /run/secrets/nixflix/$k)"
+      done
+      ```
+      On `bazarr-anime`, leave Radarr **disabled** — enabling it there would
+      have two instances managing the same films.
+   3. [ ] **Leave path mappings empty.** This is the classic Bazarr
+      misconfiguration, and it does not apply here: Bazarr runs on the same
+      host and the same filesystem as the *arrs, so the path Sonarr reports is
+      the path Bazarr opens. Mappings are for the split-container case.
+   4. [ ] **Add providers and a languages profile.** Settings → Providers
+      needs your own subtitle-site accounts; Settings → Languages defines a
+      profile, which then has to be set as the default for series/movies or it
+      applies to nothing new.
+   5. [ ] **Check what it writes**, once one subtitle has landed:
+      ```bash
+      ls -l /tank/nixflix_media/media/tv/*/*/*.srt | head
+      ```
+      Expect `bazarr media` and mode `-rw-rw-r--`. Group-writable is the point
+      — a subtitle the *arrs cannot move is one a later rename leaves behind.
+      That comes from `UMask=0002` plus `media` as Bazarr's primary group;
+      both are in `bazarr.nix` and both are load-bearing.
+
+   Reachability re-check, no DNS needed:
+   ```bash
+   for h in bazarr bazarr-anime; do
+     printf '%-14s %s\n' "$h" \
+       "$(curl -k -sS -o /dev/null -w '%{http_code}' --max-time 5 "https://$h.arr.internal/" 2>&1)"
+   done
+   ```
+
+10. [ ] **One-time repair of the download tree's permissions.** Needed once,
+   alongside the switch that carries the qBittorrent `UMask = "0002"` fix in
+   `nixflix.nix`. A umask only applies to newly created files, so the fix
+   covers new downloads and nothing already on disk.
+
+   What went wrong: qBittorrent ran at the default 0022 and created every
+   release directory `0755 qbittorrent:media`, so nothing else in the `media`
+   group could write inside one. Unpackerr extracted sixteen RAR'd Sonarr
+   grabs correctly and then failed every move back with `permission denied`.
+   Sonarr imports needing to write there would have failed the same way.
+
+   1. [ ] Switch first, so new downloads stop reproducing it:
+      ```bash
+      sudo nixos-rebuild switch --flake .#galactica
+      systemctl show qbittorrent -p UMask   # expect UMask=0002
+      ```
+   2. [ ] Fix what is already there. `chmod -R g+w` adds group write and
+      touches nothing else — it does not make files executable:
+      ```bash
+      sudo chmod -R g+w /tank/nixflix_media/downloads/torrent
+      ```
+   3. [ ] Clear Unpackerr's abandoned output. It writes into
+      `<release>_unpackerred/` beside each release; the sixteen from the
+      failed run are stale and regenerable, since the `.rar` files are all
+      still there. **Look before deleting:**
+      ```bash
+      sudo find /tank/nixflix_media/downloads/torrent -maxdepth 2 -type d -name '*_unpackerred' -print
+      sudo find /tank/nixflix_media/downloads/torrent -maxdepth 2 -type d -name '*_unpackerred' -exec rm -rf {} +
+      ```
+   4. [ ] Restart Unpackerr. It had exhausted `max_retries = 3` on all
+      sixteen (`48 retries, 16 failed`), so it will not pick them up again on
+      its own — the counters are in memory:
+      ```bash
+      sudo systemctl restart unpackerr
+      journalctl -u unpackerr -f
+      ```
+      Expect `Extracted` rather than `Extraction Failed`, then Sonarr
+      importing them within a few minutes.
+
+11. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
+   `nix flake update`. The input is pinned to an exact upstream revision that
+   the fork's CI has cleared against 26.05. To move it: merge upstream into
+   `zjones-xyz/nixflix-exp`, let its CI go green against the 26.05 pin, then
+   set that same upstream rev here. A bare branch URL would let a routine
+   update pull an unrehearsed revision into the fleet, which is precisely
+   what the canary exists to prevent.
+
+### Anime
+
+`sonarr-anime` is enabled — a second Sonarr on port 8990 with its own root
+folder (`media/anime`), which nixflix treats as a first-class service:
+Prowlarr registers it as its own application and both download clients get a
+matching category, so anime stays separated end to end.
+
+**There is no `radarr-anime`, and adding one is not symmetric.** nixflix ships
+no such module. The generic builder would happily produce one — it defines its
+own systemd unit rather than wrapping nixpkgs' single-instance
+`services.radarr`, so a second instance is architecturally fine — but the
+*name* `sonarr-anime` is enumerated by hand in about fifteen places (Prowlarr's
+application list, the qBittorrent and SABnzbd category maps, Recyclarr's
+profiles, the UID table in `globals.nix`). A `radarr-anime` would run and be
+reachable, and would be wired into none of them without local patches to each.
+
+So anime films start in the **existing Radarr**, using their own root folder
+(e.g. `media/anime-movies`) and an anime quality profile — the common
+arrangement, since anime films are a far smaller category than series and
+Radarr applies profiles per-movie. If that proves insufficient, a local
+`radarr-anime` module plus the category/application wiring is the next step,
+and would be a good upstream contribution: it fills a real asymmetry.
+
+### Music — Lidarr and Navidrome, and the one real hazard
+
+Navidrome (port 4533) streams the library; Lidarr (8686) acquires into it.
+Navidrome runs *here* rather than on memory-alpha, unlike Jellyfin: audio
+transcoding is cheap enough for this CPU, so the no-GPU argument that exiles
+video playback does not apply, and serving from local disk skips an NFS hop.
+Navidrome's `MusicFolder` follows Lidarr's root folder automatically, so the
+two cannot drift apart.
+
+⚠ **The existing music collection is the one genuinely irreplaceable thing in
+this migration.** SHARES.md marks `music` 🛡 Protected, and the re-acquirable
+table deliberately omits it — unlike `arr_media`, it cannot be re-downloaded.
+Lidarr is not a read-only cataloguer: within its root folder it renames,
+moves, and on upgrade deletes files.
+
+So the config points Lidarr at a **fresh** `media/music`, and the old
+collection stays where it is in `tank/media_staging`. When you do bring it
+across, copy rather than move, and keep the staging copy until Lidarr has
+matched the library and you have listened to a few albums:
+
+```bash
+# copy, do not move — the staging copy is the undo
+rsync -a --info=progress2 /tank/media_staging/music/ /tank/nixflix_media/media/music/
+```
+
+Navidrome only ever reads the folder, so pointing *it* at the library is
+risk-free; all the write authority is Lidarr's. If you would rather have
+streaming now and defer the acquisition question, set
+`nixflix.lidarr.enable = false` and give Navidrome an explicit
+`settings.MusicFolder` pointing at the staging path — it does not need Lidarr
+to work.
+
+### FlareSolverr
+
+Enabled, with two local corrections to upstream's wiring that
+`hosts/galactica/nixflix.nix` explains at length. In short: upstream gives the
+readiness probe 30 seconds, but FlareSolverr's startup includes a cold
+Chromium launch measured at 43s on a *modern* cloud runner — and a failed
+`ExecStartPost` kills the unit, so on this 2012 Xeon the stock timeout risks a
+permanent restart-loop rather than a stumble. The probe is raised to 180s.
+Separately, upstream makes `prowlarr-indexer-proxies` *require*
+`flaresolverr.service`, so one failed start cancels the proxy-configuration
+job outright and nothing ever re-queues it — Prowlarr comes up with no proxy
+and stays that way silently. That is relaxed to `wants`, which is safe because
+the script only ever calls Prowlarr's own API and saves with `forceSave=true`
+(no validation call to the proxy).
+
+Worth confirming on first boot: `journalctl -u flaresolverr` should show it
+becoming ready once, not looping, and Prowlarr's Settings → Indexer Proxies
+should list a `FlareSolverr` entry tagged `flaresolverr`.
+
+**Both since enabled:** `lidarr` (SHARES.md marks `music` 🛡 Protected, so
+automating it was its own decision — taken, with `media/music` starting empty
+and the existing collection imported rather than migrated in place) and
+`recyclarr` (TRaSH profile sync, step 7).
+SABnzbd is deliberately **outside** the VPN — usenet is already TLS to a paid
+provider, so the tunnel would only cap throughput; `nixflix.nix` says so at
+the option.

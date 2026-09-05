@@ -78,6 +78,67 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # nixflix (used on galactica) — the declarative *arr media stack. Points
+    # at UPSTREAM, not at our zjones-xyz/nixflix-exp fork, and that is the
+    # canary-pattern split rather than an accident: the fork's job is to merge
+    # each upstream revision, prove it against nixos-26.05 in its own CI, and
+    # only then is this lock bumped to the matching upstream rev. The fork
+    # validates; upstream is what actually deploys.
+    #
+    # This did briefly point at the fork, to pick up seven robustness fixes it
+    # carries that upstream has not taken yet. Two things sent it back here:
+    #
+    #  1. The fork is a PRIVATE repo, so CI — a bare actions/checkout runner
+    #     whose token is scoped to this repository — cannot fetch it at all.
+    #     Older Nix reports that inaccessible remote as "Cannot find Git
+    #     revision ... in ref ...", which reads like a stale pin and is not:
+    #     the ref is correct and carries exactly that rev, the runner simply
+    #     has no access. (`allRefs=1` does not help, for the same reason.)
+    #  2. Of those seven fixes, all but the FlareSolverr ones are either
+    #     confined to the fork's `tests/` tree or gated behind a service this
+    #     host does not enable — jellyfin and seerr are both `false` in
+    #     hosts/galactica/nixflix.nix. Those are what makes the *canary's* CI
+    #     reliable, which is where they belong.
+    #
+    # ⚠ FlareSolverr and Navidrome ARE enabled here, so three of the fork's
+    # fixes now matter to what this host runs, and all three are re-applied
+    # by hand in hosts/galactica/nixflix.nix instead — the readiness probe
+    # (plus the TimeoutStartSec that makes it effective), the
+    # prowlarr-indexer-proxies `requires`→`wants` relaxation, and a bounded
+    # Restart on navidrome-setup.
+    #
+    # That is the cost of reason 1, and it is real: `lib.mkForce` on an
+    # upstream unit is silent on drift, and these three are precisely the
+    # corrections the canary's CI does NOT rehearse, because the canary is
+    # what we are not using. The exit is to make the fork fetchable from CI
+    # (publish it, or give the workflow a credential — a CI change, not an
+    # architectural one) and point this input back at it, which deletes all
+    # three overrides. Upstreaming them to kiriwalawren/nixflix does the same
+    # job. Until one of those happens this is carried debt, not a settled
+    # design; hosts/galactica/nixflix.nix says the same at each override.
+    #
+    # `follows` on nixpkgs is what governs galactica's packages either way: a
+    # NixOS module always evaluates against the *consuming* host's pkgs, so
+    # upstream tracking nixos-unstable is irrelevant here — these modules get
+    # this fleet's 26.05 pin, which is exactly what the fork's CI rehearses.
+    #
+    # Pinned to an exact rev rather than tracking `main`, and the rev is not
+    # upstream's tip: `c5b5944` is the revision the canary has actually proven
+    # against 26.05 (zjones-xyz/nixflix-exp#1 is that tree, CI green). Upstream
+    # commits most days, so a bare branch URL would let `nix flake update` pull
+    # an unvalidated revision into the fleet — which is the exact failure the
+    # canary exists to prevent. Bumping this is a deliberate step: merge
+    # upstream into the fork, let its CI prove the result against 26.05, then
+    # move this rev to match. Same rev-pinning shape as the two standalone
+    # nixpkgs inputs below.
+    #
+    # git+https rather than github: — see the claude-desktop-debian input
+    # comment above for why.
+    nixflix = {
+      url = "git+https://github.com/kiriwalawren/nixflix.git?rev=c5b5944791ecbc2a434fbf6d8d95859aee47b3b9&shallow=1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # A second, standalone nixpkgs — deliberately NOT inputs.nixpkgs.follows,
     # unlike every other input above — pinned only to pull a newer
     # `orca-slicer` (used on pegasus) than the one in the main `nixpkgs`
@@ -103,7 +164,7 @@
     nixpkgs-bambu-studio.url = "git+https://github.com/NixOS/nixpkgs.git?rev=13b979d75662827615c1de6dd22f87e6296ba71d&shallow=1";
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, niri-flake, nixpkgs-orca-slicer, nixpkgs-bambu-studio, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, niri-flake, nixflix, nixpkgs-orca-slicer, nixpkgs-bambu-studio, ... }:
   {
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
@@ -186,6 +247,13 @@
           ./hosts/galactica/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
+          # Brings in nixflix's own modules AND vpn-confinement (nixflix's
+          # nixosModules.default imports it), which is what provides the
+          # `vpnNamespaces` options and the per-service `vpnConfinement`
+          # option that hosts/galactica/nixflix.nix uses for the NAT-PMP
+          # sidecar. The stack's own configuration lives in that file, which
+          # configuration.nix imports.
+          nixflix.nixosModules.default
         ];
       };
 

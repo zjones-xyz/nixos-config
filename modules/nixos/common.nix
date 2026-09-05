@@ -117,6 +117,14 @@
     ssh-to-age
     sops
 
+    # In systemPackages rather than home-manager on purpose. `jq` is already in
+    # modules/home/common.nix, but that puts it on `z`'s PATH only — so it
+    # disappears under `sudo`, which is exactly when it is wanted, since every
+    # sops-provisioned secret and API key on these hosts is root-readable.
+    # `openssl` was absent fleet-wide; both have now cost a detour mid-task.
+    jq
+    openssl
+
     # Edit this host's own secrets/<host>.yaml using its SSH host key as the age
     # identity: `sops-hostkey secrets/galactica.yaml`. The key is root-only, so
     # plain `sops` never finds it.
