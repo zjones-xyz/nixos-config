@@ -498,6 +498,39 @@ in
       )
   );
 
+  # ── qBittorrent's umask ───────────────────────────────────────────────────
+  # A fifth local correction, and the first one that has actually bitten in
+  # production rather than been caught in review.
+  #
+  # nixflix sets `UMask = "0002"` for every *arr (arr-common/
+  # mkArrServiceModule.nix) and SABnzbd's own settings default `permissions =
+  # "775"` — but the qBittorrent module sets neither, and neither does
+  # nixpkgs'. So the one download client that is not an *arr runs at systemd's
+  # default 0022 and creates each release directory `0755 qbittorrent:media`.
+  #
+  # Every other service here is in the `media` group, which therefore gets
+  # read-and-traverse but NOT write inside those directories. Observed
+  # 2026-09-05: Unpackerr extracted sixteen RAR'd Sonarr grabs perfectly well
+  # into `<release>_unpackerred/` — a sibling in the category directory, which
+  # tmpfiles creates 0775, so that half worked — and then failed every move
+  # back into the release directory:
+  #
+  #   rename …/Shetland.S09E02…_unpackerred/….mkv
+  #       →  …/Shetland.S09E02…/….mkv: permission denied
+  #
+  # `drwxrwxr-x` on the category directory, `drwxr-xr-x` on the release
+  # directories inside it. That one difference is the whole bug, and it would
+  # equally have blocked a Sonarr import that needed to write there.
+  #
+  # ⚠ A umask applies only to newly created files, so this fixes new downloads
+  # and does nothing for what is already on disk. MANUAL-STEPS §12 step 10
+  # carries the one-time repair.
+  #
+  # Good upstream contribution: nixflix is internally inconsistent here, not
+  # wrong on purpose — its *arrs and its usenet client both get this right.
+  systemd.services.qbittorrent.serviceConfig.UMask = "0002";
+
+
   # ── ProtonVPN NAT-PMP → qBittorrent listen port ───────────────────────────
   # Why this exists: nixflix's `vpn.openVPNPorts` declares a STATIC forwarded
   # port, which is how AirVPN and IVPN work. ProtonVPN does not do static

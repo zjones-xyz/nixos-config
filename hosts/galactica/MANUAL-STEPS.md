@@ -787,7 +787,46 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    done
    ```
 
-10. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
+10. [ ] **One-time repair of the download tree's permissions.** Needed once,
+   alongside the switch that carries the qBittorrent `UMask = "0002"` fix in
+   `nixflix.nix`. A umask only applies to newly created files, so the fix
+   covers new downloads and nothing already on disk.
+
+   What went wrong: qBittorrent ran at the default 0022 and created every
+   release directory `0755 qbittorrent:media`, so nothing else in the `media`
+   group could write inside one. Unpackerr extracted sixteen RAR'd Sonarr
+   grabs correctly and then failed every move back with `permission denied`.
+   Sonarr imports needing to write there would have failed the same way.
+
+   1. [ ] Switch first, so new downloads stop reproducing it:
+      ```bash
+      sudo nixos-rebuild switch --flake .#galactica
+      systemctl show qbittorrent -p UMask   # expect UMask=0002
+      ```
+   2. [ ] Fix what is already there. `chmod -R g+w` adds group write and
+      touches nothing else — it does not make files executable:
+      ```bash
+      sudo chmod -R g+w /tank/nixflix_media/downloads/torrent
+      ```
+   3. [ ] Clear Unpackerr's abandoned output. It writes into
+      `<release>_unpackerred/` beside each release; the sixteen from the
+      failed run are stale and regenerable, since the `.rar` files are all
+      still there. **Look before deleting:**
+      ```bash
+      sudo find /tank/nixflix_media/downloads/torrent -maxdepth 2 -type d -name '*_unpackerred' -print
+      sudo find /tank/nixflix_media/downloads/torrent -maxdepth 2 -type d -name '*_unpackerred' -exec rm -rf {} +
+      ```
+   4. [ ] Restart Unpackerr. It had exhausted `max_retries = 3` on all
+      sixteen (`48 retries, 16 failed`), so it will not pick them up again on
+      its own — the counters are in memory:
+      ```bash
+      sudo systemctl restart unpackerr
+      journalctl -u unpackerr -f
+      ```
+      Expect `Extracted` rather than `Extraction Failed`, then Sonarr
+      importing them within a few minutes.
+
+11. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
    `nix flake update`. The input is pinned to an exact upstream revision that
    the fork's CI has cleared against 26.05. To move it: merge upstream into
    `zjones-xyz/nixflix-exp`, let its CI go green against the 26.05 pin, then
