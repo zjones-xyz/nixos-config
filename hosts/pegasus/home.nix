@@ -77,6 +77,7 @@
     discord
     ferdium
     signal-desktop
+    slack
     openscad
     obsidian
     spotify
@@ -85,12 +86,6 @@
     jellyfin-desktop
     vlc
 
-    # ── Mail: Thunderbird + Proton Bridge ───────────────────────────────────
-    # Proton exposes no standard IMAP/SMTP, so the Bridge re-serves the mailbox
-    # on 127.0.0.1 for Thunderbird (unlike protonmail-desktop below, which is
-    # Proton's own client). GUI variant, not the headless `protonmail-bridge`
-    # service: fits this host's all-GUI pattern and avoids the pass/GPG store
-    # the headless build needs. First-run login is manual — MANUAL-STEPS.md §20.
     thunderbird
     protonmail-bridge-gui
 
