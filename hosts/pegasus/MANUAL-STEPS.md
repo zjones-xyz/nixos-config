@@ -615,3 +615,126 @@ and reading the packaging, not from a real login.
    Whether that session gets an empty keyring each login or inherits the
    already-running daemon from the shared user manager wasn't determined —
    check with step 2 from inside that session if it matters.
+
+## 20. Thunderbird + Proton Bridge — first-run login (interactive)
+
+Added `thunderbird` and `protonmail-bridge-gui` to `hosts/pegasus/home.nix`.
+The packages install declaratively; wiring them to a live Proton mailbox is a
+one-time interactive flow this session can't drive. After the next switch:
+
+1. **Launch the Bridge and sign in.** Run `protonmail-bridge-gui` (the GUI
+   tray app; the bare `protonmail-bridge` binary is the headless variant and
+   isn't installed) and log in with the Proton account — a paid plan is required; Bridge is
+   not available on free Proton. On first launch it stores its own credentials
+   and mailbox keys in the Secret Service, i.e. the **gnome-keyring** daemon
+   from §19 — so do this from a session where §19 is confirmed working
+   (`busctl --user list | grep secrets` shows `org.freedesktop.secrets` owned
+   by `gnome-keyring-daemon`). If the keyring isn't up, Bridge falls back to
+   prompting on every start.
+
+2. **Copy the Bridge's local IMAP/SMTP settings.** In the Bridge window, open
+   the account's Mailbox details — it shows a `127.0.0.1` host, the IMAP and
+   SMTP ports, and a **Bridge-generated password** (this is NOT the Proton
+   account password; it's unique per client and only valid against the local
+   Bridge). Leave the Bridge running — it must stay up for Thunderbird to send
+   or receive, since it's the proxy.
+
+3. **Add the account in Thunderbird** using those values: server `127.0.0.1`,
+   the IMAP/SMTP ports and Bridge password from step 2, connection security
+   **STARTTLS**, auth **normal password**. Thunderbird will warn about the
+   Bridge's self-signed certificate on first connect — expected (the TLS is
+   purely loopback), accept/trust it. Or use the Bridge's "Configure
+   automatically" export if Thunderbird's autoconfig is offered.
+
+4. **Autostart — declared, just verify it.** Mail only flows while the Bridge
+   is running, so it's started with every Niri session via `spawn-at-startup`
+   in `niri-settings.nix` (`protonmail-bridge-gui --no-window`: tray only, no
+   window popping up at login). Nothing to enable by hand — on the next login
+   after the switch, confirm the Bridge tray icon is present. Leave the
+   Bridge's own "Start on login" settings toggle off: it writes an XDG
+   autostart entry, which Niri ignores anyway — but it *is* the mechanism
+   that would cover the Plasma/COSMIC sessions, if one of those ever becomes
+   a daily driver again.
+
+## 21. Two known lockups — Discord screenshare, unfocused games (workarounds)
+
+Both observed by Zoe on real hardware, 2026-09-06. Neither is a pegasus
+misconfiguration: the session already runs Electron apps native-Wayland with
+the GNOME portal (`NIXOS_OZONE_WL`/`ELECTRON_OZONE_PLATFORM_HINT` in
+`niri-settings.nix`), so the standard "fix your portals/ozone flags" advice
+is already satisfied — these are upstream bugs with documented workarounds.
+
+**Discord locks up mid-screenshare.** Closest documented match: Discord's
+`2026-03-linux-vulkan-capture` experiment breaks capture sessions under niri
+(https://github.com/niri-wm/niri/discussions/3921 — portal tweaks and
+hardware-accel toggles did *not* help there). Stock Discord exposes no way to
+opt out of an experiment; the confirmed fix was Vesktop, which does.
+Interim workaround that already works here: restart Discord right before a
+screenshare.
+
+**Some games freeze within the first minute or two if unfocused on start.**
+Matches the open bug https://github.com/Supreeeme/xwayland-satellite/issues/201 —
+X11 games under xwayland-satellite desync when unfocused and can freeze
+permanently after ~10–15s without focus; no upstream fix yet. Niri's own
+documented answer for game issues is gamescope
+(https://github.com/niri-wm/niri/wiki/Application-Issues), which brings its
+own Xwayland and takes satellite out of the loop; `gaming.nix` already
+installs it. Interim workaround: keep a freshly launched game focused for
+its first minute or two.
+
+To try, roughly cheapest-first:
+
+1. [ ] Stock Discord: toggle **off** hardware acceleration (User Settings →
+   Advanced), restart, test a longer screenshare. The classic NVIDIA/Electron
+   freeze lever — didn't help in the linked report, but it's a 30-second test.
+2. [ ] Try Vesktop without installing: `nix run nixpkgs#vesktop`, sign in,
+   then Settings → Vencord → enable the "Experiments" plugin → restart →
+   set the `2026-03-linux-vulkan-capture` experiment to "not eligible", and
+   test a screenshare. If it holds up, have the config session declare
+   `vesktop` in `home.nix` (keep or drop `discord` — either works; note
+   Discord's ToS technically frowns on modified clients, enforcement against
+   plain client mods has historically been nil, judgement call).
+3. [ ] For each affected game (Steam → Properties → Launch Options):
+   `gamescope -f -w 2560 -h 1440 -W 2560 -H 1440 --force-grab-cursor --backend sdl -- %command%`
+   (swap in the monitor's real resolution), then confirm the unfocused
+   early-freeze stops. `--backend sdl` is currently load-bearing (gamescope's
+   Wayland backend doesn't lock the cursor properly, per the niri wiki).
+   Note: Lutris's own gamescope toggle is NOT a substitute for Steam titles —
+   Lutris's Steam runner hands launching off to the Steam client, so Lutris
+   system options never wrap the game process
+   (https://github.com/lutris/lutris/issues/3085). It only applies to games
+   Lutris itself execs (Wine/native/GOG/EGS).
+4. [ ] Proton titles only, alternative to gamescope:
+   `PROTON_ENABLE_WAYLAND=1 %command%` (recent Proton) — native Wayland
+   avoids the satellite bug entirely, per the issue reporter.
+5. [ ] Check https://github.com/Supreeeme/xwayland-satellite/issues/201
+   occasionally; once fixed and the nixpkgs package carries it, steps 3–4
+   become unnecessary for the unfocused-freeze (gamescope may still be nice
+   for other reasons).
+
+## 22. Stream privacy block-outs — verify app-ids on real hardware
+
+`niri-settings.nix` now blocks these out of screencasts (`block-out-from =
+"screencast"`): 1Password, Signal, Discord, Ferdium, Thunderbird, the Proton
+Bridge window, gnome-keyring unlock prompts, and DMS's notification
+popups/center + polkit prompt (layer rules). The DMS layer namespaces and the
+Bridge's `ch.proton.bridge-gui` app-id were verified against pinned sources;
+the Electron/Mozilla app-ids could NOT be — Electron picks its own id at
+runtime, so those rules are case-insensitive suffix regexes that need one
+real-hardware check:
+
+1. [ ] With the apps open, run `niri msg windows` and confirm each of
+   1Password / Signal / Discord / Ferdium / Thunderbird reports an app-id
+   the rules match (`1password$`, `signal$`, `discord$`, `ferdium$`,
+   `thunderbird$`, all case-insensitive). Trigger a keyring unlock (e.g.
+   first Bridge start after a fresh login) and check the prompt's app-id
+   against `gcr.*prompt`. Fix any regex that misses in
+   `niri-settings.nix` and note it here.
+2. [ ] Live test: start a monitor screencast (OBS, or a Discord share) and
+   confirm each blocked window renders as black/blank in the *cast* while
+   staying visible on the physical screen — including a notification popup
+   (send yourself a Signal/Discord message mid-cast).
+3. [ ] Remember the accepted trade-off: normal screenshots still capture
+   these windows, and a third-party screenshot tool's frozen fullscreen
+   overlay could briefly leak them into an active cast — mid-stream, prefer
+   niri's built-in screenshot (`Print` binds).
