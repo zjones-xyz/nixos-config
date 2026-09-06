@@ -1,6 +1,60 @@
 { config, pkgs, ... }:
 
+let
+  # ── "Go to Urgent Window" helper (Mod+G) ──────────────────────────────────
+  # niri marks a window `is-urgent` on an xdg-activation request (e.g. an
+  # already-running Vivaldi asking to be raised for a new tab) but — by
+  # design, to avoid focus-stealing — never switches focus/workspace for it
+  # itself; it's purely a border/tab-indicator color change on a window that
+  # may be on a workspace you're not looking at. This script is the manual
+  # "go there" action bound below.
+  #
+  # First press: if any window is urgent, save the currently-focused window
+  # id to a runtime-dir state file (only if one isn't already saved, so a
+  # multi-window run doesn't clobber the original starting point), then
+  # focus the (first) urgent window — which niri confirms clears its urgent
+  # flag as a side effect of gaining focus. Repeated presses cycle through
+  # any remaining urgent windows the same way. Once none are left, the next
+  # press consumes the saved state file and jumps back to where you started;
+  # pressing again after that (nothing urgent, nothing saved) just toasts.
+  niriFocusUrgent = pkgs.writeShellApplication {
+    name = "niri-focus-urgent";
+    runtimeInputs = [
+      pkgs.jq
+      pkgs.niri
+    ];
+    text = ''
+      state_file="''${XDG_RUNTIME_DIR:-/tmp}/niri-focus-urgent-return-id"
+
+      urgent_id=$(niri msg -j windows | jq -r '[.[] | select(.is_urgent)][0].id // empty')
+
+      if [ -n "$urgent_id" ]; then
+        if [ ! -f "$state_file" ]; then
+          focused_id=$(niri msg -j windows | jq -r '[.[] | select(.is_focused)][0].id // empty')
+          if [ -n "$focused_id" ]; then
+            echo "$focused_id" > "$state_file"
+          fi
+        fi
+        niri msg action focus-window --id "$urgent_id"
+      else
+        if [ -f "$state_file" ]; then
+          return_id=$(cat "$state_file")
+          rm -f "$state_file"
+          if niri msg -j windows | jq -e --argjson id "$return_id" '.[] | select(.id == $id)' >/dev/null; then
+            niri msg action focus-window --id "$return_id"
+          else
+            dms ipc call toast info "Urgent window handled — previous window is gone"
+          fi
+        else
+          dms ipc call toast info "No urgent windows"
+        fi
+      fi
+    '';
+  };
+in
 {
+  home.packages = [ niriFocusUrgent ];
+
   # ── Declarative niri config (niri-flake's homeModules.config) ──────────────
   # Migrated 2026-08-11 from a hand-edited ~/.config/niri/config.kdl (niri's
   # own auto-generated first-run template, with `natural-scroll` disabled by
@@ -412,6 +466,44 @@
         hotkey-overlay.title = "Toggle Night Mode";
         action = spawn "dms" "ipc" "night" "toggle";
       };
+      "Mod+G" = {
+        hotkey-overlay.title = "Go to Urgent Window";
+        action = spawn "niri-focus-urgent";
+      };
     };
+  };
+
+  # ── systemd --user service environment (dcal, dms, …) ───────────────────
+  # Distinct from the KDL `environment` block above: that one is niri-
+  # session's own mechanism for niri-spawned processes. niri's own wiki
+  # (Application-Issues.md) is explicit that it "does not propagate to apps
+  # and shells started by systemd" — which includes DMS and dcal, both
+  # `systemd.user.services.*` units (dankcalendar.nix / desktop-niri.nix),
+  # not children of niri itself.
+  #
+  # That gap is the actual root cause of dcal's Google OAuth failure: Qt's
+  # QDesktopServices browser fallback checks $BROWSER first, then hunts a
+  # short hardcoded list of browser binary names that doesn't include
+  # "vivaldi" — with neither available, it logged "Unable to detect a web
+  # browser to launch". (Separately, Qt tries the xdg-desktop-portal
+  # OpenURI call first and logs a "Could not register app ID" DBus error —
+  # confirmed on pegasus that xdg-desktop-portal and both its gtk/gnome
+  # backends are installed and running fine, and niri's generated
+  # niri-portals.conf already falls through to them by default, so that
+  # warning is a Quickshell/Qt-on-Wayland single-app-ID-per-connection
+  # quirk, not a missing-portal problem — it's noise, not fixed by this.)
+  #
+  # home-manager's `systemd.user.sessionVariables` writes to
+  # ~/.config/environment.d/10-home-manager.conf, which the systemd --user
+  # manager reads once at its own startup and applies to every unit from
+  # then on — a general fix for any systemd --user service, not a
+  # dcal-only `Environment=` override. Requires a full logout/login (or
+  # reboot): environment.d is only read when the manager itself (re)starts,
+  # not on `daemon-reload` or a single unit restart. To test immediately
+  # without logging out:
+  #   systemctl --user set-environment BROWSER=vivaldi
+  #   systemctl --user restart dcal
+  systemd.user.sessionVariables = {
+    BROWSER = "vivaldi";
   };
 }
