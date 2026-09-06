@@ -132,6 +132,46 @@
           inactive.color = "#7d0d2d";
         };
       }
+
+      # ── Stream privacy (Zoe, 2026-09-06) ──────────────────────────────
+      # These windows are blocked out of the screencast portal (OBS,
+      # Discord shares, …) but stay normally screenshot-able. Deliberately
+      # "screencast", not the stricter "screen-capture" — the one known
+      # leak is screenshot tools that draw their own frozen full-screen
+      # overlay mid-cast (niri's built-in screenshot is always safe).
+      # The Electron app-ids are case-insensitive suffix matches because
+      # Electron picks its own id rather than nixpkgs pinning one —
+      # verify against `niri msg windows` on the host (MANUAL-STEPS §22);
+      # ch.proton.bridge-gui IS pinned (nixpkgs sets it as the wmclass).
+      {
+        matches = [
+          { app-id = "(?i)1password$"; } # incl. quick-access + unlock
+          { app-id = "(?i)signal$"; }
+          { app-id = "(?i)discord$"; }
+          { app-id = "(?i)ferdium$"; }
+          { app-id = "(?i)thunderbird$"; }
+          { app-id = "^ch\\.proton\\.bridge-gui$"; } # shows IMAP/SMTP creds
+          { app-id = "(?i)gcr.*prompt"; } # gnome-keyring unlock dialogs
+        ];
+        block-out-from = "screencast";
+      }
+    ];
+
+    # Same stream privacy for DMS's layer surfaces: notification popups
+    # (message previews are the sneakiest mid-stream leak), the
+    # notification center (same content, just opened deliberately), and
+    # DMS's polkit auth prompt. Namespaces verified against the pinned
+    # dank-material-shell source (WlrLayershell.namespace in
+    # Modules/Notifications/ and Modals/PolkitAuthSurfaceModal.qml).
+    layer-rules = [
+      {
+        matches = [
+          { namespace = "^dms:notification-popup$"; }
+          { namespace = "^dms:notification-center-popout$"; }
+          { namespace = "^dms:polkit-auth-surface$"; }
+        ];
+        block-out-from = "screencast";
+      }
     ];
 
     binds = with config.lib.niri.actions; {

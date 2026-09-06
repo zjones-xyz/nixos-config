@@ -711,3 +711,30 @@ To try, roughly cheapest-first:
    occasionally; once fixed and the nixpkgs package carries it, steps 3–4
    become unnecessary for the unfocused-freeze (gamescope may still be nice
    for other reasons).
+
+## 22. Stream privacy block-outs — verify app-ids on real hardware
+
+`niri-settings.nix` now blocks these out of screencasts (`block-out-from =
+"screencast"`): 1Password, Signal, Discord, Ferdium, Thunderbird, the Proton
+Bridge window, gnome-keyring unlock prompts, and DMS's notification
+popups/center + polkit prompt (layer rules). The DMS layer namespaces and the
+Bridge's `ch.proton.bridge-gui` app-id were verified against pinned sources;
+the Electron/Mozilla app-ids could NOT be — Electron picks its own id at
+runtime, so those rules are case-insensitive suffix regexes that need one
+real-hardware check:
+
+1. [ ] With the apps open, run `niri msg windows` and confirm each of
+   1Password / Signal / Discord / Ferdium / Thunderbird reports an app-id
+   the rules match (`1password$`, `signal$`, `discord$`, `ferdium$`,
+   `thunderbird$`, all case-insensitive). Trigger a keyring unlock (e.g.
+   first Bridge start after a fresh login) and check the prompt's app-id
+   against `gcr.*prompt`. Fix any regex that misses in
+   `niri-settings.nix` and note it here.
+2. [ ] Live test: start a monitor screencast (OBS, or a Discord share) and
+   confirm each blocked window renders as black/blank in the *cast* while
+   staying visible on the physical screen — including a notification popup
+   (send yourself a Signal/Discord message mid-cast).
+3. [ ] Remember the accepted trade-off: normal screenshots still capture
+   these windows, and a third-party screenshot tool's frozen fullscreen
+   overlay could briefly leak them into an active cast — mid-stream, prefer
+   niri's built-in screenshot (`Print` binds).
