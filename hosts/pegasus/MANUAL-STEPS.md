@@ -699,6 +699,11 @@ To try, roughly cheapest-first:
    (swap in the monitor's real resolution), then confirm the unfocused
    early-freeze stops. `--backend sdl` is currently load-bearing (gamescope's
    Wayland backend doesn't lock the cursor properly, per the niri wiki).
+   Note: Lutris's own gamescope toggle is NOT a substitute for Steam titles —
+   Lutris's Steam runner hands launching off to the Steam client, so Lutris
+   system options never wrap the game process
+   (https://github.com/lutris/lutris/issues/3085). It only applies to games
+   Lutris itself execs (Wine/native/GOG/EGS).
 4. [ ] Proton titles only, alternative to gamescope:
    `PROTON_ENABLE_WAYLAND=1 %command%` (recent Proton) — native Wayland
    avoids the satellite bug entirely, per the issue reporter.
