@@ -21,7 +21,9 @@
     ../../modules/nixos/arcane-agent.nix
     ../../modules/nixos/scrutiny-collector.nix
     ../../modules/nixos/traefik-galactica.nix
+    ../../modules/nixos/newt.nix
     ./borgmatic.nix
+    ./homepages.nix
     ./nixflix.nix
     ./unpackerr.nix
     ./bazarr.nix
@@ -162,6 +164,24 @@
   # SMART trend history → the Scrutiny hub on memory-alpha; smartd (below)
   # stays the local alerter.
   services.scrutinyCollector.enable = true;
+
+  # ── Remote access for the dashboards (homepages.nix) ───────────────────────
+  # Tailscale carries the admin homepage (and SSH) over the tailnet. No sops
+  # authKeyFile on purpose: the key would only cover the one-time join, and
+  # this host is already SSH-able — the owner runs `tailscale up` once
+  # (MANUAL-STEPS.md §13) and state persists in /var/lib/tailscale.
+  services.tailscale.enable = true;
+
+  # The guest homepage's door: Newt tunnels guesthome.zjones.xyz in from the
+  # Pangolin VPS. ⚠ Commented until the Pangolin Site for galactica exists —
+  # the id below is issued at creation (same reasoning as the NUT block: a
+  # made-up id fails at service start, not eval, and would be easy to miss).
+  # §13 has the steps, including the `newt/clientSecret` sops entry this
+  # enables.
+  # homelab.newt = {
+  #   enable = true;
+  #   id = "CONFIRM_ME_FROM_PANGOLIN"; # Pangolin → Sites → create "galactica"
+  # };
 
   # ── NUT — pending: galactica is to be the UPS server ───────────────────────
   # Deliberately NOT modules/nixos/nut.nix (that file is hopper's own server

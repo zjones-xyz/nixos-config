@@ -948,3 +948,58 @@ and the existing collection imported rather than migrated in place) and
 SABnzbd is deliberately **outside** the VPN — usenet is already TLS to a paid
 provider, so the tunnel would only cap throughput; `nixflix.nix` says so at
 the option.
+
+## 13. The homepages — tailnet + Pangolin (owner steps)
+
+`hosts/galactica/homepages.nix` declares both dashboards (Tower's old
+`homelab-stacks tower/homepage` and `tower/guesthome`, dead since the
+bare-metal cutover) as pinned Homepage containers on loopback ports —
+admin on `127.0.0.1:3010`, guest on `127.0.0.1:3011`. The switch itself
+needs no new secrets: the widget keys reuse the existing `nixflix/*` sops
+entries, and Tailscale deliberately has no authKey (see the block in
+`configuration.nix`). What the nix config cannot do is join networks and
+create Pangolin objects — that is this section.
+
+The admin instance is also routed by the host's own Traefik at
+`home.arr.internal` / `home.arr.zjones.dev` (registered via
+`homelab.arrExtraUpstreams`, like bazarr), so LAN access works as soon as
+the switch lands — steps below are for the tailnet and public halves.
+
+1. [ ] **Join the tailnet.** `sudo tailscale up --ssh`, authenticate in the
+   browser as usual. In the admin console, disable key expiry for
+   `galactica` (Machines → galactica → Disable key expiry) — a server, not
+   a laptop.
+
+2. [ ] **Serve the admin homepage over HTTPS on the tailnet:**
+   ```bash
+   sudo tailscale serve --bg --https=443 http://127.0.0.1:3010
+   ```
+   Then check `https://galactica.peacock-koi.ts.net` loads. (`--bg` persists
+   across reboots; the tailnet already has MagicDNS + HTTPS certs enabled —
+   the old tsdproxy names like `home.peacock-koi.ts.net` prove it.)
+
+3. [ ] **Create the Pangolin Site.** Pangolin admin → Sites → create
+   `galactica` (Newt connector). Copy the issued **id** and **secret**.
+
+4. [ ] **Wire Newt up.** `sops secrets/galactica.yaml` → add the secret as
+   `newt/clientSecret`; put the id in the `homelab.newt` block in
+   `configuration.nix` and uncomment it; `nrs`. `systemctl status newt`
+   should show the tunnel registered.
+
+5. [ ] **Re-point the guesthome Resource.** Pangolin admin → Resources →
+   `guesthome.zjones.xyz` → move it onto the `galactica` site with target
+   `http://localhost:3011` (host-resolvable — Newt runs on the host, so
+   container names do NOT resolve; `localhost:<published port>` does, same
+   as memory-alpha's Jellyfin resource). Keep whatever auth/SSO the old
+   Tower resource had. Verify from off-LAN (phone on cellular).
+
+6. [ ] **Verify the guest links actually work from outside.** The guest
+   dashboard currently lists only Jellyfin (`jellyfin.zjones.dev`) — confirm
+   that name resolves and routes publicly (it is also a Pangolin resource);
+   if the public name differs, fix the href in `homepages.nix`. The other
+   Tower-era guest links (Audiobookshelf, Grimmory, Shelfmark, 13ft) return
+   as those services are re-homed.
+
+7. [ ] **Retire the Tower stacks.** In homelab-stacks, delete (or mark
+   migrated) `tower/homepage`, `tower/guesthome` and `tower/pangolin-newt`,
+   and delete the old `tower` Site in Pangolin once nothing references it.
