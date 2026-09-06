@@ -95,8 +95,8 @@ in
 
     openFirewall = lib.mkOption {
       type = lib.types.bool;
-      default = true;
-      description = "Open cfg.port so the hub can reach the agent. List-merges with any other allowedTCPPorts.";
+      default = false;
+      description = "Open cfg.port so the hub can reach the agent. Off by default, like every other openFirewall; hosts opt in.";
     };
 
     image = lib.mkOption {
@@ -119,8 +119,7 @@ in
       serviceConfig = {
         Restart = "on-failure";
         RestartSec = "10s";
-        ExecStartPre = "${pkgs.coreutils}/bin/mkdir -p ${cfg.dataDir}";
-        ExecStop = "${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name beszel-agent down";
+        ExecStop = "${config.virtualisation.docker.package}/bin/docker compose -f ${composeFile} --project-name beszel-agent down";
       };
 
       # KEY/TOKEN exported into the compose invocation's environment (compose's
@@ -129,8 +128,14 @@ in
       script = ''
         export KEY="$(cat ${cfg.keyFile})"
         export TOKEN="$(cat ${cfg.tokenFile})"
-        exec ${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name beszel-agent up --remove-orphans
+        exec ${config.virtualisation.docker.package}/bin/docker compose -f ${composeFile} --project-name beszel-agent up --remove-orphans
       '';
+    };
+
+    systemd.tmpfiles.settings."10-beszel-agent".${cfg.dataDir}.d = {
+      user = "root";
+      group = "root";
+      mode = "0700";
     };
 
     networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [ cfg.port ];

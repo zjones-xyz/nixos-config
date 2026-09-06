@@ -1,31 +1,15 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, dr460nized-src, window-title-applet-src, ... }:
 
 let
-  # Garuda's actual current Dr460nized package (v4.7.1 as of this pin) —
-  # native Plasma 6 panels, not the old unmaintained Latte Dock setup. Pinned
-  # to the exact commit the PKGBUILD (garuda-linux/pkgbuilds) built from.
-  #
-  # builtins.fetchGit + narHash rather than pkgs.fetchgit: fully pure/pinned
-  # either way (no --impure needed, verified), but this authoring session's
-  # proxy only reliably reaches github.com from the evaluator process
-  # (builtins.fetchGit), not from inside pkgs.fetchgit's build sandbox,
-  # which hit a TLS chain error there — see hosts/pegasus/DECISIONS.md.
-  dr460nizedSrc = builtins.fetchGit {
-    url = "https://gitlab.com/garuda-linux/themes-and-settings/settings/garuda-dr460nized.git";
-    rev = "35eb3abbc534f4046257c43ad9e05a9c010235cf";
-    narHash = "sha256-4kRU4h3WRuVjixhK5B/x19bIxtHc9vcfbv5QPjFMBfc=";
-    shallow = true;
-  };
+  # Sources are pinned flake inputs (see flake.nix), passed in via pegasus's
+  # specialArgs. Garuda's actual current Dr460nized package (v4.7.1 as of the
+  # pin) — native Plasma 6 panels, not the old unmaintained Latte Dock setup.
+  dr460nizedSrc = dr460nized-src;
 
   # org.kde.windowtitle — pure QML, no compiled backend, unlike
   # org.kde.windowbuttons and luisbocanegra.panel.colorizer (both deferred,
   # see hosts/pegasus/DECISIONS.md — this is the "fast subset" build).
-  windowTitleAppletSrc = builtins.fetchGit {
-    url = "https://github.com/dhruv8sh/plasma6-window-title-applet.git";
-    rev = "a6eaf5086a473919ed2fffc5d3b8d98237c2dd41";
-    narHash = "sha256-pFXVySorHq5EpgsBz01vZQ0sLAy2UrF4VADMjyz2YLs=";
-    shallow = true;
-  };
+  windowTitleAppletSrc = window-title-applet-src;
 
   # Static theme data (Look-and-Feel package, panel/dock layout templates,
   # both Plasma styles, Kvantum theme, both SDDM themes, the Malefor
