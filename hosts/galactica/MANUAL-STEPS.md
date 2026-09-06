@@ -524,3 +524,44 @@ nameserver fd2e:7702:f2a4::1                                # ← real, NM-gener
 No manual `nameserver` workaround needed anymore. Lesson for the rest of the
 fleet: any `boot.initrd.systemd.services.*` script that calls a non-systemd,
 non-`ip` binary must add that binary to `storePaths` or it silently no-ops.
+
+## 12. AdGuard/Unbound DNS — declarative config, migrating off the router
+
+`configuration.nix` now imports `modules/nixos/dns.nix` and declares the
+rewrites that previously lived only in the router's (GL.iNet, AdGuard bundled
+in its firmware) mutable UI state. `mutableSettings = false` on that module
+means AdGuard here won't accept UI edits that survive a rebuild — by design,
+this is meant to become the one declarative source of truth, with
+AdGuardHome-Sync replicating it out to the router (and later hopper/hamilton)
+rather than each instance being hand-edited.
+
+1. [ ] **Set AdGuard admin credentials.** With `mutableSettings = false`,
+   there's no setup wizard to fall back on — and even if AdGuard shows one on
+   first web UI visit, anything entered there gets wiped on the next
+   `nixos-rebuild switch`. Generate a password hash AdGuard accepts (check its
+   current docs for the expected format — historically bcrypt) and declare it
+   via `services.adguardhome.settings.users = [{ name = "..."; password =
+   "<hash>"; }];`. This can't come from a sops secret the normal way: the
+   config file is rendered from `settings` at build time, before any
+   sops-nix secret is decrypted on the target host — so this is a hash
+   committed to the repo (like a value, not a plaintext credential) or an
+   activation-script workaround, not a `config.sops.secrets."...".path`
+   reference.
+2. [ ] **Confirm `*.zjones.xyz` routing.** `arr.zjones.xyz` and
+   `guesthome.zjones.xyz` were carried over from the router's rewrite list,
+   but no Traefik router for `.zjones.xyz` exists anywhere in this repo (see
+   the comment above the rewrites block). Check galactica's actual Traefik
+   config (in `homelab_stacks`, not here) for what serves these, if anything.
+3. [ ] **Deploy and verify** — `sudo nixos-rebuild switch --flake .#galactica`,
+   then `dig @localhost tower.internal` etc. against the full rewrite list
+   before treating this as the source of truth.
+4. [ ] **Stand up AdGuardHome-Sync** with galactica as origin and the router
+   (`192.168.8.1:3000`, confirmed reachable, running `v0.107.73`) as the first
+   replica. Populate galactica's rewrites (above) and confirm they match the
+   router's current list *before* enabling sync — it's a one-directional
+   overwrite, so a mismatch here means the first sync wipes the router's live
+   config instead of just taking over maintaining it.
+5. [ ] **Repoint DHCP later, not yet.** Once galactica's AdGuard is confirmed
+   correct and stable, add it to the GL.iNet DHCP DNS server list (primary or
+   alongside the router) — a separate, deliberate cutover step, not part of
+   this change.

@@ -116,9 +116,9 @@
       #     }
       #   ];
       #
-      # Note: both hopper and hamilton import this module, so any clients
-      # defined here appear on both instances — which is what you want for
-      # a primary/backup resolver pair.
+      # Note: hopper and hamilton also import this module (currently dead
+      # code — hosts/README-rpi-os.md) alongside galactica, so any clients
+      # defined here would appear on all instances that actually run it.
     };
   };
 

@@ -25,6 +25,7 @@
     ../../modules/nixos/beszel-agent.nix
     ../../modules/nixos/arcane-agent.nix
     ../../modules/nixos/scrutiny-collector.nix
+    ../../modules/nixos/dns.nix
     ./borgmatic.nix
   ];
 
@@ -41,11 +42,67 @@
   # instead (which worked, but was never supposed to be the only option).
   homelab.serialConsole.device = "ttyS1,115200n8";
 
-  # `tower.internal` keeps resolving to this host via an AdGuard rewrite on
-  # hopper, not via the hostname — DECISIONS.md §2. Nothing to configure here;
-  # the rewrite lives in hopper's dns.nix, pointed at whatever DHCP hands this
-  # box. Static reservation on the router is the intended mechanism, not a
-  # static IP in this config.
+  # `tower.internal` keeps resolving to this host via an AdGuard rewrite —
+  # DECISIONS.md §2. That rewrite now lives below (galactica is the AdGuard
+  # instance itself, migrated off the router's UI-only config), not on
+  # hopper's dead dns.nix import. Static reservation on the router is still
+  # the intended mechanism for this host's own IP, not a static IP here.
+
+  # ── DNS rewrites — migrated off the router's AdGuard instance ──────────────
+  # These lived only in the router's mutable UI state (hand-clicked, not
+  # tracked anywhere) until now. Grouped by physical box, not alphabetically,
+  # since several boxes answer to more than one name: galactica is also
+  # `tower`/`arr` (legacy identities it absorbed, DECISIONS.md §2), and
+  # memory-alpha is also `nixie`. One duplicate row (`arr.zjones.dev`, twice
+  # in the router's list) was dropped here.
+  #
+  # ⚠ `*.arr.zjones.xyz` / `guesthome.zjones.xyz` have no known Traefik router
+  # anywhere in this repo (only `pangolin.zjones.xyz` does, as Newt's tunnel
+  # endpoint — DECISIONS.md). Carried over as-is; confirm what actually serves
+  # these before relying on them.
+  services.adguardhome.settings.filtering.rewrites = [
+    # router (GL.iNet)
+    { domain = "router.internal"; answer = "192.168.8.1"; }
+
+    # hopper
+    { domain = "hopper.internal"; answer = "192.168.8.10"; }
+
+    # pegasus
+    { domain = "pegasus.internal"; answer = "192.168.8.72"; }
+
+    # memory-alpha-2
+    { domain = "memory-alpha-2.internal"; answer = "192.168.8.98"; }
+    { domain = "*.memory-alpha-2.internal"; answer = "192.168.8.98"; }
+
+    # memory-alpha (also answers to the legacy name "nixie")
+    { domain = "memory-alpha.internal"; answer = "192.168.8.99"; }
+    { domain = "*.memory-alpha.internal"; answer = "192.168.8.99"; }
+    { domain = "*.memory-alpha.zjones.dev"; answer = "192.168.8.99"; }
+    { domain = "*.monitor.zjones.dev"; answer = "192.168.8.99"; }
+    { domain = "nixie.internal"; answer = "192.168.8.99"; }
+    { domain = "*.nixie.internal"; answer = "192.168.8.99"; }
+
+    # homeassistant
+    { domain = "homeassistant.internal"; answer = "192.168.8.142"; }
+
+    # towerbmc (Tower's physical BMC/IPMI — separate NIC from galactica itself)
+    { domain = "towerbmc.internal"; answer = "192.168.8.191"; }
+
+    # galactica (also answers to the legacy names "tower" and "arr")
+    { domain = "galactica.internal"; answer = "192.168.8.190"; }
+    { domain = "*.galactica.internal"; answer = "192.168.8.190"; }
+    { domain = "*.galactica.zjones.dev"; answer = "192.168.8.190"; }
+    { domain = "tower.internal"; answer = "192.168.8.190"; }
+    { domain = "*.tower.internal"; answer = "192.168.8.190"; }
+    { domain = "tower.zjones.dev"; answer = "192.168.8.190"; }
+    { domain = "*.tower.zjones.dev"; answer = "192.168.8.190"; }
+    { domain = "arr.internal"; answer = "192.168.8.190"; }
+    { domain = "*.arr.internal"; answer = "192.168.8.190"; }
+    { domain = "arr.zjones.dev"; answer = "192.168.8.190"; }
+    { domain = "*.arr.zjones.dev"; answer = "192.168.8.190"; }
+    { domain = "*.arr.zjones.xyz"; answer = "192.168.8.190"; }
+    { domain = "guesthome.zjones.xyz"; answer = "192.168.8.190"; }
+  ];
 
   # Mandatory for ZFS — its absence fails late and confusingly (DECISIONS.md
   # §7 implementation notes). Derived from the hostname
