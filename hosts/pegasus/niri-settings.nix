@@ -116,6 +116,22 @@
         ];
         open-floating = true;
       }
+
+      # Red border around the window targeted by an active screencast, so
+      # it's always obvious what's being shared. Colors are upstream's own
+      # example values (wiki, `is-window-cast-target`, since niri 25.02).
+      # `enable = true` matters: this host's layout keeps borders off in
+      # favor of the focus ring, and only an enabled border shows on the
+      # cast window while it's NOT focused. Only matches single-window
+      # casts — a full-monitor screencast marks nothing.
+      {
+        matches = [ { is-window-cast-target = true; } ];
+        border = {
+          enable = true;
+          active.color = "#f38ba8";
+          inactive.color = "#7d0d2d";
+        };
+      }
     ];
 
     binds = with config.lib.niri.actions; {
