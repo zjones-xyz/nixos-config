@@ -59,6 +59,24 @@
         "type": "github"
       }
     },
+    "dr460nized-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1777073713,
+        "narHash": "sha256-4kRU4h3WRuVjixhK5B/x19bIxtHc9vcfbv5QPjFMBfc=",
+        "ref": "refs/heads/main",
+        "rev": "35eb3abbc534f4046257c43ad9e05a9c010235cf",
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.com/garuda-linux/themes-and-settings/settings/garuda-dr460nized.git"
+      },
+      "original": {
+        "rev": "35eb3abbc534f4046257c43ad9e05a9c010235cf",
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.com/garuda-linux/themes-and-settings/settings/garuda-dr460nized.git"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -137,7 +155,9 @@
         "nixpkgs": [
           "nixpkgs"
         ],
-        "nixpkgs-stable": "nixpkgs-stable",
+        "nixpkgs-stable": [
+          "nixpkgs"
+        ],
         "xwayland-satellite-stable": "xwayland-satellite-stable",
         "xwayland-satellite-unstable": "xwayland-satellite-unstable"
       },
@@ -236,7 +256,9 @@
     },
     "nixos-hardware": {
       "inputs": {
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1787144466,
@@ -254,15 +276,18 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1767892417,
-        "narHash": "sha256-8bW3q88CEg2u4hSP66Vf4lpbLonHz7hqDNBMcCY7E9U=",
-        "rev": "3497aa5c9457a9d88d71fa93a4a8368816fbeeba",
-        "type": "tarball",
-        "url": "https://releases.nixos.org/nixos/unstable/nixos-26.05pre924538.3497aa5c9457/nixexprs.tar.xz"
+        "lastModified": 1787204541,
+        "narHash": "sha256-OURZPknrTjQrlNyxPdqzyqmU/81Wes1CUP/Ft1Rv/YI=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "5880666fd9eb563038431edb35c2d0aa595884e6",
+        "type": "github"
       },
       "original": {
-        "type": "tarball",
-        "url": "https://channels.nixos.org/nixos-unstable/nixexprs.tar.xz"
+        "owner": "NixOS",
+        "ref": "nixos-26.05",
+        "repo": "nixpkgs",
+        "type": "github"
       }
     },
     "nixpkgs-bambu-studio": {
@@ -314,38 +339,6 @@
         "url": "https://github.com/NixOS/nixpkgs.git"
       }
     },
-    "nixpkgs-stable": {
-      "locked": {
-        "lastModified": 1782847189,
-        "narHash": "sha256-twXPFqFsrrY5r28Zh7Homgcp2gUMBgQ6WDS98Q/3xFI=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "b6018f87da91d19d0ab4cf979885689b469cdd41",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixos-25.11",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_2": {
-      "locked": {
-        "lastModified": 1787204541,
-        "narHash": "sha256-OURZPknrTjQrlNyxPdqzyqmU/81Wes1CUP/Ft1Rv/YI=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "5880666fd9eb563038431edb35c2d0aa595884e6",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixos-26.05",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "plasma-manager": {
       "inputs": {
         "home-manager": [
@@ -373,16 +366,18 @@
       "inputs": {
         "claude-desktop-debian": "claude-desktop-debian",
         "dank-material-shell": "dank-material-shell",
+        "dr460nized-src": "dr460nized-src",
         "home-manager": "home-manager",
         "niri-flake": "niri-flake",
         "nix-darwin": "nix-darwin",
         "nixflix": "nixflix",
         "nixos-hardware": "nixos-hardware",
-        "nixpkgs": "nixpkgs_2",
+        "nixpkgs": "nixpkgs",
         "nixpkgs-bambu-studio": "nixpkgs-bambu-studio",
         "nixpkgs-orca-slicer": "nixpkgs-orca-slicer",
         "plasma-manager": "plasma-manager",
-        "sops-nix": "sops-nix"
+        "sops-nix": "sops-nix",
+        "window-title-applet-src": "window-title-applet-src"
       }
     },
     "sops-nix": {
@@ -439,6 +434,24 @@
         "owner": "Maroka-chan",
         "repo": "VPN-Confinement",
         "type": "github"
+      }
+    },
+    "window-title-applet-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1722184924,
+        "narHash": "sha256-pFXVySorHq5EpgsBz01vZQ0sLAy2UrF4VADMjyz2YLs=",
+        "ref": "refs/heads/master",
+        "rev": "a6eaf5086a473919ed2fffc5d3b8d98237c2dd41",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/dhruv8sh/plasma6-window-title-applet.git"
+      },
+      "original": {
+        "rev": "a6eaf5086a473919ed2fffc5d3b8d98237c2dd41",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/dhruv8sh/plasma6-window-title-applet.git"
       }
     },
     "xwayland-satellite-stable": {
