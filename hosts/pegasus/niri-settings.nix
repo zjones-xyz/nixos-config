@@ -92,6 +92,16 @@
     # service (programs.dank-material-shell.systemd.enable = true in
     # modules/nixos/desktop-niri.nix), not spawn-at-startup.
 
+    # Proton Bridge must be running for Thunderbird to reach the Proton
+    # mailbox at all (see home.nix); if it isn't, mail just silently stops
+    # syncing with no error anywhere. Niri doesn't honor XDG autostart, so
+    # start it with the session here. --no-window ("Don't show window after
+    # start" — the same flag Bridge's own autostart entry uses) keeps it in
+    # the tray instead of opening its window on every login.
+    spawn-at-startup = [
+      { argv = [ "protonmail-bridge-gui" "--no-window" ]; }
+    ];
+
     window-rules = [
       # Kept from the original config: open Firefox's picture-in-picture
       # player as floating. Firefox is actually installed on this host

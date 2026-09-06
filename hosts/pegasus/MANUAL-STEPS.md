@@ -622,8 +622,9 @@ Added `thunderbird` and `protonmail-bridge-gui` to `hosts/pegasus/home.nix`.
 The packages install declaratively; wiring them to a live Proton mailbox is a
 one-time interactive flow this session can't drive. After the next switch:
 
-1. **Launch the Bridge and sign in.** Run `protonmail-bridge` (the GUI tray
-   app) and log in with the Proton account — a paid plan is required; Bridge is
+1. **Launch the Bridge and sign in.** Run `protonmail-bridge-gui` (the GUI
+   tray app; the bare `protonmail-bridge` binary is the headless variant and
+   isn't installed) and log in with the Proton account — a paid plan is required; Bridge is
    not available on free Proton. On first launch it stores its own credentials
    and mailbox keys in the Secret Service, i.e. the **gnome-keyring** daemon
    from §19 — so do this from a session where §19 is confirmed working
@@ -645,8 +646,12 @@ one-time interactive flow this session can't drive. After the next switch:
    purely loopback), accept/trust it. Or use the Bridge's "Configure
    automatically" export if Thunderbird's autoconfig is offered.
 
-4. **Autostart (optional).** Mail only flows while the Bridge is running. If
-   you want it up without launching by hand each login, enable its own
-   "Start on login" toggle in the Bridge's settings — deliberately not declared
-   in Nix here (it's per-user GUI state, and the headless systemd-user service
-   variant was passed over on purpose, see the home.nix comment).
+4. **Autostart — declared, just verify it.** Mail only flows while the Bridge
+   is running, so it's started with every Niri session via `spawn-at-startup`
+   in `niri-settings.nix` (`protonmail-bridge-gui --no-window`: tray only, no
+   window popping up at login). Nothing to enable by hand — on the next login
+   after the switch, confirm the Bridge tray icon is present. Leave the
+   Bridge's own "Start on login" settings toggle off: it writes an XDG
+   autostart entry, which Niri ignores anyway — but it *is* the mechanism
+   that would cover the Plasma/COSMIC sessions, if one of those ever becomes
+   a daily driver again.
