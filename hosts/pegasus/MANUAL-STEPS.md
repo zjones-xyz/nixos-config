@@ -655,3 +655,54 @@ one-time interactive flow this session can't drive. After the next switch:
    autostart entry, which Niri ignores anyway — but it *is* the mechanism
    that would cover the Plasma/COSMIC sessions, if one of those ever becomes
    a daily driver again.
+
+## 21. Two known lockups — Discord screenshare, unfocused games (workarounds)
+
+Both observed by Zoe on real hardware, 2026-09-06. Neither is a pegasus
+misconfiguration: the session already runs Electron apps native-Wayland with
+the GNOME portal (`NIXOS_OZONE_WL`/`ELECTRON_OZONE_PLATFORM_HINT` in
+`niri-settings.nix`), so the standard "fix your portals/ozone flags" advice
+is already satisfied — these are upstream bugs with documented workarounds.
+
+**Discord locks up mid-screenshare.** Closest documented match: Discord's
+`2026-03-linux-vulkan-capture` experiment breaks capture sessions under niri
+(https://github.com/niri-wm/niri/discussions/3921 — portal tweaks and
+hardware-accel toggles did *not* help there). Stock Discord exposes no way to
+opt out of an experiment; the confirmed fix was Vesktop, which does.
+Interim workaround that already works here: restart Discord right before a
+screenshare.
+
+**Some games freeze within the first minute or two if unfocused on start.**
+Matches the open bug https://github.com/Supreeeme/xwayland-satellite/issues/201 —
+X11 games under xwayland-satellite desync when unfocused and can freeze
+permanently after ~10–15s without focus; no upstream fix yet. Niri's own
+documented answer for game issues is gamescope
+(https://github.com/niri-wm/niri/wiki/Application-Issues), which brings its
+own Xwayland and takes satellite out of the loop; `gaming.nix` already
+installs it. Interim workaround: keep a freshly launched game focused for
+its first minute or two.
+
+To try, roughly cheapest-first:
+
+1. [ ] Stock Discord: toggle **off** hardware acceleration (User Settings →
+   Advanced), restart, test a longer screenshare. The classic NVIDIA/Electron
+   freeze lever — didn't help in the linked report, but it's a 30-second test.
+2. [ ] Try Vesktop without installing: `nix run nixpkgs#vesktop`, sign in,
+   then Settings → Vencord → enable the "Experiments" plugin → restart →
+   set the `2026-03-linux-vulkan-capture` experiment to "not eligible", and
+   test a screenshare. If it holds up, have the config session declare
+   `vesktop` in `home.nix` (keep or drop `discord` — either works; note
+   Discord's ToS technically frowns on modified clients, enforcement against
+   plain client mods has historically been nil, judgement call).
+3. [ ] For each affected game (Steam → Properties → Launch Options):
+   `gamescope -f -w 2560 -h 1440 -W 2560 -H 1440 --force-grab-cursor --backend sdl -- %command%`
+   (swap in the monitor's real resolution), then confirm the unfocused
+   early-freeze stops. `--backend sdl` is currently load-bearing (gamescope's
+   Wayland backend doesn't lock the cursor properly, per the niri wiki).
+4. [ ] Proton titles only, alternative to gamescope:
+   `PROTON_ENABLE_WAYLAND=1 %command%` (recent Proton) — native Wayland
+   avoids the satellite bug entirely, per the issue reporter.
+5. [ ] Check https://github.com/Supreeeme/xwayland-satellite/issues/201
+   occasionally; once fixed and the nixpkgs package carries it, steps 3–4
+   become unnecessary for the unfocused-freeze (gamescope may still be nice
+   for other reasons).
