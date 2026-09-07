@@ -182,10 +182,16 @@
         # login at all. `admin` and empty username both correctly 401'd
         # against nothing; "adguardsync" is a real user hand-created via SSH
         # (users: block in the router's /etc/AdGuardHome/config.yaml, same
-        # bcrypt-hash mechanism as galactica's own admin above), confirmed
-        # live via a full login+cookie exchange returning 200 OK.
+        # bcrypt-hash mechanism as galactica's own admin above).
         username = "adguardsync";
         passwordFile = config.sops.secrets."adguardhome-sync/routerPassword".path;
+        # This build also rejects HTTP Basic Auth outright (401 with the
+        # identical, verified-correct credentials) while accepting the
+        # browser /control/login flow — confirmed live via curl on both
+        # :3000 directly and the nginx-fronted :80. adguardhome-sync's own
+        # client only ever sends Basic Auth for username/password, so this
+        # replica needs the cookie-login path instead.
+        useCookieAuth = true;
       }
     ];
   };

@@ -11,9 +11,12 @@ let
   # copy by the unit's script. envsubst deliberately replaces an earlier
   # sed-based approach: sed's replacement text treats `&`/`\` as special,
   # so any password containing one would be silently corrupted rather than
-  # inserted verbatim — confirmed live (a curl login with the literal
-  # password succeeded; the sed-substituted config's sync attempt 401'd).
-  # envsubst does plain variable substitution with no such metacharacters.
+  # inserted verbatim.
+  # Replicas with useCookieAuth get a session cookie instead of
+  # username/password — GL.iNet's patched AdGuard rejects HTTP Basic Auth
+  # (confirmed live: correct credentials via `curl -u` return 401, the same
+  # credentials via /control/login succeed), which is the only auth method
+  # adguardhome-sync's own client sends when username/password are set.
   # Deliberately conservative about what syncs: rewrites, filter lists, and
   # client names are the only things this repo actually declares for
   # galactica's AdGuard. dns.serverConfig/dhcp.* stay off since a replica
@@ -32,11 +35,16 @@ let
       password: "''${ORIGIN_PASSWORD}"
 
     replicas:
-    ${lib.concatMapStrings (r: ''
-      - url: ${r.url}
-        username: "${r.username}"
-        password: "''${REPLICA_${toString r.idx}_PASSWORD}"
-    '') indexedReplicas}
+    ${lib.concatMapStrings (r:
+      if r.useCookieAuth then ''
+        - url: ${r.url}
+          cookie: "''${REPLICA_${toString r.idx}_COOKIE}"
+      '' else ''
+        - url: ${r.url}
+          username: "${r.username}"
+          password: "''${REPLICA_${toString r.idx}_PASSWORD}"
+      ''
+    ) indexedReplicas}
 
     features:
       dns:
@@ -78,7 +86,7 @@ let
   # so it touches only these tokens and leaves any stray `${...}` elsewhere in
   # the rendered YAML (there shouldn't be any, but be defensive) untouched.
   envVarNames = [ "ORIGIN_PASSWORD" ] ++
-    map (r: "REPLICA_${toString r.idx}_PASSWORD") indexedReplicas;
+    map (r: if r.useCookieAuth then "REPLICA_${toString r.idx}_COOKIE" else "REPLICA_${toString r.idx}_PASSWORD") indexedReplicas;
 in
 {
   options.services.adguardhomeSync = {
@@ -116,6 +124,18 @@ in
           passwordFile = lib.mkOption {
             type = lib.types.path;
             description = "Path to a decrypted secret file holding the replica admin's plaintext password.";
+          };
+          useCookieAuth = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = ''
+              Log into this replica via POST /control/login at sync startup and
+              use the resulting session cookie instead of HTTP Basic Auth.
+              Needed for GL.iNet's patched AdGuard build, which accepts the
+              browser login flow but returns 401 for Basic Auth even with
+              correct credentials (confirmed live). Stock AdGuard Home
+              replicas (e.g. a future hopper/hamilton) don't need this.
+            '';
           };
         };
       });
@@ -167,12 +187,19 @@ in
         set -euo pipefail
         install -d -m 0700 /run/adguardhome-sync
         export ORIGIN_PASSWORD="$(cat ${cfg.originPasswordFile})"
-        ${lib.concatMapStrings (r: ''
-          export REPLICA_${toString r.idx}_PASSWORD="$(cat ${r.passwordFile})"
-        '') indexedReplicas}
+        ${lib.concatMapStrings (r:
+          if r.useCookieAuth then ''
+            login_body=$(${pkgs.jq}/bin/jq -n --arg name '${r.username}' --arg password "$(cat ${r.passwordFile})" '{name:$name,password:$password}')
+            login_headers=$(${pkgs.curl}/bin/curl -s -D - -o /dev/null -X POST '${r.url}/control/login' -H 'Content-Type: application/json' -d "$login_body")
+            export REPLICA_${toString r.idx}_COOKIE="$(printf '%s' "$login_headers" | grep -i '^set-cookie:' | head -1 | sed -E 's/^[Ss]et-[Cc]ookie: *([^;]+);.*/\1/' | tr -d '\r')"
+            [ -n "$REPLICA_${toString r.idx}_COOKIE" ] || { echo "login to replica ${r.url} failed" >&2; exit 1; }
+          '' else ''
+            export REPLICA_${toString r.idx}_PASSWORD="$(cat ${r.passwordFile})"
+          ''
+        ) indexedReplicas}
         ${pkgs.gettext}/bin/envsubst '${lib.concatMapStringsSep " " (n: "$" + n) envVarNames}' \
           < ${configTemplate} > /run/adguardhome-sync/config.yaml
-        unset ORIGIN_PASSWORD ${lib.concatMapStringsSep " " (r: "REPLICA_${toString r.idx}_PASSWORD") indexedReplicas}
+        unset ORIGIN_PASSWORD ${lib.concatMapStringsSep " " (r: if r.useCookieAuth then "REPLICA_${toString r.idx}_COOKIE" else "REPLICA_${toString r.idx}_PASSWORD") indexedReplicas}
         exec ${config.virtualisation.docker.package}/bin/docker compose -f ${composeFile} --project-name adguardhome-sync up --remove-orphans
       '';
     };
