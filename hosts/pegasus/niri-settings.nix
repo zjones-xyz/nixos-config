@@ -156,6 +156,16 @@
     # service (programs.dank-material-shell.systemd.enable = true in
     # modules/nixos/desktop-niri.nix), not spawn-at-startup.
 
+    # Proton Bridge must be running for Thunderbird to reach the Proton
+    # mailbox at all (see home.nix); if it isn't, mail just silently stops
+    # syncing with no error anywhere. Niri doesn't honor XDG autostart, so
+    # start it with the session here. --no-window ("Don't show window after
+    # start" — the same flag Bridge's own autostart entry uses) keeps it in
+    # the tray instead of opening its window on every login.
+    spawn-at-startup = [
+      { argv = [ "protonmail-bridge-gui" "--no-window" ]; }
+    ];
+
     window-rules = [
       # Kept from the original config: open Firefox's picture-in-picture
       # player as floating. Firefox is actually installed on this host
@@ -169,6 +179,62 @@
           }
         ];
         open-floating = true;
+      }
+
+      # Red border around the window targeted by an active screencast, so
+      # it's always obvious what's being shared. Colors are upstream's own
+      # example values (wiki, `is-window-cast-target`, since niri 25.02).
+      # `enable = true` matters: this host's layout keeps borders off in
+      # favor of the focus ring, and only an enabled border shows on the
+      # cast window while it's NOT focused. Only matches single-window
+      # casts — a full-monitor screencast marks nothing.
+      {
+        matches = [ { is-window-cast-target = true; } ];
+        border = {
+          enable = true;
+          active.color = "#f38ba8";
+          inactive.color = "#7d0d2d";
+        };
+      }
+
+      # ── Stream privacy (Zoe, 2026-09-06) ──────────────────────────────
+      # These windows are blocked out of the screencast portal (OBS,
+      # Discord shares, …) but stay normally screenshot-able. Deliberately
+      # "screencast", not the stricter "screen-capture" — the one known
+      # leak is screenshot tools that draw their own frozen full-screen
+      # overlay mid-cast (niri's built-in screenshot is always safe).
+      # The Electron app-ids are case-insensitive suffix matches because
+      # Electron picks its own id rather than nixpkgs pinning one —
+      # verify against `niri msg windows` on the host (MANUAL-STEPS §22);
+      # ch.proton.bridge-gui IS pinned (nixpkgs sets it as the wmclass).
+      {
+        matches = [
+          { app-id = "(?i)1password$"; } # incl. quick-access + unlock
+          { app-id = "(?i)signal$"; }
+          { app-id = "(?i)discord$"; }
+          { app-id = "(?i)ferdium$"; }
+          { app-id = "(?i)thunderbird$"; }
+          { app-id = "^ch\\.proton\\.bridge-gui$"; } # shows IMAP/SMTP creds
+          { app-id = "(?i)gcr.*prompt"; } # gnome-keyring unlock dialogs
+        ];
+        block-out-from = "screencast";
+      }
+    ];
+
+    # Same stream privacy for DMS's layer surfaces: notification popups
+    # (message previews are the sneakiest mid-stream leak), the
+    # notification center (same content, just opened deliberately), and
+    # DMS's polkit auth prompt. Namespaces verified against the pinned
+    # dank-material-shell source (WlrLayershell.namespace in
+    # Modules/Notifications/ and Modals/PolkitAuthSurfaceModal.qml).
+    layer-rules = [
+      {
+        matches = [
+          { namespace = "^dms:notification-popup$"; }
+          { namespace = "^dms:notification-center-popout$"; }
+          { namespace = "^dms:polkit-auth-surface$"; }
+        ];
+        block-out-from = "screencast";
       }
     ];
 
@@ -404,9 +470,27 @@
       # niri-flake's config.lib.niri.actions cache either (they take
       # optional properties, e.g. show-pointer) — same documented
       # action.<name>=value form as above.
+      #
+      # This host's keyboard (RDR Alice, a compact Alice-layout board) has no
+      # dedicated PrtSc key — confirmed by Zoe 2026-08-20, physically sends
+      # Print Screen via Fn+K. Firmware-level mapping, not something this
+      # config (or niri) controls; recorded here since it's the non-obvious
+      # half of "how do I actually trigger these binds".
       "Print".action.screenshot = { };
       "Ctrl+Print".action.screenshot-screen = { };
       "Alt+Print".action.screenshot-window = { };
+
+      # Markup pass on whatever the binds above just put on the clipboard —
+      # niri copies every screenshot to the clipboard automatically (see
+      # home.nix's programs.swappy comment for the doc citation), so this is
+      # deliberately NOT a grim+slurp+swappy pipeline, which would duplicate
+      # the capture niri already does above. swappy itself only edits, it
+      # doesn't capture. wl-paste comes from wl-clipboard, swappy is enabled
+      # + configured via programs.swappy — both in home.nix.
+      "Mod+Shift+S" = {
+        hotkey-overlay.title = "Annotate Last Screenshot (swappy)";
+        action = spawn-sh "wl-paste --type image/png | swappy -f -";
+      };
 
       # Escape hatch for exactly the situation this host is tested under —
       # remote/KVM input — kept from the original template unchanged.

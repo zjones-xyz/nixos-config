@@ -5,11 +5,13 @@
   # Scrollable-tiling Wayland compositor, evaluated alongside Plasma/COSMIC/
   # Dragonized rather than replacing any of them — same "additive session"
   # pattern as desktop-cosmic.nix. SDDM (desktop-plasma.nix) stays the sole
-  # display manager and defaultSession stays "plasma-dragonized"; this just
-  # adds "Niri" to the session picker. The `programs.niri` module registers
-  # its own session file (via services.displayManager.sessionPackages), so —
-  # unlike Dragonized — there's no hand-rolled session/wrapper script needed
-  # here.
+  # display manager, but as of 2026-09-01 defaultSession points at this
+  # module's session ("niri", nixpkgs' niri package's declared
+  # passthru.providedSessions value) — Plasma/COSMIC/Dragonized remain
+  # selectable from the picker, just no longer pre-selected. The
+  # `programs.niri` module registers its own session file (via
+  # services.displayManager.sessionPackages), so — unlike Dragonized —
+  # there's no hand-rolled session/wrapper script needed here.
   #
   # NVIDIA fit: explicit sync (the thing that fixes flicker/stutter on NVIDIA
   # Wayland) needs driver >=555 and kernel >=6.8 — both already satisfied by

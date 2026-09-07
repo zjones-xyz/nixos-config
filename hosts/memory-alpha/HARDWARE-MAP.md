@@ -128,9 +128,33 @@ sequence, including the chime unit that fires once unlock completes.
 
 ## 4. Controllers, ports and network
 
-⟨Board and chassis unrecorded.⟩ Intel platform — `kvm-intel`, with `thunderbolt`
-and `xhci_pci` in `boot.initrd.availableKernelModules`. One M.2 socket populated;
-⟨whether a second exists is unknown⟩.
+### The board — a Framework Laptop 13 Gen 1 mainboard in a printed case
+
+**Owner-confirmed 2026-08-30**, closing this section's two standing ⟨unknowns⟩.
+Gen 1 means **11th-generation Intel Tiger Lake** (UP3) — one of `i5-1135G7`,
+`i7-1165G7` or `i7-1185G7`, all 4C/8T with Iris Xe graphics. ⟨Exact SKU still
+unread; one `lscpu` settles it.⟩
+
+⚠ **This fact had been living in the wrong file.** The only prior record of the
+CPU generation anywhere in the tree was a *comment* in
+`modules/nixos/jellyfin.nix` — `intel-media-driver # iHD — required for 11th-gen
+(Tiger Lake) Quick Sync` — which is fine as corroboration and useless to anyone
+asking "what is this machine". It belongs here.
+
+**Everything the config already showed follows from the board:**
+
+| Observation | Explanation |
+|---|---|
+| `thunderbolt` in initrd modules | The four expansion-card slots are USB4/Thunderbolt-capable |
+| No `ahci` anywhere | The board has **no SATA** at all |
+| 32 GB RAM (§2's `free -h`) | Two DDR4 SO-DIMM slots, 2× 16 GB |
+| Ethernet over USB-C dongles | ⭐ **Framework has no onboard NIC.** See below |
+
+⭐ **One M.2 2280 socket, and that is the entire complement.** So §1's "no spare
+capacity and no second disk" is **structural, not incidental** — there is nowhere
+to add a disk without replacing the one that is there. That matters directly:
+`hosts/galactica/DESIGN.md` §6.6 makes this host the borgmatic pilot's restore
+target, and the restore has to fit on the single root filesystem or not happen.
 
 **Networking is two USB-C Ethernet dongles, not onboard NICs**, and they are
 MAC-pinned to stable names because predictable interface names encode the USB
@@ -144,6 +168,46 @@ MAC-pinned to stable names because predictable interface names encode the USB
 Recorded here because **the MACs are hardware identity in the same sense a disk
 serial is** — they are the thing the config pins to, and replacing a dongle means
 editing `configuration.nix`.
+
+⚠ **This is not a workaround anyone chose.** A Framework mainboard has no onboard
+Ethernet; networking *is* expansion cards, which are USB-C devices. So the
+port-path pinning above is structural too — there is no onboard NIC to fall back
+to if a dongle misbehaves, and "just use the built-in port" is not advice that
+applies to this machine.
+
+### ⚠ Thermal envelope — a mobile part, and the case is not aluminium
+
+**Tiger Lake UP3 is a 15 W nominal part, configurable to 28 W.** It is designed to
+be cooled by a laptop: a small blower into a heatsink, with the aluminium chassis
+acting as both spreader and thermal mass. This board has the blower and the
+heatsink; it does not have the chassis.
+
+✅ **The printed case has deliberate airflow** (owner-confirmed 2026-08-30), so the
+blower has a real intake and exhaust path rather than recirculating — which is the
+failure mode that would have made sustained load a hard wall. What airflow does
+**not** restore is the aluminium's thermal mass, and printed plastics are
+insulators: PLA's glass transition is ~60 °C, PETG's ~80 °C, both inside the range
+a heat-soaked enclosure can reach.
+
+⚠ **The package budget is contended three ways, not two.** CPU inference, the Xe
+iGPU (Quick Sync *or* OpenVINO), and Jellyfin transcoding all draw from the same
+15–28 W envelope. They compete for watts even when they are not competing for
+`/dev/dri/renderD128`.
+
+⚠ **Nothing in `configuration.nix` manages any of this today** — no
+`services.thermald`, no RAPL power caps, no governor configuration. That is
+fine for Jellyfin's bursty transcodes, which is all this host has been asked to do.
+It is **not** fine for sustained multi-hour load, and that is exactly what is now
+being contemplated: `hosts/galactica/DECISIONS.md` §9's Immich rebuild would put a
+days-long ML import here, on the strength of this board having **AVX-512 VNNI and
+an iGPU** against galactica's 2012 Xeon having neither.
+
+⭐ **For sustained work, cap PL1 rather than letting it boost.** Counter-intuitive
+but reliable on mobile silicon in a marginal enclosure: holding ~15 W for eight
+hours beats reaching 28 W for twenty minutes and then heat-soaking down to single
+digits. Total throughput is higher and the case stays well away from its glass
+transition. `services.thermald.enable` is the standard NixOS lever;
+`/sys/class/powercap/intel-rapl` is the explicit one.
 
 ---
 
@@ -170,7 +234,9 @@ case — the labels never meet.
 |---|---|---|
 | ⚠ **Swap never activates** | `swapon --show` to confirm, then a `.nix` PR | aarch64 builds under memory pressure; §2 |
 | **Free space on `/`** | `df -h /` | Sizing the borgmatic pilot restore (`DESIGN.md` §6.6) |
-| Board model, chassis, whether a second M.2 exists | Case open | Any future expansion |
+| ~~Board model, chassis, whether a second M.2 exists~~ | **Closed 2026-08-30** — Framework Laptop 13 Gen 1 mainboard, printed case, one M.2 2280 socket and no second (§4) | — |
+| **Exact CPU SKU** — `i5-1135G7` / `i7-1165G7` / `i7-1185G7` | `lscpu` | Nothing today; wanted before sizing the Immich ML import (§4) |
+| ⚠ **Sustained thermal behaviour under multi-hour load** | Watch package temp through the first hour of a long job | Whether the Immich ML import runs here at all (§4, `galactica/DECISIONS.md` §9) |
 | Whether this host should run zram regardless | A decision | §2, and consistency with pegasus/Tower |
 
 The first is the only one that is a defect rather than a gap. It has been latent

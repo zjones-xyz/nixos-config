@@ -1,4 +1,4 @@
-{ config, pkgs, lib, claudeDesktop, ... }:
+{ config, pkgs, lib, claudeDesktop, orcaSlicerNewer, bambuStudioNewer, ... }:
 
 {
   imports = [
@@ -8,6 +8,10 @@
 
   home.username = "z";
   home.homeDirectory = "/home/z";
+
+  home.sessionVariables = {
+    SOPS_AGE_KEY_FILE = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
+  };
 
   # Host-specific rebuild aliases (layered on top of the shared portable ones
   # from modules/home/common.nix's home.shellAliases).
@@ -37,16 +41,37 @@
   home.shellAliases = {
     nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#pegasus";
     nrt = "sudo nixos-rebuild test --flake ~/nixos-config#pegasus";
-    npull = "git -C ~/nixos-config pull";
+    npull = "~/nixos-config/scripts/npull.sh";
+    ipmi-tower = ''~/nixos-config/scripts/ipmi-remote.sh run towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-open-tty = ''~/nixos-config/scripts/ipmi-remote.sh console towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-set-bios-next-boot = ''~/nixos-config/scripts/ipmi-remote.sh bios-next-boot towerbmc.internal "op://System Keys/tower ipmi/password"'';
+    # unlock-tower (2026-08-31): same generic scripts/luks-unlock-remote.sh
+    # binding as serenity's unlock-pegasus/unlock-memory-alpha, but carried
+    # on both machines like the ipmi-tower-* trio above rather than just
+    # serenity — Tower/galactica is the one host both pegasus's and
+    # serenity's initrd SSH keys are actually authorized on (this session's
+    # install hit that directly: pegasus unlocked it once, serenity another
+    # time), so neither machine being down should block recovering it.
+    # "tower", not "galactica", to match every other alias for this host
+    # (ipmi-tower-*, towerbmc.internal) — the fleet name and the
+    # service/physical-box name are deliberately decoupled (DECISIONS.md §2),
+    # and these aliases are about the physical box.
+    unlock-tower = ''~/nixos-config/scripts/luks-unlock-remote.sh tower.internal "op://System Keys/tower luks/password"'';
+    # unlock-memory-alpha (2026-09-02): mirror of serenity's alias, now that the
+    # shared luks-remote-unlock.nix module authorizes *both* admin keys in
+    # memory-alpha's initrd (previously serenity-only) — so pegasus can recover
+    # it too when serenity's down. `~/nixos-config` path, not serenity's ~/Code.
+    unlock-memory-alpha = ''~/nixos-config/scripts/luks-unlock-remote.sh memory-alpha.internal "op://System Keys/memory-alpha luks/password"'';
+    dms-settings-snapshot = "~/nixos-config/scripts/dms-settings.sh snapshot";
+    dms-settings-restore = "~/nixos-config/scripts/dms-settings.sh restore";
+    dms-settings-diff = "~/nixos-config/scripts/dms-settings.sh diff";
   };
 
   # ── Desktop apps ────────────────────────────────────────────────────────────
   # allowUnfree is already set globally in modules/nixos/common.nix, which
   # pegasus imports — vscode/google-chrome/vivaldi/1Password/discord/spotify/
   # ticktick/obsidian/bambu-studio are all unfree and need it; firefox/
-  # ferdium/openscad/orca-slicer/streamdeck-ui are free/open.
+  # ferdium/signal-desktop/openscad/orca-slicer/streamdeck-ui are free/open.
   #
   # Brain.fm was left out — no nixpkgs package, no native Linux client
   # anywhere (subscription web app only); usable via firefox/chrome.
@@ -56,14 +81,12 @@
     google-chrome
     firefox
     vivaldi
-    _1password-gui
-    _1password-cli
     claude-code
 
     discord
     ferdium
-    bambu-studio
-    orca-slicer
+    signal-desktop
+    slack
     openscad
     obsidian
     spotify
@@ -71,6 +94,14 @@
     prusa-slicer
     jellyfin-desktop
     vlc
+
+    thunderbird
+    protonmail-bridge-gui
+
+    # file managers
+    nemo
+    nautilus
+    thunar
 
     # itch.io's official client — handles login/library/downloads/updates.
     # lutris has no native itch.io integration (no account sync), so this is
@@ -80,6 +111,7 @@
     # Qt6 build (not plain libreoffice) for native Plasma 6 theming/integration
     # rather than pulling in GTK.
     libreoffice-qt6
+    gnumeric
 
     # Elgato Stream Deck control — needs the udev rule in
     # hosts/pegasus/configuration.nix for non-root USB access.
@@ -107,6 +139,11 @@
     # See hosts/galactica/PLATFORM.md §2 for the invocations and the
     # FreeIPMI-not-ipmitool rationale.
     freeipmi
+
+    expect
+
+    # Desktop GUI for Borg.
+    vorta
 
     # Archive handling — wasn't anywhere in the package set (system or home).
     unzip
@@ -149,9 +186,8 @@
     winetricks
     yad
 
-    # GPU-accelerated terminal emulators. kitty is NOT here — it needs
-    # configuring (see programs.kitty below), and programs.kitty.enable
-    # installs the package itself.
+    # GPU-accelerated terminal emulators. kitty itself is declared via
+    # programs.kitty below now (not here) — see that block for why.
     ghostty
 
     # Doxie Q2 (DX320) scan management — the scanner itself needs no driver
@@ -161,9 +197,27 @@
     # organizing/renaming/combining scans into PDFs.
     naps2
 
+    # PDF reading — Okular (full-featured: annotation, forms, signing) already
+    # rides in for free via services.desktopManager.plasma6.enable in
+    # modules/nixos/desktop-plasma.nix (confirmed against nixpkgs' plasma6.nix
+    # module: it's in plasma6's default optionalPackages set, and this repo
+    # never sets environment.plasma6.excludePackages). Zathura is the
+    # deliberate lightweight/keyboard-driven alternative for quick reads under
+    # niri, added 2026-08-20 per Zoe's request — not a duplicate, a different
+    # tool for a different moment.
+    zathura
+
+    # wl-paste, for the swappy screenshot-annotation bind below — niri's own
+    # wiki examples use wl-clipboard the same way (piping wl-paste into
+    # another program). See programs.swappy below and the Mod+Shift+S bind in
+    # niri-settings.nix.
+    wl-clipboard
+
     # ── Found on Serenity's /Applications, not yet replicated (2026-07-12) ────
     calibre # ebook library management
-    makemkv # disc ripping, pairs with the jellyfin/vlc media stack
+    # makemkv disabled 2026-08-25: makemkv.com origin returning Cloudflare 525
+    # (SSL handshake failed), blocking nrs. Re-enable once it's reachable again.
+    # makemkv # disc ripping, pairs with the jellyfin/vlc media stack
     filebot # media file renaming/organizing, same media stack
     arduino-ide
     proton-vpn # renamed from protonvpn-gui upstream
@@ -210,33 +264,48 @@
     # flake.nix — the FHS-wrapped variant, needed for MCP servers to work
     # (they shell out to npx/uvx/etc. expecting a standard FHS layout).
     claudeDesktop
+    # 02.05.00.67, with the real upstream withNvidiaGLWorkaround applied —
+    # fixes the blank Prepare/Preview build plate on this host's NVIDIA GPU.
+    # From the separate nixpkgs-bambu-studio input (see flake.nix); this
+    # flake's main nixpkgs pin predates both that version bump and the fix.
+    bambuStudioNewer
+    # 2.3.2 — this flake's main nixpkgs pin predates nixpkgs' 2.3.1 -> 2.3.2
+    # bump, so this comes from the separate nixpkgs-orca-slicer input
+    # instead (see flake.nix). Confirmed viewport already renders fine on
+    # this host's NVIDIA setup at 2.3.1, so no GL workaround needed here
+    # unlike bambuStudioNewer above.
+    orcaSlicerNewer
   ];
 
-  # ── kitty ───────────────────────────────────────────────────────────────────
-  # Exists only to pin the shell. The fleet convention (modules/nixos/common.nix
-  # → users.users.z.shell = pkgs.bash, plus modules/home/interactive-zsh.nix via
-  # home-manager.sharedModules) is: bash is the *login* shell so non-interactive
-  # invocations — `ssh z@pegasus cmd` above all — keep predictable bash
-  # semantics, and interactive bash sessions `exec` straight into zsh from
-  # .bashrc before reaching a prompt.
-  #
-  # That exec is load-bearing but not airtight: observed 2026-08-18, the FIRST
-  # kitty window opened after login lands in bash and stays there, while every
-  # later window is zsh as intended. Not root-caused — the likely mechanism is
-  # that kitty inherits $SHELL from the freshly-started session (still
-  # /run/current-system/sw/bin/bash, straight out of /etc/passwd) and launches
-  # it as a *login* shell, which reads .bash_profile/.profile and never sources
-  # the .bashrc holding the exec. Later windows see a session environment that
-  # has since changed.
-  #
-  # Rather than chase that, remove the dependency: a terminal emulator is always
-  # interactive, so it has no reason to route through bash at all. This does not
-  # weaken the convention — the login shell stays bash, and the bash→zsh exec
-  # stays in place for SSH — it just skips a hop for the one case that can never
-  # be non-interactive.
+  # ── kitty: launch zsh directly, not the login shell ─────────────────────────
+  # Login shell stays bash (modules/nixos/common.nix — kept for predictable
+  # non-interactive `ssh z@host cmd` semantics, see interactive-zsh.nix) and
+  # every interactive bash session execs into zsh anyway, but that's a hop
+  # kitty doesn't need to take: pointing it at zsh directly skips it. Per
+  # Zoe's request, 2026-08-20. Package now comes from programs.kitty.package
+  # (default) instead of the plain home.packages entry — same store path,
+  # declared once instead of twice.
   programs.kitty = {
     enable = true;
     settings.shell = "${pkgs.zsh}/bin/zsh";
+  };
+
+  # ── Screenshot annotation (swappy) ──────────────────────────────────────────
+  # niri's own Print/Ctrl+Print/Alt+Print binds (niri-settings.nix) already do
+  # the actual *capturing* — niri implements screenshot capture itself at the
+  # compositor level (confirmed against niri's own wiki, Configuration:-Key-
+  # Bindings.md: "The screenshot is both stored to the clipboard and saved to
+  # disk"), so no grim/slurp is needed here, unlike on sway/Hyprland. swappy
+  # only adds a markup step on top: Mod+Shift+S (niri-settings.nix) pipes
+  # whatever niri just put on the clipboard into swappy for annotation
+  # (arrows/boxes/text/blur); swappy's own Ctrl+S then saves the edited copy
+  # to save_dir below, separately from niri's own screenshot-path.
+  programs.swappy = {
+    enable = true;
+    settings.Default = {
+      save_dir = "$HOME/Pictures/Screenshots";
+      save_filename_format = "swappy-%Y%m%d-%H%M%S.png";
+    };
   };
 
   # ── Declarative Plasma 6 (plasma-manager) ───────────────────────────────────
@@ -306,6 +375,37 @@
   # time this changes.
   home.activation.rebuildKSycoca = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     $DRY_RUN_CMD ${pkgs.kdePackages.kservice}/bin/kbuildsycoca6 $VERBOSE_ARG
+  '';
+
+  # ── DankMaterialShell settings: seed-only-if-missing ────────────────────────
+  # DMS's own settings.json and plugin_settings.json are deliberately NOT
+  # Home-Manager-managed (no home.file/xdg.configFile, in-store or
+  # mkOutOfStoreSymlink alike) — DMS saves both via an atomic
+  # write-temp-then-rename, which severs any symlink at that path on the
+  # very first GUI change instead of writing through it. See
+  # scripts/dms-settings.sh and DECISIONS.md for the full reasoning.
+  #
+  # This just seeds a fresh host — one with no live file yet — from the
+  # repo's checkpoints (hosts/pegasus/dms-settings.json and
+  # dms-plugin-settings.json, created by `dms-settings-snapshot`), so a
+  # rebuild-from-scratch starts from the last-known-good config instead of
+  # DMS's own defaults. Each check is independent and never touches an
+  # existing live file, so it can't clobber an in-progress GUI experiment —
+  # that traffic only ever flows explicitly, via dms-settings-snapshot/
+  # -restore/-diff above.
+  home.activation.seedDmsSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    DMS_DIR="$HOME/.config/DankMaterialShell"
+    CHECKPOINTS="$HOME/nixos-config/hosts/pegasus"
+
+    if [ ! -e "$DMS_DIR/settings.json" ] && [ -e "$CHECKPOINTS/dms-settings.json" ]; then
+      $DRY_RUN_CMD mkdir -p "$DMS_DIR"
+      $DRY_RUN_CMD cp "$CHECKPOINTS/dms-settings.json" "$DMS_DIR/settings.json"
+    fi
+
+    if [ ! -e "$DMS_DIR/plugin_settings.json" ] && [ -e "$CHECKPOINTS/dms-plugin-settings.json" ]; then
+      $DRY_RUN_CMD mkdir -p "$DMS_DIR"
+      $DRY_RUN_CMD cp "$CHECKPOINTS/dms-plugin-settings.json" "$DMS_DIR/plugin_settings.json"
+    fi
   '';
 
   home.stateVersion = "26.05";
