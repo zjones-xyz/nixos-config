@@ -21,13 +21,13 @@ let
 
     origin:
       url: ${cfg.originUrl}
-      username: ${cfg.originUsername}
+      username: "${cfg.originUsername}"
       password: "@ORIGIN_PASSWORD@"
 
     replicas:
     ${lib.concatMapStrings (r: ''
       - url: ${r.url}
-        username: ${r.username}
+        username: "${r.username}"
         password: "@REPLICA_${toString r.idx}_PASSWORD@"
     '') indexedReplicas}
 
