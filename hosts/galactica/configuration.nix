@@ -62,10 +62,15 @@
   # memory-alpha is also `nixie`. One duplicate row (`arr.zjones.dev`, twice
   # in the router's list) was dropped here.
   #
-  # ⚠ `*.arr.zjones.xyz` / `guesthome.zjones.xyz` have no known Traefik router
-  # anywhere in this repo (only `pangolin.zjones.xyz` does, as Newt's tunnel
-  # endpoint — DECISIONS.md). Carried over as-is; confirm what actually serves
-  # these before relying on them.
+  # `.xyz` is the owner's convention for externally-routable names — terminated
+  # by Pangolin (tunneling to a Newt client), not Traefik, so no local router
+  # or cert is expected for these. This rewrite is a LAN-side shortcut so local
+  # clients hit galactica directly instead of round-tripping through the
+  # tunnel. ⚠ Newt only runs on memory-alpha in this repo (jellyfin.nix); if
+  # `arr.zjones.xyz` is meant to reach the *arr stack (now on galactica, post
+  # nixflix migration), confirm Pangolin's resource target was updated to
+  # galactica's IP — that mapping lives in Pangolin's own admin config, not
+  # here, so it can't be verified from the repo.
   services.adguardhome.settings.filtering.rewrites = [
     # router (GL.iNet)
     { domain = "router.internal"; answer = "192.168.8.1"; }

@@ -1031,11 +1031,18 @@ rather than each instance being hand-edited.
    the password through the AdGuard UI is *not* an option under
    `mutableSettings = false` — a real rotation means generating a new hash and
    redeploying.
-2. [ ] **Confirm `*.zjones.xyz` routing.** `arr.zjones.xyz` and
-   `guesthome.zjones.xyz` were carried over from the router's rewrite list,
-   but no Traefik router for `.zjones.xyz` exists anywhere in this repo (see
-   the comment above the rewrites block). Check galactica's actual Traefik
-   config (in `homelab_stacks`, not here) for what serves these, if anything.
+2. [ ] **Confirm Pangolin's resource targets for `.xyz`.** `.xyz` is the
+   owner's convention for externally-routable names, terminated by Pangolin
+   via a Newt tunnel — not Traefik, so the earlier "no Traefik router" framing
+   here was checking the wrong layer. `arr.zjones.xyz` and
+   `guesthome.zjones.xyz` were carried over from the router's rewrite list as
+   LAN-side shortcuts (so local clients hit galactica directly instead of
+   round-tripping through the tunnel). But Newt only runs on memory-alpha in
+   this repo (`newt.nix`, confirmed via `jellyfin.nix`'s comment), and the
+   *arr stack it's presumably meant to reach moved to **galactica** in the
+   nixflix migration. Confirm in Pangolin's own admin config (not this repo)
+   that `arr.zjones.xyz`'s resource target was updated to galactica's IP —
+   otherwise the tunnel may still be pointing at wherever it used to.
 3. [ ] **Deploy and verify** — `sudo nixos-rebuild switch --flake .#galactica`,
    then `dig @localhost tower.internal` etc. against the full rewrite list
    before treating this as the source of truth.
