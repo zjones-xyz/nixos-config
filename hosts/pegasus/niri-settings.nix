@@ -80,37 +80,12 @@
     };
 
     # ── Outputs ────────────────────────────────────────────────────────────
-    # Added 2026-08-18, when this host actually went dual-head (the move
-    # DECISIONS.md had been anticipating since the DMS-over-Noctalia choice).
-    # Before this, niri auto-picked mode/scale/position, which is fine until
-    # it isn't: on first bring-up the LG came up at 1920x1080 on a 4K panel
-    # while the Dell took its preferred mode, and the two ended up at
-    # different scales — so windows changed size crossing between them.
-    #
-    # ⚠ Keyed on EDID identity ("Make Model Serial"), NOT the connector name
-    # (DP-1/DP-2/DP-3). niri accepts either. Connector names track which
-    # physical port a cable happens to be in, and during this host's dual-head
-    # bring-up the same monitor appeared as DP-2 and then DP-3 across a
-    # recabling — anything keyed on the connector would have silently stopped
-    # applying. The serials here are from `niri msg outputs`; if a panel is
-    # ever replaced, the key must be updated to match.
-    #
-    # ⚠ DMS also drives outputs, via wlr-output-management (its log reports
-    # "wlr-output-management capability detected", and it keeps its own
-    # DisplayConfigState profiles). This block is meant to be the single
-    # source of truth — clear DMS's saved display profile if the two ever
-    # disagree, rather than editing both.
-    #
-    # Scale 1.25 on both is deliberate and is what makes the pair coherent:
-    # 3840x2160 / 1.25 = a logical 3072x1728 each, so the two have identical
-    # logical heights and sit flush side by side. The panels differ physically
-    # (LG 31.5" ≈ 140 PPI, Dell 27" ≈ 163 PPI), so 1.25 is a compromise that
-    # keeps text within ~15% between them rather than matching either exactly.
-    #
-    # VRR left off. The Dell reports "supported, disabled" and the LG doesn't
-    # support it at all; enabling it is a behavioural change worth making on
-    # purpose, with the NVIDIA-Wayland caveats checked, not as a side effect
-    # of declaring the layout.
+    # Keyed on EDID identity ("Make Model Serial"), not connector name — a
+    # cable's connector can migrate across recabling, the panel's identity
+    # doesn't. Scale 1.25 on both matches logical height despite differing
+    # physical PPI. DMS also drives outputs via wlr-output-management and
+    # keeps its own profile; this block is meant to be authoritative. VRR is
+    # deliberately off. See DECISIONS.md for the bring-up story and why.
     outputs = {
       # Left.
       "LG Electronics LG HDR 4K 111NTEP7X460" = {

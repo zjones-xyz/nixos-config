@@ -728,6 +728,23 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   doesn't come back on its own. Not root-caused past "PipeWire's protocol
   parser doesn't like something about this sink's format announcement" —
   could be Qt Multimedia, Quickshell, or PipeWire itself; not filed upstream.
+  *The output layout, declared afterward:* niri auto-picked mode/scale/
+  position before this, which produced a real error on first bring-up — the
+  LG came up at 1920x1080 on its 4K panel while the Dell took its preferred
+  3840x2160@59.997, at different scales, so windows resized crossing between
+  them. `niri-settings.nix`'s `outputs` block now declares both explicitly,
+  keyed on EDID identity rather than connector name — during this same
+  bring-up the same monitor appeared as `DP-2` and then `DP-3` across a
+  recabling, which a `DP-N`-keyed config would have silently stopped
+  matching. Scale 1.25 on both gives matching logical heights
+  (3840x2160 / 1.25 = 3072x1728) despite the panels' different physical PPI
+  (LG 31.5" ≈140, Dell 27" ≈163). VRR left off deliberately — the Dell
+  reports it supported-but-disabled and the LG doesn't support it at all, so
+  enabling it is a decision to make on purpose later, not a byproduct of
+  declaring the layout. DMS also drives outputs via wlr-output-management
+  and keeps its own `DisplayConfigState` profile; the niri block is meant to
+  be authoritative — clear DMS's saved profile if the two disagree rather
+  than editing both.
 
 - **DMS settings.json → snapshot/restore script, not a Home-Manager symlink**
   (2026-08-21). *alt:* `config.lib.file.mkOutOfStoreSymlink` pointing
