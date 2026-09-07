@@ -56,6 +56,11 @@
     { name = "admin"; password = "$2y$10$8TU89p4pf3Up.YCaKacwJe1kAkP2sQMu8xsXaL0TjYNVxD8hs4ybm"; }
   ];
 
+  # Query log retention — 60 days on this box specifically (not a fleet
+  # default in dns.nix; hopper/hamilton's eventual RAM-only logging is a
+  # different tradeoff). `interval` is a duration string, 1h–8760h.
+  services.adguardhome.settings.querylog.interval = "1440h";
+
   # ── DNS rewrites — migrated off the router's AdGuard instance ──────────────
   # These lived only in the router's mutable UI state (hand-clicked, not
   # tracked anywhere) until now. Grouped by physical box, not alphabetically,
