@@ -1012,3 +1012,120 @@ and the existing collection imported rather than migrated in place) and
 SABnzbd is deliberately **outside** the VPN — usenet is already TLS to a paid
 provider, so the tunnel would only cap throughput; `nixflix.nix` says so at
 the option.
+
+## 13. AdGuard/Unbound DNS — declarative config, migrating off the router
+
+`configuration.nix` now imports `modules/nixos/dns.nix` and declares the
+rewrites that previously lived only in the router's (GL.iNet, AdGuard bundled
+in its firmware) mutable UI state. `mutableSettings = false` on that module
+means AdGuard here won't accept UI edits that survive a rebuild — by design,
+this is meant to become the one declarative source of truth, with
+AdGuardHome-Sync replicating it out to the router (and later hopper/hamilton)
+rather than each instance being hand-edited.
+
+1. [x] **Set AdGuard admin credentials.** Done — `services.adguardhome.settings
+   .users` declares `admin` with a bcrypt hash (`htpasswd -B -C 10 -n -b`),
+   committed directly in `configuration.nix` per the reasoning above (can't be
+   a sops secret: this config renders at build time, before secrets decrypt on
+   the target host). Confirm login works after the first deploy, then change
+   the password through the AdGuard UI is *not* an option under
+   `mutableSettings = false` — a real rotation means generating a new hash and
+   redeploying.
+2. [x] **`.xyz` split-horizon scope — decided.** `.xyz` is the owner's
+   convention for externally-routable names, terminated by Pangolin via a
+   Newt tunnel — not Traefik, so the earlier "no Traefik router" framing here
+   was checking the wrong layer. Resolved: `arr.zjones.xyz` is dropped
+   entirely (the *arr stack doesn't need off-network access). `jellyfin` and
+   `guesthome` keep the split-horizon treatment — meant to work both on- and
+   off-network without Tailscale, so the AdGuard rewrite is a LAN-side
+   shortcut alongside Pangolin's tunnel, not a replacement for it.
+   `homeassistant` deliberately gets no `.xyz` name at all — stays
+   Tailscale/LAN-only. Still worth confirming in Pangolin's own admin config
+   (not this repo) that `jellyfin.zjones.xyz` and `guesthome.zjones.xyz`
+   actually have resources configured, pointing at the right targets
+   (memory-alpha for jellyfin, galactica for guesthome) — Newt itself only
+   runs on memory-alpha in this repo (`newt.nix`), which is fine since Newt's
+   targets aren't restricted to localhost.
+3. [x] **Deploy and verify — done 2026-09-06.** Deployed, then two real bugs
+   found live and fixed (see git history): every rewrite loaded
+   `enabled: false` (an undocumented per-rewrite toggle, Go bool zero-value
+   when omitted), and OISD's filter URL had moved (`basic` renamed
+   `small`). After both fixes, exact-match and wildcard rewrites
+   (`tower.internal`, `jellyfin.zjones.dev`, `traefik.galactica.zjones.dev`,
+   `memory-alpha.internal`) all confirmed resolving correctly via
+   `dig @127.0.0.1`. AdGuard's web UI, found stuck on loopback-only, is now
+   routed through Traefik at
+   `adguard.galactica.internal`/`adguard.galactica.zjones.dev`.
+4. [x] **AdGuardHome-Sync — confirmed working end-to-end 2026-09-07.**
+   `modules/nixos/adguardhome-sync.nix` + galactica's own
+   `services.adguardhomeSync` block: galactica as origin, the router as the
+   first replica. Only syncs rewrites, filter lists, and client names —
+   deliberately not `dns.serverConfig`/`dhcp.*`, since the router has its
+   own upstream/DHCP needs that shouldn't be overwritten by galactica's.
+   hopper/hamilton join `replicas` once they're rebuilt as the ephemeral
+   resolvers discussed — not yet, neither exists.
+
+   Getting the router side actually authenticating took a long chain of real
+   bugs, found live, in order: (1) `network_mode: host` was missing, so the
+   container's `127.0.0.1` was its own loopback, not galactica's; (2) the
+   sync tool's own status-API port was never wired to `cfg.port` and
+   defaulted to 8080, colliding with SABnzbd under host networking; (3) an
+   empty replica `username` rendered as bare YAML (`username: `), parsing
+   as `null` and failing the tool's own schema validation; (4) GL.iNet's
+   bundled AdGuard ships with `users: []` — no default login at all, so
+   every credential we tried (`admin`, empty, `root`) correctly failed
+   against nothing; (5) hand-editing the router's `users:` block to add a
+   real `adguardsync` user initially split into two malformed YAML list
+   entries (name and password as separate `-` items) instead of one; (6)
+   the module's `sed`-based secret substitution treated `&`/`\` in a
+   password as sed metacharacters, silently corrupting it — replaced with
+   `envsubst`; (7) the real, final blocker: GL.iNet's bundled AdGuard runs
+   with a `--glinet` flag that routes *all* auth through the router's own
+   webui login, so every one of AdGuard's own auth paths (Basic Auth, even
+   a genuinely valid `/control/login` session cookie) 401'd regardless of
+   correct credentials. Removing `--glinet` from `/etc/init.d/adguardhome`
+   on the router restored normal AdGuard auth, and plain Basic Auth
+   (matching how origin auth already works) then succeeded. A real sync run
+   confirmed live: rewrites, filters, and client settings all applied to
+   the router with no errors.
+
+   Full CRUD confirmed live, not just adds: dropping the retired
+   `nixie.internal`/`*.nixie.internal` rewrites from galactica's declared
+   list (memory-alpha's old name) was deliberately used as a delete-path
+   test — the very next cron cycle cleanly deleted both from the router,
+   no errors, no oscillation.
+
+   Two loose ends from that chain, now resolved or downgraded:
+   - The `--glinet` removal was done interactively via SSH and wasn't
+     persistent — confirmed the hard way when a router firmware update
+     rebooted it and auth broke again exactly as predicted. Fixed
+     properly now; see item 5.
+   - The router's bundled AdGuard (`0.107.73`) is older than galactica's
+     (`0.107.78`); a firmware update was applied hoping to close that gap,
+     but it didn't change AdGuard's version — apparently the newest GL.iNet
+     currently ships. One rewrite (`arr.zjones.dev`) was seen deleted then
+     re-added across two early cycles, but that window coincided with the
+     still-unresolved auth debugging, not a repeatable pattern — several
+     clean cycles since (including the nixie delete test) show no further
+     oscillation. Not chasing this further unless it actually recurs;
+     downgrading galactica's own AdGuard to match would trade a real
+     version back for a cosmetic match, which isn't worth it for a WARN
+     that hasn't caused any actual sync failure.
+5. [ ] **Verify the `--glinet` removal survives an actual reboot.** Fixed
+   in `/etc/rc.local` (a first attempt via `vi` split the `sed` command
+   across two lines, silently breaking it — rewritten with a `cat` heredoc
+   instead to avoid the interactive-editor pitfall):
+   ```
+   sed -i "s/--glinet //g" /etc/init.d/adguardhome
+   service adguardhome restart
+   ```
+   above `exit 0`. Confirmed correct by reading the file back, but not yet
+   proven across a real reboot (only manually re-applied so far) — check
+   after the router's next reboot/update rather than forcing one just to
+   test. Tradeoff to accept knowingly: this also drops the AdGuard stats
+   widget from the GL.iNet router's own dashboard (that integration depends
+   on `--glinet`).
+6. [ ] **Repoint DHCP later, not yet.** Once galactica's AdGuard is confirmed
+   correct and stable, add it to the GL.iNet DHCP DNS server list (primary or
+   alongside the router) — a separate, deliberate cutover step, not part of
+   this change.
