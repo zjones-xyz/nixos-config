@@ -173,11 +173,19 @@
     originPasswordFile = config.sops.secrets."adguardhome-sync/originPassword".path;
     replicas = [
       {
-        url = "http://192.168.8.1:3000";
-        # Router's AdGuard (GL.iNet firmware build) has no username concept —
-        # confirmed live (401 with the default "admin"). Empty string matches
-        # its actual stored user.
-        username = "";
+        # GL.iNet's bundled AdGuard sits behind the router's own reverse
+        # proxy — adguardhome-sync's wiki (Integration‐GL.iNet) is explicit:
+        # no port here, unlike a normal AdGuard instance. :3000 answered our
+        # earlier manual curl tests fine but isn't the right path for this
+        # tool. GL.iNet also ships with no default AdGuard user at all — one
+        # must be created by hand via SSH (users: block in the router's own
+        # /etc/AdGuardHome/config.yaml, same bcrypt-hash mechanism as
+        # galactica's own admin above).
+        url = "http://192.168.8.1";
+        # CONFIRM_ME_LIVE — the username already configured on the router
+        # (used successfully in the very first manual curl login test, before
+        # this file existed). Not "admin", not empty — both failed live.
+        username = "CONFIRM_ME_LIVE";
         passwordFile = config.sops.secrets."adguardhome-sync/routerPassword".path;
       }
     ];
