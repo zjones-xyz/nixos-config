@@ -47,15 +47,19 @@ let
       tlsConfig: false
   '';
 
+  # network_mode: host — required, not cosmetic. Under the default bridge
+  # network, 127.0.0.1 inside the container is the container's own loopback,
+  # not the host's, so originUrl's default (127.0.0.1:3000, this host's own
+  # AdGuard) is unreachable without it. Confirmed live: first deploy without
+  # this failed every sync with "connection refused" on the origin.
   composeFile = pkgs.writeText "adguardhome-sync-compose.yml" ''
     services:
       adguardhome-sync:
         image: ${cfg.image}
         container_name: adguardhome-sync
         restart: unless-stopped
+        network_mode: host
         command: run --config /config/adguardhome-sync.yaml
-        ports:
-          - "127.0.0.1:${toString cfg.port}:8080"
         volumes:
           - /run/adguardhome-sync/config.yaml:/config/adguardhome-sync.yaml:ro
   '';
@@ -124,9 +128,11 @@ in
       type = lib.types.port;
       default = 8080;
       description = ''
-        Port for adguardhome-sync's own status web UI. Bound to loopback only
-        (127.0.0.1) — nothing on the LAN needs this; use an SSH tunnel to
-        check sync status.
+        Documents the port adguardhome-sync's own status API listens on
+        (currently not independently configurable — this must match its
+        actual default). With network_mode: host and no
+        networking.firewall.allowedTCPPorts entry for it, the host firewall
+        blocks LAN access by default; use an SSH tunnel to check sync status.
       '';
     };
   };
