@@ -95,9 +95,9 @@
   # These lived only in the router's mutable UI state (hand-clicked, not
   # tracked anywhere) until now. Grouped by physical box, not alphabetically,
   # since several boxes answer to more than one name: galactica is also
-  # `tower`/`arr` (legacy identities it absorbed, DECISIONS.md §2), and
-  # memory-alpha is also `nixie`. One duplicate row (`arr.zjones.dev`, twice
-  # in the router's list) was dropped here.
+  # `tower`/`arr` (legacy identities it absorbed, DECISIONS.md §2). One
+  # duplicate row (`arr.zjones.dev`, twice in the router's list) was dropped
+  # here, and `nixie` (memory-alpha's own retired legacy name) later too.
   #
   # `.xyz` is the owner's convention for externally-routable names — terminated
   # by Pangolin (tunneling to a Newt client), not Traefik, so no local router
@@ -128,13 +128,11 @@
     { domain = "memory-alpha-2.internal"; answer = "192.168.8.98"; }
     { domain = "*.memory-alpha-2.internal"; answer = "192.168.8.98"; }
 
-    # memory-alpha (also answers to the legacy name "nixie")
+    # memory-alpha (the legacy name "nixie" is retired, no longer in use)
     { domain = "memory-alpha.internal"; answer = "192.168.8.99"; }
     { domain = "*.memory-alpha.internal"; answer = "192.168.8.99"; }
     { domain = "*.memory-alpha.zjones.dev"; answer = "192.168.8.99"; }
     { domain = "*.monitor.zjones.dev"; answer = "192.168.8.99"; }
-    { domain = "nixie.internal"; answer = "192.168.8.99"; }
-    { domain = "*.nixie.internal"; answer = "192.168.8.99"; }
     # jellyfin.zjones.dev: flat name, not *.memory-alpha.zjones.dev — Traefik
     # (modules/nixos/traefik.nix, on memory-alpha) already routes it with its
     # own single-name LE cert; this rewrite was the only missing piece.
