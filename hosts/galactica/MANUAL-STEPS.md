@@ -535,18 +535,14 @@ this is meant to become the one declarative source of truth, with
 AdGuardHome-Sync replicating it out to the router (and later hopper/hamilton)
 rather than each instance being hand-edited.
 
-1. [ ] **Set AdGuard admin credentials.** With `mutableSettings = false`,
-   there's no setup wizard to fall back on — and even if AdGuard shows one on
-   first web UI visit, anything entered there gets wiped on the next
-   `nixos-rebuild switch`. Generate a password hash AdGuard accepts (check its
-   current docs for the expected format — historically bcrypt) and declare it
-   via `services.adguardhome.settings.users = [{ name = "..."; password =
-   "<hash>"; }];`. This can't come from a sops secret the normal way: the
-   config file is rendered from `settings` at build time, before any
-   sops-nix secret is decrypted on the target host — so this is a hash
-   committed to the repo (like a value, not a plaintext credential) or an
-   activation-script workaround, not a `config.sops.secrets."...".path`
-   reference.
+1. [x] **Set AdGuard admin credentials.** Done — `services.adguardhome.settings
+   .users` declares `admin` with a bcrypt hash (`htpasswd -B -C 10 -n -b`),
+   committed directly in `configuration.nix` per the reasoning above (can't be
+   a sops secret: this config renders at build time, before secrets decrypt on
+   the target host). Confirm login works after the first deploy, then change
+   the password through the AdGuard UI is *not* an option under
+   `mutableSettings = false` — a real rotation means generating a new hash and
+   redeploying.
 2. [ ] **Confirm `*.zjones.xyz` routing.** `arr.zjones.xyz` and
    `guesthome.zjones.xyz` were carried over from the router's rewrite list,
    but no Traefik router for `.zjones.xyz` exists anywhere in this repo (see

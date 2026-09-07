@@ -48,6 +48,14 @@
   # hopper's dead dns.nix import. Static reservation on the router is still
   # the intended mechanism for this host's own IP, not a static IP here.
 
+  # ── AdGuard admin login — bcrypt hash, not a sops secret ────────────────────
+  # Can't reference sops here: this file renders into AdGuardHome.yaml at
+  # build time, before secrets decrypt on the target host (MANUAL-STEPS.md
+  # §12). A bcrypt hash is the credential-safe form to commit directly.
+  services.adguardhome.settings.users = [
+    { name = "admin"; password = "$2y$10$8TU89p4pf3Up.YCaKacwJe1kAkP2sQMu8xsXaL0TjYNVxD8hs4ybm"; }
+  ];
+
   # ── DNS rewrites — migrated off the router's AdGuard instance ──────────────
   # These lived only in the router's mutable UI state (hand-clicked, not
   # tracked anywhere) until now. Grouped by physical box, not alphabetically,
