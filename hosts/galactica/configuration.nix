@@ -87,6 +87,10 @@
     { domain = "*.monitor.zjones.dev"; answer = "192.168.8.99"; }
     { domain = "nixie.internal"; answer = "192.168.8.99"; }
     { domain = "*.nixie.internal"; answer = "192.168.8.99"; }
+    # jellyfin.zjones.dev: flat name, not *.memory-alpha.zjones.dev — Traefik
+    # (modules/nixos/traefik.nix, on memory-alpha) already routes it with its
+    # own single-name LE cert; this rewrite was the only missing piece.
+    { domain = "jellyfin.zjones.dev"; answer = "192.168.8.99"; }
 
     # homeassistant
     { domain = "homeassistant.internal"; answer = "192.168.8.142"; }
