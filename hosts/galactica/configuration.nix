@@ -38,12 +38,6 @@
   # console= or SOL goes dark when it takes over (live-iso.nix, PLATFORM.md §2).
   homelab.serialConsole.device = "ttyS1,115200n8";
 
-  # `tower.internal` keeps resolving to this host via an AdGuard rewrite —
-  # DECISIONS.md §2. That rewrite now lives below (galactica is the AdGuard
-  # instance itself, migrated off the router's UI-only config), not on
-  # hopper's dead dns.nix import. Static reservation on the router is still
-  # the intended mechanism for this host's own IP, not a static IP here.
-
   # ── AdGuard admin login — bcrypt hash, not a sops secret ────────────────────
   # Can't reference sops here: this file renders into AdGuardHome.yaml at
   # build time, before secrets decrypt on the target host (MANUAL-STEPS.md

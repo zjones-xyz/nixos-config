@@ -66,19 +66,12 @@
         bootstrap_dns = [ "127.0.0.1:5335" ];
         # Don't fall back to public resolvers; keep all recursion in Unbound.
         upstream_mode = "load_balance";
-        # Default (20/sec/client) exists to protect a publicly-reachable
-        # resolver from abuse — this one binds LAN-only. A busy Docker host
-        # (metadata lookups, image pulls) can legitimately burst past 20/sec,
-        # so leave it uncapped rather than risk silent, hard-to-diagnose
-        # query drops for no real security benefit.
         ratelimit = 0;
       };
       # ── Filter lists ────────────────────────────────────────────────────────
       filters = [
         { enabled = true; id = 1; name = "AdGuard DNS filter";
           url = "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt"; }
-        # "Basic" was renamed "Small" upstream — the old basic.oisd.nl URL
-        # 404s now (caught live on galactica's first filter update, 2026-09-06).
         { enabled = true; id = 2; name = "OISD Small";
           url = "https://small.oisd.nl/"; }
         { enabled = true; id = 3; name = "AdAway Default Blocklist";
@@ -86,9 +79,6 @@
       ];
 
       # ── Global filtering policy ─────────────────────────────────────────────
-      # Off fleet-wide, deliberately — no household member's browsing needs
-      # safe search or parental filtering, and both add failure modes (a
-      # blocked-but-legitimate site) for no benefit here.
       filtering = {
         safebrowsing_enabled = false;
         parental_enabled = false;
