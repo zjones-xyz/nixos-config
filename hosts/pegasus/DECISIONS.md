@@ -966,3 +966,48 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   with the caveat called out: a headless service only alerts if monitoring
   is wired up, and a tray app only alerts if it's actually autostarted and
   running.
+- **DDC/CI switching research, 2026-09-07 — findings recorded ahead of the
+  actual script, not yet a decision.** The plan under consideration: replace
+  a hardware KVM with `ddcutil` (already wired in via `hardware.i2c.enable`
+  and the NVIDIA `RMUseSwI2c` fix, both `modules/nixos/nvidia.nix`/
+  `hosts/pegasus/configuration.nix`) commanding a monitor's own input-select
+  VCP feature (0x60) to switch which machine it's showing, for sharing with
+  the Mac and/or a future work laptop. Third monitor for this is a **Dell
+  S2722QC** (corrected from an initial S2721QC guess) — same panel family as
+  the existing S2721QS, but adds USB-C (DP Alt Mode + 65W PD), a USB-A
+  upstream hub, HDMI 2.1, and Dell's own "Auto Select" KVM firmware. The
+  4070 has no native USB-C output, so feeding its USB-C port from pegasus
+  needs a DP-to-USB-C cable — likely unnecessary, since that port reads as
+  intended for the Mac/laptop side, with pegasus on DP or HDMI instead.
+  *DDC/CI only works on the currently active input* — confirmed independently
+  twice, not just inferred: general community consensus, and
+  [`i3v/monitor_input_control`](https://github.com/i3v/monitor_input_control),
+  a prior-art project doing the same kind of switching, which had to run a
+  script on *both* connected PCs because the inactive one can't reliably
+  reach the monitor over DDC. Plan around this from the start rather than
+  discovering it after wiring up pegasus alone.
+  *Auto Select can fight a scripted switch.* Dell's community threads
+  describe the S2722QC-family's own KVM auto-detect firmware disagreeing
+  with an external DDC command about which input should be active. Set
+  Auto Select to **Off** in the OSD (not "Prompt") before relying on
+  `ddcutil` — several reported fixes only worked after that.
+  *A real conflict to watch for, not yet hit:* Dell has a documented bug
+  ([KB000197189](https://www.dell.com/support/kbdoc/en-us/000197189)) where
+  the S2722QC flickers with Apple Silicon Macs set to "Variable" (40-60 Hz)
+  refresh — fixed by macOS ≥13.0.1 and forcing a fixed 60 Hz on the Mac
+  (has to be reset after every Mac reboot, per Dell). One community-reported
+  workaround for the same flicker is **disabling DDC/CI on the monitor** —
+  which would break the switching script for that machine. If the flicker
+  shows up, use the fixed-60Hz fix, not the DDC/CI one.
+  *Lower-confidence, not acted on:* the S2721QS is DisplayPort 1.2, not 1.4
+  — HBR2×4 still comfortably covers the 4K60 8-bit mode already running, but
+  it's a hard ceiling on that monitor, unrelated to the GPU or any cable.
+  Scattered independent reports of a low-brightness flicker on some S2721QS
+  units (unrelated to PWM, which rtings measured as genuinely absent) —
+  sounds like a firmware/batch issue, not confirmed as universal; try
+  maximum brightness as a first diagnostic step if it's ever seen.
+  *Not yet identified:* the existing left-hand monitor reports only
+  `"LG Electronics LG HDR 4K"` over EDID — confirmed to be a generic string
+  LG's GoldStar (`GSM`) vendor code reuses across multiple actual models,
+  not a real model number. No monitor-specific research possible until the
+  real model number comes off the unit itself.
