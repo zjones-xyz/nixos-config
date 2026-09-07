@@ -1067,3 +1067,63 @@ the switch lands — steps below are for the tailnet and public halves.
 7. [ ] **Retire the Tower stacks.** In homelab-stacks, delete (or mark
    migrated) `tower/homepage`, `tower/guesthome` and `tower/pangolin-newt`,
    and delete the old `tower` Site in Pangolin once nothing references it.
+
+## 14. AdGuard/Unbound DNS — declarative config, migrating off the router
+
+`configuration.nix` now imports `modules/nixos/dns.nix` and declares the
+rewrites that previously lived only in the router's (GL.iNet, AdGuard bundled
+in its firmware) mutable UI state. `mutableSettings = false` on that module
+means AdGuard here won't accept UI edits that survive a rebuild — by design,
+this is meant to become the one declarative source of truth, with
+AdGuardHome-Sync replicating it out to the router (and later hopper/hamilton)
+rather than each instance being hand-edited.
+
+1. [x] **Set AdGuard admin credentials.** Done — `services.adguardhome.settings
+   .users` declares `admin` with a bcrypt hash (`htpasswd -B -C 10 -n -b`),
+   committed directly in `configuration.nix` per the reasoning above (can't be
+   a sops secret: this config renders at build time, before secrets decrypt on
+   the target host). Confirm login works after the first deploy, then change
+   the password through the AdGuard UI is *not* an option under
+   `mutableSettings = false` — a real rotation means generating a new hash and
+   redeploying.
+2. [x] **`.xyz` split-horizon scope — decided.** `.xyz` is the owner's
+   convention for externally-routable names, terminated by Pangolin via a
+   Newt tunnel — not Traefik, so the earlier "no Traefik router" framing here
+   was checking the wrong layer. Resolved: `arr.zjones.xyz` is dropped
+   entirely (the *arr stack doesn't need off-network access). `jellyfin` and
+   `guesthome` keep the split-horizon treatment — meant to work both on- and
+   off-network without Tailscale, so the AdGuard rewrite is a LAN-side
+   shortcut alongside Pangolin's tunnel, not a replacement for it.
+   `homeassistant` deliberately gets no `.xyz` name at all — stays
+   Tailscale/LAN-only. Still worth confirming in Pangolin's own admin config
+   (not this repo) that `jellyfin.zjones.xyz` and `guesthome.zjones.xyz`
+   actually have resources configured, pointing at the right targets
+   (memory-alpha for jellyfin, galactica for guesthome) — Newt itself only
+   runs on memory-alpha in this repo (`newt.nix`), which is fine since Newt's
+   targets aren't restricted to localhost.
+3. [x] **Deploy and verify — done 2026-09-06.** Deployed, then two real bugs
+   found live and fixed (see git history): every rewrite loaded
+   `enabled: false` (an undocumented per-rewrite toggle, Go bool zero-value
+   when omitted), and OISD's filter URL had moved (`basic` renamed
+   `small`). After both fixes, exact-match and wildcard rewrites
+   (`tower.internal`, `jellyfin.zjones.dev`, `traefik.galactica.zjones.dev`,
+   `memory-alpha.internal`) all confirmed resolving correctly via
+   `dig @127.0.0.1`. AdGuard's web UI, found stuck on loopback-only, is now
+   routed through Traefik at
+   `adguard.galactica.internal`/`adguard.galactica.zjones.dev`.
+4. [x] **AdGuardHome-Sync — enabled 2026-09-06.** `modules/nixos/
+   adguardhome-sync.nix` + galactica's own `services.adguardhomeSync` block:
+   galactica as origin, the router (`192.168.8.1:3000`, running `v0.107.73`)
+   as the first replica. Only syncs rewrites, filter lists, and client
+   names — deliberately not `dns.serverConfig`/`dhcp.*`, since the router
+   has its own upstream/DHCP needs that shouldn't be overwritten by
+   galactica's. Owner confirmed galactica's rewrites matched the router's
+   live list before flipping `enable` on — `runOnStart` is hardcoded true,
+   so the first sync fired immediately on that deploy. Confirm the router's
+   AdGuard UI actually reflects the synced config after this lands.
+   hopper/hamilton join `replicas` once they're rebuilt as the ephemeral
+   resolvers discussed — not yet, neither exists.
+5. [ ] **Repoint DHCP later, not yet.** Once galactica's AdGuard is confirmed
+   correct and stable, add it to the GL.iNet DHCP DNS server list (primary or
+   alongside the router) — a separate, deliberate cutover step, not part of
+   this change.

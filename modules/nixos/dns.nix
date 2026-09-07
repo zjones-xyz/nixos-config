@@ -66,59 +66,55 @@
         bootstrap_dns = [ "127.0.0.1:5335" ];
         # Don't fall back to public resolvers; keep all recursion in Unbound.
         upstream_mode = "load_balance";
+        # Default (20/sec/client) exists to protect a publicly-reachable
+        # resolver from abuse — this one binds LAN-only. A busy Docker host
+        # (metadata lookups, image pulls) can legitimately burst past 20/sec,
+        # so leave it uncapped rather than risk silent, hard-to-diagnose
+        # query drops for no real security benefit.
+        ratelimit = 0;
       };
       # ── Filter lists ────────────────────────────────────────────────────────
-      # Add blocklists here. Each entry needs a unique integer `id`.
-      # Example:
-      #   filters = [
-      #     { enabled = true; id = 1; name = "AdGuard DNS filter";
-      #       url = "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt"; }
-      #     { enabled = true; id = 2; name = "OISD Basic";
-      #       url = "https://basic.oisd.nl/"; }
-      #   ];
+      filters = [
+        { enabled = true; id = 1; name = "AdGuard DNS filter";
+          url = "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt"; }
+        # "Basic" was renamed "Small" upstream — the old basic.oisd.nl URL
+        # 404s now (caught live on galactica's first filter update, 2026-09-06).
+        { enabled = true; id = 2; name = "OISD Small";
+          url = "https://small.oisd.nl/"; }
+        { enabled = true; id = 3; name = "AdAway Default Blocklist";
+          url = "https://raw.githubusercontent.com/AdAway/adaway.github.io/master/hosts.txt"; }
+      ];
 
-      # ── Per-client names and settings ───────────────────────────────────────
-      # Identify devices by IP or MAC address and give them a friendly name.
-      # With mutableSettings = false, do this here — not in the web UI, which
-      # would be overwritten on the next rebuild.
-      #
-      # `ids` accepts: IPv4, IPv6, MAC address (aa:bb:cc:dd:ee:ff), CIDR, or
-      # a ClientID for DNS-over-HTTPS/TLS clients.
-      #
-      # Minimal example (name only, inherit all global settings):
-      #   clients.persistent = [
-      #     { name = "router";    ids = [ "192.168.1.1" ]; }
-      #     { name = "tv";        ids = [ "192.168.1.42" "aa:bb:cc:dd:ee:ff" ]; }
-      #     { name = "hopper";    ids = [ "192.168.1.10" ]; }
-      #     { name = "hamilton";  ids = [ "192.168.1.11" ]; }
-      #   ];
-      #
-      # Per-client overrides (filtering, safe search, parental controls, etc.):
-      #   clients.persistent = [
-      #     {
-      #       name = "kids-tablet";
-      #       ids = [ "192.168.1.55" ];
-      #       use_global_settings = false;
-      #       filtering_enabled = true;
-      #       safebrowsing_enabled = true;
-      #       parental_enabled = true;
-      #       safe_search = {
-      #         enabled = true;
-      #         google = true; youtube = true; bing = true;
-      #       };
-      #     }
-      #     {
-      #       name = "server";
-      #       ids = [ "192.168.1.20" ];
-      #       use_global_settings = false;
-      #       # Bypass filtering entirely for a trusted server.
-      #       filtering_enabled = false;
-      #     }
-      #   ];
-      #
-      # Note: both hopper and hamilton import this module, so any clients
-      # defined here appear on both instances — which is what you want for
-      # a primary/backup resolver pair.
+      # ── Global filtering policy ─────────────────────────────────────────────
+      # Off fleet-wide, deliberately — no household member's browsing needs
+      # safe search or parental filtering, and both add failure modes (a
+      # blocked-but-legitimate site) for no benefit here.
+      filtering = {
+        safebrowsing_enabled = false;
+        parental_enabled = false;
+        safe_search.enabled = false;
+      };
+
+      # ── Per-client names ────────────────────────────────────────────────────
+      # Identify devices by IP so the AdGuard UI/query log reads by name
+      # instead of address. `ids` also accepts IPv6, MAC, CIDR, or a
+      # DoH/DoT ClientID. With mutableSettings = false, this has to be
+      # declared here — the web UI can't hold it across a rebuild.
+      clients.persistent = [
+        { name = "router"; ids = [ "192.168.8.1" ]; }
+        { name = "hopper"; ids = [ "192.168.8.10" ]; }
+        { name = "pegasus"; ids = [ "192.168.8.72" ]; }
+        { name = "memory-alpha-2"; ids = [ "192.168.8.98" ]; }
+        { name = "memory-alpha"; ids = [ "192.168.8.99" ]; }
+        { name = "homeassistant"; ids = [ "192.168.8.142" ]; }
+        { name = "galactica"; ids = [ "192.168.8.190" ]; }
+        { name = "towerbmc"; ids = [ "192.168.8.191" ]; }
+        # hamilton: not yet deployed, no known IP — add once it exists.
+      ];
+
+      # Note: hopper and hamilton also import this module (currently dead
+      # code — hosts/README-rpi-os.md) alongside galactica, so any clients
+      # defined here would appear on all instances that actually run it.
     };
   };
 

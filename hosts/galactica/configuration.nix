@@ -20,6 +20,8 @@
     ../../modules/nixos/beszel-agent.nix
     ../../modules/nixos/arcane-agent.nix
     ../../modules/nixos/scrutiny-collector.nix
+    ../../modules/nixos/dns.nix
+    ../../modules/nixos/adguardhome-sync.nix
     ../../modules/nixos/traefik-galactica.nix
     ../../modules/nixos/newt.nix
     ./borgmatic.nix
@@ -36,8 +38,160 @@
   # console= or SOL goes dark when it takes over (live-iso.nix, PLATFORM.md §2).
   homelab.serialConsole.device = "ttyS1,115200n8";
 
-  # (`tower.internal` resolves here via an AdGuard rewrite on hopper, not via
-  # anything in this file — DECISIONS.md §2.)
+  # `tower.internal` keeps resolving to this host via an AdGuard rewrite —
+  # DECISIONS.md §2. That rewrite now lives below (galactica is the AdGuard
+  # instance itself, migrated off the router's UI-only config), not on
+  # hopper's dead dns.nix import. Static reservation on the router is still
+  # the intended mechanism for this host's own IP, not a static IP here.
+
+  # ── AdGuard admin login — bcrypt hash, not a sops secret ────────────────────
+  # Can't reference sops here: this file renders into AdGuardHome.yaml at
+  # build time, before secrets decrypt on the target host (MANUAL-STEPS.md
+  # §12). A bcrypt hash is the credential-safe form to commit directly.
+  services.adguardhome.settings.users = [
+    { name = "admin"; password = "$2y$10$8TU89p4pf3Up.YCaKacwJe1kAkP2sQMu8xsXaL0TjYNVxD8hs4ybm"; }
+  ];
+
+  # Query log retention — 60 days on this box specifically (not a fleet
+  # default in dns.nix; hopper/hamilton's eventual RAM-only logging is a
+  # different tradeoff). `interval` is a duration string, 1h–8760h.
+  services.adguardhome.settings.querylog.interval = "1440h";
+
+  # Stats retention (aggregated top-domains/clients, distinct from the raw
+  # query log above) — 90 days, same per-host reasoning. Same duration-string
+  # format/bounds as querylog.
+  services.adguardhome.settings.statistics.interval = "2160h";
+
+  # AdGuard's web UI defaults to 127.0.0.1:3000 only (confirmed live —
+  # unreachable from the LAN until this). Routed via Traefik under
+  # galactica.internal/galactica.zjones.dev — not arrExtraUpstreams, since
+  # that publishes under arr.*, and AdGuard isn't part of the media stack.
+  # *.galactica.internal/*.galactica.zjones.dev already resolve to galactica
+  # (rewrites below), so no new DNS entry needed. ⚠ Unlike an arrExtraUpstreams
+  # entry, the -dev router below has no matching wildcard cert to dedup
+  # against (traefik-galactica.nix's `domains` only covers arr.zjones.dev),
+  # so this requests its own single-name LE cert for
+  # adguard.galactica.zjones.dev — a one-time, deliberate cost, not a
+  # repeatable per-router one.
+  services.traefik.dynamicConfigOptions.http = {
+    routers = {
+      adguard = {
+        rule = "Host(`adguard.galactica.internal`)";
+        entrypoints = [ "websecure" ];
+        tls = { };
+        service = "adguard-svc";
+      };
+      "adguard-dev" = {
+        rule = "Host(`adguard.galactica.zjones.dev`)";
+        entrypoints = [ "websecure" ];
+        tls.certResolver = "letsencrypt";
+        service = "adguard-svc";
+      };
+    };
+    services.adguard-svc.loadBalancer.servers = [ { url = "http://127.0.0.1:3000"; } ];
+  };
+
+  # ── DNS rewrites — migrated off the router's AdGuard instance ──────────────
+  # These lived only in the router's mutable UI state (hand-clicked, not
+  # tracked anywhere) until now. Grouped by physical box, not alphabetically,
+  # since several boxes answer to more than one name: galactica is also
+  # `tower`/`arr` (legacy identities it absorbed, DECISIONS.md §2), and
+  # memory-alpha is also `nixie`. One duplicate row (`arr.zjones.dev`, twice
+  # in the router's list) was dropped here.
+  #
+  # `.xyz` is the owner's convention for externally-routable names — terminated
+  # by Pangolin (tunneling to a Newt client), not Traefik, so no local router
+  # or cert is expected for these. jellyfin/guesthome get the split-horizon
+  # treatment (LAN clients hit the box directly instead of round-tripping
+  # through the tunnel) since they're meant to work both on- and off-network
+  # without Tailscale. homeassistant deliberately does NOT — stays
+  # Tailscale/LAN-only, no `.xyz` name at all. The *arr stack's `.xyz` route
+  # was dropped entirely (owner's call: not needed).
+  # ⚠ `enabled = true` is mapped over every entry below, not written per-line
+  # — AdGuard 0.107.78 added a per-rewrite enable toggle that isn't in most
+  # docs yet, and an omitted bool renders as Go's zero-value (`false`), so
+  # every rewrite loaded silently disabled until this was caught live
+  # (2026-09-06: every dig came back NXDOMAIN via real recursive resolution,
+  # not a rewrite hit).
+  services.adguardhome.settings.filtering.rewrites = map (r: r // { enabled = true; }) [
+    # router (GL.iNet)
+    { domain = "router.internal"; answer = "192.168.8.1"; }
+
+    # hopper
+    { domain = "hopper.internal"; answer = "192.168.8.10"; }
+
+    # pegasus
+    { domain = "pegasus.internal"; answer = "192.168.8.72"; }
+
+    # memory-alpha-2
+    { domain = "memory-alpha-2.internal"; answer = "192.168.8.98"; }
+    { domain = "*.memory-alpha-2.internal"; answer = "192.168.8.98"; }
+
+    # memory-alpha (also answers to the legacy name "nixie")
+    { domain = "memory-alpha.internal"; answer = "192.168.8.99"; }
+    { domain = "*.memory-alpha.internal"; answer = "192.168.8.99"; }
+    { domain = "*.memory-alpha.zjones.dev"; answer = "192.168.8.99"; }
+    { domain = "*.monitor.zjones.dev"; answer = "192.168.8.99"; }
+    { domain = "nixie.internal"; answer = "192.168.8.99"; }
+    { domain = "*.nixie.internal"; answer = "192.168.8.99"; }
+    # jellyfin.zjones.dev: flat name, not *.memory-alpha.zjones.dev — Traefik
+    # (modules/nixos/traefik.nix, on memory-alpha) already routes it with its
+    # own single-name LE cert; this rewrite was the only missing piece.
+    { domain = "jellyfin.zjones.dev"; answer = "192.168.8.99"; }
+    # jellyfin.zjones.xyz: split-horizon shortcut for the Pangolin-tunneled
+    # public name — Newt runs on memory-alpha (jellyfin.nix), so this is a
+    # LAN clients-only bypass, not a second route.
+    { domain = "jellyfin.zjones.xyz"; answer = "192.168.8.99"; }
+
+    # homeassistant
+    { domain = "homeassistant.internal"; answer = "192.168.8.142"; }
+
+    # towerbmc (Tower's physical BMC/IPMI — separate NIC from galactica itself)
+    { domain = "towerbmc.internal"; answer = "192.168.8.191"; }
+
+    # galactica (also answers to the legacy names "tower" and "arr")
+    { domain = "galactica.internal"; answer = "192.168.8.190"; }
+    { domain = "*.galactica.internal"; answer = "192.168.8.190"; }
+    { domain = "*.galactica.zjones.dev"; answer = "192.168.8.190"; }
+    { domain = "tower.internal"; answer = "192.168.8.190"; }
+    { domain = "*.tower.internal"; answer = "192.168.8.190"; }
+    { domain = "tower.zjones.dev"; answer = "192.168.8.190"; }
+    { domain = "*.tower.zjones.dev"; answer = "192.168.8.190"; }
+    { domain = "arr.internal"; answer = "192.168.8.190"; }
+    { domain = "*.arr.internal"; answer = "192.168.8.190"; }
+    { domain = "arr.zjones.dev"; answer = "192.168.8.190"; }
+    { domain = "*.arr.zjones.dev"; answer = "192.168.8.190"; }
+    { domain = "guesthome.zjones.xyz"; answer = "192.168.8.190"; }
+  ];
+
+  # ── AdGuardHome-Sync — galactica (origin) → router (first replica) ─────────
+  # Owner confirmed galactica's rewrites match the router's live list;
+  # enabled 2026-09-06. runOnStart is hardcoded true in the module, so the
+  # first sync fires immediately once this deploys.
+  # hopper/hamilton join `replicas` once they're rebuilt as the ephemeral
+  # resolvers discussed — not yet, since neither exists today.
+  services.adguardhomeSync = {
+    enable = true;
+    originPasswordFile = config.sops.secrets."adguardhome-sync/originPassword".path;
+    replicas = [
+      {
+        # GL.iNet's bundled AdGuard sits behind the router's own reverse
+        # proxy — adguardhome-sync's wiki (Integration‐GL.iNet) is explicit:
+        # no port here, unlike a normal AdGuard instance. :3000 answered our
+        # earlier manual curl tests fine but isn't the right path for this
+        # tool. GL.iNet also ships with no default AdGuard user at all — one
+        # must be created by hand via SSH (users: block in the router's own
+        # /etc/AdGuardHome/config.yaml, same bcrypt-hash mechanism as
+        # galactica's own admin above).
+        url = "http://192.168.8.1";
+        # CONFIRM_ME_LIVE — the username already configured on the router
+        # (used successfully in the very first manual curl login test, before
+        # this file existed). Not "admin", not empty — both failed live.
+        username = "CONFIRM_ME_LIVE";
+        passwordFile = config.sops.secrets."adguardhome-sync/routerPassword".path;
+      }
+    ];
+  };
 
   # Mandatory for ZFS. Derived from the hostname (`sha256sum
   # <<<"galactica.internal" | head -c8`) so it is reproducible; no other meaning.
@@ -203,6 +357,10 @@
       "beszel/hubKey".owner = "z";
       "beszel/agentToken".owner = "z";
       "arcane/agentToken".owner = "z";
+      # Default owner (root) is fine — the adguardhome-sync systemd service
+      # runs as root, no User= override.
+      "adguardhome-sync/originPassword" = { };
+      "adguardhome-sync/routerPassword" = { };
       # Raw keyfile for all seven array members (slot 0; every disk also
       # carries the fleet recovery passphrase in slot 1). `format = "binary"`
       # is the byte-exact round-trip for raw key material.
