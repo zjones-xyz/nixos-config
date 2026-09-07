@@ -74,8 +74,6 @@
     _1password-gui
     _1password-cli
     claude-code
-    # Google's agentic IDE (Cursor/Windsurf-adjacent) — in nixpkgs since
-    # 26.05, x86_64-linux included.
     antigravity
     # Google's terminal coding agent, the CLI counterpart to claude-code
     # above — nixpkgs' own npm-sourced build (gemini-cli-bin, the prebuilt
