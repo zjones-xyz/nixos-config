@@ -813,13 +813,13 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    sanctioned answer is a second instance. `hosts/galactica/bazarr.nix`
    records the alternatives that were weighed and why none of them fit.
 
-   1. [ ] ⚠ **BLOCKING — set a login first, on both.** Settings → General →
+   1. [x] ⚠ **BLOCKING — set a login first, on both.** Settings → General →
       Security. Bazarr ships with authentication **off**, so from the moment
       the routes are live, anyone on the LAN can drive both instances through
       Traefik — and Bazarr's settings page shows the Sonarr/Radarr API keys in
       cleartext. None of the other services here behave this way. Do this
       before anything else in this step.
-   2. [ ] **Point each at its *arr(s).** Settings → Sonarr / Settings → Radarr:
+   2. [x] **Point each at its *arr(s).** Settings → Sonarr / Settings → Radarr:
       host `127.0.0.1`, the port from the table, SSL off, and the API key.
       Read the keys without opening the editor:
       ```bash
@@ -829,14 +829,24 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
       ```
       On `bazarr-anime`, leave Radarr **disabled** — enabling it there would
       have two instances managing the same films.
-   3. [ ] **Leave path mappings empty.** This is the classic Bazarr
+   3. [x] **Leave path mappings empty.** This is the classic Bazarr
       misconfiguration, and it does not apply here: Bazarr runs on the same
       host and the same filesystem as the *arrs, so the path Sonarr reports is
       the path Bazarr opens. Mappings are for the split-container case.
-   4. [ ] **Add providers and a languages profile.** Settings → Providers
+   4. [x] **Add providers and a languages profile.** Settings → Providers
       needs your own subtitle-site accounts; Settings → Languages defines a
       profile, which then has to be set as the default for series/movies or it
-      applies to nothing new.
+      applies to nothing new. Providers used: OpenSubtitles.com, Gestdown
+      (Addic7ed proxy — no login needed, so it stood in for Addic7ed itself,
+      which wanted either a paid captcha solver or a manually-refreshed
+      cookie), subf2m.co, subsource.net, Subdl.
+
+      ⚠ **The default-profile toggle only applies to shows/movies added to
+      Bazarr *after* it's turned on** — this host's whole library was already
+      imported (step 8), so the existing catalog needs the profile applied
+      retroactively: Series/Movies list pages → select all → mass-edit →
+      assign the language profile. Done without this, nothing already in the
+      library gets searched at all.
    5. [ ] **Check what it writes**, once one subtitle has landed:
       ```bash
       ls -l /tank/nixflix_media/media/tv/*/*/*.srt | head
@@ -853,6 +863,13 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
        "$(curl -k -sS -o /dev/null -w '%{http_code}' --max-time 5 "https://$h.arr.internal/" 2>&1)"
    done
    ```
+   ✅ Both `200`.
+
+   Jellyfin notifications (optional, not blocking): Settings → Jellyfin
+   Media Server on `bazarr` points at memory-alpha's Jellyfin with a
+   dedicated API key (Dashboard → API Keys), so a subtitle download
+   refreshes that item's metadata immediately instead of waiting on
+   Jellyfin's own scan. Not yet mirrored onto `bazarr-anime`.
 
 10. [ ] **One-time repair of the download tree's permissions.** Needed once,
    alongside the switch that carries the qBittorrent `UMask = "0002"` fix in
@@ -865,17 +882,17 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    grabs correctly and then failed every move back with `permission denied`.
    Sonarr imports needing to write there would have failed the same way.
 
-   1. [ ] Switch first, so new downloads stop reproducing it:
+   1. [x] Switch first, so new downloads stop reproducing it:
       ```bash
       sudo nixos-rebuild switch --flake .#galactica
       systemctl show qbittorrent -p UMask   # expect UMask=0002
       ```
-   2. [ ] Fix what is already there. `chmod -R g+w` adds group write and
+   2. [x] Fix what is already there. `chmod -R g+w` adds group write and
       touches nothing else — it does not make files executable:
       ```bash
       sudo chmod -R g+w /tank/nixflix_media/downloads/torrent
       ```
-   3. [ ] Clear Unpackerr's abandoned output. It writes into
+   3. [x] Clear Unpackerr's abandoned output. It writes into
       `<release>_unpackerred/` beside each release; the sixteen from the
       failed run are stale and regenerable, since the `.rar` files are all
       still there. **Look before deleting:**
@@ -883,7 +900,10 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
       sudo find /tank/nixflix_media/downloads/torrent -maxdepth 2 -type d -name '*_unpackerred' -print
       sudo find /tank/nixflix_media/downloads/torrent -maxdepth 2 -type d -name '*_unpackerred' -exec rm -rf {} +
       ```
-   4. [ ] Restart Unpackerr. It had exhausted `max_retries = 3` on all
+      ✅ Returned nothing on this run — the sixteen had already cleared
+      (imported or self-resolved) before this repair, so there was nothing
+      left to delete.
+   4. [x] Restart Unpackerr. It had exhausted `max_retries = 3` on all
       sixteen (`48 retries, 16 failed`), so it will not pick them up again on
       its own — the counters are in memory:
       ```bash
@@ -892,6 +912,16 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
       ```
       Expect `Extracted` rather than `Extraction Failed`, then Sonarr
       importing them within a few minutes.
+
+      ✅ Not needed on this run — `0 extracting, 0 failed` in the queue
+      summary confirmed nothing was stuck on extraction. ⚠ The four items
+      that *were* sitting in the queue as "Completed item still waiting... no
+      extractable files found" are a separate, unrelated snag: Sonarr/Lidarr
+      rejecting the match (invalid episode, ID-only match, track-count or
+      match-percentage below threshold), not an Unpackerr or permissions
+      problem. "No extractable files found" there just means the release
+      isn't an archive — nothing to unpack. Resolve those in each *arr's own
+      Manual Import screen, not here.
 
 11. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
    `nix flake update`. The input is pinned to an exact upstream revision that
