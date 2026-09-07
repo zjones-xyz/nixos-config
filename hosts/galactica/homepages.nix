@@ -3,9 +3,11 @@
 # ── The two dashboards, re-homed from Tower's Unraid Docker ─────────────────
 # (homelab-stacks tower/homepage and tower/guesthome, dead since the
 # bare-metal cutover.) Same Homepage app twice, different audiences:
-#   admin — full service directory; tailnet (Tailscale serve) + LAN (Traefik).
-#   guest — friends-and-family links at guesthome.zjones.xyz, published
-#           through Pangolin (homelab.newt in configuration.nix).
+#   admin — full service directory; home.{internal,zjones.dev} (Traefik) +
+#           galactica.peacock-koi.ts.net (Tailscale serve).
+#   guest — friends-and-family links; guest.{internal,zjones.dev} (Traefik,
+#           LAN) and guest.zjones.xyz (Pangolin tunnel, off-network —
+#           homelab.newt in configuration.nix).
 # Config is nix-rendered store files bind-mounted read-only; edit here, `nrs`.
 # MANUAL-STEPS.md §13 has the owner steps that put both on the network.
 
@@ -239,10 +241,11 @@ let
     '';
 
     # ⚠ Guest links must be names that resolve and route from the public
-    # internet (Pangolin resources), not the split-horizon LAN names the
-    # admin dashboard uses. §13 step 6 verifies each before it goes live.
-    # Tower's guesthome also listed Audiobookshelf, Grimmory, Shelfmark and
-    # 13ft — restore from homelab-stacks tower/guesthome as each is re-homed.
+    # internet (Pangolin resources), since guest.zjones.xyz is the door
+    # off-network — not the .arr.zjones.dev names the admin dashboard uses.
+    # §13 step 6 verifies each before it goes live. Tower's guesthome also
+    # listed Audiobookshelf, Grimmory, Shelfmark and 13ft — restore from
+    # homelab-stacks tower/guesthome as each is re-homed.
     "services.yaml" = pkgs.writeText "homepage-guest-services.yaml" ''
       - Media:
           - Jellyfin:
@@ -310,14 +313,16 @@ in
     HOMEPAGE_VAR_RADARR_API_KEY=${config.sops.placeholder."nixflix/radarrApiKey"}
   '';
 
-  # Loopback-only publishes: the admin instance is reached through Traefik
-  # (router below) or Tailscale serve, the guest instance only through the
-  # Newt tunnel — nothing dials either port from the LAN directly.
+  # Loopback-only publishes: both instances are reached through Traefik
+  # (router pairs below) or, for admin, Tailscale serve — nothing dials
+  # either port from the LAN directly. Guest also gets a Pangolin tunnel
+  # (homelab.newt) for its public `.zjones.xyz` name; that's a DNS-level
+  # split-horizon and a Newt resource target, not a second Traefik route.
   virtualisation.oci-containers.containers = {
     homepage-admin = {
       inherit image;
       environment.HOMEPAGE_ALLOWED_HOSTS =
-        "home.arr.internal,home.arr.zjones.dev,galactica.peacock-koi.ts.net";
+        "home.internal,home.zjones.dev,galactica.peacock-koi.ts.net";
       environmentFiles = [ config.sops.templates."homepage-admin.env".path ];
       ports = [ "127.0.0.1:3010:3000" ];
       volumes = mkConfigMounts adminConfig;
@@ -325,15 +330,54 @@ in
 
     homepage-guest = {
       inherit image;
-      environment.HOMEPAGE_ALLOWED_HOSTS = "guesthome.zjones.xyz";
+      environment.HOMEPAGE_ALLOWED_HOSTS =
+        "guest.internal,guest.zjones.dev,guest.zjones.xyz";
       environmentFiles = [ config.sops.templates."homepage-guest.env".path ];
       ports = [ "127.0.0.1:3011:3000" ];
       volumes = mkConfigMounts guestConfig;
     };
   };
 
-  # LAN routes (home.arr.internal / home.arr.zjones.dev) via the existing
-  # Traefik — the same registration point bazarr.nix uses. The guest instance
-  # is deliberately NOT routed here: its only door is the Pangolin tunnel.
-  homelab.arrExtraUpstreams.home = "http://127.0.0.1:3010";
+  # ── Traefik routes — flat top-level names, not arrExtraUpstreams ───────────
+  # `homelab.arrExtraUpstreams` (bazarr.nix's mechanism) only ever produces
+  # `*.arr.{internal,zjones.dev}` names, so these dashboards register their
+  # own router pairs directly instead, same shape as configuration.nix's
+  # `adguard`/`adguard-dev` pair. `guest.zjones.xyz` is NOT routed here —
+  # per dns.nix's rewrites comment, `.xyz` names are terminated by Pangolin
+  # (a Newt tunnel target), not Traefik. Neither `home.zjones.dev` nor
+  # `guest.zjones.dev` falls under the arr wildcard's SAN list
+  # (`*.arr.zjones.dev`), so each requests its own single-name LE
+  # cert — the same one-time cost the adguard pair already accepted.
+  services.traefik.dynamicConfigOptions.http = {
+    routers = {
+      home = {
+        rule = "Host(`home.internal`)";
+        entrypoints = [ "websecure" ];
+        tls = { };
+        service = "home-svc";
+      };
+      "home-dev" = {
+        rule = "Host(`home.zjones.dev`)";
+        entrypoints = [ "websecure" ];
+        tls.certResolver = "letsencrypt";
+        service = "home-svc";
+      };
+      guest = {
+        rule = "Host(`guest.internal`)";
+        entrypoints = [ "websecure" ];
+        tls = { };
+        service = "guest-svc";
+      };
+      "guest-dev" = {
+        rule = "Host(`guest.zjones.dev`)";
+        entrypoints = [ "websecure" ];
+        tls.certResolver = "letsencrypt";
+        service = "guest-svc";
+      };
+    };
+    services = {
+      home-svc.loadBalancer.servers = [ { url = "http://127.0.0.1:3010"; } ];
+      guest-svc.loadBalancer.servers = [ { url = "http://127.0.0.1:3011"; } ];
+    };
+  };
 }

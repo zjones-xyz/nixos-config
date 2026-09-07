@@ -1024,10 +1024,12 @@ entries, and Tailscale deliberately has no authKey (see the block in
 `configuration.nix`). What the nix config cannot do is join networks and
 create Pangolin objects — that is this section.
 
-The admin instance is also routed by the host's own Traefik at
-`home.arr.internal` / `home.arr.zjones.dev` (registered via
-`homelab.arrExtraUpstreams`, like bazarr), so LAN access works as soon as
-the switch lands — steps below are for the tailnet and public halves.
+Both instances are already routed by the host's own Traefik —
+`home.internal` / `home.zjones.dev` for admin, `guest.internal` /
+`guest.zjones.dev` for guest — with matching AdGuard rewrites
+(§14) pointing all four at galactica's LAN IP, so LAN access to both
+works as soon as the switch lands. Steps below are for the tailnet
+(admin) and public (guest) halves.
 
 1. [ ] **Join the tailnet.** `sudo tailscale up --ssh`, authenticate in the
    browser as usual. In the admin console, disable key expiry for
@@ -1050,12 +1052,13 @@ the switch lands — steps below are for the tailnet and public halves.
    `configuration.nix` and uncomment it; `nrs`. `systemctl status newt`
    should show the tunnel registered.
 
-5. [ ] **Re-point the guesthome Resource.** Pangolin admin → Resources →
-   `guesthome.zjones.xyz` → move it onto the `galactica` site with target
-   `http://localhost:3011` (host-resolvable — Newt runs on the host, so
-   container names do NOT resolve; `localhost:<published port>` does, same
-   as memory-alpha's Jellyfin resource). Keep whatever auth/SSO the old
-   Tower resource had. Verify from off-LAN (phone on cellular).
+5. [ ] **Re-point the guest Resource.** Pangolin admin → Resources →
+   `guesthome.zjones.xyz` → rename to `guest.zjones.xyz` and move it onto
+   the `galactica` site with target `http://localhost:3011`
+   (host-resolvable — Newt runs on the host, so container names do NOT
+   resolve; `localhost:<published port>` does, same as memory-alpha's
+   Jellyfin resource). Keep whatever auth/SSO the old Tower resource had.
+   Verify from off-LAN (phone on cellular).
 
 6. [ ] **Verify the guest links actually work from outside.** The guest
    dashboard currently lists only Jellyfin (`jellyfin.zjones.dev`) — confirm
@@ -1091,16 +1094,17 @@ rather than each instance being hand-edited.
    Newt tunnel — not Traefik, so the earlier "no Traefik router" framing here
    was checking the wrong layer. Resolved: `arr.zjones.xyz` is dropped
    entirely (the *arr stack doesn't need off-network access). `jellyfin` and
-   `guesthome` keep the split-horizon treatment — meant to work both on- and
+   the guest homepage (`guest.zjones.xyz` — renamed from `guesthome`, §13)
+   keep the split-horizon treatment — meant to work both on- and
    off-network without Tailscale, so the AdGuard rewrite is a LAN-side
    shortcut alongside Pangolin's tunnel, not a replacement for it.
-   `homeassistant` deliberately gets no `.xyz` name at all — stays
-   Tailscale/LAN-only. Still worth confirming in Pangolin's own admin config
-   (not this repo) that `jellyfin.zjones.xyz` and `guesthome.zjones.xyz`
-   actually have resources configured, pointing at the right targets
-   (memory-alpha for jellyfin, galactica for guesthome) — Newt itself only
-   runs on memory-alpha in this repo (`newt.nix`), which is fine since Newt's
-   targets aren't restricted to localhost.
+   `homeassistant` and the admin homepage (`home.*`, §13) deliberately get
+   no `.xyz` name at all — stay Tailscale/LAN-only. Still worth confirming
+   in Pangolin's own admin config (not this repo) that `jellyfin.zjones.xyz`
+   and `guest.zjones.xyz` actually have resources configured, pointing at
+   the right targets (memory-alpha for jellyfin, galactica for guest) — Newt
+   itself only runs on memory-alpha in this repo today (`newt.nix`), which
+   is fine since Newt's targets aren't restricted to localhost.
 3. [x] **Deploy and verify — done 2026-09-06.** Deployed, then two real bugs
    found live and fixed (see git history): every rewrite loaded
    `enabled: false` (an undocumented per-rewrite toggle, Go bool zero-value

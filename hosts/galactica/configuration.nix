@@ -101,12 +101,13 @@
   #
   # `.xyz` is the owner's convention for externally-routable names — terminated
   # by Pangolin (tunneling to a Newt client), not Traefik, so no local router
-  # or cert is expected for these. jellyfin/guesthome get the split-horizon
+  # or cert is expected for these. jellyfin/guest get the split-horizon
   # treatment (LAN clients hit the box directly instead of round-tripping
   # through the tunnel) since they're meant to work both on- and off-network
   # without Tailscale. homeassistant deliberately does NOT — stays
   # Tailscale/LAN-only, no `.xyz` name at all. The *arr stack's `.xyz` route
-  # was dropped entirely (owner's call: not needed).
+  # was dropped entirely (owner's call: not needed). `home` (the admin
+  # dashboard) also gets no `.xyz` name — it's LAN/tailnet-only by design.
   # ⚠ `enabled = true` is mapped over every entry below, not written per-line
   # — AdGuard 0.107.78 added a per-rewrite enable toggle that isn't in most
   # docs yet, and an omitted bool renders as Go's zero-value (`false`), so
@@ -161,7 +162,13 @@
     { domain = "*.arr.internal"; answer = "192.168.8.190"; }
     { domain = "arr.zjones.dev"; answer = "192.168.8.190"; }
     { domain = "*.arr.zjones.dev"; answer = "192.168.8.190"; }
-    { domain = "guesthome.zjones.xyz"; answer = "192.168.8.190"; }
+    # The two dashboards (hosts/galactica/homepages.nix) — flat names, own
+    # Traefik router pair each, not under arr.* or galactica.*.
+    { domain = "home.internal"; answer = "192.168.8.190"; }
+    { domain = "home.zjones.dev"; answer = "192.168.8.190"; }
+    { domain = "guest.internal"; answer = "192.168.8.190"; }
+    { domain = "guest.zjones.dev"; answer = "192.168.8.190"; }
+    { domain = "guest.zjones.xyz"; answer = "192.168.8.190"; }
   ];
 
   # ── AdGuardHome-Sync — galactica (origin) → router (first replica) ─────────
@@ -328,7 +335,7 @@
   # (MANUAL-STEPS.md §13) and state persists in /var/lib/tailscale.
   services.tailscale.enable = true;
 
-  # The guest homepage's door: Newt tunnels guesthome.zjones.xyz in from the
+  # The guest homepage's door: Newt tunnels guest.zjones.xyz in from the
   # Pangolin VPS. ⚠ Commented until the Pangolin Site for galactica exists —
   # the id below is issued at creation (same reasoning as the NUT block: a
   # made-up id fails at service start, not eval, and would be easy to miss).
