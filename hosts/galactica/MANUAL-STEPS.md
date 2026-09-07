@@ -1054,7 +1054,8 @@ rather than each instance being hand-edited.
    (`tower.internal`, `jellyfin.zjones.dev`, `traefik.galactica.zjones.dev`,
    `memory-alpha.internal`) all confirmed resolving correctly via
    `dig @127.0.0.1`. AdGuard's web UI, found stuck on loopback-only, is now
-   routed through Traefik at `adguard.arr.internal`/`adguard.arr.zjones.dev`.
+   routed through Traefik at
+   `adguard.galactica.internal`/`adguard.galactica.zjones.dev`.
 4. [ ] **AdGuardHome-Sync — written, secrets populated, `enable = false` on
    purpose.** `modules/nixos/adguardhome-sync.nix` + galactica's own
    `services.adguardhomeSync` block wire this up: galactica as origin, the

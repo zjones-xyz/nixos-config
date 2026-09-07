@@ -57,13 +57,32 @@
 
   # AdGuard's web UI defaults to 127.0.0.1:3000 only (confirmed live —
   # unreachable from the LAN until this). Routed via Traefik under
-  # arr.internal/arr.zjones.dev rather than opening 3000 directly, reusing
-  # the existing wildcard cert instead of requesting a new one (traefik-
-  # galactica.nix's mkRouterPair dedup) — the `arr.*` namespace is a
-  # placement of convenience here, not a claim that AdGuard is part of the
-  # media stack. *.arr.internal/*.arr.zjones.dev already resolve to
-  # galactica (rewrites above), so no new DNS entry needed either.
-  homelab.arrExtraUpstreams.adguard = "http://127.0.0.1:3000";
+  # galactica.internal/galactica.zjones.dev — not arrExtraUpstreams, since
+  # that publishes under arr.*, and AdGuard isn't part of the media stack.
+  # *.galactica.internal/*.galactica.zjones.dev already resolve to galactica
+  # (rewrites below), so no new DNS entry needed. ⚠ Unlike an arrExtraUpstreams
+  # entry, the -dev router below has no matching wildcard cert to dedup
+  # against (traefik-galactica.nix's `domains` only covers arr.zjones.dev),
+  # so this requests its own single-name LE cert for
+  # adguard.galactica.zjones.dev — a one-time, deliberate cost, not a
+  # repeatable per-router one.
+  services.traefik.dynamicConfigOptions.http = {
+    routers = {
+      adguard = {
+        rule = "Host(`adguard.galactica.internal`)";
+        entrypoints = [ "websecure" ];
+        tls = { };
+        service = "adguard-svc";
+      };
+      "adguard-dev" = {
+        rule = "Host(`adguard.galactica.zjones.dev`)";
+        entrypoints = [ "websecure" ];
+        tls.certResolver = "letsencrypt";
+        service = "adguard-svc";
+      };
+    };
+    services.adguard-svc.loadBalancer.servers = [ { url = "http://127.0.0.1:3000"; } ];
+  };
 
   # ── DNS rewrites — migrated off the router's AdGuard instance ──────────────
   # These lived only in the router's mutable UI state (hand-clicked, not
