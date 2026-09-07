@@ -174,6 +174,10 @@
     replicas = [
       {
         url = "http://192.168.8.1:3000";
+        # Router's AdGuard (GL.iNet firmware build) has no username concept —
+        # confirmed live (401 with the default "admin"). Empty string matches
+        # its actual stored user.
+        username = "";
         passwordFile = config.sops.secrets."adguardhome-sync/routerPassword".path;
       }
     ];
