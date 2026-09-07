@@ -1616,7 +1616,7 @@ a live risk. Still 1 MB, still worth provisioning if the partitioning is scripte
 anyway, but nothing depends on it.
 
 ⚠ **This does not answer whether the NVMe is bootable — that is a separate
-question** (`DESIGN.md` §5.5, still open). UEFI support and an NVMe DXE driver in
+question** (~~still open~~ — answered negatively below, 2026-08-31). UEFI support and an NVMe DXE driver in
 firmware are independent: a 2011 board can offer UEFI and still not enumerate an
 NVMe namespace as a boot target, because the standard postdates the firmware. So
 §5.5's workaround stands until tested with the adapter physically installed —

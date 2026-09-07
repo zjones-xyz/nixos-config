@@ -10,7 +10,13 @@
   nix = {
     settings = {
       experimental-features = [ "nix-command" "flakes" ];
-      auto-optimise-store = true;
+      # Scheduled optimise (below), not auto-optimise-store: the latter
+      # hardlink-dedupes inside every build's critical path.
+      auto-optimise-store = false;
+    };
+    optimise = {
+      automatic = true;
+      dates = [ "weekly" ];
     };
     gc = {
       automatic = true;
@@ -19,26 +25,24 @@
     };
   };
 
-  nixpkgs.config.allowUnfree = true;
+  nixpkgs.config.allowUnfree = lib.mkDefault true;
 
   # ── Persistent journald ─────────────────────────────────────────────────────
   # Default (volatile/RAM-only) storage means any hard crash or panic loses the
   # crashed boot's log entirely — see docs/runbooks/unexpected-reboot.md. Cap
   # growth so persistence doesn't accumulate unbounded: whichever limit hits
   # first wins.
-  services.journald.storage = "persistent";
+  services.journald.storage = lib.mkDefault "persistent";
   services.journald.extraConfig = ''
     SystemMaxUse=500M
     MaxRetentionSec=2week
   '';
 
   # ── Kernel panic → auto-reboot ──────────────────────────────────────────────
-  # Default kernel.panic=0 means a panicking host just hangs at the panic
-  # screen forever until someone power-cycles it — bad for headless fleet
-  # members. Reboot 10s after a panic so recoverable panics come back on their
-  # own. Hosts that want a longer window override with lib.mkForce (see
-  # pegasus, which has a physical display attached).
-  boot.kernel.sysctl."kernel.panic" = 10;
+  # Default kernel.panic=0 means a panicking host hangs at the panic screen
+  # until someone power-cycles it — bad for headless fleet members. mkDefault
+  # so a host overrides with a plain set (pegasus wants a longer window).
+  boot.kernel.sysctl."kernel.panic" = lib.mkDefault 10;
 
   time.timeZone = "America/Los_Angeles";
 
@@ -67,7 +71,7 @@
   # dynamically against the calling process's PATH.
   services.envfs.enable = true;
 
-  security.sudo.wheelNeedsPassword = false;
+  security.sudo.wheelNeedsPassword = lib.mkDefault false;
 
   users.users.z = {
     isNormalUser = true;
@@ -76,6 +80,8 @@
     extraGroups = [ "wheel" "networkmanager" "docker" ];
     # Login/non-interactive shell — see modules/home/interactive-zsh.nix
     # (pulled in via sharedModules below) for the interactive-session default.
+    # Plain set, not mkDefault: users-groups.nix's useDefaultShell path already
+    # defines shell at mkDefault priority, and two mkDefaults conflict.
     shell = pkgs.bash;
     openssh.authorizedKeys.keys = [
       "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCfTHdojQvKOlTaaTYT2RmYMNKQ/6rBQwn6V+bPnrtASaI/G5E7RW67XGbZHi3K7EctyB9UP9Uw54sayEu4ebixI/dNFVVWeZ2byBQ49FoXh5o9Cfok0Qwf0QM7g9Td8O6Iu2ElnI8e+9cr8ThrfPpKmP68e6mpuYDvhQb4omcx8kRhxnsuNxkL2xCTNVxG/jw68o/1KHX++6tRqf0E3PBCjZ3Z8HMTdS8ouEBa8Y96GGeUvslwDJ9cUtLNCUhR5t3mGu3iSS9RYpFg/JujyTT9yhe2O/0og+OhBeSayGZMOXGWngGUEItExlbq2I4rMV5pFB1q+OyqksvlUfkJ/j3yJOii5uwonYvkWLZfR02yhn2b/bgOfYaimO5rfKj5jAC8bMRnWqLJAiG2qRDwtJT+ijyYlTKgLpz73sOGAQVvZygq11Vc35cZMFojlMeqAHdZMGi6XkUHnfZt8gyplw6VPV5EQnyDI4bRfY9sknuFvjHqdEzNyNrIEXtlmIB870s= z@Serenity.local"
@@ -117,6 +123,14 @@
     ssh-to-age
     sops
 
+    # In systemPackages rather than home-manager on purpose. `jq` is already in
+    # modules/home/common.nix, but that puts it on `z`'s PATH only — so it
+    # disappears under `sudo`, which is exactly when it is wanted, since every
+    # sops-provisioned secret and API key on these hosts is root-readable.
+    # `openssl` was absent fleet-wide; both have now cost a detour mid-task.
+    jq
+    openssl
+
     # Edit this host's own secrets/<host>.yaml using its SSH host key as the age
     # identity: `sops-hostkey secrets/galactica.yaml`. The key is root-only, so
     # plain `sops` never finds it.
@@ -149,7 +163,7 @@
   # root-equivalent — is mitigated for the public-facing reverse proxy by fronting
   # the socket with a hardened proxy (see traefik.nix). A userns-remap follow-up is
   # planned to restore uid isolation once stack data ownership is normalized.
-  virtualisation.docker.enable = true;
+  virtualisation.docker.enable = lib.mkDefault true;
 
   virtualisation.docker.autoPrune = {
     enable = true;

@@ -1,26 +1,14 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Real hardware config, reconciled 2026-08-31 after installing via disko.nix
-# onto the SPCC 1TB NVMe (galactica's root) plus midden (the repurposed
-# fastservices SSD, s-9545 — see disko.nix). Module list from
-# `nixos-generate-config --no-filesystems`; UUIDs from `blkid` against the
-# disko-driven layout. `mpt3sas` showed up in detection even with the HBA's
-# drives (sidepool, the special-vdev candidates) physically disconnected —
-# the controller itself still enumerates on the PCIe bus with nothing behind
-# it; harmless, and useful to have already present for when those disks come
-# back for the array build (MANUAL-STEPS.md §9).
+# Real hardware config, reconciled after the disko.nix install (module list
+# from `nixos-generate-config --no-filesystems`, UUIDs from blkid). mpt3sas
+# stays even with the HBA's disks disconnected — the controller enumerates on
+# the PCIe bus regardless.
 #
 # ⚠ `/boot` is on the WD Blue ESP (special-vdev disk s-3255, by-uuid
-# 0B82-159C), migrated off midden 2026-09-01. The road there: the NVMe can't
-# be a UEFI boot target on this board (PLATFORM.md §11), and the two candidate
-# SSDs both sat on add-in controllers this AMI BIOS won't UEFI-boot — the MX100
-# hard-failed on first write, and the WD Blue + both BX500s were on the LSI HBA
-# (PCI 02:00.0). Only the onboard C204 (00:1f.2) boots. Confirmed empirically:
-# explicit `\EFI\BOOT\BOOTX64.EFI` NVRAM entries for the NVMe and the
-# LSI-attached WD Blue were both *pruned by the firmware at POST*. Fix: the WD
-# Blue was physically recabled from the LSI to onboard port `ata1` (its
-# pre-array-build home), after which the firmware boots it fine. midden's old
-# ESP (5B33-9B74) is kept intact as a bootable fallback (it still carries a
-# gen-8 systemd-boot). The NVMe's own ESP stays vestigial.
+# 0B82-159C), on the onboard C204 — the only controller this board UEFI-boots
+# (no NVMe boot driver, and nothing behind the LSI HBA boots either — see
+# PLATFORM.md §11 / DECISIONS.md). midden's old ESP (5B33-9B74) is kept as a
+# bootable fallback; the NVMe's own ESP stays vestigial.
 #
 # ⚠ This BIOS boots ONLY the removable-media fallback path
 # (`\EFI\BOOT\BOOTX64.EFI`), never `\EFI\systemd\systemd-bootx64.efi`. So the
@@ -72,15 +60,11 @@
   boot.initrd.luks.devices."cryptroot" = {
     device = "/dev/disk/by-uuid/0f3c74bc-87df-4c14-915f-c46741962b38";
     # Matches disko.nix's settings.allowDiscards = true — nixos-generate-config
-    # does not carry this over on its own (MANUAL-STEPS.md §2, caught by the
-    # opus review before install day rather than discovered after).
+    # does not carry this over on its own.
     allowDiscards = true;
   };
 
-  # On the WD Blue ESP (special-vdev disk s-3255, part1) — migrated off midden
-  # 2026-09-01 after recabling the WD Blue from the LSI HBA to onboard C204
-  # port ata1. See the header note for the full story + the manual NVRAM entry
-  # this BIOS needs. midden's ESP (5B33-9B74) stays as a bootable fallback.
+  # WD Blue ESP — see the header for the manual NVRAM entry this BIOS needs.
   fileSystems."/boot" = {
     device = "/dev/disk/by-uuid/0B82-159C";
     fsType = "vfat";
@@ -88,35 +72,24 @@
   };
 
   # randomEncryption swap has no persistent on-disk signature to detect —
-  # by-partlabel rather than by-uuid, same reasoning MANUAL-STEPS.md §2
-  # flagged ahead of time.
+  # hence by-partlabel rather than by-uuid.
   swapDevices = [
     { device = "/dev/disk/by-partlabel/disk-main-swap"; randomEncryption.enable = true; }
   ];
 
   # ── midden (disko.nix: disk.midden) ────────────────────────────────────────
-  # /var/log/journal is NOT root, so no boot.initrd.luks.devices entry here —
-  # cryptlogs is opened during normal boot by configuration.nix's own
-  # environment.etc."crypttab", not initrd (DECISIONS.md §7). By the time
-  # this fileSystems entry mounts, /dev/mapper/cryptlogs already exists —
-  # PROVIDED secrets/galactica.yaml exists, since that crypttab entry is
-  # gated on `hasSops`. Found live, the hard way, on the first real boot:
-  # without `nofail` here, a boot with no secrets file yet (this one) waits
-  # out systemd's default ~90s device timeout for a mapper device that will
-  # never appear, before continuing in a degraded boot. `nofail` matches
-  # what MANUAL-STEPS.md §2 already called for and this file should have had
-  # from the start.
+  # cryptlogs is opened in stage 2 by configuration.nix's crypttab (not
+  # initrd, DECISIONS.md §7) — and only when secrets/galactica.yaml exists,
+  # so `nofail` is required: without it a secrets-less boot waits out the
+  # ~90s device timeout on a mapper device that never appears.
   fileSystems."/var/log/journal" = {
     device = "/dev/mapper/cryptlogs";
     fsType = "ext4";
     options = [ "noatime" "nofail" ];
   };
 
-  # Plain, unencrypted (reversed 2026-08-31 — see disko.nix's
-  # nixBuildScratch comment) — referenced directly by its own filesystem
-  # UUID, no LUKS layer to open first. UUID is post-reformat: this partition
-  # was deleted and recreated 1G smaller to make room for /boot above, so
-  # its original UUID from the first disko run no longer applies.
+  # Plain, unencrypted (see disko.nix's nixBuildScratch comment) — no LUKS
+  # layer to open first. UUID is post-reformat, newer than the first disko run.
   fileSystems."/var/cache/nix-build" = {
     device = "/dev/disk/by-uuid/644dbaff-563a-415f-877b-11d41ed8cb89";
     fsType = "ext4";

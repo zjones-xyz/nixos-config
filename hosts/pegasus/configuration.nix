@@ -84,7 +84,7 @@ in
   # has a physical display attached, so widen that to 600s — enough time to
   # walk over and read/photograph the panic screen before it auto-reboots and
   # the evidence is gone.
-  boot.kernel.sysctl."kernel.panic" = lib.mkForce 600;
+  boot.kernel.sysctl."kernel.panic" = 600;
 
   # ── Tailscale ───────────────────────────────────────────────────────────────
   # Pegasus is reached over the tailnet (it is the primary GPU inference

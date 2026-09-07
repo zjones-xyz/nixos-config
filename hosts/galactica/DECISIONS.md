@@ -76,6 +76,9 @@ exactly the coupling that made the previous plan awkward.
 
 ## 3. Why there is no config here yet
 
+> ✅ **Superseded 2026-08-31** — `configuration.nix` exists and the host is
+> installed and live. Kept as the record of why it was deferred.
+
 **Documentation-only until the storage layout is settled** — *alt:* scaffold a
 `configuration.nix` now and fill in the disks later.
 
@@ -96,6 +99,9 @@ cannot evaluate anything here, and the `.sops.yaml` staging stanza is absent too
 (see 4).
 
 ## 4. sops staging is deferred with the config
+
+> ✅ **Superseded 2026-08-31** — `secrets/galactica.yaml` and the `.sops.yaml`
+> rule exist, encrypted to `*admin` + `*galactica`, per the shape below.
 
 **No `&galactica` key and no `secrets/galactica.yaml` creation rule until there
 is a host config to gate on it** — *alt:* add the placeholder stanza now, as
@@ -442,7 +448,98 @@ Protected tier during the window, which raises rather than lowers the bar.
 
 ---
 
-## 9. The nine-device plan — ZFS throughout, and the LSI may stop being necessary
+## 9. Media-stack services that nixflix does not provide
+
+Two services in `hosts/galactica/` are host-local units rather than nixflix
+modules, because nixpkgs ships the package and nixflix ships no module.
+
+### Unpackerr is torrent-only
+
+A large share of scene torrents arrive as a `.rar` set, qBittorrent does no
+unpacking, and the *arrs cannot import an archive — the item sits in the queue
+as "Found archive file, might need to be extracted" indefinitely.
+
+**It is deliberately not pointed at the usenet path.** SABnzbd unpacks archives
+itself during post-processing, so both would race to extract and delete the
+same files. Hence `protocols = "torrent"` on every block.
+
+Its five timing settings are Unpackerr's own defaults, written out rather than
+left implicit: pinned against an upstream change arriving through a routine
+`nix flake update`, and visible so the cadence is answerable without reading
+upstream's docs. Poll every 2m, require an item to look complete for 1m before
+touching it, retry a failure after 5m at most 3 times — so ~3m worst case from
+a torrent finishing to extraction starting.
+
+### Bazarr runs as two instances
+
+Bazarr connects to exactly one Sonarr and one Radarr — scalar `sonarr.ip` /
+`radarr.ip` keys in its config schema, and upstream has closed the
+multi-instance request as "won't happen" with "run a second instance" as the
+answer. This host has a first-class `sonarr-anime`, so one instance would leave
+the whole anime library without subtitles.
+
+Alternatives were checked first; none was reasonable here:
+
+| Candidate | Why not |
+|---|---|
+| **Bazarr+** (`LavX/bazarr`) | Genuinely solves it — v2.5 manages many instances as one. But a single-maintainer hard fork at ~90 stars, absent from nixpkgs, shipped only as `ghcr.io/lavx/bazarr:latest`, a floating tag. This holds four *arr API keys and writes to the library; unpinned from one maintainer is not a trade this host makes. |
+| **Subliminal** (nixpkgs) | Instance-agnostic, since it walks media paths — one timer would cover everything. But a fetcher, not a manager: no per-series language profiles, no upgrade loop, no sync, no notion of which episodes still lack subtitles. |
+| **Jellyfin's OpenSubtitles plugin** | Playback-side, on demand, and lives on memory-alpha. |
+
+So the nixpkgs module serves the primary instance and a hand-rolled twin serves
+`sonarr-anime`, because `services.bazarr` is a singleton. The twin mirrors the
+module's three odd settings — `SIGINT`, exit status 156, `--no-update True` —
+verbatim rather than diverging quietly. If upstream ever gains multi-instance
+support, the twin is what gets deleted.
+
+Bazarr keeps its configuration in its own database, so the *arr wiring is by
+hand — `MANUAL-STEPS.md` §12 step 9. It also ships with authentication **off**,
+unlike everything else on this host.
+
+### Both write into trees the *arrs own
+
+`media` is the group, and the umask matters. Unpackerr's `file_mode`/`dir_mode`
+override its 0644/0755 defaults; Bazarr takes `media` as its **primary** group
+plus `UMask = "0002"`. Anything not group-writable is left behind by the next
+*arr rename. The qBittorrent umask bug in `MANUAL-STEPS.md` §12 step 10 is the
+same lesson from the other end of the pipeline.
+
+## 10. nixflix rides upstream; the private fork is the canary — at the cost of three hand-applied fixes
+
+**The flake input points at upstream `kiriwalawren/nixflix`, pinned to the
+exact revision the `zjones-xyz/nixflix-exp` fork's CI has proven against
+nixos-26.05. The fork validates; upstream deploys.**
+
+*Why not the fork directly:* it is a private repo, and CI — a bare
+`actions/checkout` runner whose token is scoped to this repository — cannot
+fetch it. (Older Nix reports the inaccessible remote as "Cannot find Git
+revision … in ref …", which reads like a stale pin and is not; `allRefs=1`
+does not help either.) Of the seven robustness fixes the fork carries, all
+but three are confined to its `tests/` tree or gated behind services this
+host disables.
+
+*The cost, and it is real:* FlareSolverr and Navidrome are enabled, so three
+fork fixes matter to what runs, and all three are re-applied by hand in
+`hosts/galactica/nixflix.nix` — the readiness probe (with the TimeoutStartSec
+that makes it effective), the `requires`→`wants` relaxation on
+prowlarr-indexer-proxies, and a bounded Restart on navidrome-create-admin.
+`lib.mkForce` on an upstream unit is silent on drift, and these are precisely
+the corrections the canary's CI does not rehearse — the phantom
+`navidrome-setup` unit (MANUAL-STEPS.md §12) is what that costs, concretely.
+
+*The exit:* make the fork fetchable from CI (publish it, or give the workflow
+a credential) and point the input back at it — or upstream the three fixes.
+Either deletes the overrides. Until then this is carried debt, not a settled
+design.
+
+*Why never a branch URL:* upstream commits most days, and `follows` on
+nixpkgs already governs packages (modules evaluate against the consuming
+host's pkgs) — the pin exists so a routine `nix flake update` cannot pull an
+unrehearsed module revision into the fleet.
+
+---
+
+## 11. The nine-device plan — ZFS throughout, and the LSI may stop being necessary
 
 **Owner, 2026-08-10:** *"I'm tempted to say screw this."* What followed is a
 simplification rather than a retreat: it deletes most of the hardware problems the
@@ -584,8 +681,6 @@ churn on the 3 TB rather than on either parity array.
 and the LSI-versus-ASM1166 question are open; everything else above is the plan as
 stated.
 
----
-
 ## Carried forward from the VFIO plan
 
 Constraints and findings that were established under the previous design and
@@ -633,9 +728,11 @@ re-derive why it stopped applying.
 - **NUT server duty moving to memory-alpha.** The whole argument was that
   virtualizing Tower puts the UPS USB on the host, leaving the host — which
   physically holds every disk — unable to see the UPS. Bare metal dissolves it:
-  the UPS plugs into the NixOS host, `modules/nixos/nut.nix` makes it the server,
-  and memory-alpha stays a client. **No cable move is needed.** See `DESIGN.md`
-  §4.7.
+  the UPS plugs into the NixOS host, which becomes the server, and memory-alpha
+  stays a client. **No cable move is needed.** (Not via `modules/nixos/nut.nix`
+  as this bullet originally said — that module is hopper's, hardwired to its
+  local ntfy; galactica's server config is inline in `configuration.nix`, see
+  `MANUAL-STEPS.md` §6.)
 - **The array belongs on the ASM1166.** Under passthrough it had to be — onboard
   SATA was never passed through, so an array left there would have been invisible
   to the guest. Under bare metal the reasoning inverts: the onboard SATA 2.0

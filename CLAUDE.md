@@ -12,8 +12,9 @@ documents the repo's structure and patterns.)
 - **`hosts/<host>/`** — `configuration.nix` (host wiring), `hardware-configuration.nix`,
   `home.nix` (per-host Home Manager). Pi hosts also have `DEPLOY.md`/`bootstrap.sh`.
   A host directory may exist as **documentation only**, before any config is written
-  — `hosts/galactica/` is the live example, and its `README.md` says why. Don't
-  "fix" a missing `configuration.nix` without reading that host's `DECISIONS.md`.
+  — `hosts/galactica/` spent months in that state (its `DECISIONS.md` §3 records
+  why). Don't "fix" a missing `configuration.nix` without reading that host's
+  `DECISIONS.md`.
 - **`modules/nixos/<concern>.nix`** — one concern per module (e.g. `traefik.nix`,
   `dockge.nix`, `nvidia.nix`, `gaming.nix`). Hosts import the modules they need.
 - **`modules/home/<name>.nix`** — Home Manager modules shared across hosts/platforms
@@ -30,6 +31,14 @@ documents the repo's structure and patterns.)
 - Module signature `{ config, pkgs, lib, ... }:`. 2-space indent.
 - Lead non-obvious blocks with a `# ── Section ──` banner and a comment explaining
   *why*, not just what. Match the density of the surrounding files.
+- **Comment budget.** A banner gets ~5 lines. If the reasoning needs more, it
+  belongs in the host's `DECISIONS.md` or `MANUAL-STEPS.md`, and the comment is
+  one line pointing there. Beware the ratchet: "surrounding files" means the
+  repo's established density, not the last file the same author wrote.
+- **No incident narrative in `.nix` files.** Dates, journal excerpts, error
+  strings and "observed on the hardware" go in the run book and the commit
+  message. Comment the surprise — the thing a reader would otherwise undo — not
+  the story of finding it.
 - Each host sets `system.stateVersion`; don't bump it casually.
 
 ## Secrets (sops-nix)
@@ -58,6 +67,10 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
   items get a checkbox.
 - `.nix`/config changes → feature branch + PR, title prefixed with the host scope
   in brackets, e.g. `[memory-alpha] …`, `[pegasus] …`, `[all] …`.
+- **Branch names carry no agent prefix.** `nfs-cutover`, not `claude/nfs-cutover`
+  — name the branch for the work, not for who did it. Where a session is handed
+  a prefixed branch by its harness, that one is out of our hands; every branch
+  created from inside the repo follows this.
 - Validate with `nix flake check` / `nix eval`. On the Mac (aarch64-darwin) the
   Linux closures can be *evaluated* but not *built* (no Linux builder); building
   and every `switch` happen on the target host.
