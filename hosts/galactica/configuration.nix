@@ -64,13 +64,12 @@
   #
   # `.xyz` is the owner's convention for externally-routable names — terminated
   # by Pangolin (tunneling to a Newt client), not Traefik, so no local router
-  # or cert is expected for these. This rewrite is a LAN-side shortcut so local
-  # clients hit galactica directly instead of round-tripping through the
-  # tunnel. ⚠ Newt only runs on memory-alpha in this repo (jellyfin.nix); if
-  # `arr.zjones.xyz` is meant to reach the *arr stack (now on galactica, post
-  # nixflix migration), confirm Pangolin's resource target was updated to
-  # galactica's IP — that mapping lives in Pangolin's own admin config, not
-  # here, so it can't be verified from the repo.
+  # or cert is expected for these. jellyfin/guesthome get the split-horizon
+  # treatment (LAN clients hit the box directly instead of round-tripping
+  # through the tunnel) since they're meant to work both on- and off-network
+  # without Tailscale. homeassistant deliberately does NOT — stays
+  # Tailscale/LAN-only, no `.xyz` name at all. The *arr stack's `.xyz` route
+  # was dropped entirely (owner's call: not needed).
   services.adguardhome.settings.filtering.rewrites = [
     # router (GL.iNet)
     { domain = "router.internal"; answer = "192.168.8.1"; }
@@ -96,6 +95,10 @@
     # (modules/nixos/traefik.nix, on memory-alpha) already routes it with its
     # own single-name LE cert; this rewrite was the only missing piece.
     { domain = "jellyfin.zjones.dev"; answer = "192.168.8.99"; }
+    # jellyfin.zjones.xyz: split-horizon shortcut for the Pangolin-tunneled
+    # public name — Newt runs on memory-alpha (jellyfin.nix), so this is a
+    # LAN clients-only bypass, not a second route.
+    { domain = "jellyfin.zjones.xyz"; answer = "192.168.8.99"; }
 
     # homeassistant
     { domain = "homeassistant.internal"; answer = "192.168.8.142"; }
@@ -115,7 +118,6 @@
     { domain = "*.arr.internal"; answer = "192.168.8.190"; }
     { domain = "arr.zjones.dev"; answer = "192.168.8.190"; }
     { domain = "*.arr.zjones.dev"; answer = "192.168.8.190"; }
-    { domain = "*.arr.zjones.xyz"; answer = "192.168.8.190"; }
     { domain = "guesthome.zjones.xyz"; answer = "192.168.8.190"; }
   ];
 
