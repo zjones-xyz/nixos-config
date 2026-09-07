@@ -148,6 +148,8 @@
   # ⚠ Registration and secrets are owner steps: MANUAL-STEPS.md §7.
   services.beszelAgent = {
     enable = true;
+    # The hub pulls from this agent over the LAN, so the port must be open.
+    openFirewall = true;
     keyFile = config.sops.secrets."beszel/hubKey".path;
     tokenFile = config.sops.secrets."beszel/agentToken".path;
     # hubUrl / port / image default to the fleet's values — see beszel-agent.nix.

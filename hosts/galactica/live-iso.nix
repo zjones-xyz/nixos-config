@@ -1,24 +1,11 @@
-# A throwaway, minimal x86_64 live ISO for testing on Tower's bare metal
-# *before* galactica has a real NixOS configuration (see README.md — there is
-# deliberately no configuration.nix yet). Boots from a flash drive to:
-#
-#   - confirm the hardware boots NixOS's installer kernel/drivers at all
-#   - test mounting the Unraid array's data disks read-only, per DESIGN.md
-#     §6.1/§6.2 step 9 ("confirm the filesystem mounts cleanly ... before you
-#     plan around it") — the data disks are plain XFS or btrfs, LUKS on the
-#     two data disks and the SSD pools, plaintext on the two parity disks
-#     (HARDWARE-MAP.md §2)
-#   - capture a hardware profile for HARDWARE-MAP.md / PLATFORM.md, persisted
-#     onto a spare partition on the flash drive itself where possible (this
-#     medium's own root is tmpfs and evaporates on reboot)
+# Throwaway minimal live ISO for Tower's bare metal — boot testing, mounting
+# the Unraid array read-only, and hardware profiling, all before galactica had
+# a real config. Never becomes nixosConfigurations.galactica.
 #
 # Build:
 #   nix build .#nixosConfigurations.galactica-live-iso.config.system.build.isoImage
 # Flash (replace /dev/sdX with the flash drive, NOT a disk you care about):
 #   sudo dd if=result/iso/*.iso of=/dev/sdX bs=4M status=progress conv=fsync
-#
-# This is not nixosConfigurations.galactica and never becomes the real host —
-# it exists only to de-risk the migration plan before it's written.
 
 { pkgs, ... }:
 
@@ -27,42 +14,26 @@
 
   networking.hostName = "galactica-live";
 
-  # Silences an eval warning: the base installer profile pulls in ZFS
-  # support generically (so the installer can handle ZFS targets), which
-  # defaults `forceImportRoot` to `true`. This ISO has no ZFS root of its
-  # own to import, so there's nothing to force — same setting galactica's
-  # real configuration.nix already sets, for the same reason.
+  # The installer profile enables generic ZFS support and defaults
+  # forceImportRoot on; this ISO has no ZFS root — silences an eval warning.
   boot.zfs.forceImportRoot = false;
 
-  # Packaging `disko` directly (below) didn't fully sidestep needing flakes
-  # the way it looked like it would — its CLI wrapper shells out through the
-  # new-style `nix` commands internally regardless of how it's invoked, and
-  # this installer profile has neither `nix-command` nor `flakes` on by
-  # default. Discovered 2026-08-31 running disko live rather than caught
-  # ahead of time — the workaround at that moment was
-  # `NIX_CONFIG="extra-experimental-features = nix-command flakes"` on the
-  # invocation; this makes it unnecessary on the next rebuild.
+  # disko's CLI shells out through new-style `nix` commands internally, and
+  # this installer profile has neither nix-command nor flakes on by default.
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
-  # lsiutil/storcli/megacli (below) are all unfree — Broadcom/Avago vendor
-  # tooling, same as every other proprietary LSI utility.
+  # lsiutil/storcli/megacli are unfree vendor tooling.
   nixpkgs.config.allowUnfree = true;
 
-  # Tower's BMC does IPMI SOL on COM2/ttyS1 @ 115200 by convention on
-  # Supermicro X9 boards (PLATFORM.md §2) — but that BIOS-level redirection
-  # only covers POST and the firmware boot-device menu. Without this, the
-  # kernel and login prompt only go to tty0/VGA, so SOL would go dark the
-  # instant the bootloader hands off. tty0 stays too (serial-console.nix
-  # appends rather than replaces), so a physically attached monitor still
-  # works. ⚠ Confirm against *Advanced → Serial Port Console Redirection* in
-  # BIOS before trusting this — a mismatch reads as a hung machine, not a
-  # wrong setting.
+  # Tower's BMC does IPMI SOL on COM2/ttyS1 @ 115200 (PLATFORM.md §2); BIOS
+  # redirection ends at the bootloader handoff, so the kernel console must be
+  # pointed there too. tty0 stays (serial-console.nix appends). ⚠ Confirm
+  # against BIOS Serial Port Console Redirection — a mismatch reads as a hung
+  # machine, not a wrong setting.
   homelab.serialConsole.device = "ttyS1,115200n8";
 
-  # Root login over SSH, key-only. The installation-device profile this
-  # builds on defaults to an *empty* root password with PermitRootLogin =
-  # "yes" — fine for a machine that never touches a network, not for one
-  # about to sit on the home LAN during testing.
+  # The installation-device profile defaults to an EMPTY root password with
+  # PermitRootLogin=yes — fine air-gapped, not on the home LAN.
   services.openssh = {
     enable = true;
     settings = {
@@ -71,9 +42,8 @@
     };
   };
 
-  # z's outbound keys from pegasus and serenity (see modules/nixos/common.nix
-  # for the canonical copies) — this image has no z user, so they go on root
-  # directly.
+  # z's outbound keys (canonical copies: modules/nixos/common.nix) — this
+  # image has no z user, so they go on root directly.
   users.users.root.openssh.authorizedKeys.keys = [
     "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCfTHdojQvKOlTaaTYT2RmYMNKQ/6rBQwn6V+bPnrtASaI/G5E7RW67XGbZHi3K7EctyB9UP9Uw54sayEu4ebixI/dNFVVWeZ2byBQ49FoXh5o9Cfok0Qwf0QM7g9Td8O6Iu2ElnI8e+9cr8ThrfPpKmP68e6mpuYDvhQb4omcx8kRhxnsuNxkL2xCTNVxG/jw68o/1KHX++6tRqf0E3PBCjZ3Z8HMTdS8ouEBa8Y96GGeUvslwDJ9cUtLNCUhR5t3mGu3iSS9RYpFg/JujyTT9yhe2O/0og+OhBeSayGZMOXGWngGUEItExlbq2I4rMV5pFB1q+OyqksvlUfkJ/j3yJOii5uwonYvkWLZfR02yhn2b/bgOfYaimO5rfKj5jAC8bMRnWqLJAiG2qRDwtJT+ijyYlTKgLpz73sOGAQVvZygq11Vc35cZMFojlMeqAHdZMGi6XkUHnfZt8gyplw6VPV5EQnyDI4bRfY9sknuFvjHqdEzNyNrIEXtlmIB870s= z@Serenity.local"
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICjzi98Mik0CUMxSpUBf7+LA8co0grMtDb5NqwhVZ7nF z@pegasus"
@@ -81,15 +51,10 @@
 
   networking.firewall.enable = true;
 
-  # Tools to open/mount the Unraid array directly, plus enough
-  # hardware-inventory tools to profile the machine. lsiutil/storcli/megacli
-  # are for the LSI 9240-8i SAS2008 HBA (PLATFORM.md §7b) — already validated
-  # as a genuine, correctly crossflashed IT-mode card (cold pass 2026-08-09),
-  # about to be seated permanently, and IT mode passes disks straight through
-  # so it doesn't otherwise change how the array-mounting test works.
-  # ⚠ sas2flash is NOT in nixpkgs (PLATFORM.md §7b) — if IT/IR needs
-  # re-confirming beyond what lsiutil/the device ID show, it has to come from
-  # Broadcom separately, this ISO doesn't carry it.
+  # Array/mount tooling plus hardware-inventory tools. lsiutil/storcli/megacli
+  # are for the LSI 9240-8i SAS2008 HBA (PLATFORM.md §7b).
+  # ⚠ sas2flash is NOT in nixpkgs — if IT/IR needs re-confirming beyond what
+  # lsiutil/the device ID show, it must come from Broadcom separately.
   environment.systemPackages = with pkgs; [
     cryptsetup
     xfsprogs
@@ -109,15 +74,10 @@
     storcli
     megacli
 
-    # This ISO now also drives the actual install (MANUAL-STEPS.md), not
-    # just hardware diagnosis — `disko` packaged directly rather than `nix
-    # run github:nix-community/disko`, which needs flakes enabled (this
-    # profile doesn't have them on) and a live GitHub fetch at the single
-    # least-recoverable step in the whole migration. The repo itself gets
-    # onto this ISO via `rsync` from pegasus/serenity (which already have
-    # standing SSH access here — see authorizedKeys above), not a git clone,
-    # so this ISO never needs outbound GitHub credentials. `git` is still
-    # included for convenience once the repo's local.
+    # This ISO also drives the actual install (MANUAL-STEPS.md). disko is
+    # packaged directly rather than `nix run github:...` so the single
+    # least-recoverable migration step needs no live GitHub fetch; the repo
+    # itself arrives via rsync from pegasus/serenity over the SSH access above.
     disko
     git
 
@@ -137,42 +97,35 @@
           smartctl -a "$dev" || true
         done
 
-        # LSI/SAS2008 HBA (PLATFORM.md §7b). Device ID settles firmware
-        # personality outright: 1000:0072 = MPT (IT-capable), 1000:0073 =
+        # HBA personality: device ID 1000:0072 = MPT (IT-capable), 1000:0073 =
         # stock MegaRAID. storcli/megacli enumerating the card at all is a
         # negative test — in true IT mode, neither should see it.
         echo; echo "## lspci -nnk -d 1000: (LSI/Avago/Broadcom devices)"
         lspci -nnk -d 1000: || true
         echo; echo "## dmesg | grep -E 'LSISAS|sas_address|mpt2sas|mpt3sas'"
-        echo "   (mpt3sas is the module; SAS2 hardware itself registers as mpt2sas_cm0 — PLATFORM.md §7b's naming trap)"
+        echo "   (mpt3sas is the module; SAS2 hardware registers as mpt2sas_cm0 — PLATFORM.md §7b's naming trap)"
         dmesg | grep -E "LSISAS|sas_address|mpt2sas|mpt3sas" || true
         echo; echo "## storcli show (should FAIL to enumerate the card in true IT mode)"
         storcli show || true
         echo; echo "## MegaCli64 -AdpAllInfo -aALL (should also FAIL to enumerate)"
         MegaCli64 -AdpAllInfo -aALL || true
-        echo "   (lsiutil is interactive/menu-driven — run it by hand for IT-vs-IR and the SAS address if the above isn't conclusive)"
+        echo "   (lsiutil is interactive — run it by hand for IT-vs-IR if the above isn't conclusive)"
 
         echo; echo "## lshw"; lshw
       } > "$out" 2>&1
       echo "Wrote $out"
 
-      # Best-effort: persist a copy onto the flash drive itself, in whatever
-      # free space is left after the ISO image (this medium's own root is
-      # tmpfs and evaporates on reboot). Never touches the ISO's own
-      # partitions — only creates a new one in unallocated space, and only if
-      # one doesn't already exist from a previous run.
+      # Best-effort: persist a copy in the flash drive's leftover free space
+      # (this medium's root is tmpfs). Only ever creates a NEW partition in
+      # unallocated space — never touches the ISO's own partitions.
       isoSrc=$(findmnt -no SOURCE /iso || true)
       if [ -z "$isoSrc" ]; then
         echo "Could not find the boot device (/iso not mounted from a block device) — skipping persistence, scp $out off instead."
         exit 0
       fi
-      # This is a hybrid isohybrid image: booted from a USB stick, the
-      # ISO9660 filesystem is normally found directly on the whole-disk node
-      # (e.g. /dev/sdb, TYPE=disk) rather than a partition — pkname on that
-      # is empty because it has no parent, not because there's no disk.
-      # -d/--nodeps is required: without it lsblk lists the device's children
-      # too (disk + all its partitions), so $srcType would be a multi-line
-      # dump that matches neither case arm below.
+      # Hybrid isohybrid image: booted from USB, the ISO9660 fs is normally on
+      # the whole-disk node (TYPE=disk), not a partition. -d/--nodeps is
+      # required or lsblk lists children too and $srcType goes multi-line.
       srcType=$(lsblk -dno TYPE "$isoSrc")
       case "$srcType" in
         disk) disk="$isoSrc" ;;
@@ -186,17 +139,14 @@
       dataPart=$(blkid -L HWPROFILE 2>/dev/null || true)
       if [ -z "$dataPart" ]; then
         echo "No HWPROFILE partition yet on $disk — looking for free space to create one..."
-        # Machine-readable free-space line looks like "START:END:SIZE:free;"
-        # (no leading partition-number field, unlike a real partition line).
+        # Free-space line: "START:END:SIZE:free;" (no partition-number field).
         freeStart=$(parted -ms "$disk" unit MiB print free 2>/dev/null | awk -F: '/:free;$/ {start=$1} END{print start}' | tr -d 'MiB')
         if [ -z "$freeStart" ]; then
           echo "No free space found on $disk — skipping persistence, scp $out off instead."
           exit 0
         fi
-        # mkpart's syntax differs by table type: GPT partitions take a NAME
-        # before the fs-type, MBR partitions take primary/extended/logical
-        # instead. This hybrid ISO (makeEfiBootable + makeUsbBootable) is
-        # normally GPT, but detect rather than assume.
+        # mkpart takes a NAME on GPT but primary/extended/logical on MBR —
+        # detect rather than assume.
         table=$(parted -ms "$disk" print 2>/dev/null | sed -n '2p' | cut -d: -f6)
         echo "Creating a FAT32 HWPROFILE partition on $disk ($table) starting at ''${freeStart}MiB..."
         if [ "$table" = "gpt" ]; then
@@ -206,8 +156,8 @@
         fi
         partprobe "$disk" || true
         udevadm settle
-        # Freshly partitioned, not yet formatted, so blkid -L can't find it
-        # yet — the new partition is the last one lsblk lists for this disk.
+        # Not yet formatted, so blkid -L can't find it — take the last
+        # partition lsblk lists for this disk.
         newPartName=$(lsblk -nlo NAME "$disk" | tail -n1)
         newPart="/dev/$newPartName"
         mkfs.vfat -F 32 -n HWPROFILE "$newPart"

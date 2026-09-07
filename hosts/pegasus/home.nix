@@ -86,6 +86,7 @@
     discord
     ferdium
     signal-desktop
+    slack
     openscad
     obsidian
     spotify
@@ -93,6 +94,9 @@
     prusa-slicer
     jellyfin-desktop
     vlc
+
+    thunderbird
+    protonmail-bridge-gui
 
     # file managers
     nemo

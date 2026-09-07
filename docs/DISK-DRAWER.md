@@ -19,7 +19,9 @@ Dates are UTC.
 
 Read from photographs of the drives' own labels, 2026-08-07. Twelve, not the five
 an earlier revision of this file assumed — that count came from recollection and
-was low on every size class except 4 TB.
+was low on every size class except 4 TB. **Thirteen as of 2026-09-05**, when
+`h25-8SRC` surfaced — which is the same lesson a second time: the drawer's
+contents are known by reading them, not by remembering them.
 
 Reading off the label rather than over a USB dock sidesteps the bridge-masking
 problem described below, so these identifiers are trustworthy. **Recording
@@ -39,9 +41,11 @@ SMR section, which is the most consequential thing in this file.
 | `h-NYXN` | **WD Blue** WD10EZEX-00BN5A0 | 1 TB | `WCC3F2NRNYXN` | 2015-05-01 | CMR | 7200 class |
 | `h-6D0X` | **WD Blue** WD10EZRZ-00HTKB0 | 1 TB | `WCC4J6NP6D0X` | 2017-03-19 | CMR | 5400 class. Serial char **confirmed 2026-08-10** — digit zero |
 | `h-AFYJ` | **Seagate Barracuda ES** ST3500630NS | 500 GB | `9QG9AFYJ` | 2008 (date code `08396`) | CMR | Still sealed in an antistatic bag. Firmware `3.AQN`, P/N `9BL146-038`. |
+| `h25-8SRC` | **WD Black** WD5000LPLX-66ZNTT1 | 500 GB | `WX31A18K8SRC` | 2018-02-10 | CMR | **2.5", 7 mm**, 7200 rpm, hence `h25-`. HP OEM spare — see below. ⚠ untested |
 | `h25-P4TH` | **Hitachi Travelstar 5K250** HTS542560K9SA00 | ⚠ 40 GB? | `WAG0P4TH` | 2009 (date code `4907`) | CMR | **2.5"**, hence `h25-`. Carries a `Microsoft P/N` field. ⚠ capacity, see below |
 
-**Aggregate: ~23.5 TB.** That is materially more than the ~12 TB this file
+**Aggregate: ~24.0 TB** (was ~23.5 TB before `h25-8SRC` was catalogued
+2026-09-05). That is materially more than the ~12 TB this file
 previously credited, which changes the staging arithmetic — see below.
 
 #### ⚠ Four of these are SMR, including two of the three 4 TB disks
@@ -135,6 +139,53 @@ exception from SMART polling to be safe.
 **Treat it as out of the pool entirely.** It is not a spare, not staging, and not
 burn-in material. Anywhere this document or `hosts/galactica/` counts drawer
 capacity, `h-8742` does not count.
+
+#### `h25-8SRC` is an HP OEM drive — read the identity off the WD fields
+
+Catalogued 2026-09-05 from a label photograph. The drive carries **two
+manufacturers' identifiers at once**, and only one of them is its identity:
+
+| Field | Value | Whose |
+|---|---|---|
+| `S/N` | `WX31A18K8SRC` | **WD — this is the identity** |
+| `MDL` | `WD5000LPLX-66ZNTT1` | WD |
+| `WWN` | `50014EE60B60B8BB` | WD |
+| `P/N` | `805754-002` | HP |
+| `SPARES NO.` | `916852-001`, and `916877-001` on a second sticker | HP |
+| `CT` | `2FQUU017ZAG3CW` | WD internal, not an identity |
+
+**Same rule as `m2-0627`** (the HP-OEM SanDisk in the M.2 table): the label
+prints `S/N:` explicitly, so that is what the identifier derives from, and the
+HP part and spares numbers are ignored. Recorded because an HP spares sticker
+is physically the most prominent thing on this label — it is a black overlay
+across the centre — and is exactly the field someone would reach for first.
+
+**What the label does settle.** The black HP sticker reads `500GB 7.2K 7mm
+SATA`, which confirms rotational speed and 7 mm z-height without needing the
+drive attached. WD Black mobile is a **CMR** line throughout — no SMR part was
+ever shipped in it — so the `CMR` above is a stronger inference than §1's
+method-1 caveat usually allows, though it is still an inference. The `AF` logo
+means Advanced Format: 4 K physical sectors, 512-byte emulated.
+
+**What it does not settle, and this is the whole question for this disk.** The
+label gives a manufacture date of **2018-02-10**, which is not a wear figure. A
+mobile WD Black is a drive that lived in a laptop, and an HP spares sticker
+does not distinguish an unused spare from a pull. Three SMART attributes decide
+whether this disk is worth anything, and all three need it attached:
+
+1. **`Power_On_Hours`** (attr 9) — the actual age. A 2018 drive with 500 hours
+   and one with 40,000 are not the same disk.
+2. **`Load_Cycle_Count`** (attr 193) — the specific killer for WD mobile
+   drives, which park heads aggressively on an idle timer and can burn through
+   a ~600 k rating far faster than their hours suggest.
+3. **`Reallocated_Sector_Ct`** (attr 5) — as for anything else here.
+
+```sh
+smartctl -a -d sat /dev/sdX          # -d sat: pierce a USB bridge, see below
+```
+
+Until those are read, this disk falls under this file's standing constraint
+like everything else: **an untested spare is a guess.**
 
 #### Label readings to confirm at attach time — one of two now closed
 

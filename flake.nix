@@ -20,7 +20,10 @@
     # is in cache.nixos.org, so the images build without compiling a kernel.
     # (We deliberately avoid raspberry-pi-nix: its downstream kernel isn't
     # cached, forcing a multi-hour emulated compile on every bump.)
-    nixos-hardware.url = "github:NixOS/nixos-hardware";
+    nixos-hardware = {
+      url = "github:NixOS/nixos-hardware";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     # nix-darwin for the Mac (Serenity). nix-darwin uses release branches that
     # must match the nixpkgs release — nix-darwin-26.05 pairs with nixpkgs 26.05
@@ -76,6 +79,7 @@
     niri-flake = {
       url = "github:sodiboo/niri-flake";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs-stable.follows = "nixpkgs";
     };
 
     # nixflix (galactica) — the declarative *arr media stack. Points at
@@ -116,10 +120,28 @@
     # replaces the hand-rolled overrideAttrs fix with the real thing, plus
     # picks up two extra version bumps (02.04.00.70, 02.05.00.67).
     nixpkgs-bambu-studio.url = "git+https://github.com/NixOS/nixpkgs.git?rev=13b979d75662827615c1de6dd22f87e6296ba71d&shallow=1";
+
+    # Non-flake theme sources for pegasus's Dragonized session, pinned here so
+    # every source pin lives in flake.lock — consumed by
+    # modules/nixos/desktop-dragonized.nix via specialArgs.
+    dr460nized-src = {
+      url = "git+https://gitlab.com/garuda-linux/themes-and-settings/settings/garuda-dr460nized.git?rev=35eb3abbc534f4046257c43ad9e05a9c010235cf&shallow=1";
+      flake = false;
+    };
+    window-title-applet-src = {
+      url = "git+https://github.com/dhruv8sh/plasma6-window-title-applet.git?rev=a6eaf5086a473919ed2fffc5d3b8d98237c2dd41&shallow=1";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, niri-flake, nixflix, nixpkgs-orca-slicer, nixpkgs-bambu-studio, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, niri-flake, nixflix, nixpkgs-orca-slicer, nixpkgs-bambu-studio, dr460nized-src, window-title-applet-src, ... }:
   {
+    formatter = {
+      x86_64-linux = nixpkgs.legacyPackages.x86_64-linux.nixfmt-tree;
+      aarch64-linux = nixpkgs.legacyPackages.aarch64-linux.nixfmt-tree;
+      aarch64-darwin = nixpkgs.legacyPackages.aarch64-darwin.nixfmt-tree;
+    };
+
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
@@ -136,7 +158,7 @@
       # Single NVMe, installed via hosts/pegasus/disko.nix (2026-07-11).
       pegasus = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
-        specialArgs = { inherit self; };
+        specialArgs = { inherit self dr460nized-src window-title-applet-src; };
         modules = [
           ./hosts/pegasus/configuration.nix
           home-manager.nixosModules.home-manager
