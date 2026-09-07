@@ -1089,32 +1089,43 @@ rather than each instance being hand-edited.
    confirmed live: rewrites, filters, and client settings all applied to
    the router with no errors.
 
-   Two loose ends from that chain:
-   - The `--glinet` removal was done interactively via SSH and is **not
-     persistent** — it reverts on the router's next reboot or firmware
-     update. See item 5 below.
+   Full CRUD confirmed live, not just adds: dropping the retired
+   `nixie.internal`/`*.nixie.internal` rewrites from galactica's declared
+   list (memory-alpha's old name) was deliberately used as a delete-path
+   test — the very next cron cycle cleanly deleted both from the router,
+   no errors, no oscillation.
+
+   Two loose ends from that chain, now resolved or downgraded:
+   - The `--glinet` removal was done interactively via SSH and wasn't
+     persistent — confirmed the hard way when a router firmware update
+     rebooted it and auth broke again exactly as predicted. Fixed
+     properly now; see item 5.
    - The router's bundled AdGuard (`0.107.73`) is older than galactica's
-     (`0.107.78`); `adguardhome-sync`'s own GL.iNet wiki page warns sync can
-     misbehave when origin is newer than replica. Syncs are completing
-     without errors, but one entry (`arr.zjones.dev`) was observed being
-     deleted on one sync and re-added on the next — watch a few more
-     10-minute cycles to see if that settles or keeps oscillating.
-5. [ ] **Persist the `--glinet` removal on the router**, or it reverts on
-   next reboot/firmware update. Per the GL.iNet forum tutorial that found
-   this (`--glinet` gates all AdGuard auth behind the router's own webui
-   login): add to `/etc/rc.local`, above `exit 0`:
+     (`0.107.78`); a firmware update was applied hoping to close that gap,
+     but it didn't change AdGuard's version — apparently the newest GL.iNet
+     currently ships. One rewrite (`arr.zjones.dev`) was seen deleted then
+     re-added across two early cycles, but that window coincided with the
+     still-unresolved auth debugging, not a repeatable pattern — several
+     clean cycles since (including the nixie delete test) show no further
+     oscillation. Not chasing this further unless it actually recurs;
+     downgrading galactica's own AdGuard to match would trade a real
+     version back for a cosmetic match, which isn't worth it for a WARN
+     that hasn't caused any actual sync failure.
+5. [ ] **Verify the `--glinet` removal survives an actual reboot.** Fixed
+   in `/etc/rc.local` (a first attempt via `vi` split the `sed` command
+   across two lines, silently breaking it — rewritten with a `cat` heredoc
+   instead to avoid the interactive-editor pitfall):
    ```
    sed -i "s/--glinet //g" /etc/init.d/adguardhome
    service adguardhome restart
    ```
-   Tradeoff to accept knowingly: this also drops the AdGuard stats widget
-   from the GL.iNet router's own dashboard (that integration depends on
-   `--glinet`).
-6. [ ] **Watch the version-mismatch oscillation.** If `arr.zjones.dev` (or
-   anything else) keeps flip-flopping add/delete across sync cycles instead
-   of settling, the router's AdGuard firmware is likely due an update to
-   close the `0.107.73`/`0.107.78` gap.
-7. [ ] **Repoint DHCP later, not yet.** Once galactica's AdGuard is confirmed
+   above `exit 0`. Confirmed correct by reading the file back, but not yet
+   proven across a real reboot (only manually re-applied so far) — check
+   after the router's next reboot/update rather than forcing one just to
+   test. Tradeoff to accept knowingly: this also drops the AdGuard stats
+   widget from the GL.iNet router's own dashboard (that integration depends
+   on `--glinet`).
+6. [ ] **Repoint DHCP later, not yet.** Once galactica's AdGuard is confirmed
    correct and stable, add it to the GL.iNet DHCP DNS server list (primary or
    alongside the router) — a separate, deliberate cutover step, not part of
    this change.
