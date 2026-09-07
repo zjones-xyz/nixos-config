@@ -163,17 +163,13 @@
   ];
 
   # ── AdGuardHome-Sync — galactica (origin) → router (first replica) ─────────
-  # Secrets are populated (secrets/galactica.yaml, 2026-09-07). `enable = false`
-  # deliberately, for now: the module's runOnStart is hardcoded true, so
-  # flipping this on syncs immediately with no manual gate in between — flip
-  # it only after confirming via galactica's own AdGuard UI that its rewrites
-  # actually match the router's current live list. Sync overwrites the
-  # replica one-way; a mismatch here means the first run wipes the router's
-  # config instead of just taking over maintaining it.
+  # Owner confirmed galactica's rewrites match the router's live list;
+  # enabled 2026-09-06. runOnStart is hardcoded true in the module, so the
+  # first sync fires immediately once this deploys.
   # hopper/hamilton join `replicas` once they're rebuilt as the ephemeral
   # resolvers discussed — not yet, since neither exists today.
   services.adguardhomeSync = {
-    enable = false;
+    enable = true;
     originPasswordFile = config.sops.secrets."adguardhome-sync/originPassword".path;
     replicas = [
       {

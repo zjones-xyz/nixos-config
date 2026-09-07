@@ -1056,25 +1056,18 @@ rather than each instance being hand-edited.
    `dig @127.0.0.1`. AdGuard's web UI, found stuck on loopback-only, is now
    routed through Traefik at
    `adguard.galactica.internal`/`adguard.galactica.zjones.dev`.
-4. [ ] **AdGuardHome-Sync — written, secrets populated, `enable = false` on
-   purpose.** `modules/nixos/adguardhome-sync.nix` + galactica's own
-   `services.adguardhomeSync` block wire this up: galactica as origin, the
-   router (`192.168.8.1:3000`, confirmed reachable, running `v0.107.73`) as
-   the first replica. Only syncs rewrites, filter lists, and client names —
-   deliberately not `dns.serverConfig`/`dhcp.*`, since the router has its own
-   upstream/DHCP needs that shouldn't be overwritten by galactica's.
-   `adguardhome-sync/originPassword` and `adguardhome-sync/routerPassword`
-   are populated in `secrets/galactica.yaml` (2026-09-07) — the sops-nix
-   activation blocker is cleared.
-   ⚠ `enable = false` is the actual gate right now: the module's
-   `runOnStart` is hardcoded true, so flipping `enable` on syncs immediately
-   with no manual checkpoint in between. Do NOT flip it until step 3's
-   deploy is done and galactica's own AdGuard UI is confirmed to match the
-   router's current live rewrite list — sync overwrites the replica
-   one-way, so a mismatch here means the first run wipes the router's
-   config instead of just taking over maintaining it. hopper/hamilton join
-   `replicas` once they're rebuilt as the ephemeral resolvers discussed —
-   not yet, neither exists.
+4. [x] **AdGuardHome-Sync — enabled 2026-09-06.** `modules/nixos/
+   adguardhome-sync.nix` + galactica's own `services.adguardhomeSync` block:
+   galactica as origin, the router (`192.168.8.1:3000`, running `v0.107.73`)
+   as the first replica. Only syncs rewrites, filter lists, and client
+   names — deliberately not `dns.serverConfig`/`dhcp.*`, since the router
+   has its own upstream/DHCP needs that shouldn't be overwritten by
+   galactica's. Owner confirmed galactica's rewrites matched the router's
+   live list before flipping `enable` on — `runOnStart` is hardcoded true,
+   so the first sync fired immediately on that deploy. Confirm the router's
+   AdGuard UI actually reflects the synced config after this lands.
+   hopper/hamilton join `replicas` once they're rebuilt as the ephemeral
+   resolvers discussed — not yet, neither exists.
 5. [ ] **Repoint DHCP later, not yet.** Once galactica's AdGuard is confirmed
    correct and stable, add it to the GL.iNet DHCP DNS server list (primary or
    alongside the router) — a separate, deliberate cutover step, not part of
