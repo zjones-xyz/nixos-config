@@ -1056,7 +1056,7 @@ rather than each instance being hand-edited.
    `dig @127.0.0.1`. AdGuard's web UI, found stuck on loopback-only, is now
    routed through Traefik at
    `adguard.galactica.internal`/`adguard.galactica.zjones.dev`.
-4. [x] **AdGuardHome-Sync — working end-to-end as of 2026-09-07.**
+4. [x] **AdGuardHome-Sync — confirmed working end-to-end 2026-09-07.**
    `modules/nixos/adguardhome-sync.nix` + galactica's own
    `services.adguardhomeSync` block: galactica as origin, the router as the
    first replica. Only syncs rewrites, filter lists, and client names —
@@ -1065,8 +1065,8 @@ rather than each instance being hand-edited.
    hopper/hamilton join `replicas` once they're rebuilt as the ephemeral
    resolvers discussed — not yet, neither exists.
 
-   Getting the router side actually authenticating took several real bugs,
-   found live, in order: (1) `network_mode: host` was missing, so the
+   Getting the router side actually authenticating took a long chain of real
+   bugs, found live, in order: (1) `network_mode: host` was missing, so the
    container's `127.0.0.1` was its own loopback, not galactica's; (2) the
    sync tool's own status-API port was never wired to `cfg.port` and
    defaulted to 8080, colliding with SABnzbd under host networking; (3) an
@@ -1076,12 +1076,45 @@ rather than each instance being hand-edited.
    every credential we tried (`admin`, empty, `root`) correctly failed
    against nothing; (5) hand-editing the router's `users:` block to add a
    real `adguardsync` user initially split into two malformed YAML list
-   entries (name and password as separate `-` items) instead of one. Fixed
-   in order; a full login+cookie exchange against `192.168.8.1:3000`
-   confirmed 200 OK. Also: the wiki's "no port" guidance for GL.iNet turned
-   out not to matter here — `:3000` works directly and is what's actually
-   configured now.
-5. [ ] **Repoint DHCP later, not yet.** Once galactica's AdGuard is confirmed
+   entries (name and password as separate `-` items) instead of one; (6)
+   the module's `sed`-based secret substitution treated `&`/`\` in a
+   password as sed metacharacters, silently corrupting it — replaced with
+   `envsubst`; (7) the real, final blocker: GL.iNet's bundled AdGuard runs
+   with a `--glinet` flag that routes *all* auth through the router's own
+   webui login, so every one of AdGuard's own auth paths (Basic Auth, even
+   a genuinely valid `/control/login` session cookie) 401'd regardless of
+   correct credentials. Removing `--glinet` from `/etc/init.d/adguardhome`
+   on the router restored normal AdGuard auth, and plain Basic Auth
+   (matching how origin auth already works) then succeeded. A real sync run
+   confirmed live: rewrites, filters, and client settings all applied to
+   the router with no errors.
+
+   Two loose ends from that chain:
+   - The `--glinet` removal was done interactively via SSH and is **not
+     persistent** — it reverts on the router's next reboot or firmware
+     update. See item 5 below.
+   - The router's bundled AdGuard (`0.107.73`) is older than galactica's
+     (`0.107.78`); `adguardhome-sync`'s own GL.iNet wiki page warns sync can
+     misbehave when origin is newer than replica. Syncs are completing
+     without errors, but one entry (`arr.zjones.dev`) was observed being
+     deleted on one sync and re-added on the next — watch a few more
+     10-minute cycles to see if that settles or keeps oscillating.
+5. [ ] **Persist the `--glinet` removal on the router**, or it reverts on
+   next reboot/firmware update. Per the GL.iNet forum tutorial that found
+   this (`--glinet` gates all AdGuard auth behind the router's own webui
+   login): add to `/etc/rc.local`, above `exit 0`:
+   ```
+   sed -i "s/--glinet //g" /etc/init.d/adguardhome
+   service adguardhome restart
+   ```
+   Tradeoff to accept knowingly: this also drops the AdGuard stats widget
+   from the GL.iNet router's own dashboard (that integration depends on
+   `--glinet`).
+6. [ ] **Watch the version-mismatch oscillation.** If `arr.zjones.dev` (or
+   anything else) keeps flip-flopping add/delete across sync cycles instead
+   of settling, the router's AdGuard firmware is likely due an update to
+   close the `0.107.73`/`0.107.78` gap.
+7. [ ] **Repoint DHCP later, not yet.** Once galactica's AdGuard is confirmed
    correct and stable, add it to the GL.iNet DHCP DNS server list (primary or
    alongside the router) — a separate, deliberate cutover step, not part of
    this change.
