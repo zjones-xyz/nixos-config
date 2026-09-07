@@ -1056,18 +1056,31 @@ rather than each instance being hand-edited.
    `dig @127.0.0.1`. AdGuard's web UI, found stuck on loopback-only, is now
    routed through Traefik at
    `adguard.galactica.internal`/`adguard.galactica.zjones.dev`.
-4. [x] **AdGuardHome-Sync — enabled 2026-09-06.** `modules/nixos/
-   adguardhome-sync.nix` + galactica's own `services.adguardhomeSync` block:
-   galactica as origin, the router (`192.168.8.1:3000`, running `v0.107.73`)
-   as the first replica. Only syncs rewrites, filter lists, and client
-   names — deliberately not `dns.serverConfig`/`dhcp.*`, since the router
-   has its own upstream/DHCP needs that shouldn't be overwritten by
-   galactica's. Owner confirmed galactica's rewrites matched the router's
-   live list before flipping `enable` on — `runOnStart` is hardcoded true,
-   so the first sync fired immediately on that deploy. Confirm the router's
-   AdGuard UI actually reflects the synced config after this lands.
+4. [x] **AdGuardHome-Sync — working end-to-end as of 2026-09-07.**
+   `modules/nixos/adguardhome-sync.nix` + galactica's own
+   `services.adguardhomeSync` block: galactica as origin, the router as the
+   first replica. Only syncs rewrites, filter lists, and client names —
+   deliberately not `dns.serverConfig`/`dhcp.*`, since the router has its
+   own upstream/DHCP needs that shouldn't be overwritten by galactica's.
    hopper/hamilton join `replicas` once they're rebuilt as the ephemeral
    resolvers discussed — not yet, neither exists.
+
+   Getting the router side actually authenticating took several real bugs,
+   found live, in order: (1) `network_mode: host` was missing, so the
+   container's `127.0.0.1` was its own loopback, not galactica's; (2) the
+   sync tool's own status-API port was never wired to `cfg.port` and
+   defaulted to 8080, colliding with SABnzbd under host networking; (3) an
+   empty replica `username` rendered as bare YAML (`username: `), parsing
+   as `null` and failing the tool's own schema validation; (4) GL.iNet's
+   bundled AdGuard ships with `users: []` — no default login at all, so
+   every credential we tried (`admin`, empty, `root`) correctly failed
+   against nothing; (5) hand-editing the router's `users:` block to add a
+   real `adguardsync` user initially split into two malformed YAML list
+   entries (name and password as separate `-` items) instead of one. Fixed
+   in order; a full login+cookie exchange against `192.168.8.1:3000`
+   confirmed 200 OK. Also: the wiki's "no port" guidance for GL.iNet turned
+   out not to matter here — `:3000` works directly and is what's actually
+   configured now.
 5. [ ] **Repoint DHCP later, not yet.** Once galactica's AdGuard is confirmed
    correct and stable, add it to the GL.iNet DHCP DNS server list (primary or
    alongside the router) — a separate, deliberate cutover step, not part of
