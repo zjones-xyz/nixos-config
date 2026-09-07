@@ -16,6 +16,9 @@ let
     cron: "${cfg.cron}"
     runOnStart: true
 
+    api:
+      port: ${toString cfg.port}
+
     origin:
       url: ${cfg.originUrl}
       username: ${cfg.originUsername}
@@ -126,13 +129,15 @@ in
 
     port = lib.mkOption {
       type = lib.types.port;
-      default = 8080;
+      default = 8090;
       description = ''
-        Documents the port adguardhome-sync's own status API listens on
-        (currently not independently configurable — this must match its
-        actual default). With network_mode: host and no
-        networking.firewall.allowedTCPPorts entry for it, the host firewall
-        blocks LAN access by default; use an SSH tunnel to check sync status.
+        Port for adguardhome-sync's own status API (config.yaml `api.port`).
+        Default deliberately isn't the upstream default of 8080 — with
+        network_mode: host this shares the whole host's port space, and 8080
+        collides with SABnzbd on hosts running nixflix (confirmed live).
+        With no networking.firewall.allowedTCPPorts entry for it, the host
+        firewall blocks LAN access by default; use an SSH tunnel to check
+        sync status.
       '';
     };
   };
