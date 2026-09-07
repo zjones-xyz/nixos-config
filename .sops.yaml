@@ -13,6 +13,15 @@
 
 keys:
   - &admin age10xxhjwmlntkw3q7wggqhq3jvjr0eycscrtdknpf7kw6mmmy75p0syt2twm
+  # Second admin identity, on pegasus (2026-09-04) — a user-level editing key
+  # so secrets can be edited there without SSHing to serenity. Its own key,
+  # NOT a copy of &admin's: retiring or re-imaging pegasus is then one
+  # `sops updatekeys` pass rather than rotating &admin everywhere.
+  #
+  # ⚠ Distinct from &pegasus below, which is that machine's *host* key —
+  # root-only, used by sops-nix at activation for secrets/pegasus.yaml.
+  # This one lives at ~/.config/sops/age/keys.txt (hosts/pegasus/home.nix).
+  - &admin-pegasus age1s4ngf5vulmc3rqp3tz8x9g3854fe6ql4nj8hdnt8wevqfgekuqascw28v6
   - &memory-alpha age13790dgm55mp5luu7pdpqewjxh0he5dlhnagp5wuk9dte0ks5gc6qp09882
   # TODO: replace with hopper's real age pubkey after first boot, then add
   #   *hopper to the hopper rule below and run: sops updatekeys secrets/hopper.yaml
@@ -28,6 +37,7 @@ creation_rules:
     key_groups:
       - age:
           - *admin
+          - *admin-pegasus
           - *memory-alpha
   # hopper/hamilton: until each Pi has booted and its real age key is known, the
   # files are encrypted to admin (edit from the Mac) + memory-alpha (the build
@@ -37,16 +47,19 @@ creation_rules:
     key_groups:
       - age:
           - *admin
+          - *admin-pegasus
           - *memory-alpha
   - path_regex: secrets/hamilton\.yaml$
     key_groups:
       - age:
           - *admin
+          - *admin-pegasus
           - *memory-alpha
   - path_regex: secrets/pegasus\.yaml$
     key_groups:
       - age:
           - *admin
+          - *admin-pegasus
           - *pegasus
   # galactica's real age key, added 2026-08-31 after first boot — the file
   # itself doesn't exist yet, so it gets created directly with both keys
@@ -56,6 +69,7 @@ creation_rules:
     key_groups:
       - age:
           - *admin
+          - *admin-pegasus
           - *galactica
   # galactica's ZFS-array LUKS keyfile — a dedicated binary sops file (raw
   # 4096-byte key), consumed via sops.secrets."luks/arrayKeyFile".format =
@@ -64,4 +78,5 @@ creation_rules:
     key_groups:
       - age:
           - *admin
+          - *admin-pegasus
           - *galactica

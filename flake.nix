@@ -82,6 +82,21 @@
       inputs.nixpkgs-stable.follows = "nixpkgs";
     };
 
+    # nixflix (galactica) — the declarative *arr media stack. Points at
+    # UPSTREAM, pinned to the exact rev the zjones-xyz/nixflix-exp canary has
+    # proven against 26.05 — never a branch URL, or a routine `nix flake
+    # update` pulls an unrehearsed revision. Bump = merge upstream into the
+    # fork, let its CI go green against 26.05, then move this rev to match.
+    #
+    # ⚠ Carried debt: the fork is private, CI cannot fetch it, and three of
+    # its fixes this host needs are therefore re-applied by hand in
+    # hosts/galactica/nixflix.nix. DECISIONS.md §10 has the full argument and
+    # the exit. git+https rather than github: — see claude-desktop-debian.
+    nixflix = {
+      url = "git+https://github.com/kiriwalawren/nixflix.git?rev=c5b5944791ecbc2a434fbf6d8d95859aee47b3b9&shallow=1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # A second, standalone nixpkgs — deliberately NOT inputs.nixpkgs.follows,
     # unlike every other input above — pinned only to pull a newer
     # `orca-slicer` (used on pegasus) than the one in the main `nixpkgs`
@@ -119,7 +134,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, niri-flake, nixpkgs-orca-slicer, nixpkgs-bambu-studio, dr460nized-src, window-title-applet-src, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, niri-flake, nixflix, nixpkgs-orca-slicer, nixpkgs-bambu-studio, dr460nized-src, window-title-applet-src, ... }:
   {
     formatter = {
       x86_64-linux = nixpkgs.legacyPackages.x86_64-linux.nixfmt-tree;
@@ -197,10 +212,9 @@
       };
 
       # galactica — Tower, bare-metal NixOS (replacing Unraid). Root: LUKS +
-      # btrfs on the NVMe, installed via hosts/galactica/disko.nix (2026-08-31).
-      # The RAIDZ1 media array is a separate, later addition once it's built
-      # live — not part of this closure yet. See hosts/galactica/README.md
-      # and MANUAL-STEPS.md for what's still outstanding.
+      # btrfs on the NVMe (disko.nix); the RAIDZ1 array `tank` and the media
+      # stack are declared in hosts/galactica/. MANUAL-STEPS.md §12 tracks
+      # what's still manual.
       galactica = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         specialArgs = { inherit self; };
@@ -208,20 +222,18 @@
           ./hosts/galactica/configuration.nix
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
+          # Brings in nixflix's own modules AND vpn-confinement (nixflix's
+          # nixosModules.default imports it), which is what provides the
+          # `vpnNamespaces` options and the per-service `vpnConfinement`
+          # option that hosts/galactica/nixflix.nix uses for the NAT-PMP
+          # sidecar. The stack's own configuration lives in that file, which
+          # configuration.nix imports.
+          nixflix.nixosModules.default
         ];
       };
 
-      # hopper — Raspberry Pi 4, network-core node. Uses nixos-hardware's rpi-4
-      # profile plus nixpkgs' generic sd-image-aarch64 builder (mainline kernel,
-      # cached — see the nixos-hardware input comment above).
-      #
-      # Bootstrap: build the SD image on memory-alpha (aarch64 via binfmt) and
-      # flash it — boots straight into this config. See hosts/hopper/DEPLOY.md.
-      #   nix build .#nixosConfigurations.hopper.config.system.build.sdImage
-      # Routine deploys, with memory-alpha as the aarch64 build host:
-      #   nixos-rebuild switch --flake .#hopper \
-      #     --target-host z@hopper.internal \
-      #     --build-host z@memory-alpha.internal --use-remote-sudo
+      # hopper — Raspberry Pi 4, network-core node (nixos-hardware rpi-4 +
+      # sd-image builder). Build and deploy commands: hosts/hopper/DEPLOY.md.
       hopper = nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
         specialArgs = { inherit self; };
@@ -234,17 +246,8 @@
         ];
       };
 
-      # hamilton — Raspberry Pi 3 (bcm2837), backup AdGuard/Unbound resolver.
-      # Same approach as hopper: nixos-hardware's rpi-3 profile plus nixpkgs'
-      # sd-image-aarch64 builder (SD-card boot).
-      #
-      # Bootstrap: build the SD image on memory-alpha (aarch64 via binfmt) and
-      # flash it — boots straight into this config. See hosts/hamilton/DEPLOY.md.
-      #   nix build .#nixosConfigurations.hamilton.config.system.build.sdImage
-      # Routine deploys, with memory-alpha as the aarch64 build host:
-      #   nixos-rebuild switch --flake .#hamilton \
-      #     --target-host z@hamilton.internal \
-      #     --build-host z@memory-alpha.internal --use-remote-sudo
+      # hamilton — Raspberry Pi 3, backup AdGuard/Unbound resolver (same
+      # shape as hopper). Build and deploy commands: hosts/hamilton/DEPLOY.md.
       hamilton = nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
         specialArgs = { inherit self; };
@@ -257,12 +260,9 @@
         ];
       };
 
-      # galactica-live-iso — throwaway live ISO for Tower's bare metal, built
-      # to de-risk the migration plan (boot test, mounting the Unraid array
-      # read-only, hardware profile) BEFORE galactica has a real config — see
-      # hosts/galactica/README.md (no configuration.nix yet, deliberately) and
-      # hosts/galactica/live-iso.nix for the build/flash commands. This is not
-      # nixosConfigurations.galactica and never becomes the real host.
+      # galactica-live-iso — throwaway live ISO built to de-risk the migration
+      # (hosts/galactica/live-iso.nix has the build/flash commands). Not the
+      # real host and never becomes it.
       galactica-live-iso = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
