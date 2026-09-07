@@ -55,6 +55,16 @@
   # different tradeoff). `interval` is a duration string, 1h–8760h.
   services.adguardhome.settings.querylog.interval = "1440h";
 
+  # AdGuard's web UI defaults to 127.0.0.1:3000 only (confirmed live —
+  # unreachable from the LAN until this). Routed via Traefik under
+  # arr.internal/arr.zjones.dev rather than opening 3000 directly, reusing
+  # the existing wildcard cert instead of requesting a new one (traefik-
+  # galactica.nix's mkRouterPair dedup) — the `arr.*` namespace is a
+  # placement of convenience here, not a claim that AdGuard is part of the
+  # media stack. *.arr.internal/*.arr.zjones.dev already resolve to
+  # galactica (rewrites above), so no new DNS entry needed either.
+  homelab.arrExtraUpstreams.adguard = "http://127.0.0.1:3000";
+
   # ── DNS rewrites — migrated off the router's AdGuard instance ──────────────
   # These lived only in the router's mutable UI state (hand-clicked, not
   # tracked anywhere) until now. Grouped by physical box, not alphabetically,
