@@ -71,7 +71,13 @@
   # without Tailscale. homeassistant deliberately does NOT — stays
   # Tailscale/LAN-only, no `.xyz` name at all. The *arr stack's `.xyz` route
   # was dropped entirely (owner's call: not needed).
-  services.adguardhome.settings.filtering.rewrites = [
+  # ⚠ `enabled = true` is mapped over every entry below, not written per-line
+  # — AdGuard 0.107.78 added a per-rewrite enable toggle that isn't in most
+  # docs yet, and an omitted bool renders as Go's zero-value (`false`), so
+  # every rewrite loaded silently disabled until this was caught live
+  # (2026-09-06: every dig came back NXDOMAIN via real recursive resolution,
+  # not a rewrite hit).
+  services.adguardhome.settings.filtering.rewrites = map (r: r // { enabled = true; }) [
     # router (GL.iNet)
     { domain = "router.internal"; answer = "192.168.8.1"; }
 

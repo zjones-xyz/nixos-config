@@ -77,8 +77,10 @@
       filters = [
         { enabled = true; id = 1; name = "AdGuard DNS filter";
           url = "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt"; }
-        { enabled = true; id = 2; name = "OISD Basic";
-          url = "https://basic.oisd.nl/"; }
+        # "Basic" was renamed "Small" upstream — the old basic.oisd.nl URL
+        # 404s now (caught live on galactica's first filter update, 2026-09-06).
+        { enabled = true; id = 2; name = "OISD Small";
+          url = "https://small.oisd.nl/"; }
         { enabled = true; id = 3; name = "AdAway Default Blocklist";
           url = "https://raw.githubusercontent.com/AdAway/adaway.github.io/master/hosts.txt"; }
       ];
