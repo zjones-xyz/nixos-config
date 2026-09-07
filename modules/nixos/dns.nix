@@ -66,6 +66,12 @@
         bootstrap_dns = [ "127.0.0.1:5335" ];
         # Don't fall back to public resolvers; keep all recursion in Unbound.
         upstream_mode = "load_balance";
+        # Default (20/sec/client) exists to protect a publicly-reachable
+        # resolver from abuse — this one binds LAN-only. A busy Docker host
+        # (metadata lookups, image pulls) can legitimately burst past 20/sec,
+        # so leave it uncapped rather than risk silent, hard-to-diagnose
+        # query drops for no real security benefit.
+        ratelimit = 0;
       };
       # ── Filter lists ────────────────────────────────────────────────────────
       filters = [
