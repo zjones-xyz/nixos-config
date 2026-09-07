@@ -182,10 +182,11 @@
         # /etc/AdGuardHome/config.yaml, same bcrypt-hash mechanism as
         # galactica's own admin above).
         url = "http://192.168.8.1";
-        # CONFIRM_ME_LIVE — the username already configured on the router
-        # (used successfully in the very first manual curl login test, before
-        # this file existed). Not "admin", not empty — both failed live.
-        username = "CONFIRM_ME_LIVE";
+        # Trying "root" as a live guess (owner's hunch) — GL.iNet's own
+        # system login is "root", so the router's bundled AdGuard may reuse
+        # that identity rather than a separate AdGuard-specific user. Not
+        # confirmed yet; "admin" and "" both failed live already.
+        username = "root";
         passwordFile = config.sops.secrets."adguardhome-sync/routerPassword".path;
       }
     ];
