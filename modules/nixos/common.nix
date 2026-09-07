@@ -131,8 +131,6 @@
     jq
     openssl
 
-    # `dig`/`nslookup`/`host` — absent fleet-wide until testing AdGuard's
-    # rewrites on galactica cost a detour through `nix-shell -p dnsutils`.
     dnsutils
 
     # Edit this host's own secrets/<host>.yaml using its SSH host key as the age
