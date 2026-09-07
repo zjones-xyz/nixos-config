@@ -6,12 +6,19 @@ let
   indexedReplicas = lib.imap0 (i: r: r // { idx = i; }) cfg.replicas;
 
   # Real passwords are never written here — this template only carries
-  # placeholder tokens, substituted into a runtime-only (tmpfs) copy by the
-  # unit's script. Deliberately conservative about what syncs: rewrites,
-  # filter lists, and client names are the only things this repo actually
-  # declares for galactica's AdGuard. dns.serverConfig/dhcp.* stay off since
-  # a replica (e.g. the router) has its own upstream/DHCP needs that
-  # shouldn't be overwritten by origin's.
+  # ${VAR}-style placeholders, substituted by envsubst (real environment
+  # variables, not shell text substitution) into a runtime-only (tmpfs)
+  # copy by the unit's script. envsubst deliberately replaces an earlier
+  # sed-based approach: sed's replacement text treats `&`/`\` as special,
+  # so any password containing one would be silently corrupted rather than
+  # inserted verbatim — confirmed live (a curl login with the literal
+  # password succeeded; the sed-substituted config's sync attempt 401'd).
+  # envsubst does plain variable substitution with no such metacharacters.
+  # Deliberately conservative about what syncs: rewrites, filter lists, and
+  # client names are the only things this repo actually declares for
+  # galactica's AdGuard. dns.serverConfig/dhcp.* stay off since a replica
+  # (e.g. the router) has its own upstream/DHCP needs that shouldn't be
+  # overwritten by origin's.
   configTemplate = pkgs.writeText "adguardhome-sync-config.yaml.tmpl" ''
     cron: "${cfg.cron}"
     runOnStart: true
@@ -22,13 +29,13 @@ let
     origin:
       url: ${cfg.originUrl}
       username: "${cfg.originUsername}"
-      password: "@ORIGIN_PASSWORD@"
+      password: "''${ORIGIN_PASSWORD}"
 
     replicas:
     ${lib.concatMapStrings (r: ''
       - url: ${r.url}
         username: "${r.username}"
-        password: "@REPLICA_${toString r.idx}_PASSWORD@"
+        password: "''${REPLICA_${toString r.idx}_PASSWORD}"
     '') indexedReplicas}
 
     features:
@@ -67,10 +74,11 @@ let
           - /run/adguardhome-sync/config.yaml:/config/adguardhome-sync.yaml:ro
   '';
 
-  # sed with `|` as the delimiter — passwords must not contain `|`.
-  sedArgs = lib.concatMapStringsSep " " (r:
-    ''-e "s|@REPLICA_${toString r.idx}_PASSWORD@|$(cat ${r.passwordFile})|"''
-  ) indexedReplicas;
+  # Names of the env vars envsubst substitutes, passed as its own restrict-list
+  # so it touches only these tokens and leaves any stray `${...}` elsewhere in
+  # the rendered YAML (there shouldn't be any, but be defensive) untouched.
+  envVarNames = [ "ORIGIN_PASSWORD" ] ++
+    map (r: "REPLICA_${toString r.idx}_PASSWORD") indexedReplicas;
 in
 {
   options.services.adguardhomeSync = {
@@ -158,10 +166,13 @@ in
       script = ''
         set -euo pipefail
         install -d -m 0700 /run/adguardhome-sync
-        sed \
-          -e "s|@ORIGIN_PASSWORD@|$(cat ${cfg.originPasswordFile})|" \
-          ${sedArgs} \
-          ${configTemplate} > /run/adguardhome-sync/config.yaml
+        export ORIGIN_PASSWORD="$(cat ${cfg.originPasswordFile})"
+        ${lib.concatMapStrings (r: ''
+          export REPLICA_${toString r.idx}_PASSWORD="$(cat ${r.passwordFile})"
+        '') indexedReplicas}
+        ${pkgs.gettext}/bin/envsubst '${lib.concatMapStringsSep " " (n: "$" + n) envVarNames}' \
+          < ${configTemplate} > /run/adguardhome-sync/config.yaml
+        unset ORIGIN_PASSWORD ${lib.concatMapStringsSep " " (r: "REPLICA_${toString r.idx}_PASSWORD") indexedReplicas}
         exec ${config.virtualisation.docker.package}/bin/docker compose -f ${composeFile} --project-name adguardhome-sync up --remove-orphans
       '';
     };
