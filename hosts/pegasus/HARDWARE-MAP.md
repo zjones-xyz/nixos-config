@@ -446,10 +446,24 @@ confirmed via `niri msg outputs` (EDID-sourced make/model/serial — see
 `hosts/pegasus/niri-settings.nix` for the declarative layout, added the same
 day):
 
-| Panel | Serial | Size | Native mode |
-|---|---|---|---|
-| LG Electronics LG HDR 4K | `111NTEP7X460` | 31.5″ | `3840x2160@59.997` (preferred) |
-| Dell S2721QS | `44B9513` | 27″ | `3840x2160@59.997` (preferred) |
+| Panel | Model | Serial | Size | Active area | PPI | Native mode |
+|---|---|---|---|---|---|---|
+| LG UltraFine Ergo | **32UN880-B** | `111NTEP7X460` | 31.5″ | 697 × 392 mm | **140** | `3840x2160@59.997` (preferred) |
+| Dell | **S2721QS** | `44B9513` | 27″ | 598 × 336 mm | **163** | `3840x2160@59.997` (preferred) |
+
+⚠ **The LG's EDID does not carry its model number.** It reports only
+`LG Electronics LG HDR 4K` — a generic string LG's GoldStar (`GSM`) vendor
+code reuses across several unrelated models, so `niri msg outputs` cannot
+identify this panel. `32UN880-B` came from the owner reading the unit itself,
+2026-09-07, and is recorded here because there is no way to recover it from
+the running system. It is the USB-C variant (60 W PD), 60 Hz, IPS.
+
+**PPI is computed, not measured** — from the diagonal and pixel grid, assuming
+square pixels: 31.5″ 16:9 at 3840×2160 → 139.9, and 27″ at the same resolution
+→ 163.2. The LG's figure cross-checks against the 700 × 400 mm its EDID
+reports, which agrees within EDID's centimetre rounding. The ~17% density gap
+is why `niri-settings.nix` scales both at 1.25 rather than matching either
+panel exactly — see that file, and `DECISIONS.md`.
 
 Both are wired **directly to the GPU** as of 2026-08-18, bypassing a
 DisplayPort KVM switch that had been in the LG's path. Which two of `DP-1`/
