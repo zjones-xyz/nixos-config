@@ -1046,9 +1046,15 @@ rather than each instance being hand-edited.
    (memory-alpha for jellyfin, galactica for guesthome) — Newt itself only
    runs on memory-alpha in this repo (`newt.nix`), which is fine since Newt's
    targets aren't restricted to localhost.
-3. [ ] **Deploy and verify** — `sudo nixos-rebuild switch --flake .#galactica`,
-   then `dig @localhost tower.internal` etc. against the full rewrite list
-   before treating this as the source of truth.
+3. [x] **Deploy and verify — done 2026-09-06.** Deployed, then two real bugs
+   found live and fixed (see git history): every rewrite loaded
+   `enabled: false` (an undocumented per-rewrite toggle, Go bool zero-value
+   when omitted), and OISD's filter URL had moved (`basic` renamed
+   `small`). After both fixes, exact-match and wildcard rewrites
+   (`tower.internal`, `jellyfin.zjones.dev`, `traefik.galactica.zjones.dev`,
+   `memory-alpha.internal`) all confirmed resolving correctly via
+   `dig @127.0.0.1`. AdGuard's web UI, found stuck on loopback-only, is now
+   routed through Traefik at `adguard.arr.internal`/`adguard.arr.zjones.dev`.
 4. [ ] **AdGuardHome-Sync — written, secrets populated, `enable = false` on
    purpose.** `modules/nixos/adguardhome-sync.nix` + galactica's own
    `services.adguardhomeSync` block wire this up: galactica as origin, the
