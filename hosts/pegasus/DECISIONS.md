@@ -909,3 +909,14 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   needed, just the one-line `defaultSession` change in
   `desktop-plasma.nix` (SDDM's own module stays the owner of that option,
   same as before). Not yet confirmed on real hardware.
+
+- **Convention (Zoe, 2026-09-06): prefer GUI tools on pegasus, but not
+  dogmatically.** When a tool exists in both GUI and headless/CLI form (as
+  with Proton Bridge above), default to the GUI variant. *Why:* Zoe's
+  stated rationale — a GUI usually surfaces errors and warnings visibly on
+  the desktop she's actually sitting at, where a background service fails
+  silently unless someone thinks to check `systemctl`/logs. She's not
+  opposed to non-GUI tooling; propose it where it genuinely fits better,
+  with the caveat called out: a headless service only alerts if monitoring
+  is wired up, and a tray app only alerts if it's actually autostarted and
+  running.

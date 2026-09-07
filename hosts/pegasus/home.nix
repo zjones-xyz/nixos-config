@@ -9,6 +9,10 @@
   home.username = "z";
   home.homeDirectory = "/home/z";
 
+  home.sessionVariables = {
+    SOPS_AGE_KEY_FILE = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
+  };
+
   # Host-specific rebuild aliases (layered on top of the shared portable ones
   # from modules/home/common.nix's home.shellAliases).
   #
@@ -82,6 +86,7 @@
     discord
     ferdium
     signal-desktop
+    slack
     openscad
     obsidian
     spotify
@@ -89,6 +94,9 @@
     prusa-slicer
     jellyfin-desktop
     vlc
+
+    thunderbird
+    protonmail-bridge-gui
 
     # file managers
     nemo
