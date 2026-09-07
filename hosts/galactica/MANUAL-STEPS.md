@@ -1049,12 +1049,27 @@ rather than each instance being hand-edited.
 3. [ ] **Deploy and verify** — `sudo nixos-rebuild switch --flake .#galactica`,
    then `dig @localhost tower.internal` etc. against the full rewrite list
    before treating this as the source of truth.
-4. [ ] **Stand up AdGuardHome-Sync** with galactica as origin and the router
-   (`192.168.8.1:3000`, confirmed reachable, running `v0.107.73`) as the first
-   replica. Populate galactica's rewrites (above) and confirm they match the
-   router's current list *before* enabling sync — it's a one-directional
-   overwrite, so a mismatch here means the first sync wipes the router's live
-   config instead of just taking over maintaining it.
+4. [ ] **AdGuardHome-Sync — written, needs two secrets before it activates.**
+   `modules/nixos/adguardhome-sync.nix` + galactica's own
+   `services.adguardhomeSync` block wire this up: galactica as origin, the
+   router (`192.168.8.1:3000`, confirmed reachable, running `v0.107.73`) as
+   the first replica. Only syncs rewrites, filter lists, and client names —
+   deliberately not `dns.serverConfig`/`dhcp.*`, since the router has its own
+   upstream/DHCP needs that shouldn't be overwritten by galactica's.
+   sops-nix will refuse activation (`nrs`) until both exist:
+   ```
+   sops secrets/galactica.yaml
+   ```
+   - `adguardhome-sync/originPassword` — galactica AdGuard's admin password
+     (the plaintext behind the bcrypt hash in `configuration.nix` — not
+     derivable from the hash; use whatever you set when generating it).
+   - `adguardhome-sync/routerPassword` — the router's admin password (the one
+     used earlier to confirm its version via curl).
+   ⚠ Sync is a one-directional overwrite. Confirm galactica's rewrites
+   (above) actually match the router's current list *before* this first
+   runs, or the first sync wipes the router's live config instead of just
+   taking over maintaining it. hopper/hamilton join `replicas` once they're
+   rebuilt as the ephemeral resolvers discussed — not yet, neither exists.
 5. [ ] **Repoint DHCP later, not yet.** Once galactica's AdGuard is confirmed
    correct and stable, add it to the GL.iNet DHCP DNS server list (primary or
    alongside the router) — a separate, deliberate cutover step, not part of

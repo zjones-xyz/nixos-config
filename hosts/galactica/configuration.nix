@@ -21,6 +21,7 @@
     ../../modules/nixos/arcane-agent.nix
     ../../modules/nixos/scrutiny-collector.nix
     ../../modules/nixos/dns.nix
+    ../../modules/nixos/adguardhome-sync.nix
     ../../modules/nixos/traefik-galactica.nix
     ./borgmatic.nix
     ./nixflix.nix
@@ -120,6 +121,27 @@
     { domain = "*.arr.zjones.dev"; answer = "192.168.8.190"; }
     { domain = "guesthome.zjones.xyz"; answer = "192.168.8.190"; }
   ];
+
+  # ── AdGuardHome-Sync — galactica (origin) → router (first replica) ─────────
+  # ⚠ OWNER STEPS before this activates: sops-nix fails activation on a
+  # missing secret, so `nrs` will refuse until both exist.
+  #   sops secrets/galactica.yaml
+  #     adguardhome-sync/originPassword: galactica AdGuard's admin password
+  #       (the plaintext behind the bcrypt hash above — not derivable from it).
+  #     adguardhome-sync/routerPassword: the router's (192.168.8.1) AdGuard
+  #       admin password, used earlier to confirm its version (v0.107.73).
+  # hopper/hamilton join `replicas` once they're rebuilt as the ephemeral
+  # resolvers discussed — not yet, since neither exists today.
+  services.adguardhomeSync = {
+    enable = true;
+    originPasswordFile = config.sops.secrets."adguardhome-sync/originPassword".path;
+    replicas = [
+      {
+        url = "http://192.168.8.1:3000";
+        passwordFile = config.sops.secrets."adguardhome-sync/routerPassword".path;
+      }
+    ];
+  };
 
   # Mandatory for ZFS. Derived from the hostname (`sha256sum
   # <<<"galactica.internal" | head -c8`) so it is reproducible; no other meaning.
@@ -267,6 +289,10 @@
       "beszel/hubKey".owner = "z";
       "beszel/agentToken".owner = "z";
       "arcane/agentToken".owner = "z";
+      # Default owner (root) is fine — the adguardhome-sync systemd service
+      # runs as root, no User= override.
+      "adguardhome-sync/originPassword" = { };
+      "adguardhome-sync/routerPassword" = { };
       # Raw keyfile for all seven array members (slot 0; every disk also
       # carries the fleet recovery passphrase in slot 1). `format = "binary"`
       # is the byte-exact round-trip for raw key material.
