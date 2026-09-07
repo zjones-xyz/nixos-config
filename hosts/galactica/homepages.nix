@@ -37,6 +37,11 @@ let
   # Widget/link URLs go through Traefik's public-DNS names (real LE certs,
   # split-horizon to the LAN address) — NOT 127.0.0.1, which inside the
   # container is the container. Works identically from both instances.
+  # `siteMonitor` mirrors `href` on every entry: Homepage does its own
+  # periodic HTTP status check against that URL (independent of any
+  # `widget:` block) and shows a colored dot next to the service name —
+  # so every entry gets a live up/down indicator, not just the ones with
+  # an API-backed widget.
   adminConfig = {
     "custom.css" = customCss;
 
@@ -72,16 +77,19 @@ let
       - Media:
           - Jellyfin:
               href: https://jellyfin.zjones.dev
+              siteMonitor: https://jellyfin.zjones.dev
               icon: jellyfin.png
               description: Streaming (memory-alpha)
           - Navidrome:
               href: https://navidrome.arr.zjones.dev
+              siteMonitor: https://navidrome.arr.zjones.dev
               icon: navidrome.png
               description: Music
 
       - Media Management:
           - Sonarr:
               href: https://sonarr.arr.zjones.dev
+              siteMonitor: https://sonarr.arr.zjones.dev
               icon: sonarr.png
               description: TV
               widget:
@@ -90,6 +98,7 @@ let
                 key: "{{HOMEPAGE_VAR_SONARR_API_KEY}}"
           - Sonarr (Anime):
               href: https://sonarr-anime.arr.zjones.dev
+              siteMonitor: https://sonarr-anime.arr.zjones.dev
               icon: sonarr.png
               description: Anime
               widget:
@@ -98,6 +107,7 @@ let
                 key: "{{HOMEPAGE_VAR_SONARR_ANIME_API_KEY}}"
           - Radarr:
               href: https://radarr.arr.zjones.dev
+              siteMonitor: https://radarr.arr.zjones.dev
               icon: radarr.png
               description: Movies
               widget:
@@ -106,6 +116,7 @@ let
                 key: "{{HOMEPAGE_VAR_RADARR_API_KEY}}"
           - Lidarr:
               href: https://lidarr.arr.zjones.dev
+              siteMonitor: https://lidarr.arr.zjones.dev
               icon: lidarr.png
               description: Music
               widget:
@@ -114,14 +125,17 @@ let
                 key: "{{HOMEPAGE_VAR_LIDARR_API_KEY}}"
           - Bazarr:
               href: https://bazarr.arr.zjones.dev
+              siteMonitor: https://bazarr.arr.zjones.dev
               icon: bazarr.png
               description: Subtitles
           - Bazarr (Anime):
               href: https://bazarr-anime.arr.zjones.dev
+              siteMonitor: https://bazarr-anime.arr.zjones.dev
               icon: bazarr.png
               description: Anime subtitles
           - Prowlarr:
               href: https://prowlarr.arr.zjones.dev
+              siteMonitor: https://prowlarr.arr.zjones.dev
               icon: prowlarr.png
               description: Indexers
               widget:
@@ -132,10 +146,12 @@ let
       - Downloads:
           - qBittorrent:
               href: https://qbittorrent.arr.zjones.dev
+              siteMonitor: https://qbittorrent.arr.zjones.dev
               icon: qbittorrent.png
               description: Torrents
           - SABnzbd:
               href: https://usenet.arr.zjones.dev
+              siteMonitor: https://usenet.arr.zjones.dev
               icon: sabnzbd.png
               description: Usenet
               widget:
@@ -146,34 +162,42 @@ let
       - Infrastructure:
           - Traefik:
               href: https://traefik.arr.zjones.dev
+              siteMonitor: https://traefik.arr.zjones.dev
               icon: traefik.png
               description: Reverse proxy (this host)
           - Uptime Kuma:
               href: https://kuma.monitor.zjones.dev
+              siteMonitor: https://kuma.monitor.zjones.dev
               icon: uptime-kuma.png
               description: Uptime monitoring
           - Beszel:
               href: https://beszel.monitor.zjones.dev
+              siteMonitor: https://beszel.monitor.zjones.dev
               icon: sh-beszel
               description: Host monitoring
           - Scrutiny:
               href: https://scrutiny.monitor.zjones.dev
+              siteMonitor: https://scrutiny.monitor.zjones.dev
               icon: scrutiny.png
               description: Disk health
           - Dozzle:
               href: https://dozzle.monitor.zjones.dev
+              siteMonitor: https://dozzle.monitor.zjones.dev
               icon: dozzle.png
               description: Container logs
           - ntfy:
               href: https://ntfy.monitor.zjones.dev
+              siteMonitor: https://ntfy.monitor.zjones.dev
               icon: ntfy.png
               description: Notifications
           - Arcane:
               href: https://arcane.monitor.zjones.dev
+              siteMonitor: https://arcane.monitor.zjones.dev
               icon: sh-arcane
               description: Container management
           - Dockge:
               href: https://dockge.memory-alpha.zjones.dev
+              siteMonitor: https://dockge.memory-alpha.zjones.dev
               icon: dockge.png
               description: Compose stacks
     '';
@@ -250,6 +274,7 @@ let
       - Media:
           - Jellyfin:
               href: https://jellyfin.zjones.dev
+              siteMonitor: https://jellyfin.zjones.dev
               icon: jellyfin.png
               description: Movies & TV
     '';
