@@ -192,15 +192,17 @@
         # against nothing; "adguardsync" is a real user hand-created via SSH
         # (users: block in the router's /etc/AdGuardHome/config.yaml, same
         # bcrypt-hash mechanism as galactica's own admin above).
+        #
+        # The router's bundled AdGuard also runs with a `--glinet` flag that
+        # gates all access through the GL.iNet webui's own login instead of
+        # AdGuard's — every one of AdGuard's own auth paths (Basic Auth,
+        # even a valid /control/login session cookie) 401's regardless of
+        # correct credentials while that flag is set. Removed from
+        # /etc/init.d/adguardhome on the router itself (non-persistent —
+        # not yet added to /etc/rc.local for boot survival, see
+        # MANUAL-STEPS.md), which restores normal AdGuard Basic Auth.
         username = "adguardsync";
         passwordFile = config.sops.secrets."adguardhome-sync/routerPassword".path;
-        # This build also rejects HTTP Basic Auth outright (401 with the
-        # identical, verified-correct credentials) while accepting the
-        # browser /control/login flow — confirmed live via curl on both
-        # :3000 directly and the nginx-fronted :80. adguardhome-sync's own
-        # client only ever sends Basic Auth for username/password, so this
-        # replica needs the cookie-login path instead.
-        useCookieAuth = true;
       }
     ];
   };
