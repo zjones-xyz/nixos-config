@@ -55,6 +55,11 @@
   # different tradeoff). `interval` is a duration string, 1h–8760h.
   services.adguardhome.settings.querylog.interval = "1440h";
 
+  # Stats retention (aggregated top-domains/clients, distinct from the raw
+  # query log above) — 90 days, same per-host reasoning. Same duration-string
+  # format/bounds as querylog.
+  services.adguardhome.settings.statistics.interval = "2160h";
+
   # AdGuard's web UI defaults to 127.0.0.1:3000 only (confirmed live —
   # unreachable from the LAN until this). Routed via Traefik under
   # galactica.internal/galactica.zjones.dev — not arrExtraUpstreams, since
