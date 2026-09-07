@@ -9,7 +9,7 @@ run books).
 
 | Host | Hardware | Role |
 |---|---|---|
-| `memory-alpha` | x86 mini PC | Docker services: Jellyfin, Traefik, monitoring hub (Beszel/Scrutiny/Arcane), dockge |
+| `memory-alpha` | x86 mini PC | Docker services: Jellyfin, Traefik, monitoring hub (Beszel/Scrutiny), Arcane (fleet compose-stack manager) |
 | `galactica` | Supermicro X9 tower (ex-Unraid) | Bulk storage: ZFS RAIDZ1 `tank`, NFS shares, media stack, offsite borgmatic |
 | `pegasus` | AM4 Ryzen + RTX 4070 | Desktop (Plasma 6/Wayland) + GPU inference (ollama) |
 | `hopper` | Raspberry Pi 4 | Network core: DNS (AdGuard/Unbound), ntfy, NUT server for its UPS |

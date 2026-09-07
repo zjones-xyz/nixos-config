@@ -38,7 +38,6 @@ in
     ../../modules/nixos/jellyfin-pretranscode.nix
     ../../modules/nixos/newt.nix
     ../../modules/nixos/traefik.nix
-    ../../modules/nixos/dockge.nix
     ../../modules/nixos/arcane.nix
     ../../modules/nixos/nut-client.nix
     ../../modules/nixos/luks-remote-unlock.nix

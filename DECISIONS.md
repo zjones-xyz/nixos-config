@@ -87,3 +87,39 @@ Wrote an addendum to `HOMELAB_STACKS_HANDOFF.md` (bottom of file) covering: why 
 4. For hopper: hand the `HOMELAB_STACKS_HANDOFF.md` addendum to a session with access to the `homelab_stacks` repo.
 
 No Phase 4 (cleanup/skill doc) yet — deferred until Phase 3 has an actual second consumer of `arcane-agent.nix` to document a real usage example from.
+
+## Dockge retirement (2026-09-07)
+
+By now the manager from Phase 1 is live (pinned `v2.10.1`, DB dumped by
+`hosts/memory-alpha/borgmatic.nix`) and manages the same
+`/home/z/homelab-stacks/memory-alpha` tree Dockge did; galactica reports in
+as a remote environment via `services.arcaneAgent` (the Phase 2 module,
+imported in `hosts/galactica/configuration.nix`). That covers both halves of
+Dockge's job — management by Arcane, visibility by Beszel (`docs/BACKUP.md`
+records why that split made retiring it safe) — so Dockge is retired
+repo-wide:
+
+- `modules/nixos/dockge.nix` deleted; its import dropped from
+  `hosts/memory-alpha/configuration.nix`.
+- `traefik.nix`'s `docker-proxy-network` no longer orders against
+  `dockge.service` (Arcane wires its own ordering from `arcane.nix`).
+- borgmatic no longer dumps `dockge.db`; existing archives keep the history.
+- No other host ever ran Dockge from this repo: the Pis run hand-managed
+  Compose (Pi OS), galactica's media stack is NixOS-native (PR #94), and
+  Tower — whose Dockge was an Unraid container outside this repo — has been
+  replaced by galactica entirely, so its Dockge died with the host. The
+  `tower/` tree in homelab-stacks stays as a Dockge-era archive of that
+  retired host.
+
+Decommission steps on the hardware (memory-alpha):
+
+1. [ ] `nixos-rebuild switch` — removing the unit stops it, and the old
+   unit's `ExecStop` runs `docker compose down`, taking the container with
+   it. If one lingers: `docker rm -f dockge`.
+2. [ ] `docker compose ls` — any project whose config path still points
+   under `/opt/stacks/` gets one redeploy from Arcane. Expect a container
+   recreate, not an error: the compose working-dir label changes from the
+   symlinked path to the real one.
+3. [ ] `sudo rm /opt/stacks && sudo rmdir /opt` (if otherwise empty) — the
+   tmpfiles symlink outlives the rule that created it.
+4. [ ] `rm -rf /home/z/dockge` once satisfied nothing in it is wanted.

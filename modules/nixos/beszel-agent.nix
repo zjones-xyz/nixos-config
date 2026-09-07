@@ -17,7 +17,7 @@ let
   # matching what memory-alpha runs.
   #
   # Same compose-file-in-systemd shape the rest of the fleet uses
-  # (arcane-agent.nix, dockge.nix). Socket is the rootful daemon
+  # (arcane.nix, arcane-agent.nix). Socket is the rootful daemon
   # (`/run/docker.sock`), mounted read-only — the agent only reads container
   # stats. The data volume persists the agent's identity across restarts.
   composeFile = pkgs.writeText "beszel-agent-compose.yml" ''

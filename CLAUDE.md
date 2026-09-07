@@ -16,7 +16,7 @@ documents the repo's structure and patterns.)
   why). Don't "fix" a missing `configuration.nix` without reading that host's
   `DECISIONS.md`.
 - **`modules/nixos/<concern>.nix`** — one concern per module (e.g. `traefik.nix`,
-  `dockge.nix`, `nvidia.nix`, `gaming.nix`). Hosts import the modules they need.
+  `arcane.nix`, `nvidia.nix`, `gaming.nix`). Hosts import the modules they need.
 - **`modules/home/<name>.nix`** — Home Manager modules shared across hosts/platforms
   (e.g. `common.nix`, consumed by both a NixOS host and a darwin host).
 - **`secrets/<host>.yaml`** — sops-encrypted, per host. Policy in `.sops.yaml`.

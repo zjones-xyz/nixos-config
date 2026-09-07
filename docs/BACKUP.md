@@ -886,8 +886,8 @@ or it fails open.
 
 ### The better answer where Nix owns the Compose file
 
-This fleet renders Compose files from Nix — `traefik.nix`, `dockge.nix` and
-`arcane.nix` all use `pkgs.writeText` and shell out to `docker compose`. Where
+This fleet renders Compose files from Nix — `traefik.nix` and `arcane.nix`
+both use `pkgs.writeText` and shell out to `docker compose`. Where
 that is true, **round-tripping tier information through Docker labels means
 writing it in Nix, rendering it into a label, and then reading it back out at
 runtime.** Nix already has it.
@@ -903,7 +903,7 @@ list is static, so a stopped service cannot silently vanish from the backup.
 | Who owns the Compose file | Right mechanism |
 |---|---|
 | **Nix** (`modules/nixos/*.nix`, `writeText` + `docker compose`) | Declare the tier in Nix; generate the path list alongside the Compose file |
-| **Dockge / hand-managed** (`homelab-stacks`, Unraid templates) | Labels are the only in-band option — Nix does not own those files |
+| **Arcane / hand-managed** (`homelab-stacks`, Unraid templates) | Labels are the only in-band option — Nix does not own those files |
 
 Tower today is the second case; Tower after the migration is intended to be the
 first. **So labels are the right tool for the transition and the wrong tool for
@@ -961,9 +961,13 @@ should be judged as one.
 > was a requirement. **The owner is not attached to Dockge** — what is wanted is
 > *visibility*, not stack management. That materially weakens the argument, so it
 > is restated rather than left standing.
+>
+> **Superseded 2026-09-07.** Dockge is retired fleet-wide; Arcane
+> (`modules/nixos/arcane.nix`) took over the management half. The analysis
+> below stands as the record of why retiring it was safe.
 
-`modules/nixos/dockge.nix` exists so stacks under `homelab-stacks/` can be managed
-through a web UI, deliberately *outside* the flake. It does two jobs that are
+`modules/nixos/dockge.nix` existed so stacks under `homelab-stacks/` could be managed
+through a web UI, deliberately *outside* the flake. It did two jobs that are
 easy to conflate:
 
 | Job | Who needs it if Nix owns the stacks |
