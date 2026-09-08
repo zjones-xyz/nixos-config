@@ -90,7 +90,15 @@
       # instead of address. `ids` also accepts IPv6, MAC, CIDR, or a
       # DoH/DoT ClientID. With mutableSettings = false, this has to be
       # declared here — the web UI can't hold it across a rebuild.
-      clients.persistent = [
+      # use_global_settings defaults to Go's zero-value `false` when omitted
+      # (same class of bug as the rewrites' `enabled` field) — without it,
+      # AdGuard disables filtering, rewrites included, specifically for
+      # queries sourced *from* these IPs, which silently broke DNS
+      # resolution for every fleet host talking to another fleet host
+      # (confirmed live, 2026-09-08 — the router replica inherited the same
+      # bug via AdGuardHome-Sync, since it just mirrors whatever origin
+      # reports).
+      clients.persistent = map (c: c // { use_global_settings = true; }) [
         { name = "router"; ids = [ "192.168.8.1" ]; }
         { name = "hopper"; ids = [ "192.168.8.10" ]; }
         { name = "pegasus"; ids = [ "192.168.8.72" ]; }
