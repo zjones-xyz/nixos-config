@@ -178,17 +178,22 @@ file exists to do.
 > The general lesson: `wtf?` is for a device that *should* have a serial and does
 > not. Establish what a device is before applying it.
 
-**It is load-bearing, not incidental.** `DECISIONS.md` records that xrdp was added
-partly to replace the physical IP-KVM, and is explicit that BIOS/UEFI screens, the
-boot-loader menu and kernel panics are out of scope for any software remote
-desktop. **The NanoKVM is what covers that gap** — including the one case this
-host will actually hit, a boot that needs the firmware menu. Do not treat it as
-spare hardware to be reclaimed.
+⚠ **Removed for good, 2026-09-08 — `sdd` no longer appears at all.** It came out
+on 2026-08-18 to rule it out while diagnosing the DP KVM fault (§8) and is not
+going back: the third monitor now occupies `HDMI-A-1`, the 4070's only HDMI
+output, and the NanoKVM is an HDMI capture device. The description above is kept
+because an `lsblk` capture predating this date will still show `sdd`, and the
+next reader should not have to work out what it was.
 
-⚠ **Physically removed 2026-08-18**, deliberately, to rule it out while
-diagnosing the DP KVM fault in §8 — `HDMI-A-1` reading `disconnected` for the
-duration is expected and is this, not a regression. **Reconnect it** once the
-display troubleshooting in §8 is done; the paragraph above is not hyperbole.
+**What that costs, stated plainly.** `DECISIONS.md` records that xrdp was added
+partly to replace the physical IP-KVM, and is explicit that BIOS/UEFI screens,
+the boot-loader menu and kernel panics are out of scope for any software remote
+desktop. This host now has **no out-of-band console at all** — recovering a
+failed boot or reading a panic means being physically at the machine. That was
+a documented reason not to reclaim this hardware, and the decision to drop it
+anyway is recorded in `DECISIONS.md`. `boot.kernel.sysctl."kernel.panic" = 600`
+(`configuration.nix`) is now the only concession to reading a panic screen: ten
+minutes to walk over before it reboots.
 
 ---
 
@@ -382,7 +387,12 @@ inventory has to learn to filter it back out.
 | SATA silkscreen ↔ `ata-N` reconciliation | Case open | Printing cable labels (§5) |
 | Whether bay identifiers are warranted at all | A decision | §3 |
 | ⚠ **DP KVM: cable-run length vs. link training** | Dissecting the 10 ft GPU→KVM run (§8) | Reintroducing the KVM for either monitor |
-| **Reconnect the NanoKVM** | Physical | Firmware/BIOS/panic-screen access (§1) |
+
+⛔ **Dropped 2026-09-08, not resolved:** *Reconnect the NanoKVM.* The third
+monitor took `HDMI-A-1`, the only HDMI output this host has, so there is nowhere
+to put it. Listed here rather than deleted because it leaves a real gap — no
+out-of-band console — that a future session should meet as a known decision
+rather than an oversight. See §1 and `DECISIONS.md`.
 
 ✅ **Closed 2026-08-10:** *SMART health on `h-XDAS`* — passive attributes clean
 **and** a full 366-minute extended surface scan completed without error (§1). The

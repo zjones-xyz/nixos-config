@@ -1011,3 +1011,26 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   LG's GoldStar (`GSM`) vendor code reuses across multiple actual models,
   not a real model number. No monitor-specific research possible until the
   real model number comes off the unit itself.
+- **NanoKVM dropped, 2026-09-08 — reversing this repo's own "do not reclaim
+  it" position, with the cost accepted.** The third monitor (Dell S2722QC)
+  took `HDMI-A-1`, and the 4070 has exactly one HDMI output, so an HDMI
+  capture device and a third display cannot both exist on this host.
+  *What this gives up:* the xrdp decision above is explicit that BIOS/UEFI
+  screens, the boot-loader menu and kernel panics are out of scope for any
+  software remote desktop, and `HARDWARE-MAP.md` §1 called the NanoKVM
+  "load-bearing, not incidental" for exactly that reason. Dropping it leaves
+  pegasus with **no out-of-band console**: a failed boot, a firmware menu or
+  a panic now requires being physically at the machine. That is a real
+  regression in recoverability, taken knowingly rather than overlooked.
+  *Why it was acceptable anyway:* pegasus is a desk machine that its owner
+  sits at, not a headless server in another room — the fleet hosts where
+  out-of-band access actually matters (galactica, memory-alpha) have their
+  own paths, and this host's LUKS remote-unlock over initrd SSH covers the
+  one recurring remote case. `boot.kernel.sysctl."kernel.panic" = 600`
+  stays as the concession that matters: ten minutes to read a panic before
+  the box reboots.
+  *The exit, if it is ever wanted back:* DP-3 is free, so a DP→HDMI adapter
+  would restore it without displacing a monitor — or move the S2722QC to
+  DP-3 (it has a DisplayPort input) and give `HDMI-A-1` back. The latter
+  would also change that output's declared refresh from 60.000 to whatever
+  DP negotiates; see the comment in `niri-settings.nix`.
