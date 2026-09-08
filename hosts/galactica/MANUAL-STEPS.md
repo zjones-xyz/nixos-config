@@ -1111,7 +1111,7 @@ rather than each instance being hand-edited.
      downgrading galactica's own AdGuard to match would trade a real
      version back for a cosmetic match, which isn't worth it for a WARN
      that hasn't caused any actual sync failure.
-5. [ ] **Verify the `--glinet` removal survives an actual reboot.** Fixed
+5. [x] **`--glinet` removal survives a reboot — verified 2026-09-08.** Fixed
    in `/etc/rc.local` (a first attempt via `vi` split the `sed` command
    across two lines, silently breaking it — rewritten with a `cat` heredoc
    instead to avoid the interactive-editor pitfall):
@@ -1119,12 +1119,12 @@ rather than each instance being hand-edited.
    sed -i "s/--glinet //g" /etc/init.d/adguardhome
    service adguardhome restart
    ```
-   above `exit 0`. Confirmed correct by reading the file back, but not yet
-   proven across a real reboot (only manually re-applied so far) — check
-   after the router's next reboot/update rather than forcing one just to
-   test. Tradeoff to accept knowingly: this also drops the AdGuard stats
-   widget from the GL.iNet router's own dashboard (that integration depends
-   on `--glinet`).
+   above `exit 0`. Deliberately rebooted the router to confirm rather than
+   wait for an incidental one — `rc.local` correctly stripped `--glinet`
+   again on boot, and Basic Auth against the router's AdGuard still
+   succeeded afterward. Tradeoff accepted knowingly: this also drops the
+   AdGuard stats widget from the GL.iNet router's own dashboard (that
+   integration depends on `--glinet`).
 7. [x] **Fleet-wide inter-host DNS outage, root-caused and fixed —
    2026-09-08.** SSH to `memory-alpha.internal` started failing the
    morning after §13 item 4 was confirmed working. Long diagnostic chain,
