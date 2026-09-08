@@ -1,5 +1,27 @@
 { config, pkgs, lib, ... }:
 
+let
+  fleetLib = import ../../fleet/lib.nix { inherit lib; };
+
+  # Same eight names/IPs as before, now sourced from homelab.fleet.hosts
+  # (modules/nixos/fleet.nix, fleet/hosts.nix) instead of hardcoded here.
+  # Order is explicit, not derived by enumerating the registry (Nix attrsets
+  # always enumerate alphabetically, which would reorder this list) — it
+  # matches AdGuardHome.yaml's existing client order byte-for-byte, which
+  # the Phase 1 no-op proof (`jq -S .` — sorts object keys, not array
+  # elements) depends on.
+  clientOrder = [
+    "router"
+    "hopper"
+    "pegasus"
+    "memory-alpha-2"
+    "memory-alpha"
+    "homeassistant"
+    "galactica"
+    "towerbmc"
+    # hamilton: not yet deployed, no known IP — add once it exists.
+  ];
+in
 {
   # DNS stack: AdGuard Home (LAN-facing filter) → Unbound (recursive resolver).
   #
@@ -98,21 +120,31 @@
       # (confirmed live, 2026-09-08 — the router replica inherited the same
       # bug via AdGuardHome-Sync, since it just mirrors whatever origin
       # reports).
-      clients.persistent = map (c: c // { use_global_settings = true; }) [
-        { name = "router"; ids = [ "192.168.8.1" ]; }
-        { name = "hopper"; ids = [ "192.168.8.10" ]; }
-        { name = "pegasus"; ids = [ "192.168.8.72" ]; }
-        { name = "memory-alpha-2"; ids = [ "192.168.8.98" ]; }
-        { name = "memory-alpha"; ids = [ "192.168.8.99" ]; }
-        { name = "homeassistant"; ids = [ "192.168.8.142" ]; }
-        { name = "galactica"; ids = [ "192.168.8.190" ]; }
-        { name = "towerbmc"; ids = [ "192.168.8.191" ]; }
-        # hamilton: not yet deployed, no known IP — add once it exists.
-      ];
+      clients.persistent = map (c: c // { use_global_settings = true; }) (
+        map (name: {
+          inherit name;
+          ids = [ config.homelab.fleet.hosts.${name}.ip ];
+        }) clientOrder
+      );
 
       # Note: hopper and hamilton also import this module (currently dead
       # code — hosts/README-rpi-os.md) alongside galactica, so any clients
       # defined here would appear on all instances that actually run it.
+
+      # ── Generated service rewrites (fleet/services.nix) ────────────────────
+      # Appended to, not replacing, galactica's hand-written list below it in
+      # its own configuration.nix — the module system concatenates list
+      # definitions of the same freeform-settings path. Order between the two
+      # lists is therefore undefined; that's fine, AdGuard's rewrite lookup
+      # doesn't depend on file order, and the Phase 1 no-op proof sorts by
+      # domain before comparing. Only the three rows fleet/services.nix seeds
+      # today (jellyfin.zjones.dev/.xyz, guesthome.zjones.xyz) come from here
+      # — see fleet/services.nix and fleet/lib.nix's `rewritesFor`.
+      filtering.rewrites = fleetLib.rewritesFor {
+        hosts = config.homelab.fleet.hosts;
+        services = config.homelab.fleet.services;
+        splitHorizonGlobal = config.homelab.dns.splitHorizon;
+      };
     };
   };
 

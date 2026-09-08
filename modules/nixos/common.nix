@@ -2,6 +2,7 @@
 
 {
   imports = [
+    ./fleet.nix
     ./letsencrypt.nix
     ./motd.nix
     ./smart.nix
