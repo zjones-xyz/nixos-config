@@ -32,7 +32,7 @@ Dates are UTC.
 | ID | Device | Size | Full serial | Role | `sdX` | FS | Enc. |
 |---|---|---|---|---|---|---|---|
 | `m2-0257` | **PNY CS3250 2TB SSD** | 2 TB | `PNY25372509080100257` | **Root** | `nvme0n1` | LUKS → btrfs | **yes** |
-| `h-XDAS` | **Toshiba DT01ACA300** | 3 TB | `76HE4XDAS` | ⚠ **earmarked — galactica parachute** | `sdb` | btrfs + exfat, **both empty** | **no** |
+| `h-XDAS` | **Toshiba DT01ACA300** | 3 TB | `76HE4XDAS` | unassigned (parachute role never used — see §1a) | `sdb` | btrfs + exfat, **both empty** | **no** |
 | `s-636E` | **Samsung SSD 860 QVO 1TB** | 1 TB | `S59HNG0N417636E` | **Windows** | `sda` | ntfs (+ESP) | **no** |
 | `h-P2NJ` | **WDC WD10EZEX-08WN4A0** | 1 TB | `WD-WCC6Y5LKP2NJ` | data — "Spinner" | `sdc` | ntfs | **no** |
 
@@ -44,7 +44,13 @@ they came from the same reading; **map by serial, never by `sdX`.**
 **Four-character suffixes are unique within this host** — `XDAS`, `636E`, `P2NJ`,
 `0257`. No expansion needed (`DISK-LABELLING.md` §1).
 
-### `h-XDAS` — the parachute disk
+### 1a. `h-XDAS` — the (never-used) parachute disk
+
+🗑 **The parachute role never fired.** galactica's migration went
+copy-back-from-`sidepool` instead (`hosts/galactica/DECISIONS.md` §8's banner),
+so nothing below happened: no LUKS reformat, no copy. The disk is simply an
+empty, untested, ~13-year-old spare. The section stands as written for if a
+similar role ever comes up.
 
 **Genuinely empty, confirmed 2026-08-08.** `btrfs filesystem usage` reports
 320 KiB used against 2.34 TiB, and the 400 GB exfat partition holds 768 K — both

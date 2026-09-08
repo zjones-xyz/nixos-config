@@ -64,10 +64,10 @@ on the property. **Why this over an explicit path list:**
   exactly Critical + Precious (`hosts/galactica/SHARES.md` §5). Tagging those
   datasets puts the selection where the data and its tier already live, and it
   **survives dataset renames and remounts** — a path list in Nix does not.
-- **The dataset names are not finalised.** `MANUAL-STEPS.md` §10 still has
-  `tank/appdata` as "name TBD", and the array does not exist yet. A hardcoded
-  mountpoint list would be guessing; a property is applied once, live, when the
-  dataset is created with its final name.
+- **The dataset names were not finalised when this was chosen** (the array
+  didn't exist yet). A hardcoded mountpoint list would have been guessing; a
+  property is applied once, live, when a dataset is created with its final
+  name — and that reasoning still holds for future additions.
 - **One place to add scope later.** Bringing `tank/appdata` subtrees in becomes
   one `zfs set`, with no Nix change and no redeploy.
 
@@ -188,13 +188,11 @@ verified against the unit file and its own inline comments:
    snapshot both need `CAP_SYS_ADMIN` (the unit comment literally suggests adding
    it). Added.
 
-⚠ **Still needs a real run to confirm** the snapshot actually mounts under
-`ProtectSystem=full` + `RestrictNamespaces=yes`. Those should be fine — the mount
-lands in the unit's writable `/run/borgmatic`, `@mount` is in the unit's
-`SystemCallFilter`, and the zfs kernel module is preloaded at boot
-(`boot.supportedFilesystems`, `boot.zfs.extraPools`) so `ProtectKernelModules=yes`
-never has to load it on demand — but this is the one thing that can only be
-proven live. First scheduled run against a tagged dataset settles it.
+✅ **Confirmed by the first live run (2026-09-03):** the snapshot mounts fine
+under `ProtectSystem=full` + `RestrictNamespaces=yes` — the mount lands in the
+unit's writable `/run/borgmatic`, `@mount` is in the unit's `SystemCallFilter`,
+and the zfs kernel module is preloaded at boot so `ProtectKernelModules=yes`
+never has to load it on demand.
 
 ---
 

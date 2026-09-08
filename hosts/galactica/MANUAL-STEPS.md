@@ -1,10 +1,9 @@
 # galactica — manual steps (gated on being physically at Tower, or on the ISO)
 
-`configuration.nix`, `disko.nix`, and `home.nix` exist now, but
-`nixosConfigurations.galactica` is deliberately not yet in `flake.nix` —
-`hardware-configuration.nix` doesn't exist and can't be evaluated blind. See
-the header comment in `configuration.nix` for why. Everything below closes
-that gap, roughly in order.
+galactica is installed and in the flake: `nixosConfigurations.galactica`
+evaluates with the real `hardware-configuration.nix`, and the host is live.
+The steps below record the bring-up, roughly in order — done ones are checked
+or ✅-marked; unchecked items are still pending.
 
 An opus review agent independently checked this whole plan on 2026-08-31 —
 several fixes below exist because of it, credited inline where they matter.
@@ -111,9 +110,9 @@ generator will NOT reproduce on its own, all caught by the opus review:
   set up (see §7) — the overprovisioning/endurance plan for those depends on
   discards actually reaching the physical disks, same mechanism as root.
 
-## 3. Wire the flake up — the mechanical last step
+## 3. ✅ Wire the flake up — done (galactica is in `flake.nix`, age key enrolled)
 
-Once `hardware-configuration.nix` is real:
+The steps as they were, for the record:
 
 - Add `galactica` to `nixosConfigurations` in `flake.nix`, matching
   `memory-alpha`'s shape (no extra inputs needed — it's a plain x86_64-linux
@@ -137,9 +136,9 @@ Once `hardware-configuration.nix` is real:
 step — see the crypttab fix already applied to configuration.nix, caught by
 the opus review before it could bite here.)
 
-## 4. midden's logs keyfile
+## 4. ✅ midden's logs keyfile — done (crypttab carries the real UUID, `luks/middenKeyFile` is in sops)
 
-Only `cryptlogs` needs this now — `/var/cache/nix-build` is unencrypted
+Only `cryptlogs` needed this — `/var/cache/nix-build` is unencrypted
 (reversed 2026-08-31, see disko.nix's `nixBuildScratch` comment for why).
 Once `disko.nix` has run and the LUKS partition exists:
 
@@ -264,13 +263,14 @@ if it turns out to matter.
 
 ### Doing the cutover
 
-1. [ ] **galactica first.** The mounts are `access denied` until the exports
+1. [x] **galactica first.** The mounts are `access denied` until the exports
    exist:
    ```bash
    sudo nixos-rebuild switch --flake .#galactica
    sudo exportfs -v          # expect the three paths above, with their fsids
    ```
-2. [ ] **Then memory-alpha:**
+2. [x] **Then memory-alpha** (both switched — the cutover is live, per the
+   NFS-mounts note in `hosts/memory-alpha/configuration.nix`):
    ```bash
    sudo nixos-rebuild switch --flake .#memory-alpha
    ls /mnt/media /mnt/unmanaged    # automount triggers on access
@@ -364,7 +364,7 @@ against the source, plus the Unraid flash+config insurance into
    > (silent verify pass). `move_aside/` was confirmed to be only the already
    > migrated array shares. So only the physical case work remains; nothing on
    > sidepool is still needed. Mappers closed again afterward.
-4. [ ] **NFS re-exports** — written; §8 carries the export table, the two
+4. [x] **NFS re-exports** — live; §8 carries the export table, the two
    fsids held back and why, and the switch-galactica-first sequence.
 
 The original forward-looking notes below are now mostly satisfied; kept for

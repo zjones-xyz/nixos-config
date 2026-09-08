@@ -3,46 +3,14 @@
 Everything below requires real hardware or secrets and was deliberately NOT done
 by the authoring session. Roughly in order.
 
-## 0. Before Wednesday — gather from the running CachyOS system
+## 0. ✅ Pre-install survey of the running CachyOS system — moot
 
-Do this *now*, while CachyOS boots fine, to de-risk install day. The pegasus
-config was authored blind (placeholder UUIDs, generic module lists); running
-these on the live box and pasting the output back lets the real values get
-reconciled into the config ahead of time. Nothing here changes anything — all
-read-only.
+The install happened 2026-07-11 and the CachyOS drive was physically removed;
+the gathered hardware values were folded into the config (see §1 and
+`HARDWARE-MAP.md`). The read-only survey commands lived here and are in git
+history if a similar pre-install pass is ever wanted for another box.
 
-```bash
-# 1. Drive identity — MOST IMPORTANT. Records the CachyOS drive's model+serial
-#    so that, once the new blank NVMe is installed, you can positively identify
-#    which /dev/disk/by-id/ path is the NEW drive (by elimination) before disko
-#    ever touches it. Do NOT trust nvme0n1 vs nvme1n1 with two drives present.
-lsblk -o NAME,SIZE,MODEL,SERIAL,TYPE,MOUNTPOINTS
-ls -l /dev/disk/by-id/ | grep -i nvme
-
-# 2. GPU — confirm it's the RTX 4070 and see the in-use kernel driver.
-lspci -nnk | grep -iA3 -E 'vga|3d controller'
-
-# 3. CPU — confirm AMD (feeds kvm-amd + microcode in hardware-configuration.nix).
-lscpu | grep -iE 'model name|vendor'
-
-# 4. NIC — driver + interface name + MAC (feeds networking / later tailscale).
-lspci -nnk | grep -iA3 -E 'ethernet|network controller'
-ip -o link | grep -v 'lo:'
-
-# 5. RAM — sanity-check zram sizing (config uses memoryPercent = 90).
-free -h
-
-# 6. Board + BIOS — model informs the M.2-slot / SATA lane-sharing question
-#    (matters for the Windows SATA SSD) and whether a BIOS update is wanted.
-sudo dmidecode -t bios -t baseboard | grep -iE 'vendor|version|manufacturer|product name'
-
-# 7. TPM — confirm fTPM is exposable (needed for Windows 11 later).
-ls -l /sys/class/tpm/ 2>/dev/null || echo "no TPM device — enable fTPM in BIOS"
-```
-
-Paste the output back and it'll be folded into the config before install day.
-
-## 1. Bare-metal NixOS install (single NVMe — CachyOS drive removed 2026-07-11)
+## 1. ✅ Bare-metal NixOS install — done 2026-07-11 (single NVMe, CachyOS drive removed)
 
 **Superseded from the original dual-NVMe plan**: at install time, the CachyOS
 drive was physically pulled entirely rather than dual-booted, so pegasus is
@@ -67,7 +35,7 @@ blank" step.
    `nixos-generate-config --root /mnt` and replace
    `hosts/pegasus/hardware-configuration.nix` with the result. Commit it.
 
-## 2. First switch (Phase 1 only — have a TTY reachable)
+## 2. ✅ First switch — done (all phases have long since been switched and exercised)
 
 Bring up base + GPU + Plasma first, before gaming/perf/inference, so a bad GPU
 or display-manager state doesn't lock you out:
@@ -133,10 +101,10 @@ To bump Olla's version later: change `version`, re-run
   `rtcwake` the evening before or set a BIOS RTC wake — the timer alone won't wake
   the box, and global suspend behaviour was deliberately left unchanged.
 
-## 7. Secrets
+## 7. ✅ Secrets — done
 
-See `SECRETS-TODO.md` — create `secrets/pegasus.yaml`, add pegasus's age key to
-`.sops.yaml`, then the Tailscale auth key wiring activates automatically.
+`secrets/pegasus.yaml` exists and pegasus's age key is in `.sops.yaml`;
+`SECRETS-TODO.md` tracks the couple of BorgBase follow-ups still open.
 
 ## 8. Mac (serenity) — nix-darwin activation
 

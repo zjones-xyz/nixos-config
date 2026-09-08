@@ -1,6 +1,9 @@
 # Deploying hopper (Raspberry Pi 4)
 
-hopper is an `aarch64-linux` host built with `raspberry-pi-nix`. The flow is:
+hopper is an `aarch64-linux` host built from nixos-hardware's `raspberry-pi-4`
+profile plus nixpkgs' `sd-image-aarch64` module — **not** raspberry-pi-nix,
+whose downstream kernel isn't in cache.nixos.org (see the nixos-hardware input
+comment in `flake.nix`). The flow is:
 build a complete SD image on **memory-alpha** (which emulates aarch64 via
 binfmt) → flash it → boot straight into the full hopper config → enrol its
 sops key → deploy normally with `nixos-rebuild --target-host` from then on.

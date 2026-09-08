@@ -1,12 +1,5 @@
 { config, pkgs, lib, ... }:
 
-let
-  # secrets/pegasus.yaml does not exist in the repo yet — it must be created by
-  # Zoe (see hosts/pegasus/SECRETS-TODO.md). The sops + tailscale-authKey wiring
-  # below is gated on the file's presence so the closure evaluates cleanly until
-  # then, and activates automatically once the encrypted file is committed.
-  hasSops = builtins.pathExists ../../secrets/pegasus.yaml;
-in
 {
   imports = [
     ./hardware-configuration.nix
@@ -102,9 +95,7 @@ in
   services.tailscale = {
     enable = true;
     extraUpFlags = [ "--ssh" ];
-    # Headless auth key, provisioned via sops once secrets/pegasus.yaml exists.
-    # Until then, run `tailscale up` once interactively on first boot.
-    authKeyFile = lib.mkIf hasSops config.sops.secrets."tailscale/authKey".path;
+    authKeyFile = config.sops.secrets."tailscale/authKey".path;
   };
   networking.firewall.trustedInterfaces = [ "tailscale0" ];
   networking.firewall.allowedUDPPorts = [
@@ -170,7 +161,7 @@ in
   #   ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub
   # then replace the pegasus placeholder in .sops.yaml and run
   #   sops updatekeys secrets/pegasus.yaml
-  sops = lib.mkIf hasSops {
+  sops = {
     defaultSopsFile = ../../secrets/pegasus.yaml;
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
     secrets."tailscale/authKey" = { };
@@ -195,8 +186,7 @@ in
     };
   };
 
-  users.users.z.hashedPasswordFile =
-    lib.mkIf hasSops config.sops.secrets."z/hashedPassword".path;
+  users.users.z.hashedPasswordFile = config.sops.secrets."z/hashedPassword".path;
 
   # Elgato Stream Deck — udev rule for non-root /dev/hidraw access. The
   # streamdeck-ui package (installed via home.packages in home.nix) ships
