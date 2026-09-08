@@ -1111,7 +1111,7 @@ rather than each instance being hand-edited.
      downgrading galactica's own AdGuard to match would trade a real
      version back for a cosmetic match, which isn't worth it for a WARN
      that hasn't caused any actual sync failure.
-5. [ ] **Verify the `--glinet` removal survives an actual reboot.** Fixed
+5. [x] **`--glinet` removal survives a reboot — verified 2026-09-08.** Fixed
    in `/etc/rc.local` (a first attempt via `vi` split the `sed` command
    across two lines, silently breaking it — rewritten with a `cat` heredoc
    instead to avoid the interactive-editor pitfall):
@@ -1119,13 +1119,49 @@ rather than each instance being hand-edited.
    sed -i "s/--glinet //g" /etc/init.d/adguardhome
    service adguardhome restart
    ```
-   above `exit 0`. Confirmed correct by reading the file back, but not yet
-   proven across a real reboot (only manually re-applied so far) — check
-   after the router's next reboot/update rather than forcing one just to
-   test. Tradeoff to accept knowingly: this also drops the AdGuard stats
-   widget from the GL.iNet router's own dashboard (that integration depends
-   on `--glinet`).
-6. [ ] **Repoint DHCP later, not yet.** Once galactica's AdGuard is confirmed
+   above `exit 0`. Deliberately rebooted the router to confirm rather than
+   wait for an incidental one — `rc.local` correctly stripped `--glinet`
+   again on boot, and Basic Auth against the router's AdGuard still
+   succeeded afterward. Tradeoff accepted knowingly: this also drops the
+   AdGuard stats widget from the GL.iNet router's own dashboard (that
+   integration depends on `--glinet`).
+7. [x] **Fleet-wide inter-host DNS outage, root-caused and fixed —
+   2026-09-08.** SSH to `memory-alpha.internal` started failing the
+   morning after §13 item 4 was confirmed working. Long diagnostic chain,
+   in order, each one ruled out before finding the real cause: dnsmasq's
+   forward-to-AdGuard config (`server=127.0.0.1#3053` — fine), AdGuard's
+   own DNS cache (cleared it, still broken), the `--glinet` flag
+   (temporarily restored it as a test — no effect, ruled out; then
+   discovered it had been left restored from that test and was quietly
+   breaking sync auth again, stripped a second time). The actual cause:
+   `dns.nix`'s `clients.persistent` list never set `use_global_settings`,
+   which defaults to Go's zero-value `false` — disabling AdGuard filtering
+   (rewrites included, since they're implemented as part of the filtering
+   subsystem) specifically for queries sourced *from* the 8 listed fleet
+   IPs, while any unlisted device resolved normally the whole time. This
+   almost certainly broke galactica's own inter-host resolution from the
+   day `clients.persistent` was first added — unnoticed because most
+   testing went through `127.0.0.1`, which isn't on the list. The router
+   replica inherited the identical bug via AdGuardHome-Sync, since sync
+   just mirrors whatever origin reports.
+   Fixed in `dns.nix` (every client now gets `use_global_settings = true`,
+   PR #102) and confirmed live: `dig @192.168.8.1 memory-alpha.internal`
+   resolving correctly, `ssh memory-alpha.internal` working again.
+   Also added: `systemd.services.adguardhome-sync.restartTriggers` on
+   AdGuard's own settings, so a rewrite/client/filter change from `nrs`
+   reaches the router immediately instead of waiting up to 10 minutes for
+   the next cron tick.
+8. [ ] **Repoint DHCP later, not yet.** Once galactica's AdGuard is confirmed
    correct and stable, add it to the GL.iNet DHCP DNS server list (primary or
    alongside the router) — a separate, deliberate cutover step, not part of
    this change.
+   Idea for whenever this happens: DHCP hostname reservations (the
+   `dhcp-host=` lines rendered into the router's dnsmasq config) and
+   AdGuard's rewrites are currently two independently hand-maintained lists
+   that happen to agree — no single source of truth ties a lease's name to
+   its rewrite. Worth figuring out then whether AdGuard's own DHCP handling
+   (`dns.serverConfig`/`dhcp.*`, deliberately excluded from what
+   AdGuardHome-Sync propagates today, per item 4) could take over DHCP
+   entirely and derive rewrites from leases, or whether reservations should
+   just get declared in Nix alongside `clients.persistent` so a name only
+   has to be typed once.

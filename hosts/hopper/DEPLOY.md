@@ -1,5 +1,11 @@
 # Deploying hopper (Raspberry Pi 4)
 
+> **Status (2026-09-08):** this flow has never been completed — no image from
+> the current config ever finished a first boot, and hopper is powered off.
+> The plan is to rebuild it as an ephemeral resolver replica of galactica;
+> whether this document's flow survives that rebuild is deliberately
+> undecided. History and the full plan: [`DECISIONS.md`](DECISIONS.md) §5.
+
 hopper is an `aarch64-linux` host built from nixos-hardware's `raspberry-pi-4`
 profile plus nixpkgs' `sd-image-aarch64` module — **not** raspberry-pi-nix,
 whose downstream kernel isn't in cache.nixos.org (see the nixos-hardware input

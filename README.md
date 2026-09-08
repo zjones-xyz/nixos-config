@@ -12,8 +12,8 @@ run books).
 | `memory-alpha` | x86 mini PC | Docker services: Jellyfin, Traefik, monitoring hub (Beszel/Scrutiny/Arcane), dockge |
 | `galactica` | Supermicro X9 tower (ex-Unraid) | Bulk storage: ZFS RAIDZ1 `tank`, NFS shares, media stack, primary DNS (AdGuard/Unbound), offsite borgmatic |
 | `pegasus` | AM4 Ryzen + RTX 4070 | Desktop (Niri or Plasma 6, Wayland) + GPU inference (ollama) |
-| `hopper` | Raspberry Pi 4 | Staged, not in service: DNS resolver, ntfy, NUT server (DNS runs on galactica meanwhile) |
-| `hamilton` | Raspberry Pi 3 | Staged, not in service: backup DNS resolver |
+| `hopper` | Raspberry Pi 4 | Shelved; to be rebuilt as an ephemeral DNS resolver replica of galactica (`hosts/hopper/DECISIONS.md`) |
+| `hamilton` | Raspberry Pi 3 | Shelved; same ephemeral-resolver rebuild as hopper |
 | `serenity` | Mac (aarch64-darwin) | nix-darwin + shared Home Manager modules |
 
 Each host directory carries its own record: `DECISIONS.md` (why things are the
