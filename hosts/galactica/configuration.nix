@@ -190,10 +190,7 @@
     ];
   };
 
-  # Without this, a rewrite/client/filter change only reaches the router on
-  # the next 10-minute cron tick (or a manual restart) — restart on any
-  # change to AdGuard's own settings instead, so `nrs` re-syncs immediately
-  # via the module's existing `runOnStart`.
+  # Resync AdGuard when settings update.
   systemd.services.adguardhome-sync.restartTriggers = [
     (builtins.toJSON config.services.adguardhome.settings)
   ];
