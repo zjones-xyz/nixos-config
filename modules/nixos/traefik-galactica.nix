@@ -12,9 +12,9 @@
 let
   # Staging and production certs live in separate files so flipping
   # homelab.letsencryptStaging never requires deleting cached certs. The CA
-  # URL itself is the derived homelab.letsencryptCaServer; only the storage
-  # path is this module's own, because a native Traefik keeps state in its
-  # dataDir rather than a bind-mounted host directory.
+  # URL and ACME email are the shared options from letsencrypt.nix; only the
+  # storage path is this module's own, because a native Traefik keeps state in
+  # its dataDir rather than a bind-mounted host directory.
   acmeStorage =
     if config.homelab.letsencryptStaging
     then "/var/lib/traefik/acme-staging.json"
@@ -171,10 +171,7 @@ in
         };
 
         certificatesResolvers.letsencrypt.acme = {
-          # The same address the other three Traefik modules already register
-          # with Let's Encrypt; kept identical so all four hosts share one ACME
-          # account rather than creating a fourth.
-          email = "zoejonestx91@gmail.com";
+          email = config.homelab.letsencryptEmail;
           storage = acmeStorage;
           caServer = config.homelab.letsencryptCaServer;
           dnsChallenge = {
