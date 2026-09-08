@@ -190,6 +190,14 @@
     ];
   };
 
+  # Without this, a rewrite/client/filter change only reaches the router on
+  # the next 10-minute cron tick (or a manual restart) — restart on any
+  # change to AdGuard's own settings instead, so `nrs` re-syncs immediately
+  # via the module's existing `runOnStart`.
+  systemd.services.adguardhome-sync.restartTriggers = [
+    (builtins.toJSON config.services.adguardhome.settings)
+  ];
+
   # Mandatory for ZFS. Derived from the hostname (`sha256sum
   # <<<"galactica.internal" | head -c8`) so it is reproducible; no other meaning.
   networking.hostId = "f9e250c9";
