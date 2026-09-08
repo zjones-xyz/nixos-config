@@ -190,6 +190,11 @@
     ];
   };
 
+  # Resync AdGuard when settings update.
+  systemd.services.adguardhome-sync.restartTriggers = [
+    (builtins.toJSON config.services.adguardhome.settings)
+  ];
+
   # Mandatory for ZFS. Derived from the hostname (`sha256sum
   # <<<"galactica.internal" | head -c8`) so it is reproducible; no other meaning.
   networking.hostId = "f9e250c9";

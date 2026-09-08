@@ -1125,7 +1125,33 @@ rather than each instance being hand-edited.
    test. Tradeoff to accept knowingly: this also drops the AdGuard stats
    widget from the GL.iNet router's own dashboard (that integration depends
    on `--glinet`).
-6. [ ] **Repoint DHCP later, not yet.** Once galactica's AdGuard is confirmed
+7. [x] **Fleet-wide inter-host DNS outage, root-caused and fixed —
+   2026-09-08.** SSH to `memory-alpha.internal` started failing the
+   morning after §13 item 4 was confirmed working. Long diagnostic chain,
+   in order, each one ruled out before finding the real cause: dnsmasq's
+   forward-to-AdGuard config (`server=127.0.0.1#3053` — fine), AdGuard's
+   own DNS cache (cleared it, still broken), the `--glinet` flag
+   (temporarily restored it as a test — no effect, ruled out; then
+   discovered it had been left restored from that test and was quietly
+   breaking sync auth again, stripped a second time). The actual cause:
+   `dns.nix`'s `clients.persistent` list never set `use_global_settings`,
+   which defaults to Go's zero-value `false` — disabling AdGuard filtering
+   (rewrites included, since they're implemented as part of the filtering
+   subsystem) specifically for queries sourced *from* the 8 listed fleet
+   IPs, while any unlisted device resolved normally the whole time. This
+   almost certainly broke galactica's own inter-host resolution from the
+   day `clients.persistent` was first added — unnoticed because most
+   testing went through `127.0.0.1`, which isn't on the list. The router
+   replica inherited the identical bug via AdGuardHome-Sync, since sync
+   just mirrors whatever origin reports.
+   Fixed in `dns.nix` (every client now gets `use_global_settings = true`,
+   PR #102) and confirmed live: `dig @192.168.8.1 memory-alpha.internal`
+   resolving correctly, `ssh memory-alpha.internal` working again.
+   Also added: `systemd.services.adguardhome-sync.restartTriggers` on
+   AdGuard's own settings, so a rewrite/client/filter change from `nrs`
+   reaches the router immediately instead of waiting up to 10 minutes for
+   the next cron tick.
+8. [ ] **Repoint DHCP later, not yet.** Once galactica's AdGuard is confirmed
    correct and stable, add it to the GL.iNet DHCP DNS server list (primary or
    alongside the router) — a separate, deliberate cutover step, not part of
    this change.
