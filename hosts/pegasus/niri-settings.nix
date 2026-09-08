@@ -82,17 +82,19 @@
     # ── Outputs ────────────────────────────────────────────────────────────
     # Keyed on EDID identity ("Make Model Serial"), not connector name — a
     # cable's connector can migrate across recabling, the panel's identity
-    # doesn't. Scale 1.25 on both matches logical height despite differing
-    # physical PPI. DMS also drives outputs via wlr-output-management and
-    # keeps its own profile; this block is meant to be authoritative. VRR is
-    # deliberately off. See DECISIONS.md for the bring-up story and why.
+    # doesn't. `position.x` is in *logical* pixels (native / scale), so each
+    # panel starts where the previous one ends. DMS also drives outputs via
+    # wlr-output-management and keeps its own profile; this block is meant to
+    # be authoritative. See DECISIONS.md for the bring-up story and why.
     outputs = {
-      # Left.
-      "LG Electronics LG HDR 4K 111NTEP7X460" = {
+      # Left. On HDMI, where the preferred mode is 60.000 — not the 59.997
+      # the two DisplayPort panels report. Don't "normalise" these to match:
+      # an unavailable refresh makes niri discard the mode and pick its own.
+      "Dell Inc. DELL S2722QC 1NC1J24" = {
         mode = {
           width = 3840;
           height = 2160;
-          refresh = 59.997;
+          refresh = 60.000;
         };
         scale = 1.25;
         position = {
@@ -101,10 +103,8 @@
         };
       };
 
-      # Right. x = 3072 is the LG's *logical* width (3840 / 1.25), not its
-      # pixel width — niri positions outputs in logical coordinates, so using
-      # 3840 here would leave a 768px dead gap the cursor cannot cross.
-      "Dell Inc. DELL S2721QS 44B9513" = {
+      # Centre.
+      "LG Electronics LG HDR 4K 111NTEP7X460" = {
         mode = {
           width = 3840;
           height = 2160;
@@ -113,6 +113,24 @@
         scale = 1.25;
         position = {
           x = 3072;
+          y = 0;
+        };
+      };
+
+      # Right, in portrait — rotation is deliberate, dropping it silently
+      # relandscapes the panel. Rotated it is 1728x3072 logical, so it spans
+      # x 6144-7872 and hangs 1344 below the other two, which are y-aligned
+      # at the top.
+      "Dell Inc. DELL S2721QS 44B9513" = {
+        mode = {
+          width = 3840;
+          height = 2160;
+          refresh = 59.997;
+        };
+        scale = 1.25;
+        transform.rotation = 270;
+        position = {
+          x = 6144;
           y = 0;
         };
       };
