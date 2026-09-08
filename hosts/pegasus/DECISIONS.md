@@ -699,6 +699,52 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   `mkForce` lines in `modules/nixos/keyring.nix` plus disabling gnome-keyring.
   **Not verified on hardware** — the switch, and which daemon ends up owning
   the bus name afterward, still needs a real login. See MANUAL-STEPS.md §19.
+- **Dual-head bring-up, 2026-08-18 — the pre-existing DP KVM abandoned for
+  now, and a QuickShell crash found and traced along the way.** Root cause
+  and current state are in `HARDWARE-MAP.md` §8 (a ~10 ft passive DisplayPort
+  run from the GPU to the KVM, exceeding what passive DP can carry for 4K60
+  once the switch's own mux and the second cable segment are counted in the
+  same channel); logged here because of what it says about the
+  DankMaterialShell decision above, not for the cabling itself.
+  *The QuickShell crash:* toggling the KVM's input to test the diagnosis
+  repeatedly hotplugged a display, and each hotplug also makes the GPU's
+  DisplayPort-embedded audio sink (an IEC958/S-PDIF-style device) appear and
+  disappear. One of those churns crashed Quickshell — `systemd-coredump`
+  caught a `QAudioContext` thread, stack trace bottoming out in
+  `libpipewire-module-protocol-native`'s event demarshalling, immediately
+  after a `spaVisitChoice: parse error` on that sink's `Spa:Enum:ParamId:
+  EnumFormat`. DMS's `systemd --user` service restarted it within a couple of
+  seconds without help.
+  *Why this doesn't reverse the decision above, but does qualify it:* the
+  crash is in Qt Multimedia's PipeWire audio path, not in DMS's own
+  screen-hotplug handling — `ShellCore`'s surface-recovery logging (`Screen
+  reconnect detected`, `Surface recovery triggered by: screen-reconnect`)
+  ran correctly through the same events and never dropped a bar. So the
+  multi-monitor case DMS was chosen for is still solid; what's now known is
+  that *any* DP hotplug on this host — a KVM switch, unplugging a monitor,
+  eventually a capture card or a different KVM — can take Quickshell down as
+  a side effect, via audio, not video. Expect it, don't chase it: DMS's own
+  restart is the recovery, `systemctl --user restart dms.service` if it
+  doesn't come back on its own. Not root-caused past "PipeWire's protocol
+  parser doesn't like something about this sink's format announcement" —
+  could be Qt Multimedia, Quickshell, or PipeWire itself; not filed upstream.
+  *The output layout, declared afterward:* niri auto-picked mode/scale/
+  position before this, which produced a real error on first bring-up — the
+  LG came up at 1920x1080 on its 4K panel while the Dell took its preferred
+  3840x2160@59.997, at different scales, so windows resized crossing between
+  them. `niri-settings.nix`'s `outputs` block now declares both explicitly,
+  keyed on EDID identity rather than connector name — during this same
+  bring-up the same monitor appeared as `DP-2` and then `DP-3` across a
+  recabling, which a `DP-N`-keyed config would have silently stopped
+  matching. Scale 1.25 on both gives matching logical heights
+  (3840x2160 / 1.25 = 3072x1728) despite the panels' different physical PPI
+  (LG 31.5" ≈140, Dell 27" ≈163). VRR left off deliberately — the Dell
+  reports it supported-but-disabled and the LG doesn't support it at all, so
+  enabling it is a decision to make on purpose later, not a byproduct of
+  declaring the layout. DMS also drives outputs via wlr-output-management
+  and keeps its own `DisplayConfigState` profile; the niri block is meant to
+  be authoritative — clear DMS's saved profile if the two disagree rather
+  than editing both.
 
 - **DMS settings.json → snapshot/restore script, not a Home-Manager symlink**
   (2026-08-21). *alt:* `config.lib.file.mkOutOfStoreSymlink` pointing
@@ -965,3 +1011,26 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   LG's GoldStar (`GSM`) vendor code reuses across multiple actual models,
   not a real model number. No monitor-specific research possible until the
   real model number comes off the unit itself.
+- **NanoKVM dropped, 2026-09-08 — reversing this repo's own "do not reclaim
+  it" position, with the cost accepted.** The third monitor (Dell S2722QC)
+  took `HDMI-A-1`, and the 4070 has exactly one HDMI output, so an HDMI
+  capture device and a third display cannot both exist on this host.
+  *What this gives up:* the xrdp decision above is explicit that BIOS/UEFI
+  screens, the boot-loader menu and kernel panics are out of scope for any
+  software remote desktop, and `HARDWARE-MAP.md` §1 called the NanoKVM
+  "load-bearing, not incidental" for exactly that reason. Dropping it leaves
+  pegasus with **no out-of-band console**: a failed boot, a firmware menu or
+  a panic now requires being physically at the machine. That is a real
+  regression in recoverability, taken knowingly rather than overlooked.
+  *Why it was acceptable anyway:* pegasus is a desk machine that its owner
+  sits at, not a headless server in another room — the fleet hosts where
+  out-of-band access actually matters (galactica, memory-alpha) have their
+  own paths, and this host's LUKS remote-unlock over initrd SSH covers the
+  one recurring remote case. `boot.kernel.sysctl."kernel.panic" = 600`
+  stays as the concession that matters: ten minutes to read a panic before
+  the box reboots.
+  *The exit, if it is ever wanted back:* DP-3 is free, so a DP→HDMI adapter
+  would restore it without displacing a monitor — or move the S2722QC to
+  DP-3 (it has a DisplayPort input) and give `HDMI-A-1` back. The latter
+  would also change that output's declared refresh from 60.000 to whatever
+  DP negotiates; see the comment in `niri-settings.nix`.
