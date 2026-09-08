@@ -209,16 +209,15 @@ in
     # module reopened.
     virtualisation.oci-containers = {
       # ⚠ NixOS defaults this to podman, against a host running rootful Docker
-      # (and a Beszel agent watching a Docker socket). ARCHIVE-DESIGN-snapraid.md
-      # §6.5 flags the
-      # same trap. Set explicitly.
+      # (and a Beszel agent watching a Docker socket). Set explicitly;
+      # ARCHIVE-DESIGN-snapraid.md §6.5 flags the same trap.
       backend = "docker";
 
       containers.docker-socket-proxy = {
         # Pinned: with the oci-containers default pull="missing", :latest is
-      # resolved once on first start and then NEVER updated — the worst of both
-      # directions, on the component brokering /run/docker.sock.
-      image = "tecnativa/docker-socket-proxy:v0.5.0";
+        # resolved once on first start and then NEVER updated — the worst of
+        # both directions, on the component brokering /run/docker.sock.
+        image = "tecnativa/docker-socket-proxy:v0.5.0";
         environment = {
           CONTAINERS = "1"; # Traefik reads container labels/state
           NETWORKS = "1"; # …and resolves the `proxy` network

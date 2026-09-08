@@ -40,17 +40,13 @@
       inputs.home-manager.follows = "home-manager";
     };
 
-    # Claude Desktop (used on pegasus). Anthropic shipped an official Linux
-    # beta (.deb, own apt repo) on 2026-06-30 but hasn't reached nixpkgs yet
-    # (too recent). This flake repackages that *official* .deb for Nix as of
-    # its v3.0.0 — not the older community approach of patching the Windows/
-    # macOS build to run on Linux. See hosts/pegasus/DECISIONS.md.
-    # git+https rather than github: — this session's GitHub access is
-    # scoped to zjones-xyz/nixos-config only, so the github: tarball-API
-    # fetch 403s here (though it works fine anywhere with normal GitHub
-    # access, e.g. on pegasus itself). git+https uses plain git protocol
-    # instead, unaffected either way — see .claude/hooks/flake-check-sandboxed.sh
-    # for the same workaround applied to the other inputs.
+    # Claude Desktop (used on pegasus). Repackages Anthropic's *official*
+    # Linux .deb — not the old community patch of the Windows/macOS build.
+    # See hosts/pegasus/DECISIONS.md.
+    # git+https rather than github: — sandboxed web sessions can't use the
+    # github: tarball API (403 under scoped access), while plain git protocol
+    # works everywhere. The same applies to every git+https input below, and
+    # .claude/hooks/flake-check-sandboxed.sh applies it to the rest.
     claude-desktop-debian = {
       url = "git+https://github.com/aaddrick/claude-desktop-debian.git";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -60,22 +56,17 @@
     # desktop shell, not in nixpkgs. Quickshell itself IS in nixpkgs 26.05
     # (0.3.0, meets DMS's stated minimum) so no separate quickshell input is
     # needed — only DMS's own flake, for its NixOS module and package build.
-    # git+https rather than github: for the same sandboxed-GitHub-access
-    # reason as claude-desktop-debian above.
     dank-material-shell = {
       url = "git+https://github.com/AvengeMedia/DankMaterialShell.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # niri-flake (used on pegasus) — used ONLY for its homeModules.config,
-    # which provides `programs.niri.settings` (declarative, KDL-validated at
-    # build time) as a home-manager option. Deliberately NOT using
-    # niri-flake's nixosModules.niri: that module fully disables nixpkgs'
-    # own programs.niri module and installs niri-flake's own from-source
-    # build instead — a bigger swap than intended here, and, checked
-    # 2026-08-11, actually a downgrade at the moment (niri-flake's "stable"
-    # track is pinned to v25.08; nixpkgs 26.05 already ships niri 26.04).
-    # See hosts/pegasus/DECISIONS.md.
+    # niri-flake (used on pegasus) — ONLY for its homeModules.config, which
+    # provides `programs.niri.settings` (declarative, KDL-validated at build
+    # time). Deliberately NOT its nixosModules.niri: that fully disables
+    # nixpkgs' own programs.niri module and installs niri-flake's from-source
+    # build instead — a bigger swap than intended, and an older niri than
+    # nixpkgs ships. See hosts/pegasus/DECISIONS.md.
     niri-flake = {
       url = "github:sodiboo/niri-flake";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -97,19 +88,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # A second, standalone nixpkgs — deliberately NOT inputs.nixpkgs.follows,
-    # unlike every other input above — pinned only to pull a newer
-    # `orca-slicer` (used on pegasus) than the one in the main `nixpkgs`
-    # input above. The main nixpkgs is locked well before nixpkgs bumped
-    # orca-slicer 2.3.1 -> 2.3.2 (2026-03-23); this pins exactly that bump
-    # commit rather than a moving branch HEAD, so the diff here is nothing
-    # but that one already-vetted version bump. Moving the *shared* nixpkgs
-    # input instead was considered and rejected for the same reason as the
-    # Bambu Studio NVIDIA-GL fix (see hosts/pegasus/DECISIONS.md): it's a
-    # single input shared by every host in the fleet, so bumping it would
-    # move package versions fleet-wide just for one desktop app on one host.
-    # git+https rather than github: — see the claude-desktop-debian input
-    # comment above for why.
+    # A second, standalone nixpkgs — deliberately NOT inputs.nixpkgs.follows —
+    # pinned to exactly the commit that bumped `orca-slicer` (used on
+    # pegasus), so the diff is that one vetted version bump and nothing else.
+    # Bumping the *shared* nixpkgs instead would move package versions
+    # fleet-wide for one desktop app on one host (hosts/pegasus/DECISIONS.md).
     nixpkgs-orca-slicer.url = "git+https://github.com/NixOS/nixpkgs.git?rev=e749b91730e1d4c612294f1e10dd351674d697fa&shallow=1";
 
     # Same idea as nixpkgs-orca-slicer above, for bambu-studio: the main

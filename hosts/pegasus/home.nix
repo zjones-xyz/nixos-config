@@ -13,31 +13,15 @@
     SOPS_AGE_KEY_FILE = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
   };
 
-  # Host-specific rebuild aliases (layered on top of the shared portable ones
-  # from modules/home/common.nix's home.shellAliases).
-  #
-  # home.shellAliases, NOT programs.bash.shellAliases: the login shell is
-  # bash, but modules/home/interactive-zsh.nix execs every interactive bash
-  # session straight into zsh before it ever reaches a prompt (matches
-  # Serenity's default shell) — so bash-specific aliases never actually took
-  # effect interactively. This was dead code since the very first authoring
-  # session; nobody had tested an interactive login until now. The
-  # shell-agnostic option applies to whichever shell is actually running.
+  # Host-specific aliases, layered on modules/home/common.nix's shared set.
+  # home.shellAliases, NOT programs.bash.shellAliases — interactive-zsh.nix
+  # execs every interactive bash into zsh, so bash-specific aliases never fire.
   programs.bash.enable = true;
   #
-  # The ipmi-tower-* pair binds onto scripts/ipmi-remote.sh. ⚠ Kept identical
-  # to hosts/serenity/home.nix on purpose: `PLATFORM.md` §2 has both machines
-  # carrying the FreeIPMI toolset deliberately, "so neither one being down
-  # blocks recovering the other". Duplicated aliases are the cost of that, and
-  # are cheaper than a shared module that would make the pair co-dependent.
-  # Note the repo path differs between the two (~/nixos-config here,
-  # ~/Code/nixos-config on the Mac), so the strings cannot be shared verbatim
-  # anyway.
-  #
-  # towerbmc.internal resolves through an AdGuard DNS rewrite this repo does
-  # not declare — provisioned out-of-band 2026-08-09, same situation as
-  # serenity's unlock-pegasus alias. If it ever stops resolving, the BMC's raw
-  # address is 192.168.8.191 (§2), and swapping it means editing both files.
+  # ⚠ The ipmi-tower-*/unlock-* recovery aliases are deliberately duplicated
+  # with hosts/serenity/home.nix (different repo paths anyway), so neither
+  # admin box being down blocks recovering the others — hosts/galactica/
+  # PLATFORM.md §2 has the rationale and the raw BMC address fallback.
   home.shellAliases = {
     nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#pegasus";
     nrt = "sudo nixos-rebuild test --flake ~/nixos-config#pegasus";
@@ -45,22 +29,10 @@
     ipmi-tower = ''~/nixos-config/scripts/ipmi-remote.sh run towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-open-tty = ''~/nixos-config/scripts/ipmi-remote.sh console towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-set-bios-next-boot = ''~/nixos-config/scripts/ipmi-remote.sh bios-next-boot towerbmc.internal "op://System Keys/tower ipmi/password"'';
-    # unlock-tower (2026-08-31): same generic scripts/luks-unlock-remote.sh
-    # binding as serenity's unlock-pegasus/unlock-memory-alpha, but carried
-    # on both machines like the ipmi-tower-* trio above rather than just
-    # serenity — Tower/galactica is the one host both pegasus's and
-    # serenity's initrd SSH keys are actually authorized on (this session's
-    # install hit that directly: pegasus unlocked it once, serenity another
-    # time), so neither machine being down should block recovering it.
-    # "tower", not "galactica", to match every other alias for this host
-    # (ipmi-tower-*, towerbmc.internal) — the fleet name and the
-    # service/physical-box name are deliberately decoupled (DECISIONS.md §2),
-    # and these aliases are about the physical box.
+    # "tower", not "galactica" — these aliases are about the physical box, and
+    # the fleet name / service name are deliberately decoupled (galactica's
+    # DECISIONS.md §2).
     unlock-tower = ''~/nixos-config/scripts/luks-unlock-remote.sh tower.internal "op://System Keys/tower luks/password"'';
-    # unlock-memory-alpha (2026-09-02): mirror of serenity's alias, now that the
-    # shared luks-remote-unlock.nix module authorizes *both* admin keys in
-    # memory-alpha's initrd (previously serenity-only) — so pegasus can recover
-    # it too when serenity's down. `~/nixos-config` path, not serenity's ~/Code.
     unlock-memory-alpha = ''~/nixos-config/scripts/luks-unlock-remote.sh memory-alpha.internal "op://System Keys/memory-alpha luks/password"'';
     dms-settings-snapshot = "~/nixos-config/scripts/dms-settings.sh snapshot";
     dms-settings-restore = "~/nixos-config/scripts/dms-settings.sh restore";
@@ -155,22 +127,10 @@
     unzip
     p7zip
 
-    # RAR extraction. NOT covered by p7zip above: nixpkgs builds p7zip with
-    # `enableUnfree = false` by default, which strips the RAR codec out of the
-    # source tree entirely — so `7z x foo.rar` fails with "Can not open the
-    # file as archive" rather than a missing-plugin error, which is a
-    # confusing way to find out. libarchive/bsdtar handles some RAR3 but not
-    # RAR5 (the default since WinRAR 5.0), so it isn't a substitute either.
-    # unrar is the reference extractor and covers both.
-    #
-    # This also fixes RAR in Ark (the GUI, already present via the plasma6
-    # module's default app set — Dolphin's "Extract here" goes through it):
-    # Ark's cli plugin shells out to the `unrar` binary on $PATH and silently
-    # hides the format when it's absent.
-    #
-    # Unfree — the UnRAR license permits redistribution but forbids using the
-    # source to build a RAR *compressor*. allowUnfree is already on globally
-    # in modules/nixos/common.nix. Extract-only by design; use zip/7z to pack.
+    # RAR extraction — NOT covered by p7zip above (nixpkgs strips its RAR
+    # codec, so `7z x foo.rar` fails confusingly) nor by bsdtar (no RAR5).
+    # Also what makes RAR appear in Ark, whose cli plugin shells out to the
+    # `unrar` binary on $PATH. Unfree, extract-only by license.
     unrar
 
     # Winetricks operations scoped to a specific Proton prefix — common
@@ -209,8 +169,7 @@
     # module: it's in plasma6's default optionalPackages set, and this repo
     # never sets environment.plasma6.excludePackages). Zathura is the
     # deliberate lightweight/keyboard-driven alternative for quick reads under
-    # niri, added 2026-08-20 per Zoe's request — not a duplicate, a different
-    # tool for a different moment.
+    # niri — not a duplicate, a different tool for a different moment.
     zathura
 
     # wl-paste, for the swappy screenshot-annotation bind below — niri's own
@@ -219,11 +178,10 @@
     # niri-settings.nix.
     wl-clipboard
 
-    # ── Found on Serenity's /Applications, not yet replicated (2026-07-12) ────
+    # ── Replicated from Serenity's /Applications ──────────────────────────────
     calibre # ebook library management
-    # makemkv disabled 2026-08-25: makemkv.com origin returning Cloudflare 525
-    # (SSL handshake failed), blocking nrs. Re-enable once it's reachable again.
-    # makemkv # disc ripping, pairs with the jellyfin/vlc media stack
+    # makemkv parked: upstream's download origin is unreachable, which fails
+    # the source fetch and blocks nrs. Re-add once it fetches again.
     filebot # media file renaming/organizing, same media stack
     arduino-ide
     proton-vpn # renamed from protonvpn-gui upstream
@@ -256,8 +214,8 @@
     v4l-utils
     webcamoid
 
-    # Alfred-style launchers (Alfred replacement research, 2026-07-12) — both
-    # installed to compare hands-on. See DECISIONS.md for the writeup: Albert
+    # Alfred-style launchers — both installed to compare hands-on. See
+    # DECISIONS.md for the writeup: Albert
     # relicensed to proprietary freeware at v0.21.0 (disputed legitimacy,
     # hence nixpkgs' license = unfree), Vicinae is GPL-3.0 and runs actual
     # Raycast extensions natively.
@@ -284,13 +242,9 @@
   ];
 
   # ── kitty: launch zsh directly, not the login shell ─────────────────────────
-  # Login shell stays bash (modules/nixos/common.nix — kept for predictable
-  # non-interactive `ssh z@host cmd` semantics, see interactive-zsh.nix) and
-  # every interactive bash session execs into zsh anyway, but that's a hop
-  # kitty doesn't need to take: pointing it at zsh directly skips it. Per
-  # Zoe's request, 2026-08-20. Package now comes from programs.kitty.package
-  # (default) instead of the plain home.packages entry — same store path,
-  # declared once instead of twice.
+  # Login shell stays bash (predictable non-interactive `ssh z@host cmd`
+  # semantics — interactive-zsh.nix) and interactive bash execs into zsh
+  # anyway; pointing kitty at zsh directly just skips that hop.
   programs.kitty = {
     enable = true;
     settings.shell = "${pkgs.zsh}/bin/zsh";
@@ -339,35 +293,19 @@
     };
 
     # vicinae-toggle's binding, explicit — NOT via X-KDE-Shortcuts on the
-    # desktop entry below (see xdg.desktopEntries.vicinae-toggle for why:
-    # unreliable auto-application, confirmed hands-on 2026-07-13 — it also
-    # has the side effect of resetting *other* services' shortcuts, like
-    # krunner above, back to their compiled-in defaults whenever ksycoca
-    # gets rebuilt). Writing kglobalshortcutsrc explicitly is the one
-    # mechanism proven reliable throughout this whole saga.
+    # desktop entry below: that auto-application is unreliable AND resets
+    # other services' shortcuts whenever ksycoca rebuilds. Writing
+    # kglobalshortcutsrc explicitly is the one mechanism proven reliable.
     shortcuts."services/vicinae-toggle.desktop" = {
       _launch = "Alt+Space";
     };
   };
 
-  # Vicinae has no built-in global-shortcut support at all (confirmed via
-  # its own docs/FAQ) — by design, you're expected to bind the DE's own
-  # shortcut mechanism to its CLI toggle.
-  #
-  # NOT plasma-manager's programs.plasma.hotkeys.commands — confirmed real,
-  # reproduced hands-on (2026-07-13): it synthesizes a hidden multi-action
-  # desktop entry, and KGlobalAccel doesn't actually invoke the specific
-  # named action tied to the shortcut — it launches the entry's main (empty)
-  # Exec instead, producing exactly the "app flashes briefly in the
-  # taskbar, keybind doesn't work" symptom from the open upstream issue
-  # nix-community/plasma-manager#571. Confirmed via a clean A/B test:
-  # binding the same command through System Settings' native "Add Custom
-  # Shortcut" flow (Plasma 6.1+) worked with zero glitching.
-  #
-  # This is a plain, standalone, single-Exec desktop entry — same mechanism
-  # real KDE apps use for their own default shortcuts — but the shortcut
-  # itself is bound explicitly above via programs.plasma.shortcuts, not
-  # X-KDE-Shortcuts here (see that comment for why).
+  # Vicinae has no built-in global-shortcut support by design — the DE's own
+  # shortcut mechanism binds its CLI toggle. A plain single-Exec desktop
+  # entry, deliberately NOT plasma-manager's hotkeys.commands (broken:
+  # nix-community/plasma-manager#571 — see DECISIONS.md); the shortcut is
+  # bound explicitly above via programs.plasma.shortcuts.
   xdg.desktopEntries.vicinae-toggle = {
     name = "Vicinae Toggle";
     type = "Application";
