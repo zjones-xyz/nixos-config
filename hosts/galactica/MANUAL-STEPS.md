@@ -1155,3 +1155,13 @@ rather than each instance being hand-edited.
    correct and stable, add it to the GL.iNet DHCP DNS server list (primary or
    alongside the router) — a separate, deliberate cutover step, not part of
    this change.
+   Idea for whenever this happens: DHCP hostname reservations (the
+   `dhcp-host=` lines rendered into the router's dnsmasq config) and
+   AdGuard's rewrites are currently two independently hand-maintained lists
+   that happen to agree — no single source of truth ties a lease's name to
+   its rewrite. Worth figuring out then whether AdGuard's own DHCP handling
+   (`dns.serverConfig`/`dhcp.*`, deliberately excluded from what
+   AdGuardHome-Sync propagates today, per item 4) could take over DHCP
+   entirely and derive rewrites from leases, or whether reservations should
+   just get declared in Nix alongside `clients.persistent` so a name only
+   has to be typed once.
