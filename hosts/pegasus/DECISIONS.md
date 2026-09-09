@@ -1209,3 +1209,28 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   *Already paid forward:* the qt5ct/qt6ct change sets `qt.enable = true`
   explicitly rather than relying on `plasma6.nix` setting it (see that entry),
   so Qt theming survives Plasma's removal untouched.
+- **DMS's generated `niri/dms/colors.kdl` is deliberately not included
+  (2026-09-08).** DMS writes `$XDG_CONFIG_HOME/niri/dms/colors.kdl` on every
+  matugen run, carrying `focus-ring`, `border`, `shadow`, `tab-indicator` and
+  `insert-hint` colours, and its header invites you to `include` it. Nothing in
+  this host's `config.kdl` does, so the focus ring stays niri's default blue
+  rather than tracking the wallpaper. That is a decision, not an oversight —
+  don't "fix" it without reading this.
+  *Why not:* niri treats a missing `include` as a hard parse error, not a
+  skipped line (`failed to read included config … error parsing KDL`,
+  confirmed with `niri validate`). Two consequences. First, niri-flake runs
+  `niri validate -c` on the generated config inside a Nix sandbox
+  (`validated-config-for` in its flake, wired into
+  `xdg.configFile.niri-config.source`), where no `$HOME` exists and the include
+  can never resolve — so the build would fail on every rebuild. Working around
+  that means overriding `xdg.configFile."niri/config.kdl"` with `mkForce` to
+  sidestep validation entirely. Second, at runtime any moment the file is
+  absent — fresh install before DMS's first matugen run, or
+  `matugenTemplateNiri` turned off — invalidates the whole config and takes
+  every keybind with it, needing a `home.activation` stub to paper over.
+  *The trade rejected:* build-time validation is what turns a bad `binds` entry
+  into a failed build instead of a broken session. Trading that for wallpaper-
+  tracking ring colours is a bad exchange on a host whose entire niri config is
+  declarative. If the colours are ever wanted, hardcoding the accent as
+  `focus-ring.active.color` in `niri-settings.nix` gets most of the look at
+  none of the cost — it just won't follow a retheme.
