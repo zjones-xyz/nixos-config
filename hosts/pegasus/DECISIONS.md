@@ -1109,6 +1109,68 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   *Deliberately left unset:* `qt.style`. It would export
   `QT_STYLE_OVERRIDE`, which sits on top of the very palette DMS is trying
   to apply.
+- **DMS's `scripts/qt.sh` is patched in-package (2026-09-08), rather than
+  worked around in the config** — the palette DMS generates for Qt apps had
+  never applied, on this host or any other. Two independent upstream bugs,
+  both in that one script:
+  *1. The palette is written to a file qt6ct cannot parse.* `qt.sh`
+  hardcodes `color_scheme_path` to `$HOME/.local/share/color-schemes/`
+  `DankMatugen.colors` — the **kcolorscheme** template's output, in KDE
+  format (`[KDE]`, `[General]`, `[Colors:*]`). qt6ct's own plugin reads
+  `custom_palette` and `color_scheme_path`, then parses the target for
+  `[ColorScheme]` / `active_colors` / `disabled_colors` /
+  `inactive_colors` (all four strings are present in
+  `libqt6ct-common.so.0.11`). The KDE file has none of them, so the palette
+  comes back empty and Qt apps fall back to stock Fusion grey — with the
+  button still reporting success. Meanwhile each tool's *own* matugen
+  template (`matugen/configs/qt{5,6}ct.toml`, both fed by
+  `templates/qtct-colors.conf`) already writes a correct 21-field
+  `[ColorScheme]` file to `$XDG_CONFIG_HOME/qt{5,6}ct/colors/matugen.conf`,
+  and always has: on this host both files carry the same mtime as
+  `DankMatugen.colors`, i.e. every matugen run has been generating them.
+  The patch shadows `color_scheme_path` inside `update_qt_config` with a
+  path derived from the config file being written, so each tool gets its
+  own scheme.
+  *2. The from-scratch write emits a literal `\n`.* When `qt5ct.conf` /
+  `qt6ct.conf` doesn't exist yet, `qt.sh` creates it with a `printf` whose
+  format string is single-quoted `\\n` — so the file lands as one
+  unparseable line. Masked on any machine where the qt6ct GUI has run
+  once, which is why it survived upstream; it fires on exactly the
+  rebuild-from-scratch case the DMS checkpointing exists to protect. Found
+  while testing fix 1 against a scratch `$HOME`, not by inspection.
+  *Why patch the package, not manage the config declaratively:*
+  `qt{5,6}ct.conf` is not ours to own — qt6ct writes fonts and its own
+  window geometry back into it at runtime, so it cannot be a read-only
+  home-manager symlink, and `qt.sh` `sed`s over the file on every "apply
+  colours to Qt" regardless. Fixing the writer is the only durable place.
+  *Why `--replace-fail` and not a patch file:* both anchors are single
+  lines, unique in the file, and the build fails loudly if upstream
+  changes either — which is the desired behaviour, since the shim should
+  be deleted the moment upstream fixes this rather than silently
+  no-op'ing.
+  *Upstream status, checked 2026-09-08:* unfixed at master HEAD
+  (`8fe918ff`). Only two commits have ever touched `qt.sh` — `24e80050`
+  (monorepo move) and `7c88865d` (pre-commit refactor), both structural —
+  so bumping the flake input will not fix it. No issue or PR reports
+  either bug. Issue #2951 (closed/completed, a different complaint about
+  the template's `BrightText` mapping) is corroboration rather than a
+  duplicate: its reporter's environment block quotes
+  `color_scheme_path=~/.config/qt6ct/colors/matugen.conf`, so upstream has
+  already accepted that as the correct wiring. PR #3019 (merged, qtengine
+  support) states outright that "`qt.sh` is unchanged" and routes around
+  its failure instead.
+  *Verified:* the built script rewritten as intended, and run end-to-end
+  against a scratch `$HOME` with stub `qt5ct`/`qt6ct` binaries — the
+  pre-existing-config path rewrites `color_scheme_path` to
+  `…/qt6ct/colors/matugen.conf`, the from-scratch path writes a proper
+  three-line `[Appearance]` block, and each tool gets its own scheme file.
+  Then confirmed on the hardware after a `nixos-rebuild test` (2026-09-08):
+  both configs held the old `DankMatugen.colors` path before pressing
+  **apply colours to Qt** and each held its own
+  `~/.config/qt{5,6}ct/colors/matugen.conf` after. Whether the palette then
+  renders in a Qt app was then confirmed too: qt6ct shows the matugen
+  palette instead of stock Fusion grey. The feature has never worked on this
+  host until now.
 - **Plasma and COSMIC to be removed, deferred 2026-09-09 — and `desktop-plasma.nix`
   is not the file to delete when that happens.** Neither session is in daily use
   since niri became `defaultSession` (2026-09-01) and both had degraded; the
@@ -1147,3 +1209,28 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   *Already paid forward:* the qt5ct/qt6ct change sets `qt.enable = true`
   explicitly rather than relying on `plasma6.nix` setting it (see that entry),
   so Qt theming survives Plasma's removal untouched.
+- **DMS's generated `niri/dms/colors.kdl` is deliberately not included
+  (2026-09-08).** DMS writes `$XDG_CONFIG_HOME/niri/dms/colors.kdl` on every
+  matugen run, carrying `focus-ring`, `border`, `shadow`, `tab-indicator` and
+  `insert-hint` colours, and its header invites you to `include` it. Nothing in
+  this host's `config.kdl` does, so the focus ring stays niri's default blue
+  rather than tracking the wallpaper. That is a decision, not an oversight —
+  don't "fix" it without reading this.
+  *Why not:* niri treats a missing `include` as a hard parse error, not a
+  skipped line (`failed to read included config … error parsing KDL`,
+  confirmed with `niri validate`). Two consequences. First, niri-flake runs
+  `niri validate -c` on the generated config inside a Nix sandbox
+  (`validated-config-for` in its flake, wired into
+  `xdg.configFile.niri-config.source`), where no `$HOME` exists and the include
+  can never resolve — so the build would fail on every rebuild. Working around
+  that means overriding `xdg.configFile."niri/config.kdl"` with `mkForce` to
+  sidestep validation entirely. Second, at runtime any moment the file is
+  absent — fresh install before DMS's first matugen run, or
+  `matugenTemplateNiri` turned off — invalidates the whole config and takes
+  every keybind with it, needing a `home.activation` stub to paper over.
+  *The trade rejected:* build-time validation is what turns a bad `binds` entry
+  into a failed build instead of a broken session. Trading that for wallpaper-
+  tracking ring colours is a bad exchange on a host whose entire niri config is
+  declarative. If the colours are ever wanted, hardcoding the accent as
+  `focus-ring.active.color` in `niri-settings.nix` gets most of the look at
+  none of the cost — it just won't follow a retheme.
