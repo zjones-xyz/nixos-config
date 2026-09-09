@@ -1,5 +1,12 @@
 { config, pkgs, lib, ... }:
 
+let
+  # Fleet host map (fleet.nix) — shared with galactica's DNS rewrites. The
+  # client list reads best in address order, so resort the fleet by last octet.
+  fleet = import ./fleet.nix;
+  lastOctet = h: lib.toInt (lib.last (lib.splitString "." h.ip));
+  fleetByAddress = lib.sort (a: b: lastOctet a < lastOctet b) fleet;
+in
 {
   # DNS stack: AdGuard Home (LAN-facing filter) → Unbound (recursive resolver).
   #
@@ -98,17 +105,11 @@
       # (confirmed live, 2026-09-08 — the router replica inherited the same
       # bug via AdGuardHome-Sync, since it just mirrors whatever origin
       # reports).
-      clients.persistent = map (c: c // { use_global_settings = true; }) [
-        { name = "router"; ids = [ "192.168.8.1" ]; }
-        { name = "hopper"; ids = [ "192.168.8.10" ]; }
-        { name = "pegasus"; ids = [ "192.168.8.72" ]; }
-        { name = "memory-alpha-2"; ids = [ "192.168.8.98" ]; }
-        { name = "memory-alpha"; ids = [ "192.168.8.99" ]; }
-        { name = "homeassistant"; ids = [ "192.168.8.142" ]; }
-        { name = "galactica"; ids = [ "192.168.8.190" ]; }
-        { name = "towerbmc"; ids = [ "192.168.8.191" ]; }
-        # hamilton: not yet deployed, no known IP — add once it exists.
-      ];
+      clients.persistent = map (h: {
+        name = h.name;
+        ids = [ h.ip ];
+        use_global_settings = true;
+      }) fleetByAddress;
 
       # Note: hopper and hamilton also import this module (currently dead
       # code — hosts/README-rpi-os.md) alongside galactica, so any clients

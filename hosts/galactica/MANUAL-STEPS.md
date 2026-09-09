@@ -1165,3 +1165,8 @@ rather than each instance being hand-edited.
    entirely and derive rewrites from leases, or whether reservations should
    just get declared in Nix alongside `clients.persistent` so a name only
    has to be typed once.
+   Partly done since: the Nix side of that duplication is gone —
+   `modules/nixos/fleet.nix` is now the one host map, and both
+   `clients.persistent` and the rewrites derive from it (a name and IP are
+   typed once). The router's `dhcp-host=` reservations are still their own
+   hand-maintained list, so the DHCP half of the question is unchanged.
