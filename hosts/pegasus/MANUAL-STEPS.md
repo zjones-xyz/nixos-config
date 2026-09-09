@@ -779,3 +779,4 @@ reported upstream; only the filing below is left.
    `desktop-niri.nix`. It is `--replace-fail`-anchored, so a rebuild will
    fail loudly rather than silently no-op if upstream edits those lines
    first — that failure is the signal to remove the shim, not to repair it.
+   Issue #110 records the exact failure text and the three cases it can be.

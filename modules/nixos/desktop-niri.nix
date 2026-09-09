@@ -62,7 +62,7 @@
     # The Qt palette is pointed at a KDE-format file qt6ct cannot parse, and
     # the from-scratch config write emits a literal "\n". Together: "apply
     # colours to Qt" reports success and never works. Evidence and upstream
-    # status in DECISIONS.md.
+    # status in DECISIONS.md; recovery when this breaks: issue #110.
     package = self.inputs.dank-material-shell.packages.${pkgs.stdenv.hostPlatform.system}.dms-shell.overrideAttrs (old: {
       postFixup = (old.postFixup or "") + ''
         substituteInPlace $out/share/quickshell/dms/scripts/qt.sh \
