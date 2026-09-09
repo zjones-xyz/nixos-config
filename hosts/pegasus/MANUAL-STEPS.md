@@ -808,3 +808,74 @@ named workspace is homed there.
    `dms-settings.json`), or by giving `Mail` an icon under "Named Workspace
    Icons" — that card only appears once niri reports a named workspace. If
    either is turned on, capture it with `dms-settings-snapshot`.
+
+## 26. Mic noise suppression — pick the "Noise Canceling source" in Discord
+
+Added 2026-08-26, **replaced 2026-08-26** — original attempt was
+`programs.noisetorch.enable`, which never activates on this host: NoiseTorch
+extracts its bundled RNNoise LADSPA plugin to `/tmp` and asks PipeWire to
+load it from that path, but PipeWire 1.6+ hardened its LADSPA loader to only
+search `LADSPA_PATH` + a couple of fixed system dirs — confirmed against
+upstream `noisetorch/NoiseTorch#467`/`#470`/`#412`, all open/unfixed. See
+DECISIONS.md for the full root-cause writeup.
+
+Replaced with `modules/nixos/mic-denoise.nix` — a native PipeWire
+filter-chain module using the same RNNoise LADSPA plugin (nixpkgs's
+`rnnoise-plugin`), wired up declaratively. This is live as soon as PipeWire
+starts, no GUI/toggle/relaunch needed. The only thing left to do by hand:
+
+1. [x] `nixos-rebuild switch --flake .#pegasus`, then restart PipeWire —
+   **the switch alone does not reload it**, the running daemon keeps the
+   old config and the source silently never appears:
+   `systemctl --user restart pipewire.service pipewire-pulse.service wireplumber.service`
+   (a logout/login or reboot works too; the restart is enough and does not
+   need one). Verified 2026-09-09 — daemon had to be restarted by hand.
+2. [ ] Confirm the virtual source exists (it does — but see STATUS below). Note `pactl list sources short`
+   prints `node.name`, so grep for **`rnnoise_source`**, not the
+   description — `grep -i "noise canceling"` against `short` output never
+   matches and looks like a failure:
+   `pactl list sources short | grep rnnoise` → `rnnoise_source`.
+   `wpctl status` shows it as `rnnoise_source [Audio/Source]`; the friendly
+   `Noise Canceling source` name only appears in `pactl list sources`
+   (long form) and in app device pickers.
+3. [ ] In Discord (or whichever app), pick `Noise Canceling source` as the
+   input/mic device in its own audio settings — PipeWire doesn't redirect
+   anything automatically, apps must select it like any other mic.
+4. [ ] `control."VAD Threshold (%)"` is set to `50.0` in
+   `modules/nixos/mic-denoise.nix` (RNNoise's default) — lower it if quiet
+   speech is getting silenced, raise it if background noise gets through
+   during pauses.
+
+**STATUS 2026-09-09: BLOCKED — the source appears but passes no audio.**
+Do not merge PR #72 as working. What was established on real hardware:
+
+- The module loads. `rnnoise_source` / "Noise Canceling source" appears in
+  `pactl` and `wpctl`, no LADSPA errors in the PipeWire journal, and
+  `pw-link -l` shows it correctly linked to the Snowball's `capture_FL`.
+  Plugin, LADSPA label and control name were all checked against the built
+  `librnnoise_ladspa.so` and match.
+- **It emits digital silence.** Recording the raw Snowball and
+  `rnnoise_source` *simultaneously* (same window, so it does not depend on
+  whether anyone was speaking): raw mic max byte 255, filter output max
+  byte 0.
+- Not VAD gating. Repeated with `"VAD Threshold (%)"` forced to `0.0`,
+  which disables the speech gate entirely — still max byte 0.
+- Not `node.passive`. Tested via a user-level drop-in with that line
+  removed: the node goes `IDLE` instead of `SUSPENDED`, which looks like
+  progress, but output is still silence. Change was reverted, module is
+  back to upstream's shape.
+
+Next things to try, roughly in order:
+1. `plugin = "librnnoise_ladspa"` vs upstream's `plugin =
+   "ladspa/librnnoise_ladspa"` — the module instantiates either way, so a
+   silently mis-resolved plugin is not ruled out.
+2. Channel handling: the Snowball is 2ch, `noise_suppressor_mono` is 1ch,
+   and only `capture_FL` gets linked. Try `noise_suppressor_stereo`, or an
+   explicit `audio.channels`/`audio.position` on `capture.props`.
+3. Verify the chain in isolation with `pw-loopback` / a hand-written
+   config before spending another rebuild.
+
+Note for whoever picks this up: `pactl list sources short` prints
+`node.name`, so grep `rnnoise_source` — `grep -i "noise canceling"` against
+`short` output never matches and looks like a failure even when the node
+exists.
