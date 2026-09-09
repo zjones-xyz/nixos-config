@@ -71,6 +71,26 @@ in
   # this proprietary-NVIDIA host also needs for ddcutil to actually work.
   hardware.i2c.enable = true;
 
+  # ── Qt platform theme (qt5ct/qt6ct) ─────────────────────────────────────────
+  # DankMaterialShell's "apply colours to Qt" button shells out to its own
+  # scripts/qt.sh, which exits 1 unless a qt5ct or qt6ct binary is on PATH —
+  # that failure was the whole symptom. "qt5ct" is the one platformTheme value
+  # that installs *both* tools and is the key both plugins register under.
+  #
+  # System-wide, not niri-only: it applies in the Plasma/COSMIC/Dragonized
+  # sessions too, and Plasma does not set QT_QPA_PLATFORMTHEME itself, so
+  # Breeze's Qt palette gives way to qt6ct's there. Accepted deliberately —
+  # see DECISIONS.md.
+  qt = {
+    # plasma6 already sets this, but depending on that couples Qt theming to
+    # a session that may not stay installed.
+    enable = true;
+    platformTheme = "qt5ct";
+    # `style` left unset on purpose: DMS writes custom_palette +
+    # color_scheme_path into qt6ct.conf, and a QT_STYLE_OVERRIDE would sit
+    # on top of the palette it is trying to apply.
+  };
+
   # ── Boot ────────────────────────────────────────────────────────────────────
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
