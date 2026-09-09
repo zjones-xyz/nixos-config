@@ -93,22 +93,34 @@ fi
 
 # Two of these files can carry a real-world location: session.json's
 # latitude/longitude (written by night mode's location automation) and
-# settings.json's weatherLocation/weatherCoordinates. Neither is a secret,
-# but committing where you live should be a decision rather than an
-# oversight — so name it at snapshot time, while the diff is still under
-# review. Checkpoints stay faithful copies; this only tells you what is in
-# one. jq comes from modules/home/common.nix on every host, but degrade to
+# settings.json's weatherLocation/weatherCoordinates. This repo is public,
+# so a snapshot is a permanent, world-readable commit — but city-level
+# disclosure is already an accepted trade-off here, so this is not a "don't".
+#
+# It prints the *values*, not just the field names, because the accepted
+# trade-off is about granularity: "47.6, -122.3" is the region, and
+# "47.62109, -122.34918" is a street. DMS does not round — its
+# LocationService.qml stores whatever its daemon hands back verbatim — so
+# which of those two lands in the file is not knowable from the config, only
+# from looking. That is the whole job here: put the number in front of you
+# while the diff is still under review. Checkpoints stay faithful copies.
+#
+# jq comes from modules/home/common.nix on every host, but degrade to
 # silence rather than failing a snapshot if it is somehow missing.
 warn_if_location() {
   command -v jq >/dev/null 2>&1 || return 0
   local found
   found="$(jq -r '
-    [ (if ((.latitude // 0) != 0 or (.longitude // 0) != 0) then "latitude/longitude" else empty end),
-      (if ((.weatherLocation // "") | tostring) != "" then "weatherLocation" else empty end),
-      (if ((.weatherCoordinates // "") | tostring) != "" then "weatherCoordinates" else empty end)
-    ] | join(", ")' "$1" 2>/dev/null || true)"
+    [ (if ((.latitude // 0) != 0 or (.longitude // 0) != 0)
+       then "latitude/longitude = \(.latitude // 0), \(.longitude // 0)" else empty end),
+      (if ((.weatherLocation // "") | tostring) != ""
+       then "weatherLocation    = \(.weatherLocation)" else empty end),
+      (if ((.weatherCoordinates // "") | tostring) != ""
+       then "weatherCoordinates = \(.weatherCoordinates)" else empty end)
+    ] | .[]' "$1" 2>/dev/null || true)"
   [ -n "$found" ] || return 0
-  echo "  ⚠ carries a location ($found) — check that before committing." >&2
+  echo "  ⚠ carries a location — check the granularity before committing:" >&2
+  echo "$found" | sed 's/^/      /' >&2
 }
 
 # Sets LIVE/CHECKPOINT for one target. A plain case rather than an
