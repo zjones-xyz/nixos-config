@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, self, ... }:
 
 {
   # ── Niri, as a fourth selectable SDDM session ───────────────────────────────
@@ -56,6 +56,20 @@
   # no separate quickshell flake input was needed — see flake.nix.
   programs.dank-material-shell = {
     enable = true;
+
+    # ── Patches two upstream bugs in DMS's scripts/qt.sh ────────────────────
+    # The Qt palette is pointed at a KDE-format file qt6ct cannot parse, and
+    # the from-scratch config write emits a literal "\n". Together: "apply
+    # colours to Qt" reports success and never works. Evidence and upstream
+    # status in DECISIONS.md; recovery when this breaks: issue #110.
+    package = self.inputs.dank-material-shell.packages.${pkgs.stdenv.hostPlatform.system}.dms-shell.overrideAttrs (old: {
+      postFixup = (old.postFixup or "") + ''
+        substituteInPlace $out/share/quickshell/dms/scripts/qt.sh \
+          --replace-fail 'local config_file="$1"' 'local config_file="$1"; local color_scheme_path; color_scheme_path="$(dirname "$config_file")/colors/matugen.conf"' \
+          --replace-fail '[Appearance]\\ncustom_palette=true\\ncolor_scheme_path=%s\\n' '[Appearance]\ncustom_palette=true\ncolor_scheme_path=%s\n'
+      '';
+    });
+
     # Binds dms.service to graphical-session.target, which niri's own
     # packaged systemd units activate on session start — no manual
     # spawn-at-startup entry needed for DMS to come up automatically on

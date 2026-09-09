@@ -20,8 +20,10 @@
     # they leak into other sessions, because niri injects these into the
     # shared, session-surviving systemd --user manager (DECISIONS.md).
     # Wayland/Ozone hints are harmless-to-beneficial everywhere here.
-    # Deliberately NOT QT_QPA_PLATFORMTHEME=gtk3 (also in DMS's docs): that
-    # one WOULD regress Plasma's native Qt theming if it leaked.
+    # QT_QPA_PLATFORMTHEME is deliberately NOT here even though DMS's docs
+    # put it in this block — it cannot be session-scoped given the leak
+    # above, so it is set once, system-wide and honestly, in
+    # configuration.nix (as "qt5ct", not the docs' "gtk3"). See DECISIONS.md.
     environment = {
       QT_QPA_PLATFORM = "wayland";
       # nixpkgs' own Electron wrapper checks for this specifically —
@@ -57,10 +59,11 @@
     # them 17% apart. `position.x` is in *logical* pixels (native / scale),
     # so changing a scale moves every panel right of it. DMS also drives
     # outputs via wlr-output-management and keeps its own profile; this block
-    # is meant to be authoritative. The three panels are *centre*-aligned, not
-    # top-aligned: `y` is (2560 - own logical height) / 2, putting every
-    # midline on y = 1280. The offsets look arbitrary and are not — flattening
-    # them to 0 re-aligns the tops. See DECISIONS.md for the rest.
+    # is meant to be authoritative. Vertical alignment is per-panel and
+    # matches how they physically sit, so the `y` values are derived rather
+    # than arbitrary: the QC's bottom edge meets the LG's (both 2144), and
+    # the portrait QS is centred on the LG (both midlines 1280). Flattening
+    # them to 0 aligns the tops instead. See DECISIONS.md for the rest.
     outputs = {
       # Left, 2560x1440 logical. On HDMI, where the preferred mode is 60.000
       # — not the 59.997 the two DisplayPort panels report. Don't "normalise"
@@ -75,7 +78,7 @@
         scale = 1.5;
         position = {
           x = 0;
-          y = 560;
+          y = 704;
         };
       };
 
@@ -95,8 +98,8 @@
 
       # Right, in portrait — rotation is deliberate, dropping it silently
       # relandscapes the panel. Rotated and at 1.5 it is 1440x2560 logical:
-      # the tallest of the three, so it is the one the other two centre
-      # against and the only one at y = 0.
+      # the tallest of the three, so it is what the LG centres against and
+      # the only one at y = 0.
       "Dell Inc. DELL S2721QS 44B9513" = {
         mode = {
           width = 3840;
@@ -112,13 +115,19 @@
       };
     };
 
-    # layout {}, animations {}, hotkey-overlay {}, and screenshot-path were
-    # all left at niri-flake's schema defaults — cross-checked against the
-    # original auto-generated config.kdl and, as far as could be confirmed
-    # without a real niri build here, they matched niri's actual compiled-in
-    # defaults rather than being template-only opinions (unlike the binds
-    # and spawn-at-startup below, which were NOT left as defaults — see
-    # those sections for why).
+    # animations {}, hotkey-overlay {}, and screenshot-path were all left at
+    # niri-flake's schema defaults — cross-checked against the original
+    # auto-generated config.kdl and, as far as could be confirmed without a
+    # real niri build here, they matched niri's actual compiled-in defaults
+    # rather than being template-only opinions (unlike the binds and
+    # spawn-at-startup below, which were NOT left as defaults — see those
+    # sections for why). layout {} was too, until the focus ring below.
+
+    layout = {
+      # Thinner than niri's default 4. Everything else in layout {} stays at
+      # the schema default — naming one attribute doesn't disturb the rest.
+      focus-ring.width = 2;
+    };
 
     # waybar dropped entirely (was the auto-generated template's suggested
     # bar) — DMS is the bar/shell now, started via its own systemd --user
@@ -136,6 +145,16 @@
     ];
 
     window-rules = [
+      # Claude Desktop is a frameless Electron window whose surface carries a
+      # ~15px transparent margin for its own shadow. niri draws focus rings
+      # for CSD windows as a filled rectangle *behind* the window, so that
+      # margin lights up accent-coloured and the 2px ring reads as ~15px.
+      # Upstream documents this exact case on the option.
+      {
+        matches = [ { app-id = "^com\\.anthropic\\.Claude$"; } ];
+        draw-border-with-background = false;
+      }
+
       # Kept from the original config: open Firefox's picture-in-picture
       # player as floating. Firefox is actually installed on this host
       # (unlike the original's other window-rule, for WezTerm, which isn't
