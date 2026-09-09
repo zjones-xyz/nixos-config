@@ -1109,3 +1109,41 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   *Deliberately left unset:* `qt.style`. It would export
   `QT_STYLE_OVERRIDE`, which sits on top of the very palette DMS is trying
   to apply.
+- **Plasma and COSMIC to be removed, deferred 2026-09-09 — and `desktop-plasma.nix`
+  is not the file to delete when that happens.** Neither session is in daily use
+  since niri became `defaultSession` (2026-09-01) and both had degraded; the
+  removal was scoped, then deliberately postponed until there is time for the
+  downstream work. This entry exists so that work does not have to be
+  rediscovered — and so the trap below is not walked into.
+  *The trap:* `modules/nixos/desktop-plasma.nix` is named for Plasma but owns
+  four unrelated concerns, and exactly **one line** of it is Plasma
+  (`services.desktopManager.plasma6.enable`). The other three are load-bearing
+  for niri: `services.displayManager.sddm` (the sole display manager on this
+  host — no other module enables one), `services.displayManager.defaultSession
+  = "niri"`, and the entire audio stack (`services.pipewire`,
+  `security.rtkit.enable`, `services.pulseaudio.enable = false`). Deleting the
+  file to "remove Plasma" would leave the host with no way to log in and no
+  audio — the latter being the same subsystem whose failure took DMS/QuickShell
+  down during the multi-monitor bring-up. Removing Plasma means editing that
+  file, not deleting it; the SDDM/session/audio blocks want rehoming first.
+  *COSMIC, by contrast, is genuinely trivial:* `desktop-cosmic.nix` is a single
+  option, owns nothing shared, and can go with its import line whenever.
+  *Dragonized goes with Plasma, not separately:* its start script execs
+  `startplasma-wayland` from `kdePackages.plasma-workspace`, so it is a Plasma
+  session wearing a theme. Removing it also frees the `dr460nized-src` and
+  `window-title-applet-src` flake inputs and `modules/nixos/dragonized/`.
+  *What disappears silently:* Okular and Ark arrive via plasma6's default app
+  set, not via any explicit package entry. Two `home.nix` comments are written
+  around them — the `unrar` entry explains that it fixes RAR *in Ark*, and the
+  `zathura` entry explains that zathura is deliberately the lightweight
+  alternative to Okular rather than a replacement. Both comments become wrong
+  the moment plasma6 goes, so re-add whichever apps are wanted explicitly and
+  fix the comments in the same change.
+  *The rest of the surface:* `home.nix`'s `programs.plasma` block, its
+  vicinae-toggle desktop entry and `kbuildsycoca6` activation step, and
+  `flake.nix`'s `plasma-manager` input together with its
+  `home-manager.sharedModules` entry. Only pegasus imports any of the four
+  `desktop-*.nix` modules, so nothing fleet-wide is affected.
+  *Already paid forward:* the qt5ct/qt6ct change sets `qt.enable = true`
+  explicitly rather than relying on `plasma6.nix` setting it (see that entry),
+  so Qt theming survives Plasma's removal untouched.
