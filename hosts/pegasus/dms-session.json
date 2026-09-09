@@ -2,7 +2,7 @@
   "wallpaperPath": "/home/z/Wallpaper/alena-aenami-wallpaper/alena-aenami-7pm.png",
   "perMonitorWallpaper": true,
   "monitorWallpapers": {
-    "DP-1": "/home/z/Wallpaper/alena-aenami-wallpaper/alena-aenami-dawn.jpg"
+    "DP-1": "/home/z/Wallpaper/alena-aenami-wallpaper/alena-aenami-stardust.jpg"
   },
   "monitorWallpaperFillModes": {
     "DP-1": "Fit"
@@ -12,14 +12,6 @@
   "wallpaperCyclingInterval": 43200,
   "wallpaperCyclingFolderPath": "/home/z/Wallpaper/alena-aenami-wallpaper",
   "monitorCyclingSettings": {
-    "DP-1": {
-      "enabled": true,
-      "random": true,
-      "mode": "interval",
-      "interval": 300,
-      "time": "06:00",
-      "folderPath": ""
-    },
     "HDMI-A-1": {
       "enabled": true,
       "random": true,
@@ -28,11 +20,19 @@
       "time": "06:00",
       "folderPath": ""
     },
+    "DP-1": {
+      "enabled": true,
+      "random": true,
+      "mode": "interval",
+      "interval": 21600,
+      "time": "06:00",
+      "folderPath": ""
+    },
     "DP-2": {
       "enabled": true,
       "random": true,
       "mode": "interval",
-      "interval": 43200,
+      "interval": 21600,
       "time": "06:00",
       "folderPath": ""
     }
@@ -103,18 +103,19 @@
     "showSeconds": false,
     "clockFormat": "auto"
   },
-  "launcherLastQuery": "sett",
+  "launcherLastQuery": "viv",
   "launcherQueryHistory": [
+    "viv",
     "sett",
+    "claud",
+    "dis",
     "settin",
     "clau",
     "prot",
     "thund",
     "cla",
     "tick",
-    "dis",
     "stream",
-    "viv",
     "settings",
     "libre",
     "1pa",
@@ -125,7 +126,6 @@
     "stea",
     "libr",
     "7*12",
-    "claud",
     "file",
     "vs",
     "d",
@@ -157,6 +157,6 @@
     "orca"
   ],
   "appDrawerLastMode": "all",
-  "settingsSidebarExpandedIds": ",power_security,personalization,applications,workspaces_widgets,displays,dock_launcher,dankbar,system,",
+  "settingsSidebarExpandedIds": ",power_security,applications,workspaces_widgets,displays,dock_launcher,dankbar,system,personalization,",
   "configVersion": 4
 }

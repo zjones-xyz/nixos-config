@@ -3,6 +3,7 @@
   "currentThemeCategory": "dynamic",
   "matugenScheme": "scheme-fidelity",
   "cornerRadius": 12,
+  "niriLayoutBorderSize": 1,
   "touchpadAccelProfile": "adaptive",
   "showWeekNumber": true,
   "clockFormat": "24h",
