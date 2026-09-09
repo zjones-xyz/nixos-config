@@ -1069,3 +1069,43 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   that depends on remembering. ⟨No checkpoint with real coordinates has been
   committed — `hosts/pegasus/dms-session.json` does not exist until someone
   runs `snapshot` on the host.⟩
+- **`qt.platformTheme = "qt5ct"` set system-wide, accepting that it changes
+  Qt theming in the Plasma and Dragonized sessions too, 2026-09-09.**
+  DMS's "apply colours to Qt" button reported `failed to apply Qt colors`.
+  The cause is not subtle: DMS's `quickshell/scripts/qt.sh` writes
+  `custom_palette=true` + `color_scheme_path=…/DankMatugen.colors` into
+  `qt5ct.conf`/`qt6ct.conf`, and `exit 1`s outright if neither a `qt5ct`
+  nor a `qt6ct` binary is on `PATH`. Neither was installed anywhere in this
+  flake.
+  *Why the NixOS `qt` module rather than an ad-hoc package + env var:*
+  `qt.platformTheme = "qt5ct"` is the single value that installs *both*
+  `libsForQt5.qt5ct` and `qt6Packages.qt6ct` and sets
+  `QT_QPA_PLATFORMTHEME` to the key both plugins register under —
+  home-manager's own `qt` module independently maps its `qtct` theme to the
+  same string, which is the corroboration that the Qt6 plugin answers to
+  the Qt5 name. `qt.enable` is set explicitly even though `plasma6.nix`
+  already sets it, so Qt theming does not quietly stop working the day the
+  Plasma session is removed.
+  *Why system-wide and not in niri's `environment` block, where DMS's docs
+  put it:* it cannot honestly be scoped there. `niri-settings.nix` already
+  documents that this host's `systemd --user` manager is shared and
+  persistent across session switches and that `niri-session` imports into
+  it — so a "niri-only" `QT_QPA_PLATFORMTHEME` would leak anyway, just
+  non-deterministically, depending on whether a niri session had run since
+  boot. `configuration.nix` states the real scope.
+  *The cost, taken knowingly:* the comment this replaces in
+  `niri-settings.nix` refused `QT_QPA_PLATFORMTHEME=gtk3` precisely because
+  leaking it would displace Plasma's native theming, and that reasoning
+  still holds for `qt5ct` — `plasma-workspace`'s `startplasma.cpp` sets no
+  `QT_QPA_PLATFORMTHEME` of its own, so nothing in the Plasma session wins
+  the argument back. Qt apps under Plasma/Dragonized will take qt6ct's
+  matugen palette instead of Breeze's. Accepted because those sessions are
+  no longer in daily use here (niri has been `defaultSession` since
+  2026-09-01). It is not a lock-in: deleting the `qt` block restores the
+  previous behaviour on the next rebuild.
+  *Still unverified:* the Plasma-side effect above is reasoned from
+  upstream source, not observed. Worth one look at a Plasma session after
+  the first rebuild.
+  *Deliberately left unset:* `qt.style`. It would export
+  `QT_STYLE_OVERRIDE`, which sits on top of the very palette DMS is trying
+  to apply.

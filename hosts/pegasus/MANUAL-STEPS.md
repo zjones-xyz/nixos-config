@@ -738,3 +738,21 @@ real-hardware check:
    these windows, and a third-party screenshot tool's frozen fullscreen
    overlay could briefly leak them into an active cast — mid-stream, prefer
    niri's built-in screenshot (`Print` binds).
+
+## 23. Qt platform theme (qt5ct/qt6ct) — verify after the next switch
+
+`qt.platformTheme = "qt5ct"` in `configuration.nix` exists to make DMS's
+"apply colours to Qt" work; the trade-off it accepts is a Qt theming change
+in the other sessions. Both halves want confirming on real hardware — see
+`DECISIONS.md` for why each is expected.
+
+1. [ ] In niri, press DMS's **apply colours to Qt** button again. It should
+   no longer report `failed to apply Qt colors`, and
+   `~/.config/qt6ct/qt6ct.conf` should gain `custom_palette=true` plus a
+   `color_scheme_path` pointing at `DankMatugen.colors`.
+2. [ ] Open a Qt app under niri (`qt6ct` itself will do) and confirm it
+   picks up the matugen palette rather than the default grey.
+3. [ ] Log into the **Plasma** session once and look at a Qt dialog. The
+   expectation is that Breeze's palette is displaced by qt6ct's — that is
+   the accepted cost, not a bug. If it is worse than expected, deleting the
+   `qt` block in `configuration.nix` reverts it on the next rebuild.

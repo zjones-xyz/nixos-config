@@ -47,11 +47,10 @@
     # Desktop, Teams-for-linux — see home.nix), which otherwise fall back
     # to XWayland under niri.
     #
-    # Deliberately NOT setting QT_QPA_PLATFORMTHEME=gtk3 (also in DMS's
-    # docs) — that one is a real regression risk if it leaks: it would
-    # override Plasma's native Qt/Breeze theming with GTK-styled dialogs
-    # in the Plasma/Dragonized sessions, unlike the platform/Ozone vars
-    # above which are session-agnostic.
+    # QT_QPA_PLATFORMTHEME is deliberately NOT here even though DMS's docs
+    # put it in this block — it cannot be session-scoped given the leak
+    # above, so it is set once, system-wide and honestly, in
+    # configuration.nix (as "qt5ct", not the docs' "gtk3"). See DECISIONS.md.
     environment = {
       QT_QPA_PLATFORM = "wayland";
       # nixpkgs' own Electron wrapper checks for this specifically —
