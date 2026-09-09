@@ -762,9 +762,11 @@ in the other sessions. Both halves want confirming on real hardware — see
 ## 24. DMS `qt.sh` patch — confirm, then file upstream
 
 `modules/nixos/desktop-niri.nix` patches two bugs in DMS's
-`scripts/qt.sh` at build time (full reasoning in `DECISIONS.md`). Both were
-verified against a scratch `$HOME`, neither has been seen in a running Qt
-app yet, and neither is reported upstream.
+`scripts/qt.sh` at build time (full reasoning in `DECISIONS.md`). Both are
+confirmed on the hardware: the palette renders in Qt apps, and it survives
+a full logout/login (2026-09-08) — DMS regenerates its matugen output at
+session start and leaves `color_scheme_path` alone. Neither bug is
+reported upstream; only the filing below is left.
 
 1. [x] After the next switch, press **apply colours to Qt** and check that
    `~/.config/qt6ct/qt6ct.conf` and `~/.config/qt5ct/qt5ct.conf` each point
