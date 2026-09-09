@@ -2,7 +2,7 @@
   "wallpaperPath": "/home/z/Wallpaper/alena-aenami-wallpaper/alena-aenami-7pm.png",
   "perMonitorWallpaper": true,
   "monitorWallpapers": {
-    "DP-1": "/home/z/Wallpaper/alena-aenami-wallpaper/alena-aenami-stardust.jpg"
+    "DP-1": "/home/z/Wallpaper/alena-aenami-wallpaper/alena-aenami-dawn.jpg"
   },
   "monitorWallpaperFillModes": {
     "DP-1": "Fit"
@@ -47,7 +47,7 @@
   "themeModeAutoMode": "location",
   "themeModeShareGammaSettings": false,
   "weatherLocation": "",
-  "weatherCoordinates": "47.6038321,-122.3300620",
+  "weatherCoordinates": "47.6,-122.3",
   "hiddenTrayIds": [
     "zoom::Zoom Workplace",
     "nm-applet"
@@ -91,10 +91,10 @@
         "y": 764
       },
       "HDMI-A-1": {
-        "width": 200,
-        "height": 200,
-        "x": 1180,
-        "y": 620
+        "width": 428.95703125,
+        "height": 188.24609375,
+        "x": 1928.265625,
+        "y": 102.04296875
       }
     }
   },
