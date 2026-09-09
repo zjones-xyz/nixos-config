@@ -824,15 +824,24 @@ filter-chain module using the same RNNoise LADSPA plugin (nixpkgs's
 `rnnoise-plugin`), wired up declaratively. This is live as soon as PipeWire
 starts, no GUI/toggle/relaunch needed. The only thing left to do by hand:
 
-1. After the next `nixos-rebuild switch --flake .#pegasus` and a full
-   logout/login (or reboot) so PipeWire actually restarts with the new
-   config, confirm the virtual source exists:
-   `pactl list sources short | grep -i "noise canceling"` (or
-   `wpctl status` under PipeWire) should show a `Noise Canceling source`.
-2. In Discord (or whichever app), pick `Noise Canceling source` as the
+1. [x] `nixos-rebuild switch --flake .#pegasus`, then restart PipeWire —
+   **the switch alone does not reload it**, the running daemon keeps the
+   old config and the source silently never appears:
+   `systemctl --user restart pipewire.service pipewire-pulse.service wireplumber.service`
+   (a logout/login or reboot works too; the restart is enough and does not
+   need one). Verified 2026-09-09 — daemon had to be restarted by hand.
+2. [x] Confirm the virtual source exists. Note `pactl list sources short`
+   prints `node.name`, so grep for **`rnnoise_source`**, not the
+   description — `grep -i "noise canceling"` against `short` output never
+   matches and looks like a failure:
+   `pactl list sources short | grep rnnoise` → `rnnoise_source`.
+   `wpctl status` shows it as `rnnoise_source [Audio/Source]`; the friendly
+   `Noise Canceling source` name only appears in `pactl list sources`
+   (long form) and in app device pickers.
+3. [ ] In Discord (or whichever app), pick `Noise Canceling source` as the
    input/mic device in its own audio settings — PipeWire doesn't redirect
    anything automatically, apps must select it like any other mic.
-3. `control."VAD Threshold (%)"` is set to `50.0` in
+4. [ ] `control."VAD Threshold (%)"` is set to `50.0` in
    `modules/nixos/mic-denoise.nix` (RNNoise's default) — lower it if quiet
    speech is getting silenced, raise it if background noise gets through
    during pauses.
