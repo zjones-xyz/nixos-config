@@ -749,10 +749,31 @@ in the other sessions. Both halves want confirming on real hardware — see
 1. [ ] In niri, press DMS's **apply colours to Qt** button again. It should
    no longer report `failed to apply Qt colors`, and
    `~/.config/qt6ct/qt6ct.conf` should gain `custom_palette=true` plus a
-   `color_scheme_path` pointing at `DankMatugen.colors`.
+   `color_scheme_path` pointing at `~/.config/qt6ct/colors/matugen.conf`
+   (see §24 — before the `qt.sh` patch this pointed at `DankMatugen.colors`,
+   which is why the palette never applied).
 2. [ ] Open a Qt app under niri (`qt6ct` itself will do) and confirm it
    picks up the matugen palette rather than the default grey.
 3. [ ] Log into the **Plasma** session once and look at a Qt dialog. The
    expectation is that Breeze's palette is displaced by qt6ct's — that is
    the accepted cost, not a bug. If it is worse than expected, deleting the
    `qt` block in `configuration.nix` reverts it on the next rebuild.
+
+## 24. DMS `qt.sh` patch — confirm, then file upstream
+
+`modules/nixos/desktop-niri.nix` patches two bugs in DMS's
+`scripts/qt.sh` at build time (full reasoning in `DECISIONS.md`). Both were
+verified against a scratch `$HOME`, neither has been seen in a running Qt
+app yet, and neither is reported upstream.
+
+1. [ ] After the next switch, press **apply colours to Qt** and check that
+   `~/.config/qt6ct/qt6ct.conf` and `~/.config/qt5ct/qt5ct.conf` each point
+   `color_scheme_path` at their *own* `colors/matugen.conf`.
+2. [ ] Open a Qt app and confirm the matugen palette actually renders. This
+   is the step that has never once passed on this host.
+3. [ ] File the upstream issue against `AvengeMedia/DankMaterialShell` —
+   draft ready at `~/dms-qt-issue-draft.md`, unsent. Covers both bugs.
+4. [ ] Once upstream fixes it, delete the `package` override in
+   `desktop-niri.nix`. It is `--replace-fail`-anchored, so a rebuild will
+   fail loudly rather than silently no-op if upstream edits those lines
+   first — that failure is the signal to remove the shim, not to repair it.
