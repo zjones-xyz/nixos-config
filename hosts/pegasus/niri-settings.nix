@@ -1,5 +1,16 @@
 { config, pkgs, ... }:
 
+let
+  # ── Monitor identities ──────────────────────────────────────────────────
+  # niri has no output-alias concept: `outputs`, `open-on-output` and window
+  # rules each take a raw connector name or make/model/serial string. These
+  # bindings are that alias layer, so a replaced panel is one edit. Identity
+  # strings, not DP-1/HDMI-A-1 — connector names shuffle between reboots.
+  # Verify with `niri msg outputs`.
+  monLeft = "Dell Inc. DELL S2722QC 1NC1J24";
+  monCentre = "LG Electronics LG HDR 4K 111NTEP7X460";
+  monRight = "Dell Inc. DELL S2721QS 44B9513";
+in
 {
   # ── Declarative niri config (niri-flake's homeModules.config) ──────────────
   # Migrated 2026-08-11 from a hand-edited ~/.config/niri/config.kdl (niri's
@@ -79,14 +90,15 @@
     };
 
     # ── Outputs ────────────────────────────────────────────────────────────
-    # Keyed on EDID identity ("Make Model Serial"), not connector name — a
-    # cable's connector can migrate across recabling, the panel's identity
-    # doesn't. The 27" Dells run scale 1.5 against the 31.5" LG's 1.25: that
-    # puts all three within 3% on effective PPI, where a shared scale leaves
-    # them 17% apart. `position.x` is in *logical* pixels (native / scale),
-    # so changing a scale moves every panel right of it. DMS also drives
-    # outputs via wlr-output-management and keeps its own profile; this block
-    # is meant to be authoritative. Vertical alignment is per-panel and
+    # Matched on EDID identity ("Make Model Serial") via `name`, not connector
+    # name — a cable's connector can migrate across recabling, the panel's
+    # identity doesn't. The keys are local aliases (see the `let` above);
+    # niri only ever sees `name`. The 27" Dells run scale 1.5 against the
+    # 31.5" LG's 1.25: that puts all three within 3% on effective PPI, where
+    # a shared scale leaves them 17% apart. `position.x` is in *logical*
+    # pixels (native / scale), so changing a scale moves every panel right of
+    # it. DMS also drives outputs via wlr-output-management and keeps its own
+    # profile; this block is meant to be authoritative. Vertical alignment is per-panel and
     # matches how they physically sit, so the `y` values are derived rather
     # than arbitrary: the QC's bottom edge meets the LG's (both 2144), and
     # the portrait QS is centred on the LG (both midlines 1280). Flattening
@@ -96,7 +108,8 @@
       # — not the 59.997 the two DisplayPort panels report. Don't "normalise"
       # these: an unavailable refresh makes niri discard the mode entirely
       # and pick its own.
-      "Dell Inc. DELL S2722QC 1NC1J24" = {
+      mon-left = {
+        name = monLeft;
         mode = {
           width = 3840;
           height = 2160;
@@ -110,7 +123,8 @@
       };
 
       # Centre, 3072x1728 logical.
-      "LG Electronics LG HDR 4K 111NTEP7X460" = {
+      mon-centre = {
+        name = monCentre;
         mode = {
           width = 3840;
           height = 2160;
@@ -127,7 +141,8 @@
       # relandscapes the panel. Rotated and at 1.5 it is 1440x2560 logical:
       # the tallest of the three, so it is what the LG centres against and
       # the only one at y = 0.
-      "Dell Inc. DELL S2721QS 44B9513" = {
+      mon-right = {
+        name = monRight;
         mode = {
           width = 3840;
           height = 2160;
@@ -169,7 +184,21 @@
     # the tray instead of opening its window on every login.
     spawn-at-startup = [
       { argv = [ "protonmail-bridge-gui" "--no-window" ]; }
+      # Placement for these two is not here — niri decides it from the
+      # window rules below, which is the only place a workspace or output
+      # can be named for an opening window.
+      { argv = [ "thunderbird" ]; }
+      { argv = [ "ticktick" ]; }
     ];
+
+    # ── Named workspaces ──────────────────────────────────────────────────
+    # Persistent: they exist even when empty, and (since niri 25.02) a new
+    # window no longer resets a *named* workspace's home output the way it
+    # does for unnamed ones. So open-on-output is a monitor it returns to on
+    # replug, not a pin — moving it by hand still wins until the next start.
+    workspaces = {
+      Mail.open-on-output = monLeft;
+    };
 
     window-rules = [
       # Claude Desktop is a frameless Electron window whose surface carries a
@@ -233,6 +262,42 @@
           { app-id = "(?i)gcr.*prompt"; } # gnome-keyring unlock dialogs
         ];
         block-out-from = "screencast";
+      }
+
+      # ── Login placement ───────────────────────────────────────────────
+      # Thunderbird always lands on "Mail" — that workspace exists for it,
+      # so this rule is deliberately not scoped to at-startup. The second
+      # rule only keeps the login instance from taking focus while the
+      # session is still coming up; a manual launch focuses as normal.
+      # app-ids are unverified suffix regexes — MANUAL-STEPS.md §25.
+      {
+        matches = [ { app-id = "(?i)thunderbird$"; } ];
+        open-on-workspace = "Mail";
+      }
+      {
+        matches = [
+          {
+            app-id = "(?i)thunderbird$";
+            at-startup = true;
+          }
+        ];
+        open-focused = false;
+      }
+
+      # TickTick opens on the right monitor's active workspace, which at
+      # login is its only (and therefore first) one. at-startup keeps that
+      # to the login instance — a later launch opens where you already are,
+      # rather than throwing the window onto another monitor — and, like
+      # Thunderbird above, it must not take focus during login.
+      {
+        matches = [
+          {
+            app-id = "(?i)ticktick$";
+            at-startup = true;
+          }
+        ];
+        open-on-output = monRight;
+        open-focused = false;
       }
     ];
 
