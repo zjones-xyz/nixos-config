@@ -172,6 +172,16 @@
     ];
 
     window-rules = [
+      # Claude Desktop is a frameless Electron window whose surface carries a
+      # ~15px transparent margin for its own shadow. niri draws focus rings
+      # for CSD windows as a filled rectangle *behind* the window, so that
+      # margin lights up accent-coloured and the 2px ring reads as ~15px.
+      # Upstream documents this exact case on the option.
+      {
+        matches = [ { app-id = "^com\\.anthropic\\.Claude$"; } ];
+        draw-border-with-background = false;
+      }
+
       # Kept from the original config: open Firefox's picture-in-picture
       # player as floating. Firefox is actually installed on this host
       # (unlike the original's other window-rule, for WezTerm, which isn't
