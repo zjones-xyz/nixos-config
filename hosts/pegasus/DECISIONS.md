@@ -1234,3 +1234,23 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   declarative. If the colours are ever wanted, hardcoding the accent as
   `focus-ring.active.color` in `niri-settings.nix` gets most of the look at
   none of the cost — it just won't follow a retheme.
+- **Monitors are referred to through `let` bindings, not repeated identity
+  strings (2026-09-09).** `niri-settings.nix` now opens with `monLeft` /
+  `monCentre` / `monRight`, and the `outputs` attrset is keyed `mon-left` /
+  `mon-centre` / `mon-right` with the identity string moved to niri-flake's
+  `name` attribute.
+  *Why:* niri has no output-alias concept — `outputs`, `open-on-output` and
+  window rules each take a raw connector name or `make model serial` string,
+  so a three-monitor host repeats each panel's identity once per reference.
+  Nothing validates those strings at build time, and both failure modes are
+  silent: a typo in an `outputs` entry leaves that panel on its preferred
+  mode, and one in `open-on-output` drops the window on the focused output
+  instead. One binding per panel makes that a single point of edit when a
+  monitor is replaced, and the readable `outputs` keys say which panel is
+  which without decoding a serial. niri-flake's key/name split (`outputs.<key>.name`,
+  defaulting to the key) is what makes the rekeying behaviour-neutral — the
+  key never reaches niri, it only sorts the emitted `output` nodes and breaks
+  ties for `focus-at-startup`, which this host doesn't set.
+  *Scope limit:* the bindings are file-local. If a monitor identity is ever
+  needed outside `niri-settings.nix` (a DMS setting, Plasma's output config),
+  promote them to a `homelab.*` option rather than copying the strings.
