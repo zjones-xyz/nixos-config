@@ -830,7 +830,7 @@ starts, no GUI/toggle/relaunch needed. The only thing left to do by hand:
    `systemctl --user restart pipewire.service pipewire-pulse.service wireplumber.service`
    (a logout/login or reboot works too; the restart is enough and does not
    need one). Verified 2026-09-09 — daemon had to be restarted by hand.
-2. [x] Confirm the virtual source exists. Note `pactl list sources short`
+2. [ ] Confirm the virtual source exists (it does — but see STATUS below). Note `pactl list sources short`
    prints `node.name`, so grep for **`rnnoise_source`**, not the
    description — `grep -i "noise canceling"` against `short` output never
    matches and looks like a failure:
@@ -845,3 +845,37 @@ starts, no GUI/toggle/relaunch needed. The only thing left to do by hand:
    `modules/nixos/mic-denoise.nix` (RNNoise's default) — lower it if quiet
    speech is getting silenced, raise it if background noise gets through
    during pauses.
+
+**STATUS 2026-09-09: BLOCKED — the source appears but passes no audio.**
+Do not merge PR #72 as working. What was established on real hardware:
+
+- The module loads. `rnnoise_source` / "Noise Canceling source" appears in
+  `pactl` and `wpctl`, no LADSPA errors in the PipeWire journal, and
+  `pw-link -l` shows it correctly linked to the Snowball's `capture_FL`.
+  Plugin, LADSPA label and control name were all checked against the built
+  `librnnoise_ladspa.so` and match.
+- **It emits digital silence.** Recording the raw Snowball and
+  `rnnoise_source` *simultaneously* (same window, so it does not depend on
+  whether anyone was speaking): raw mic max byte 255, filter output max
+  byte 0.
+- Not VAD gating. Repeated with `"VAD Threshold (%)"` forced to `0.0`,
+  which disables the speech gate entirely — still max byte 0.
+- Not `node.passive`. Tested via a user-level drop-in with that line
+  removed: the node goes `IDLE` instead of `SUSPENDED`, which looks like
+  progress, but output is still silence. Change was reverted, module is
+  back to upstream's shape.
+
+Next things to try, roughly in order:
+1. `plugin = "librnnoise_ladspa"` vs upstream's `plugin =
+   "ladspa/librnnoise_ladspa"` — the module instantiates either way, so a
+   silently mis-resolved plugin is not ruled out.
+2. Channel handling: the Snowball is 2ch, `noise_suppressor_mono` is 1ch,
+   and only `capture_FL` gets linked. Try `noise_suppressor_stereo`, or an
+   explicit `audio.channels`/`audio.position` on `capture.props`.
+3. Verify the chain in isolation with `pw-loopback` / a hand-written
+   config before spending another rebuild.
+
+Note for whoever picks this up: `pactl list sources short` prints
+`node.name`, so grep `rnnoise_source` — `grep -i "noise canceling"` against
+`short` output never matches and looks like a failure even when the node
+exists.
