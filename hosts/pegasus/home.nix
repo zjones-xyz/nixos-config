@@ -401,6 +401,9 @@
   # -restore/-diff above.
   home.activation.seedDmsSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     DMS_DIR="$HOME/.config/DankMaterialShell"
+    # session.json lives under XDG_STATE_HOME, not XDG_CONFIG_HOME — see
+    # scripts/dms-settings.sh for what it holds and why it is checkpointed.
+    DMS_STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/DankMaterialShell"
     CHECKPOINTS="$HOME/nixos-config/hosts/pegasus"
 
     if [ ! -e "$DMS_DIR/settings.json" ] && [ -e "$CHECKPOINTS/dms-settings.json" ]; then
@@ -411,6 +414,11 @@
     if [ ! -e "$DMS_DIR/plugin_settings.json" ] && [ -e "$CHECKPOINTS/dms-plugin-settings.json" ]; then
       $DRY_RUN_CMD mkdir -p "$DMS_DIR"
       $DRY_RUN_CMD cp "$CHECKPOINTS/dms-plugin-settings.json" "$DMS_DIR/plugin_settings.json"
+    fi
+
+    if [ ! -e "$DMS_STATE_DIR/session.json" ] && [ -e "$CHECKPOINTS/dms-session.json" ]; then
+      $DRY_RUN_CMD mkdir -p "$DMS_STATE_DIR"
+      $DRY_RUN_CMD cp "$CHECKPOINTS/dms-session.json" "$DMS_STATE_DIR/session.json"
     fi
   '';
 

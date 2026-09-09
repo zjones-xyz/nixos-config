@@ -1034,3 +1034,38 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   DP-3 (it has a DisplayPort input) and give `HDMI-A-1` back. The latter
   would also change that output's declared refresh from 60.000 to whatever
   DP negotiates; see the comment in `niri-settings.nix`.
+- **DMS's `session.json` checkpointed too, wholesale rather than filtered
+  (2026-09-09).** Extends the snapshot/restore decision above, which only
+  ever covered two of DMS's three persisted files. The third,
+  `$XDG_STATE_HOME/DankMaterialShell/session.json`, is misnamed for what it
+  holds: despite the state directory it carries durable configuration —
+  `isLightMode`, the wallpaper (including per-monitor and separate
+  light/dark wallpapers), the night-mode and auto-theme schedules, pinned
+  dock and bar apps, tray order, `recentColors`. 110 persisted properties in
+  all, confirmed against `quickshell/Common/SessionData.qml` at the revision
+  in `flake.lock`; the path is set at its line 1590 from
+  `StandardPaths.GenericStateLocation`. Left unhandled, a rebuild from
+  scratch came up with none of it, which is precisely what `seedDmsSettings`
+  exists to prevent.
+  *Wholesale, not a curated subset.* Some of those 110 are genuinely
+  transient — `monitorScrollPositions`, the runtime-discovered
+  `installedTerminals`, the computed `themeModeNextTransition` — so a filter
+  down to the durable ones was the obvious alternative, and would give
+  cleaner diffs. Rejected because the filter is the same bug in a new place:
+  it needs updating every time DMS adds a property, and when it inevitably
+  drifts the failure is silent — a new setting simply is not captured, and
+  nobody finds out until a rebuild loses it. That is the exact failure this
+  entry is fixing. A faithful copy cannot drift. Restoring a stale
+  `monitorScrollPositions` is also harmless in a way that failing to restore
+  a wallpaper is not, so the asymmetry favours copying everything.
+  *Location data, handled by surfacing rather than stripping.* `session.json`
+  carries `latitude`/`longitude` once night mode's location automation is
+  used, and `settings.json` carries `weatherLocation`/`weatherCoordinates` —
+  flagged in the entry above as worth knowing before committing. Filtering
+  them out would have made `restore` a half-restore, so instead
+  `dms-settings.sh` now names them at snapshot time, on stderr, while the
+  diff is still under review. The workflow already required a human to look
+  before committing; this makes that look an informed one rather than one
+  that depends on remembering. ⟨No checkpoint with real coordinates has been
+  committed — `hosts/pegasus/dms-session.json` does not exist until someone
+  runs `snapshot` on the host.⟩
