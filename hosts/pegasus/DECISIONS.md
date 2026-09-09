@@ -1254,3 +1254,20 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   *Scope limit:* the bindings are file-local. If a monitor identity is ever
   needed outside `niri-settings.nix` (a DMS setting, Plasma's output config),
   promote them to a `homelab.*` option rather than copying the strings.
+- **Thunderbird is routed to `Mail` unconditionally, TickTick only at startup
+  (2026-09-09).** The named workspace `Mail` exists to hold Thunderbird, so
+  its window rule carries no `at-startup` matcher — a mid-session launch
+  belongs there too. TickTick's does: "the right monitor's first workspace"
+  is a login-time arrangement, and a rule without `at-startup` would fling
+  every later launch onto another monitor.
+  *The fragile half:* TickTick is placed with `open-on-output` alone, which
+  targets whatever workspace is *active* on that monitor. That is the first
+  one only because nothing else is homed there at login. Home any named
+  workspace to the right monitor and TickTick starts landing on it instead
+  — at which point give TickTick its own named workspace and switch the rule
+  to `open-on-workspace`. Chosen over declaring that workspace now because
+  it keeps the bar to one name; MANUAL-STEPS.md §25 carries the check.
+  *Focus:* both login instances set `open-focused = false`. niri won't focus
+  a window opening on a non-focused output anyway, but which output is
+  focused at startup isn't pinned on this host (no `focus-at-startup`), so
+  without it the choice of which app steals the cursor at login is luck.

@@ -780,3 +780,31 @@ reported upstream; only the filing below is left.
    fail loudly rather than silently no-op if upstream edits those lines
    first — that failure is the signal to remove the shim, not to repair it.
    Issue #110 records the exact failure text and the three cases it can be.
+
+## 25. Named workspace `Mail` + login placement — verify on real hardware
+
+`niri-settings.nix` now declares a named workspace `Mail` homed to the left
+monitor, spawns Thunderbird and TickTick at login, and routes both with window
+rules (Thunderbird → `Mail` always; TickTick → right monitor, at-startup only).
+The Mozilla/Electron app-ids could not be verified from source — same
+limitation as §22 — and TickTick's placement additionally assumes the right
+monitor has exactly one workspace at login, which stops being true the day a
+named workspace is homed there.
+
+1. [ ] With both apps open, run `niri msg windows` and confirm the app-ids
+   match `(?i)thunderbird$` and `(?i)ticktick$`. Fix any regex that misses in
+   `niri-settings.nix` and note it here.
+2. [ ] Log out and back in. Thunderbird should land on `Mail` (left monitor,
+   its first workspace) *without* taking focus; TickTick on the right
+   monitor's first workspace.
+3. [ ] Mid-session, launch Thunderbird by hand: it should still go to `Mail`,
+   focused this time. Launch TickTick by hand: it should open on the current
+   workspace, not jump to the right monitor.
+4. [ ] Unplug and replug the left monitor with `Mail` empty. It should come
+   back to the left monitor rather than staying on whichever monitor adopted
+   it — that is the named-workspace behaviour the whole design leans on.
+5. [ ] Optional, cosmetic: DMS shows workspace *names* only with Settings →
+   Workspaces → "Workspace Names" on (off in the checked-in
+   `dms-settings.json`), or by giving `Mail` an icon under "Named Workspace
+   Icons" — that card only appears once niri reports a named workspace. If
+   either is turned on, capture it with `dms-settings-snapshot`.

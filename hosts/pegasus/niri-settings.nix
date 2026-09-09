@@ -184,7 +184,21 @@ in
     # the tray instead of opening its window on every login.
     spawn-at-startup = [
       { argv = [ "protonmail-bridge-gui" "--no-window" ]; }
+      # Placement for these two is not here — niri decides it from the
+      # window rules below, which is the only place a workspace or output
+      # can be named for an opening window.
+      { argv = [ "thunderbird" ]; }
+      { argv = [ "ticktick" ]; }
     ];
+
+    # ── Named workspaces ──────────────────────────────────────────────────
+    # Persistent: they exist even when empty, and (since niri 25.02) a new
+    # window no longer resets a *named* workspace's home output the way it
+    # does for unnamed ones. So open-on-output is a monitor it returns to on
+    # replug, not a pin — moving it by hand still wins until the next start.
+    workspaces = {
+      Mail.open-on-output = monLeft;
+    };
 
     window-rules = [
       # Claude Desktop is a frameless Electron window whose surface carries a
@@ -248,6 +262,42 @@ in
           { app-id = "(?i)gcr.*prompt"; } # gnome-keyring unlock dialogs
         ];
         block-out-from = "screencast";
+      }
+
+      # ── Login placement ───────────────────────────────────────────────
+      # Thunderbird always lands on "Mail" — that workspace exists for it,
+      # so this rule is deliberately not scoped to at-startup. The second
+      # rule only keeps the login instance from taking focus while the
+      # session is still coming up; a manual launch focuses as normal.
+      # app-ids are unverified suffix regexes — MANUAL-STEPS.md §25.
+      {
+        matches = [ { app-id = "(?i)thunderbird$"; } ];
+        open-on-workspace = "Mail";
+      }
+      {
+        matches = [
+          {
+            app-id = "(?i)thunderbird$";
+            at-startup = true;
+          }
+        ];
+        open-focused = false;
+      }
+
+      # TickTick opens on the right monitor's active workspace, which at
+      # login is its only (and therefore first) one. at-startup keeps that
+      # to the login instance — a later launch opens where you already are,
+      # rather than throwing the window onto another monitor — and, like
+      # Thunderbird above, it must not take focus during login.
+      {
+        matches = [
+          {
+            app-id = "(?i)ticktick$";
+            at-startup = true;
+          }
+        ];
+        open-on-output = monRight;
+        open-focused = false;
       }
     ];
 
