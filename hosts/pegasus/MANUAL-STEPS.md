@@ -752,7 +752,7 @@ in the other sessions. Both halves want confirming on real hardware — see
    `color_scheme_path` pointing at `~/.config/qt6ct/colors/matugen.conf`
    (see §24 — before the `qt.sh` patch this pointed at `DankMatugen.colors`,
    which is why the palette never applied).
-2. [ ] Open a Qt app under niri (`qt6ct` itself will do) and confirm it
+2. [x] Open a Qt app under niri (`qt6ct` itself will do) and confirm it
    picks up the matugen palette rather than the default grey.
 3. [ ] Log into the **Plasma** session once and look at a Qt dialog. The
    expectation is that Breeze's palette is displaced by qt6ct's — that is
@@ -769,7 +769,7 @@ app yet, and neither is reported upstream.
 1. [x] After the next switch, press **apply colours to Qt** and check that
    `~/.config/qt6ct/qt6ct.conf` and `~/.config/qt5ct/qt5ct.conf` each point
    `color_scheme_path` at their *own* `colors/matugen.conf`.
-2. [ ] Open a Qt app and confirm the matugen palette actually renders. This
+2. [x] Open a Qt app and confirm the matugen palette actually renders. This
    is the step that has never once passed on this host.
 3. [ ] File the upstream issue against `AvengeMedia/DankMaterialShell` —
    draft ready at `~/dms-qt-issue-draft.md`, unsent. Covers both bugs.

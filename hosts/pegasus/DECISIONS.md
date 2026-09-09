@@ -1168,4 +1168,6 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   both configs held the old `DankMatugen.colors` path before pressing
   **apply colours to Qt** and each held its own
   `~/.config/qt{5,6}ct/colors/matugen.conf` after. Whether the palette then
-  renders in a Qt app is tracked separately in `MANUAL-STEPS.md` §24.
+  renders in a Qt app was then confirmed too: qt6ct shows the matugen
+  palette instead of stock Fusion grey. The feature has never worked on this
+  host until now.
