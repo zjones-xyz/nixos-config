@@ -142,13 +142,19 @@
       };
     };
 
-    # layout {}, animations {}, hotkey-overlay {}, and screenshot-path were
-    # all left at niri-flake's schema defaults — cross-checked against the
-    # original auto-generated config.kdl and, as far as could be confirmed
-    # without a real niri build here, they matched niri's actual compiled-in
-    # defaults rather than being template-only opinions (unlike the binds
-    # and spawn-at-startup below, which were NOT left as defaults — see
-    # those sections for why).
+    # animations {}, hotkey-overlay {}, and screenshot-path were all left at
+    # niri-flake's schema defaults — cross-checked against the original
+    # auto-generated config.kdl and, as far as could be confirmed without a
+    # real niri build here, they matched niri's actual compiled-in defaults
+    # rather than being template-only opinions (unlike the binds and
+    # spawn-at-startup below, which were NOT left as defaults — see those
+    # sections for why). layout {} was too, until the focus ring below.
+
+    layout = {
+      # Thinner than niri's default 4. Everything else in layout {} stays at
+      # the schema default — naming one attribute doesn't disturb the rest.
+      focus-ring.width = 2;
+    };
 
     # waybar dropped entirely (was the auto-generated template's suggested
     # bar) — DMS is the bar/shell now, started via its own systemd --user
