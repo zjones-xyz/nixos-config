@@ -746,7 +746,7 @@ real-hardware check:
 in the other sessions. Both halves want confirming on real hardware — see
 `DECISIONS.md` for why each is expected.
 
-1. [ ] In niri, press DMS's **apply colours to Qt** button again. It should
+1. [x] In niri, press DMS's **apply colours to Qt** button again. It should
    no longer report `failed to apply Qt colors`, and
    `~/.config/qt6ct/qt6ct.conf` should gain `custom_palette=true` plus a
    `color_scheme_path` pointing at `~/.config/qt6ct/colors/matugen.conf`
@@ -766,7 +766,7 @@ in the other sessions. Both halves want confirming on real hardware — see
 verified against a scratch `$HOME`, neither has been seen in a running Qt
 app yet, and neither is reported upstream.
 
-1. [ ] After the next switch, press **apply colours to Qt** and check that
+1. [x] After the next switch, press **apply colours to Qt** and check that
    `~/.config/qt6ct/qt6ct.conf` and `~/.config/qt5ct/qt5ct.conf` each point
    `color_scheme_path` at their *own* `colors/matugen.conf`.
 2. [ ] Open a Qt app and confirm the matugen palette actually renders. This

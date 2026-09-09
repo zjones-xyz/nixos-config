@@ -1164,4 +1164,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   pre-existing-config path rewrites `color_scheme_path` to
   `…/qt6ct/colors/matugen.conf`, the from-scratch path writes a proper
   three-line `[Appearance]` block, and each tool gets its own scheme file.
-  Not yet confirmed by eye in a running Qt app.
+  Then confirmed on the hardware after a `nixos-rebuild test` (2026-09-08):
+  both configs held the old `DankMatugen.colors` path before pressing
+  **apply colours to Qt** and each held its own
+  `~/.config/qt{5,6}ct/colors/matugen.conf` after. Whether the palette then
+  renders in a Qt app is tracked separately in `MANUAL-STEPS.md` §24.
