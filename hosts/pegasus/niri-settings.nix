@@ -13,51 +13,24 @@ let
 in
 {
   # ── Declarative niri config (niri-flake's homeModules.config) ──────────────
-  # Migrated 2026-08-11 from a hand-edited ~/.config/niri/config.kdl (niri's
-  # own auto-generated first-run template, with `natural-scroll` disabled by
-  # hand) — see DECISIONS.md for why niri-flake was adopted this way
-  # (homeModules.config only, NOT the full nixosModules.niri, which would
-  # replace nixpkgs' niri package entirely).
+  # homeModules.config only, NOT the full nixosModules.niri (which would
+  # replace nixpkgs' niri package entirely) — see DECISIONS.md.
   #
-  # ⚠ DIVERGENCE RISK, flagged per Zoe's request: niri-flake's own README
-  # states `programs.niri.settings`' schema is "not guaranteed to be
-  # compatible with niri versions other than the two [niri-flake] provides"
-  # and that nixpkgs' niri "will not have an issue... unless running old
-  # versions 2+ releases behind." We deliberately run nixpkgs' niri (not
-  # niri-flake's own build — see `package` below), so if nixpkgs' niri drifts
-  # far enough behind niri-flake's schema, `nix flake check`/eval could start
-  # failing (a new/renamed niri action, a KDL schema change) until niri-flake
-  # is bumped, or (worse, if it happens silently) generate a config.kdl that
-  # builds but doesn't do what's declared here. Symptom to watch for: an eval
-  # error mentioning an unknown niri action name, or a real behavioral
-  # mismatch between what's declared here and what actually happens on
-  # pegasus. If that happens, check niri-flake's CHANGELOG/issues before
-  # assuming it's a mistake in this file.
-  # Validate against the niri actually installed (nixpkgs', via
-  # programs.niri.enable in modules/nixos/desktop-niri.nix), not
-  # niri-flake's own niri-stable build — see DECISIONS.md. Sibling of
-  # `settings` below, not nested under it.
+  # ⚠ DIVERGENCE RISK: we run nixpkgs' niri against niri-flake's settings
+  # schema, which niri-flake only guarantees for its own two niri versions.
+  # If an eval error here names an unknown niri action, or declared behavior
+  # stops matching the live session, check niri-flake's CHANGELOG/issues
+  # before assuming a mistake in this file.
+  # Validates against the installed nixpkgs niri, not niri-flake's build.
+  # Sibling of `settings` below, not nested under it.
   programs.niri.package = pkgs.niri;
 
   programs.niri.settings = {
     # ── Session environment ────────────────────────────────────────────────
-    # Recommended directly by DMS's own niri setup docs. Only the variables
-    # that are safe or beneficial even if they leak into other sessions —
-    # see the note below, this host's systemd --user manager is shared and
-    # persistent across session switches (same root cause as the
-    # XDG_CURRENT_DESKTOP bug in DECISIONS.md), and niri-session's own
-    # script (`systemctl --user import-environment`) confirms it injects
-    # into that shared manager, only explicitly cleaning up 5 unrelated
-    # vars (WAYLAND_DISPLAY etc.) on exit — nothing we set here.
-    #
-    # QT_QPA_PLATFORM=wayland and the Electron Ozone hints are harmless (at
-    # worst) or actively beneficial (at best) if they leak into Plasma/
-    # COSMIC/Dragonized, since every session on this host is already
-    # Wayland — matters for the Electron apps already installed (Discord,
-    # VSCode, Obsidian, Ferdium, TickTick, Claude Desktop, ProtonMail
-    # Desktop, Teams-for-linux — see home.nix), which otherwise fall back
-    # to XWayland under niri.
-    #
+    # From DMS's niri setup docs — but ONLY the variables that are safe if
+    # they leak into other sessions, because niri injects these into the
+    # shared, session-surviving systemd --user manager (DECISIONS.md).
+    # Wayland/Ozone hints are harmless-to-beneficial everywhere here.
     # QT_QPA_PLATFORMTHEME is deliberately NOT here even though DMS's docs
     # put it in this block — it cannot be session-scoped given the leak
     # above, so it is set once, system-wide and honestly, in
@@ -241,7 +214,7 @@ in
         };
       }
 
-      # ── Stream privacy (Zoe, 2026-09-06) ──────────────────────────────
+      # ── Stream privacy ────────────────────────────────────────────────
       # These windows are blocked out of the screencast portal (OBS,
       # Discord shares, …) but stay normally screenshot-able. Deliberately
       # "screencast", not the stricter "screen-capture" — the one known
@@ -322,7 +295,7 @@ in
       "Mod+Shift+Slash".action = show-hotkey-overlay;
 
       # Terminal: kitty, not the original template's suggested alacritty
-      # (not installed here) — per Zoe, 2026-08-11.
+      # (not installed here).
       "Mod+T" = {
         hotkey-overlay.title = "Open a Terminal: kitty";
         action = spawn "kitty";
@@ -551,11 +524,9 @@ in
       # optional properties, e.g. show-pointer) — same documented
       # action.<name>=value form as above.
       #
-      # This host's keyboard (RDR Alice, a compact Alice-layout board) has no
-      # dedicated PrtSc key — confirmed by Zoe 2026-08-20, physically sends
-      # Print Screen via Fn+K. Firmware-level mapping, not something this
-      # config (or niri) controls; recorded here since it's the non-obvious
-      # half of "how do I actually trigger these binds".
+      # This host's keyboard (RDR Alice) has no dedicated PrtSc key — it
+      # sends Print Screen via Fn+K, a firmware-level mapping this config
+      # doesn't control. The non-obvious half of triggering these binds.
       "Print".action.screenshot = { };
       "Ctrl+Print".action.screenshot-screen = { };
       "Alt+Print".action.screenshot-window = { };

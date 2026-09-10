@@ -48,13 +48,9 @@ let
     cp -r ${windowTitleAppletSrc}/contents $out/share/plasma/plasmoids/org.kde.windowtitle/contents
     cp ${windowTitleAppletSrc}/metadata.json $out/share/plasma/plasmoids/org.kde.windowtitle/metadata.json
     chmod -R u+w $out/share/plasma/plasmoids/org.kde.windowtitle
-    # Dead import (never actually referenced anywhere else in the applet —
-    # confirmed 2026-07-11) for org.kde.plasma.private.appmenu, a QML plugin
-    # nixpkgs' plasma-workspace build doesn't include (checked its full
-    # lib/qt-6/qml/org/kde/plasma/private/ tree — every other private module
-    # is there, this one isn't). Caused a hard "error loading Window Title"
-    # on first real login. Stripped rather than packaging a missing KDE QML
-    # plugin from source just to satisfy an import nothing uses.
+    # Strip a dead QML import (org.kde.plasma.private.appmenu — the applet
+    # never uses it, and nixpkgs' plasma-workspace doesn't build that plugin,
+    # so leaving it hard-fails the applet at load).
     sed -i '/org\.kde\.plasma\.private\.appmenu/d' \
       $out/share/plasma/plasmoids/org.kde.windowtitle/contents/ui/main.qml
   '';
@@ -69,15 +65,11 @@ let
     export XDG_DATA_HOME="$HOME/.local/share-dragonized"
     export XDG_CACHE_HOME="$HOME/.cache-dragonized"
 
-    # kglobalshortcutsrc is exempted from the wipe below (2026-07-13) — every
-    # declarative attempt to seed/pin its content got fought by KDE's own
-    # default-reassignment logic on session startup (see DECISIONS.md for
-    # the full saga: reordering around kbuildsycoca6 wasn't enough, it kept
-    # resetting KRunner's shortcut back to default regardless). Configure
-    # shortcuts once via System Settings' native GUI — proven to work
-    # cleanly in testing — and this preserves it across logins instead of
-    # fighting the mechanism further. Empty/absent on first-ever login,
-    # which just means KDE's own defaults apply until configured.
+    # kglobalshortcutsrc is exempted from the wipe below — declarative
+    # seeding gets fought by KDE's own default-reassignment logic at session
+    # startup (DECISIONS.md). Shortcuts are configured once via System
+    # Settings and preserved here instead; absent on first-ever login means
+    # KDE defaults apply until configured.
     SHORTCUTS_BACKUP="$(mktemp)"
     if [ -f "$XDG_CONFIG_HOME/kglobalshortcutsrc" ]; then
       cp "$XDG_CONFIG_HOME/kglobalshortcutsrc" "$SHORTCUTS_BACKUP"
@@ -86,27 +78,19 @@ let
     rm -rf "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
     mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
 
-    # NOT plasma-apply-lookandfeel here — it's a Qt tool that needs an
-    # already-running Wayland compositor to talk to (it *applies* a change
-    # to a live session), and at this point in the script there's no
-    # compositor running yet. Confirmed the hard way (2026-07-11): running
-    # it standalone over SSH with no display aborts identically to what
-    # happened at the real login attempt — same root cause, just easier to
-    # see outside the greeter. Pre-seeding kdeglobals instead is the
-    # standard mechanism KDE itself uses to auto-apply a distro's default
-    # theme on a fresh profile's first-ever login — no live session needed,
-    # Plasma reads this as it starts up.
+    # NOT plasma-apply-lookandfeel here — it needs an already-running
+    # compositor to talk to, and none exists at this point in the script.
+    # Pre-seeding kdeglobals is KDE's own mechanism for auto-applying a
+    # theme on a fresh profile's first login; Plasma reads it as it starts.
     cat > "$XDG_CONFIG_HOME/kdeglobals" <<'KDEGLOBALS'
     [KDE]
     LookAndFeelPackage=Dr460nized
     KDEGLOBALS
 
-    # vicinae-toggle is a plain, standalone, single-Exec desktop entry (not
-    # plasma-manager's hotkeys.commands — see home.nix for why: it
-    # synthesizes a multi-action entry that KGlobalAccel doesn't actually
-    # resolve correctly, open upstream bug nix-community/plasma-manager#571,
-    # confirmed via a clean A/B test against System Settings' native "Add
-    # Custom Shortcut" flow).
+    # vicinae-toggle is a plain single-Exec desktop entry, NOT
+    # plasma-manager's hotkeys.commands — that synthesizes a multi-action
+    # entry KGlobalAccel doesn't resolve (nix-community/plasma-manager#571;
+    # see home.nix).
     mkdir -p "$XDG_DATA_HOME/applications"
     cat > "$XDG_DATA_HOME/applications/vicinae-toggle.desktop" <<'VICINAETOGGLE'
     [Desktop Entry]
@@ -126,34 +110,10 @@ let
     fi
     rm -f "$SHORTCUTS_BACKUP"
 
-    # vicinae toggle (bound above) needs its background server already
-    # running to connect to. Two earlier approaches both failed:
-    #   1. Backgrounding it directly here, before `exec startplasma-wayland`
-    #      — crashed (real coredump, signal 6/ABRT, .vicinae-server): a
-    #      Qt/Wayland GUI process (qt6.qtwayland, layer-shell-qt) trying to
-    #      connect to a compositor that doesn't exist yet. Same failure
-    #      class as the very first Dragonized crash this session
-    #      (plasma-apply-lookandfeel needing an already-running session).
-    #   2. Seeding an XDG autostart .desktop entry into
-    #      $XDG_CONFIG_HOME/autostart, the mechanism Plasma itself uses to
-    #      launch things once the session is actually up — confirmed the
-    #      file was present with correct content, but it never fired
-    #      (`vicinae toggle` failed with "No such file or directory" on the
-    #      socket; `pgrep vicinae` found nothing). Traced the real KDE
-    #      source (plasma-workspace's AutoStart::loadAutoStartList() /
-    #      PlasmaAutostart::autostarts()) and ruled out both an
-    #      OnlyShowIn=KDE requirement and a TryExec requirement by diffing
-    #      against a known-working reference entry (kglobalacceld.desktop)
-    #      — neither actually gates the check, so something deeper in
-    #      Dragonized's autostart-phase progression is off. Not worth
-    #      chasing further given a known-working alternative exists.
-    #
-    # Manually running `vicinae server --replace` from an already-open
-    # terminal works perfectly with zero issues, confirming the server
-    # itself is fine — the only problem is timing relative to the
-    # compositor. So: actually wait for the Wayland socket to exist rather
-    # than either racing it (attempt 1) or trusting a mechanism that isn't
-    # firing here for reasons not worth spending more time on (attempt 2).
+    # Wait for the Wayland socket before starting the vicinae server: it's a
+    # Qt/Wayland client, so starting it before the compositor crashes it —
+    # and an XDG autostart entry doesn't fire in this session either, so
+    # don't retry either dead end (details in git history).
     (
       for i in $(seq 1 150); do
         compgen -G "''${XDG_RUNTIME_DIR}/wayland-*" > /dev/null && break
@@ -186,16 +146,10 @@ in
   # session — this can't affect that session no matter what, since they
   # don't share any config state.
   #
-  # Confirmed working end-to-end 2026-07-11: X-Plasma-Shell: "plasma-garuda"
-  # in Garuda's layout templates does NOT block loadTemplate() — panels,
-  # dock, wallpaper, and Kickoff all loaded correctly on first real login,
-  # after fixing the plasma-apply-lookandfeel crash (see git history). Two
-  # cosmetic gaps found on that login, both from PKGBUILD dependencies the
-  # fast-subset scoping skipped (theme data + one plasmoid only): Kickoff's
-  # category icons need the BeautyLine icon theme (font/icon-theme-dependent
-  # names, not bundled with any app), and the panel clock (configured with
-  # autoFontAndSize = false) needs Fira Sans specifically or it renders
-  # tiny using a mismatched fallback. Both added below.
+  # BeautyLine and Fira Sans are PKGBUILD dependencies the fast-subset
+  # scoping skipped: without them Kickoff's category icons render as dots
+  # and the panel clock (autoFontAndSize = false) renders tiny on a
+  # mismatched fallback font.
   environment.systemPackages = [
     dr460nizedTheme
     windowTitleApplet

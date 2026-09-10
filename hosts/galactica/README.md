@@ -9,19 +9,22 @@ back from the `sidepool` staging pool on 2026-09-02. See `MANUAL-STEPS.md`
 for what's still outstanding (NUT/UPS, Beszel agent, NFS re-export cutover,
 the nixflix media stack and its import from `tank/media_staging`).
 
-## The five documents
+## The documents
 
 | File | Answers | Read it when |
 |---|---|---|
-| **`DESIGN.md`** | *What is being built and why.* The case for leaving Unraid, the SnapRAID/mergerfs stack, failure modes, storage layout, migration plan. | Deciding anything. This is the plan of record. |
+| **`DESIGN.md`** | *Why Unraid was left.* The platform verdicts (bare metal, no VFIO) still stand; its storage half is superseded — see "Doc status" below. | Questioning the migration itself. |
+| **`ARCHIVE-DESIGN-snapraid.md`** | The retired SnapRAID/mergerfs storage design, extracted from `DESIGN.md` with numbering preserved. | Following an old §-reference, or mining the analysis. |
 | **`PLATFORM.md`** | *What the machine does.* BIOS quirks, BMC/IPMI access, controller firmware, bus speeds, and how to tell which limit you are hitting. | Standing in front of the machine, or before believing a benchmark. |
 | **`HARDWARE-MAP.md`** | *What is plugged into what.* Disks, cages, bays, controllers, ports, label strings. | Pulling a drive, or printing labels. |
-| **`SHARES.md`** | *What data is actually on it.* Unraid's 34 shares, where each physically lives, and the classification the layout waits on. | Deciding tiers, or planning the migration. |
+| **`SHARES.md`** | *What data was on Unraid.* The 34 shares and the tier classification — now implemented as `homelab:tier` ZFS properties on `tank`. | Tracing where a share's data went, or checking a tier. |
 | **`DECISIONS.md`** | *Why it is this way.* Decision → alternatives → rationale, what the previous design got right, and **`## Still open`**. | Before changing something that looks arbitrary. |
+| **`MANUAL-STEPS.md`** | The bring-up record and what's still pending (NUT, router persistence, media import). | Doing hands-on work on the box. |
+| **`BACKUP-BORG.md`** | How borgmatic selects ZFS datasets, and the live BorgBase wiring. | Touching backups. |
 
 Fleet-wide: `docs/DISK-LABELLING.md` (naming and labelling convention),
 `docs/DISK-DRAWER.md` (unassigned disks), `docs/BACKUP.md` (who owes what an
-offsite copy, and Tower's lack of one).
+offsite copy — Tower's is live via borgmatic, `BACKUP-BORG.md`).
 
 ## Naming
 
@@ -34,9 +37,9 @@ leave it; that design was retired 2026-08-07 and lives in git history.
 Stale `known_hosts` entries will present as a host-key-mismatch warning that
 reads like a MITM attack. `DECISIONS.md` §1.
 
-`tower.internal` continues to resolve to this machine — via an AdGuard rewrite on
-hopper rather than via the hostname, so the fleet name and the service name stay
-decoupled. `DECISIONS.md` §2.
+`tower.internal` continues to resolve to this machine — via an AdGuard rewrite
+(now served by galactica's own AdGuard, `configuration.nix`) rather than via the
+hostname, so the fleet name and the service name stay decoupled. `DECISIONS.md` §2.
 
 ## Doc status
 

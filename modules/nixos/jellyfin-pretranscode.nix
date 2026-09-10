@@ -19,8 +19,7 @@ in
   #
   # No nixpkgs infrastructure exists for declarative Jellyfin plugin
   # management, and this plugin ships no Nix packaging of its own — so it's
-  # fetched by URL+hash and symlinked into place, matching the fetch-and-place
-  # idiom already sketched (commented out) in jellyfin.nix for the NFS mount.
+  # fetched by URL+hash and symlinked into place.
 
   systemd.tmpfiles.rules = [
     "d ${cfg.dataDir}/plugins/PreTranscode 0750 ${cfg.user} ${cfg.group} -"

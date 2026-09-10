@@ -2,10 +2,15 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # hopper — Raspberry Pi OS Lite (64-bit, Trixie) host bootstrap
 # ─────────────────────────────────────────────────────────────────────────────
+# ⚠ RETIRED PATH: this belongs to the Raspberry-Pi-OS-plus-Compose era, which
+# is no longer deployed (DNS now runs on galactica). The flake's hopper entry
+# + DEPLOY.md are the NixOS route. Kept in case a Pi OS carrier is ever
+# wanted again; the homelab_stacks handoff spec lives in git history.
+#
 # This is the ONE-TIME OS-level setup for hopper. It does NOT install the
 # application services — those live in the homelab_stacks repo as Docker
-# Compose (see HOMELAB_STACKS_HANDOFF.md). This script gets the box to the
-# point where `docker compose up` works and the node is on the tailnet.
+# Compose. This script gets the box to the point where `docker compose up`
+# works and the node is on the tailnet.
 #
 # Assumes hostname / user `z` / SSH pubkey were set in Raspberry Pi Imager's
 # advanced options before flashing, so the box is already reachable over SSH.
@@ -100,10 +105,9 @@ hopper OS bootstrap complete.
 
 Next:
   1. NUT (UPS monitoring) is NOT in Docker — it needs USB + shutdown control.
-     See the "Appendix: NUT" section in hosts/README-rpi-os.md.
+     Install natively (modules/nixos/nut.nix documents the config it mirrors).
   2. Deploy the application services from the homelab_stacks repo:
      clone it, drop the .env secrets in place, then `docker compose up -d`.
-     See HOMELAB_STACKS_HANDOFF.md for the full layout.
   3. Once AdGuard is serving, set the Pi's own resolver to 127.0.0.1 and
      add hopper as the primary DNS in the GL.iNet DHCP settings.
 ──────────────────────────────────────────────────────────────────────────────
