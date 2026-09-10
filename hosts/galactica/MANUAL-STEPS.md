@@ -1227,7 +1227,11 @@ survive a power cycle.
    > than disks scheduled for removal deserve. Prefer the pull.
 5. [ ] **At the in-case session, weigh the LSI.** Once `sidepool`'s disks are
    out the card drives two SSDs and still draws ~9 W. `PLATFORM.md` §13c item 3
-   has the port arithmetic and the two things it is gated on (§6e's ASM1166
-   retest; the ASM1064's x1 link being a poor home for the special vdev). Not a
-   decision to make from the desk — but it belongs on the same list as the pull,
-   because both want the case open.
+   has the port arithmetic; the short version is that the ASM1166 is a proven
+   replacement (§6e: Gen3 x2, no downgrade marker) and the real trade is that it
+   needs two BIOS settings held where the LSI needs none — §1's landmine. Not a
+   decision to make from the desk.
+   ⭐ **Bundle it with §5's coin cell and the BIOS rows.** The battery is the
+   failure that landmine is exposed to, and steps 3–5 here plus §9 step 3 all
+   want the same case-open visit. Doing them together is what makes the
+   controller swap safe rather than a new dependency on an unreplaced 2011 cell.

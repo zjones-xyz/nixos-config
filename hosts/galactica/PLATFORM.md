@@ -1831,20 +1831,43 @@ need a controller — and §4's own bare-metal port budget already assumes
 **onboard 6 + ASM1166 6, with the ASM1064 removed**: a layout with no LSI in it.
 
 ⚠ **This is a question for the in-case session, not a recommendation to pull the
-card.** It is gated on two unfinished things:
+card** — but it is a narrower question than it first looks, because the obvious
+blocker is already closed:
 
-- **§6e, the ASM1166's Gen3 retest.** The ASM1166 is the intended replacement and
-  it did not enumerate in the 2026-08-09 run (§1's disappearing act; §4's
-  `Width x0`). Until that card is proven to hold a link *in this machine*, it
-  cannot be the only home for a special vdev.
-- **The ASM1064 is a poor fallback for this particular job.** §8: PCIe x1 Gen2,
-  ~500 MB/s shared across four ports, "which a *single* SATA SSD nearly
-  saturates". The special vdev carries all of `tank`'s metadata plus all of
-  `tank/appdata` — the latency-critical device in the pool, not a bulk one.
+- ✅ **The ASM1166 is proven, and §6e settled it on 2026-08-09.** It trains at
+  **Gen3 x2 with no downgrade marker** — `LnkSta` equal to `LnkCap`, the card at
+  its own ceiling — which is ~1.97 GB/s across its six ports. That is a
+  comfortable home for a special vdev. (§4's controller table still carries the
+  older "~1.97 GB/s *if* it trains Gen3" phrasing, written before the test;
+  **§6e is authoritative**.) The `Width x0` reading in §4's slot table was the
+  `Auto` run, and §6e's finding is precisely that `Auto` — the *absence* of an
+  explicit setting — is the broken variable, not the generation being asked for.
+- ⚠ **The ASM1064 is a poor fallback for this particular job**, if it is ever
+  the candidate instead. §8: PCIe x1 Gen2, ~500 MB/s shared across four ports,
+  "which a *single* SATA SSD nearly saturates". The special vdev carries all of
+  `tank`'s metadata plus all of `tank/appdata` — the latency-critical device in
+  the pool, not a bulk one.
 
-So the ordering is: pull `sidepool` → settle §6e → *then* decide. And if §6e does
-not land, **proven-good beats 9 W**: the LSI is the only storage controller that
-has been confirmed working in this chassis under real disks (§7b, 2026-08-31).
+**So the real trade is not "does the card work". It is a dependency swap.** The
+LSI needs no BIOS state to be seen. The ASM1166 needs two settings held —
+explicit `Gen X`, `Detect Non-Compliance Device Enabled` — and §1 is emphatic
+that this is a landmine: a CMOS clear or a dead coin cell makes the card vanish
+and presents as dead hardware. Moving the special vdev onto it spends ~9 W of
+savings against that dependency.
+
+⭐ **Which is an argument for doing all of this in one visit, not against doing
+it.** §5 already wants the 2011-vintage coin cell replaced, and that is the
+failure this dependency is exposed to; §5's checklist now carries the `Gen X`,
+`Detect Non-Compliance Device` and (from this section) `Power Technology` rows
+together. One trip with the case open covers the `sidepool` pull, the battery,
+the BIOS settings and the controller swap — and each one makes the others safer
+to have done.
+
+⚠ Two things still genuinely unsettled, and they are physical: **the ASM1166 is
+not currently installed** (§4 records it carrying nothing; the 2026-08-31 build
+put all eight spinners on the LSI), and §7b's own open item is that **whether
+the LSI runs hot under load has never been measured** — which is worth knowing
+before deciding it is the card that stays.
 
 #### 4. Fan mode — plausible, but this chassis has less headroom than it looks
 
