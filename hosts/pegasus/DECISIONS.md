@@ -1234,3 +1234,40 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   declarative. If the colours are ever wanted, hardcoding the accent as
   `focus-ring.active.color` in `niri-settings.nix` gets most of the look at
   none of the cost — it just won't follow a retheme.
+- **Monitors are referred to through `let` bindings, not repeated identity
+  strings (2026-09-09).** `niri-settings.nix` now opens with `monLeft` /
+  `monCentre` / `monRight`, and the `outputs` attrset is keyed `mon-left` /
+  `mon-centre` / `mon-right` with the identity string moved to niri-flake's
+  `name` attribute.
+  *Why:* niri has no output-alias concept — `outputs`, `open-on-output` and
+  window rules each take a raw connector name or `make model serial` string,
+  so a three-monitor host repeats each panel's identity once per reference.
+  Nothing validates those strings at build time, and both failure modes are
+  silent: a typo in an `outputs` entry leaves that panel on its preferred
+  mode, and one in `open-on-output` drops the window on the focused output
+  instead. One binding per panel makes that a single point of edit when a
+  monitor is replaced, and the readable `outputs` keys say which panel is
+  which without decoding a serial. niri-flake's key/name split (`outputs.<key>.name`,
+  defaulting to the key) is what makes the rekeying behaviour-neutral — the
+  key never reaches niri, it only sorts the emitted `output` nodes and breaks
+  ties for `focus-at-startup`, which this host doesn't set.
+  *Scope limit:* the bindings are file-local. If a monitor identity is ever
+  needed outside `niri-settings.nix` (a DMS setting, Plasma's output config),
+  promote them to a `homelab.*` option rather than copying the strings.
+- **Thunderbird is routed to `Mail` unconditionally, TickTick only at startup
+  (2026-09-09).** The named workspace `Mail` exists to hold Thunderbird, so
+  its window rule carries no `at-startup` matcher — a mid-session launch
+  belongs there too. TickTick's does: "the right monitor's first workspace"
+  is a login-time arrangement, and a rule without `at-startup` would fling
+  every later launch onto another monitor.
+  *The fragile half:* TickTick is placed with `open-on-output` alone, which
+  targets whatever workspace is *active* on that monitor. That is the first
+  one only because nothing else is homed there at login. Home any named
+  workspace to the right monitor and TickTick starts landing on it instead
+  — at which point give TickTick its own named workspace and switch the rule
+  to `open-on-workspace`. Chosen over declaring that workspace now because
+  it keeps the bar to one name; MANUAL-STEPS.md §25 carries the check.
+  *Focus:* both login instances set `open-focused = false`. niri won't focus
+  a window opening on a non-focused output anyway, but which output is
+  focused at startup isn't pinned on this host (no `focus-at-startup`), so
+  without it the choice of which app steals the cursor at login is luck.
