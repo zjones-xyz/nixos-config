@@ -370,6 +370,10 @@ afterwards:
       the NixOS root disk
 - [ ] Serial Port Console Redirection — note the unit and baud (§2)
 - [ ] `Restore on AC Power Loss` = **Power On**
+- [ ] `Power Technology` — and, if it reads `Custom`, C1E and the package
+      C-state limit under it. Note them *before* the clear. §13c item 2:
+      the difference between C1-only and package C6 idle is 10–20 W on this
+      CPU, and nothing in the running system surfaces a silent revert.
 - [ ] `Legacy USB Support` / `Port 60/64 Emulation` — note the values. They
       govern whether a USB keyboard works in BIOS setup at all, which is a bad
       thing to discover after a CMOS clear.
@@ -1705,3 +1709,231 @@ sudo fio --name=load --filename=/dev/sdX --rw=read --bs=1M --iodepth=32 \
 **New and drawer drives get burned in before they are trusted.** `badblocks -wsv`
 on a blank drive, or `f3` (already in serenity's package set), plus a SMART long
 test. `docs/DISK-DRAWER.md` covers why an untested spare is a guess.
+
+---
+
+## 13. Power draw — where the watts go, and which of them are reclaimable
+
+This box runs 24/7 and has never had its consumption measured. Investigated
+2026-09-10 from the desk: every number below is a datasheet estimate laid over
+the measured inventory (`hardware-profile-2026-08-31.txt`, `HARDWARE-MAP.md`
+§1/§4), **not a reading**. §13a says how to get real numbers, and it turns out
+to be nearly free.
+
+The question this section answers is deliberately narrow: *what can be given up
+without giving up reliability?* §13d is the half of the answer that says "no".
+
+### 13a. There is no wattmeter on this machine — and the pending UPS is one
+
+The X9SCM-F's BMC has no PSU power sensor (no PMBus on this board; `ipmi-sensors`
+gives fans, voltages and temperatures, never wattage), so §2's IPMI access cannot
+answer this. The instrument is already queued for another reason: `MANUAL-STEPS.md`
+§6 is waiting to make galactica the NUT server, and once `power.ups` is up,
+`upsc ups` reports `ups.load` and — on most models — `ups.realpower`. That is the
+before/after meter this whole section wants, arriving with work already on the
+list.
+
+`turbostat` is the second instrument and needs nothing at all: this generation
+reports package power over RAPL, so the CPU half of §13c item 2 can be measured
+today.
+
+### 13b. The estimated idle budget
+
+Idle, DC side, everything as it stands today. Ranges are honest uncertainty, not
+load variation.
+
+| Item | Est. idle | Basis |
+|---|---|---|
+| Xeon E3-1230 v2 package | **8–28 W** | The spread *is* the finding — see §13c item 2 |
+| Board + C204 + BMC (AST2300) + 82574L | 20–25 W | Platform floor; the BMC alone is ~5 W and is not optional |
+| 4× 8 GB dual-rank DDR3-1333 ECC UDIMM | ~12 W | `dmidecode`: four dual-rank sticks at 1333 MT/s |
+| 4× HGST He12 12 TB (`tank`), idle spinning | ~20 W | 5.0 W idle each |
+| 4× `sidepool` spinners, idle spinning | ~13 W | Toshiba 3 TB ~6 W + 3× WD 4 TB ~2.4 W |
+| 4× SATA SSD + 1× NVMe | ~3 W | Idle, all five |
+| LSI SAS2008 (Fujitsu D2607) | ~9 W | Fixed, independent of how many disks it drives |
+| ASM1064 + ASM1042 | ~2 W | |
+| Chassis + CPU fans | 5–15 W | Unknown fan count and BMC fan mode (§13c item 4) |
+| **DC subtotal** | **~90–130 W** | |
+| PSU conversion loss | +15–25 W | Assuming ~85 %; the unit is unidentified (`HARDWARE-MAP.md` §7) |
+| **At the wall** | **~105–155 W** | ≈ 920–1,360 kWh/yr |
+
+### 13c. ✅ Worth doing, in order
+
+#### 1. `sidepool`'s four disks are spinning for nothing — ~13 W
+
+`MANUAL-STEPS.md` §9 step 2 closed their LUKS mappers on 2026-09-02, and step 3's
+2026-09-03 note established that nothing on them is still needed. Nothing in the
+running system references them. **But nothing spins a disk down on its own
+either** — Linux arms no standby timer by default and these drives ship with
+none, so all four have been idling at full RPM ever since. Their own counters
+agree that this is their normal state: `Start_Stop_Count` is 23–35 on the three
+WDs, i.e. they effectively never stop.
+
+So §9 step 3 — "pull sidepool's drives during the next in-case session" — is not
+only case tidiness. It is **the single largest reclaimable load on the machine**,
+~13 W ≈ 115 kWh/yr, and it is already on the list.
+
+⭐ **Pulling them does not cost the degraded-pool hedge.** §9's "keep sidepool's
+disks as the zero-cost hedge" reasoning wants them available as an emergency
+`zfs send` target if `tank` ever runs degraded. A drive in the drawer serves that
+exactly as well as a drive spinning in the chassis, and arrives with less wear on
+it. The hedge and the watts are not in tension.
+
+If the in-case session is weeks out, `MANUAL-STEPS.md` §14 has an interim
+spin-down — but read §13e first, because two things in this host's own config
+will otherwise undo it.
+
+#### 2. The BIOS's idle configuration is unverified, and it is the biggest unknown — 10–20 W
+
+**EIST is definitely on.** The 2026-08-31 profile's `lscpu` reports `CPU min MHz
+1600 / CPU max MHz 3700` with `CPU(s) scaling MHz: 62%` — a live frequency
+sitting between the floor and the turbo ceiling, which only happens with
+SpeedStep enabled and a scaling driver loaded.
+
+**What is not established is idle.** On this BIOS, `Advanced → CPU Configuration →
+Power Technology` gates C1E and the package C-state limit separately from EIST,
+and Supermicro server boards ship it at `Disable` or `Custom` about as often as
+at `Energy Efficient`. An Ivy Bridge E3 that never leaves C1 idles roughly
+15–20 W above one that reaches package C6 — on a 24/7 box, 130–175 kWh/yr riding
+on a setup-screen toggle. That is why the CPU row in §13b spans 8–28 W.
+
+⚠ **C-states are not ASPM.** §6c's warning about power management on this
+platform is specifically about *PCIe link-state* power management on a budget
+SATA controller. CPU C-states are a different mechanism on a different bus with
+none of that history. Do not let §6c rule this out; it does not apply.
+
+Read what the kernel actually gets (both tools live in the kernel package set,
+`linuxPackages.cpupower` / `linuxPackages.turbostat`):
+
+```sh
+cpupower idle-info                       # driver, and which C-states are exposed
+cpupower frequency-info | head -20       # intel_pstate or acpi-cpufreq, and the governor
+turbostat --quiet --show PkgWatt,CPU%c1,CPU%c6,Pkg%pc6 sleep 60
+```
+
+Deep-idle residency near zero with `PkgWatt` in the twenties is the "restricted
+in BIOS" signature; `Pkg%pc6` in the high tens with `PkgWatt` under ten is the
+healthy one.
+
+⚠ **Add whatever is found to §5's post-CMOS-clear checklist.** A battery change
+wipes it, and it is exactly the kind of setting nobody re-checks.
+
+#### 3. The LSI's slot stops paying for itself once `sidepool` leaves — ~9 W
+
+§7b put the card in to drive eight spinners at once. After the pull it drives
+two: the BX500 pair in `tank`'s special vdev. A SAS2008 draws ~9–11 W whether it
+is feeding eight disks or two — the largest *fixed* load on the machine after
+the CPU and the array.
+
+The port arithmetic even works out. The onboard C204's six ports are full
+(`ata1` WD Blue, `ata2` midden, `ata3`–`ata6` the four He12s), so the two BX500s
+need a controller — and §4's own bare-metal port budget already assumes
+**onboard 6 + ASM1166 6, with the ASM1064 removed**: a layout with no LSI in it.
+
+⚠ **This is a question for the in-case session, not a recommendation to pull the
+card.** It is gated on two unfinished things:
+
+- **§6e, the ASM1166's Gen3 retest.** The ASM1166 is the intended replacement and
+  it did not enumerate in the 2026-08-09 run (§1's disappearing act; §4's
+  `Width x0`). Until that card is proven to hold a link *in this machine*, it
+  cannot be the only home for a special vdev.
+- **The ASM1064 is a poor fallback for this particular job.** §8: PCIe x1 Gen2,
+  ~500 MB/s shared across four ports, "which a *single* SATA SSD nearly
+  saturates". The special vdev carries all of `tank`'s metadata plus all of
+  `tank/appdata` — the latency-critical device in the pool, not a bulk one.
+
+So the ordering is: pull `sidepool` → settle §6e → *then* decide. And if §6e does
+not land, **proven-good beats 9 W**: the LSI is the only storage controller that
+has been confirmed working in this chassis under real disks (§7b, 2026-08-31).
+
+#### 4. Fan mode — plausible, but this chassis has less headroom than it looks
+
+The BMC exposes a fan mode the board holds independently of anything the OS does
+(`ipmi-raw 0x00 0x30 0x45 0x00` to read on the FreeIPMI tooling §2 already
+establishes). If it is sitting in Full Speed, moving to a managed mode is worth
+5–10 W and a lot of noise.
+
+⚠ **But the drives argue against it.** The He12s' SMART logs record lifetime
+maxima of **52–57 °C** against a 60 °C spec limit. Those peaks are historical —
+they cover the Unraid years and the migration's 21-hour copy-back — and the
+2026-08-31 spot readings were a comfortable 33–37 °C. A fan-speed reduction is
+precisely the change that turns a 55 °C peak into a 60 °C one, and §7b's own
+still-open item is that *whether the LSI runs hot under load has never been
+measured* — and it sits in the same air.
+
+Verdict: the one item here that trades directly against disk life. **Not before
+there is a sustained-load temperature baseline** — §12's read-saturation test
+produces one as a side effect.
+
+### 13d. ⚠ Rejected — recorded so they are not re-proposed
+
+**Spinning `tank` down.** Nominally the biggest number on the page — 4× He12 from
+5.0 W idle to ~1.0 W standby is ~16 W — and it does not work here for reasons
+that are structural rather than tunable:
+
+- **qBittorrent seeds out of `/tank/nixflix_media/downloads`.** That is a plain
+  subdirectory of the media dataset, deliberately (`nixflix.nix`'s layout rule:
+  hardlinks cannot cross datasets). A seeding client is a permanent trickle of
+  random reads against the spinners.
+- **RAIDZ1 has no idle members.** Any read touches every data disk in the vdev,
+  so there is no partial win — it is all four or none. `DESIGN.md`'s spin-down
+  row was written about the retired mergerfs/SnapRAID design, where per-disk
+  spin-down was a real option; RAIDZ1 removed it.
+- memory-alpha's Jellyfin mounts the library over NFS and runs its own scheduled
+  scans, and the five *arrs run refresh/rescan tasks on theirs.
+
+⭐ The design already banked the version of this win that was available: **`tank/
+appdata` lives on the special vdev's SSDs** (`DECISIONS.md` §7,
+`MANUAL-STEPS.md` §10), so the *arr databases — much the busiest small-random
+workload on the box — never touch a spinner at all. That was decided for
+redundancy; the idle spinners are a side effect of it.
+
+**ASPM, and `powerManagement.powertop.enable`.** §6c is explicit: Ivy Bridge plus
+a budget controller with newly-enabled link power management is the combination
+that produces intermittent dropouts, and `LnkCtl` reads `ASPM Disabled` today.
+The NixOS option is a wrapper around `powertop --auto-tune`, which turns ASPM on
+across every device that will accept it, plus USB autosuspend and SATA link power
+management. On a machine whose entire job is holding an array, that is trading
+the thing being protected for the thing being saved. **This is the line the
+request drew.**
+
+**Disk APM (`hdparm -B`) on the He12s.** Their `Load_Cycle_Count` is 1,031–1,334
+against 34k–47k power-on hours — about one head-unload per 35 hours, i.e. APM is
+effectively off and they sit in full idle. An aggressive APM level buys perhaps
+0.5 W per drive and starts accumulating load cycles on the four disks the pool is
+least able to lose: RAIDZ1 tolerates one, and `MANUAL-STEPS.md` §9 records that a
+~$350 replacement is explicitly *not* on the shelf. ~2 W is not worth spending
+there.
+
+**Setting `powerManagement.cpuFreqGovernor`.** Nothing to gain. `intel_pstate`
+drives Ivy Bridge in active mode with `powersave` as its default governor, which
+is already the efficient choice, and this generation has no HWP for the setting
+to influence. Worth *reading* to confirm which driver is loaded — if it is
+`acpi-cpufreq` rather than `intel_pstate` that is a signal about the BIOS, and
+the fix is still in the BIOS, not in Nix.
+
+**Anything involving suspend.** galactica is the fleet's DNS origin (with the
+router as a sync replica), the NFS server memory-alpha mounts, and the
+acquisition half of the media stack. There is no idle window to suspend into.
+
+### 13e. ⚠ Three things independently wake a sleeping disk on this host
+
+Any spin-down has to survive all three, or it looks like it worked for half an
+hour and then quietly stops:
+
+1. **smartd, every 30 minutes.** `modules/nixos/smart.nix` monitors with `-a`,
+   which issues a full attribute read to every autodetected disk — spinning a
+   standby drive straight back up. This is why `homelab.smart.standbyAware`
+   exists and why `configuration.nix` sets it; the module explains the flag.
+2. **The Scrutiny collector, daily at midnight.** It runs privileged with every
+   block device visible and sweeps them all, with no standby awareness and no
+   per-device exclusion. One guaranteed spin-up per disk per day. The wear is
+   negligible (one start/stop cycle a day against a 50k rating) — the problem is
+   that **the drive does not go back down**, because nothing re-arms the standby
+   timer. A spin-down meant to hold has to arm the drive's *own* timer
+   (`hdparm -S`), not just issue one standby command.
+3. **The workload**, for `tank` — §13d.
+
+⚠ **The ATA standby timer is volatile.** `hdparm -S` does not survive a power
+cycle or a controller reset. That is the second reason the durable answer for
+`sidepool` is a screwdriver rather than a systemd unit.

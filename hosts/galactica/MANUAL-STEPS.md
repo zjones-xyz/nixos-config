@@ -1165,3 +1165,69 @@ rather than each instance being hand-edited.
    entirely and derive rewrites from leases, or whether reservations should
    just get declared in Nix alongside `clients.persistent` so a name only
    has to be typed once.
+
+## 14. Power draw — the measurements this box has never taken
+
+`PLATFORM.md` §13 is the analysis: an estimated ~105–155 W at the wall, with the
+reclaimable share concentrated in three places. **Nothing here blocks anything**;
+it is queued work, ordered so each step makes the next one interpretable.
+
+⚠ **Read `PLATFORM.md` §13e before spinning anything down.** smartd and the
+Scrutiny collector both wake sleeping disks, and the ATA standby timer does not
+survive a power cycle.
+
+1. [ ] **Baseline at the wall.** Falls out of §6 for free — once `power.ups` is
+   up, `upsc ups` reports `ups.load` and usually `ups.realpower`. Record the
+   idle figure here before changing anything else, or every later number is
+   uninterpretable. The BMC cannot substitute: this board has no PSU power
+   sensor.
+2. [ ] **Read the CPU's idle behaviour.** Needs no hardware and can happen
+   today (`linuxPackages.cpupower`, `linuxPackages.turbostat`):
+   ```sh
+   cpupower idle-info
+   cpupower frequency-info | head -20
+   turbostat --quiet --show PkgWatt,CPU%c1,CPU%c6,Pkg%pc6 sleep 60
+   ```
+   Record `PkgWatt` and `Pkg%pc6` at idle. Deep-idle residency near zero with
+   `PkgWatt` in the twenties means the BIOS is restricting C-states, which is
+   step 3.
+3. [ ] **Check `Power Technology`** on the next trip into BIOS setup
+   (`Advanced → CPU Configuration`). Worth 10–20 W if it is restricted —
+   `PLATFORM.md` §13c item 2. Re-run step 2 afterwards; that is the
+   confirmation, not the setup screen. Already added to §5's post-CMOS-clear
+   checklist so a battery change does not silently undo it.
+4. [ ] **Interim: park `sidepool`'s four disks.** *Optional* — the durable fix
+   is §9 step 3's physical pull, and this is only worth doing if that session is
+   weeks out. ~13 W. They have been LUKS-closed and unreferenced since
+   2026-09-02, so this risks nothing, but confirm that before issuing anything:
+   ```sh
+   # Resolve each by serial — they are behind mpt3sas, so the by-id names are
+   # scsi-/wwn- forms, not the ata-* ones the onboard disks get.
+   for s in 76HE4XDAS WD-WXD2D534CY72 WD-WXM2D72D3V35 WD-WXD2D534CJE9; do
+     ls -l /dev/disk/by-id/ | grep -i "$s"
+   done
+   # Confirm inert: no mapper, no mountpoint, no holder
+   lsblk -o NAME,SERIAL,FSTYPE,MOUNTPOINTS
+   ```
+   Then, per disk — `-y` (STANDBY), never `-Y` (SLEEP, which needs a bus reset
+   to come back):
+   ```sh
+   hdparm -S 120 /dev/disk/by-id/<path>   # arm the drive's own 10-min timer
+   hdparm -y    /dev/disk/by-id/<path>    # spin down now
+   hdparm -C    /dev/disk/by-id/<path>    # expect: drive state is: standby
+   ```
+   `-S` is the load-bearing half: it is what puts the drive *back* to sleep ten
+   minutes after the Scrutiny collector's midnight sweep wakes it. Without it
+   the disk spins down once and then idles at full RPM until the next reboot.
+   > ⚠ If `hdparm` returns `SG_IO: bad/missing sense data`, the SAT layer on
+   > this HBA is not passing the ATA command through; use `sg_start --stop`
+   > (`sg3_utils`) or `sdparm --command=stop` instead. Those issue SCSI START
+   > STOP UNIT, which mpt3sas translates — but they have no equivalent of
+   > `-S`, so a re-arm would then need a systemd timer, which is more machinery
+   > than disks scheduled for removal deserve. Prefer the pull.
+5. [ ] **At the in-case session, weigh the LSI.** Once `sidepool`'s disks are
+   out the card drives two SSDs and still draws ~9 W. `PLATFORM.md` §13c item 3
+   has the port arithmetic and the two things it is gated on (§6e's ASM1166
+   retest; the ASM1064's x1 link being a poor home for the special vdev). Not a
+   decision to make from the desk — but it belongs on the same list as the pull,
+   because both want the case open.

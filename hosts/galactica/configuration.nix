@@ -358,6 +358,10 @@
   # smartd across the twelve-plus real disks; smart.nix ships the package.
   homelab.smart.monitor = true;
 
+  # Don't spin a parked disk up just to read its attributes — the 30-minute
+  # poll is otherwise what defeats every spin-down here. PLATFORM.md §13e.
+  homelab.smart.standbyAware = true;
+
   # Flipped after staging issuance was proven (which is what the flag is
   # for). Separate cert storage per CA, so this is freely reversible.
   homelab.letsencryptStaging = false;
