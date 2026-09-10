@@ -35,9 +35,8 @@ in
   # /dev/mapper/cryptroot, i.e. inside the LUKS container, already unlocked by
   # the time any of this runs).
   #
-  # `nofail` for the same reason the microvm volumes learned it the hard way in
-  # 2026-07: a mount that a *snapshot timer* needs must never be able to hold
-  # the whole workstation's boot hostage.
+  # `nofail`: a mount that a *snapshot timer* needs must never be able to
+  # hold the whole workstation's boot hostage.
   fileSystems."/mnt/btrfs-pool" = {
     device = config.fileSystems."/".device;
     fsType = "btrfs";

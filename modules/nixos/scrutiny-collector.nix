@@ -54,10 +54,10 @@ in
         hub's web routes carry dashboard-auth basicauth, which the collector
         cannot satisfy.
 
-        ⚠ `memory-alpha.internal` resolves via the AdGuard rewrite on hopper, so
-        this inherits that dependency: if hopper is down the collector cannot
-        resolve the hub. It retries on the next cron tick, and missing a day of
-        SMART history is not an incident.
+        ⚠ `memory-alpha.internal` resolves via an AdGuard rewrite on the LAN's
+        DNS host, so this inherits that dependency: if DNS is down the
+        collector cannot resolve the hub. It retries on the next cron tick,
+        and missing a day of SMART history is not an incident.
       '';
     };
 

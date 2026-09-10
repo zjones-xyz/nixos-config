@@ -2,6 +2,11 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # hamilton — Raspberry Pi OS Lite (64-bit, Trixie) host bootstrap
 # ─────────────────────────────────────────────────────────────────────────────
+# ⚠ RETIRED PATH: this belongs to the Raspberry-Pi-OS-plus-Compose era, which
+# is no longer deployed (DNS now runs on galactica). The flake's hamilton
+# entry + DEPLOY.md are the NixOS route. Kept in case a Pi OS carrier is
+# ever wanted again; the homelab_stacks handoff spec lives in git history.
+#
 # One-time OS-level setup for hamilton, the BACKUP DNS resolver (Pi 3). It runs
 # a smaller stack than hopper: just Traefik + AdGuard Home + Unbound, all in
 # Docker via the homelab_stacks repo. No UPS, no exit node — plain tailnet
@@ -76,7 +81,6 @@ hamilton OS bootstrap complete.
 Next:
   1. Deploy the hamilton stack from homelab_stacks (Traefik + AdGuard + Unbound):
      clone it, drop the .env secrets in place, then `docker compose up -d`.
-     See HOMELAB_STACKS_HANDOFF.md.
   2. Once AdGuard is serving, add hamilton as the SECONDARY DNS in the GL.iNet
      DHCP settings (primary = hopper). That's the whole failover story.
 ──────────────────────────────────────────────────────────────────────────────

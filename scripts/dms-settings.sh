@@ -149,7 +149,8 @@ else
 fi
 
 STATUS=0
-TOUCHED=()
+TOUCHED=()   # snapshot: repo-relative checkpoint paths, fed to git below
+RESTORED=()  # restore: target names, only counted
 
 for t in $TARGETS; do
   target_paths "$t"
@@ -183,7 +184,7 @@ for t in $TARGETS; do
       mkdir -p "$(dirname "$LIVE")"
       cp "$CHECKPOINT" "$LIVE"
       echo "[$t] Restored $CHECKPOINT -> $LIVE"
-      TOUCHED+=("$t")
+      RESTORED+=("$t")
       ;;
 
     diff)
@@ -213,7 +214,7 @@ if [ "$ACTION" = "snapshot" ] && [ "${#TOUCHED[@]}" -gt 0 ]; then
   echo "Review with: git -C $REPO diff -- ${TOUCHED[*]}"
 fi
 
-if [ "$ACTION" = "restore" ] && [ "${#TOUCHED[@]}" -gt 0 ]; then
+if [ "$ACTION" = "restore" ] && [ "${#RESTORED[@]}" -gt 0 ]; then
   echo
   echo "DMS watches these for external changes and reloads them live — no restart needed."
 fi

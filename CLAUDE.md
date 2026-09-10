@@ -1,8 +1,7 @@
 # Fleet conventions
 
 Conventions for this flake, inferred from the existing hosts so future sessions
-stay consistent. (Team-shared instructions live in `.claude/CLAUDE.md`; this file
-documents the repo's structure and patterns.)
+stay consistent. This file documents the repo's structure and patterns.
 
 ## Layout
 

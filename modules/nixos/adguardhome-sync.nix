@@ -13,10 +13,9 @@ let
   # so any password containing one would be silently corrupted rather than
   # inserted verbatim.
   # Replicas with useCookieAuth get a session cookie instead of
-  # username/password — GL.iNet's patched AdGuard rejects HTTP Basic Auth
-  # (confirmed live: correct credentials via `curl -u` return 401, the same
-  # credentials via /control/login succeed), which is the only auth method
-  # adguardhome-sync's own client sends when username/password are set.
+  # username/password — GL.iNet's patched AdGuard rejects HTTP Basic Auth,
+  # which is the only auth method adguardhome-sync's own client sends when
+  # username/password are set.
   # Deliberately conservative about what syncs: rewrites, filter lists, and
   # client names are the only things this repo actually declares for
   # galactica's AdGuard. dns.serverConfig/dhcp.* stay off since a replica
