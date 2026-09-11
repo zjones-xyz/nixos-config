@@ -1,16 +1,20 @@
-# Tower — share inventory (current Unraid state)
+# Tower — share inventory (the final Unraid state, now migrated)
 
-**What exists today**, read from `/boot/config/shares/*.cfg` on 2026-08-07. This
-is the raw starting point for the data classification that `DESIGN.md` §5's
-storage layout depends on.
+> ✅ **HISTORICAL — the migration this fed is complete.** Unraid is gone: the
+> shares were copied back onto galactica's ZFS array on 2026-09-02
+> (`MANUAL-STEPS.md` §9), and the tier classification argued out below was
+> implemented as inherited `homelab:tier` ZFS user properties on `tank`'s
+> datasets — properties on the pool, not paths. Read this file to trace where
+> a share's data went or why it carries the tier it does; nothing below is
+> live state.
 
-**Classification is in progress** — §5 carries the running verdicts. Three shares
-are confirmed dead; the rest of the tiering is still a proposal to argue with.
-Sizes are ⟨TBD⟩ pending a `du -sh /mnt/user/*` pass.
+**What existed at the end**, read from `/boot/config/shares/*.cfg` on
+2026-08-07. This was the raw starting point for the data classification that
+the storage layout depended on.
 
-**Triage status: 23 of 34 owner-confirmed** (1 parked). The undecided row is
-empty — what remains is **11 proposals awaiting confirmation or correction**, not
-unknowns.
+**Triage status at migration time: 23 of 34 owner-confirmed** (1 parked), the
+rest standing proposals that carried into the dataset tree as tiered — revisit
+a tier by changing the dataset's `homelab:tier` property, not this file.
 
 Dates are UTC.
 

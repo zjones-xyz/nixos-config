@@ -1,12 +1,5 @@
 { config, pkgs, lib, ... }:
 
-let
-  # secrets/pegasus.yaml does not exist in the repo yet — it must be created by
-  # Zoe (see hosts/pegasus/SECRETS-TODO.md). The sops + tailscale-authKey wiring
-  # below is gated on the file's presence so the closure evaluates cleanly until
-  # then, and activates automatically once the encrypted file is committed.
-  hasSops = builtins.pathExists ../../secrets/pegasus.yaml;
-in
 {
   imports = [
     ./hardware-configuration.nix
@@ -18,9 +11,9 @@ in
     ../../modules/nixos/desktop-dragonized.nix
     ../../modules/nixos/desktop-niri.nix
     ../../modules/nixos/dankcalendar.nix
+    ../../modules/nixos/scrutiny-collector.nix
     # Settles which of the two Secret Service providers the desktop modules
     # above each drag in silently is the one that actually runs.
-    ../../modules/nixos/scrutiny-collector.nix
     ../../modules/nixos/keyring.nix
     ../../modules/nixos/gaming.nix
     ../../modules/nixos/performance.nix
@@ -31,53 +24,61 @@ in
     ../../modules/nixos/keyboards.nix
     ../../modules/nixos/mouse-tools.nix
     ../../modules/nixos/luks-remote-unlock.nix
-    # olla-router.nix is DISABLED for now (2026-07-11): its build runs olla's
-    # own Go test suite, and pkg/eventbus's TestEventBus_HighVolumePublishing
-    # is a wall-clock throughput assertion that fails under the Nix sandbox's
-    # constrained/throttled CPU scheduling (expects >=1000 of 100k events
-    # delivered, got 220) — not a real defect in what we're packaging. Fastest
-    # unblock was skipping Olla entirely; ollama.nix works standalone (binds
-    # 127.0.0.1 only, no hard dependency on the router). To bring Olla back:
-    # either re-add this import with `doCheck = false;` set on the
-    # `olla = pkgs.buildGoModule` derivation in olla-router.nix (skips
-    # upstream's test suite, standard for packaging binaries we don't
-    # maintain), or file the flakiness upstream first.
+    # olla-router.nix is deliberately parked: its build runs olla's own Go
+    # test suite, which has a wall-clock assertion that fails under the Nix
+    # sandbox. ollama.nix works standalone. Re-enable steps: MANUAL-STEPS §5.
     # ../../modules/nixos/olla-router.nix
   ];
 
   networking.hostName = "pegasus";
   networking.networkmanager.enable = true;
 
-  # Added during the VFIO bring-up test for Tower's (since abandoned) hypervisor
-  # design: pegasus had no lspci at all, which made the test unrunnable on the
-  # machine it was written for. Kept because a box with an add-in card and a
-  # discrete GPU has no business being unable to enumerate its own PCI bus — and
-  # pegasus is still where Tower's cards get flashed and probed, which is all
-  # lspci work (hosts/galactica/PLATFORM.md §6).
-  #
-  # environment.systemPackages rather than home.packages so `sudo lspci`
-  # resolves — sudo does not inherit the user profile's PATH.
+  # pegasus is where Tower's cards get flashed and probed, which is all lspci
+  # work (hosts/galactica/PLATFORM.md §6). environment.systemPackages rather
+  # than home.packages so `sudo lspci` resolves — sudo does not inherit the
+  # user profile's PATH.
   environment.systemPackages = with pkgs; [
     pciutils
     nmap
   ];
 
+  # ── DDC/CI (ddcutil) ─────────────────────────────────────────────────────────
+  # ddcutil itself is installed via home.packages (home.nix) — this is just the
+  # kernel/udev wiring it needs: loads i2c-dev and grants read/write on
+  # /dev/i2c-* to whoever's logged in at the seat (and to members of a new
+  # "i2c" group), so no sudo/group-membership dance is needed to run it. See
+  # modules/nixos/nvidia.nix for the other half — the driver-side I2C fix
+  # this proprietary-NVIDIA host also needs for ddcutil to actually work.
+  hardware.i2c.enable = true;
+
+  # ── Qt platform theme (qt5ct/qt6ct) ─────────────────────────────────────────
+  # DankMaterialShell's "apply colours to Qt" button shells out to its own
+  # scripts/qt.sh, which exits 1 unless a qt5ct or qt6ct binary is on PATH —
+  # that failure was the whole symptom. "qt5ct" is the one platformTheme value
+  # that installs *both* tools and is the key both plugins register under.
+  #
+  # System-wide, not niri-only: it applies in the Plasma/COSMIC/Dragonized
+  # sessions too, and Plasma does not set QT_QPA_PLATFORMTHEME itself, so
+  # Breeze's Qt palette gives way to qt6ct's there. Accepted deliberately —
+  # see DECISIONS.md.
+  qt = {
+    # plasma6 already sets this, but depending on that couples Qt theming to
+    # a session that may not stay installed.
+    enable = true;
+    platformTheme = "qt5ct";
+    # `style` left unset on purpose: DMS writes custom_palette +
+    # color_scheme_path into qt6ct.conf, and a QT_STYLE_OVERRIDE would sit
+    # on top of the palette it is trying to apply.
+  };
+
   # ── Boot ────────────────────────────────────────────────────────────────────
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # Stock mainline kernel (NOT a CachyOS/Chaotic kernel). sched-ext is
-  # upstream since 6.12, so any of these kernels is all scx needs — see
-  # modules/nixos/performance.nix.
-  #
-  # Pinned to 7.1 (was `linuxPackages_latest`, i.e. 7.2): the NVIDIA
-  # production driver (both nvidia-open and the closed/proprietary kernel
-  # module — confirmed both) doesn't build against 7.2's kernel-interface
-  # changes (strncpy() dropped from <linux/string.h>; the DRM atomic API
-  # renamed struct drm_atomic_state -> drm_atomic_commit and restructured
-  # its lifecycle functions). See hosts/pegasus/DECISIONS.md and the git
-  # history on modules/nixos/nvidia.nix for what was tried. Bump back to
-  # `linuxPackages_latest` once nixpkgs/NVIDIA ship a real 7.2 fix.
+  # Stock mainline kernel (NOT a CachyOS/Chaotic kernel), pinned to 7.1: the
+  # NVIDIA production driver (open and proprietary alike) doesn't build
+  # against 7.2's kernel-interface changes — see hosts/pegasus/DECISIONS.md.
+  # Bump back to `linuxPackages_latest` once nixpkgs/NVIDIA ship a 7.2 fix.
   boot.kernelPackages = pkgs.linuxPackages_7_1;
 
   # Fleet default (modules/nixos/common.nix) reboots 10s after a panic. Pegasus
@@ -88,14 +89,12 @@ in
 
   # ── Tailscale ───────────────────────────────────────────────────────────────
   # Pegasus is reached over the tailnet (it is the primary GPU inference
-  # endpoint — see modules/nixos/olla-router.nix). It is NOT an exit node, so we
+  # endpoint — see modules/nixos/ollama.nix). It is NOT an exit node, so we
   # do not reuse the hopper-flavoured modules/nixos/tailscale.nix here.
   services.tailscale = {
     enable = true;
     extraUpFlags = [ "--ssh" ];
-    # Headless auth key, provisioned via sops once secrets/pegasus.yaml exists.
-    # Until then, run `tailscale up` once interactively on first boot.
-    authKeyFile = lib.mkIf hasSops config.sops.secrets."tailscale/authKey".path;
+    authKeyFile = config.sops.secrets."tailscale/authKey".path;
   };
   networking.firewall.trustedInterfaces = [ "tailscale0" ];
   networking.firewall.allowedUDPPorts = [
@@ -116,44 +115,24 @@ in
   ];
 
   # ── Remote Desktop (xrdp) ────────────────────────────────────────────────────
-  # SUPERSEDED KRDP (KWin's built-in RDP server) — see DECISIONS.md. KRDP only
-  # shares an already-live, already-logged-in KWin session; upstream KDE has
-  # confirmed it has no headless mode and no plans for one, which ruled it out
-  # for "reach a working desktop after any reboot/logout without walking over
-  # or needing the IP-KVM." xrdp + its bundled xorgxrdp backend (this
-  # nixpkgs's `xrdp` package already excludes every other sesman backend and
-  # keeps only `[Xorg]`) spins up an independent Xorg/Plasma-X11 session per
-  # RDP connection — decoupled from SDDM and whatever's on the physical seat,
-  # so it works the same whether the console is at the greeter, locked, or
-  # logged out. Trade-off: it's Plasma over X11, a second session, not a
-  # mirror of the physical Wayland one.
-  #
-  # No `openFirewall` and no bind-address config: tailscale0 is already a
-  # trustedInterfaces member (see the Tailscale block above), so xrdp rides
-  # the exact same tailnet-only boundary SSH already uses, the same reasoning
-  # as the superseded KRDP attempt — the NixOS xrdp module has no per-interface
-  # bind option, so this is enforced at the firewall, not the listen socket.
-  #
-  # Auth is PAM against z's actual account password (the same
-  # sops-provisioned `z/hashedPassword` secret used for console/SDDM login,
-  # see the sops block below) — no separate credential to provision.
+  # Supersedes KRDP, which can only mirror an already-logged-in session — see
+  # DECISIONS.md. xrdp/xorgxrdp spins up an independent Plasma-X11 session per
+  # connection, so it works whether the console is at the greeter, locked, or
+  # logged out. Deliberately no `openFirewall`: tailscale0 is already a
+  # trusted interface, and the module has no per-interface bind option, so the
+  # tailnet-only boundary is enforced at the firewall. Auth is PAM against
+  # z's account password (the sops z/hashedPassword below) — nothing extra.
   services.xrdp = {
     enable = true;
     defaultWindowManager = "${pkgs.kdePackages.plasma-workspace}/bin/startplasma-x11";
   };
 
   # ── LUKS SSH unlock ─────────────────────────────────────────────────────────
-  # The shared flow (initrd SSH server, DHCP, pre-switch-root network flush,
-  # chimes) lives in modules/nixos/luks-remote-unlock.nix, imported above.
-  # Only pegasus's host-specific piece stays here — the NIC driver.
-  #
-  # Onboard NIC (enp42s0) is Realtek, driver confirmed 2026-07-11 via
-  # `readlink -f /sys/class/net/enp42s0/device/driver` while booted normally
-  # — r8169, not built into the initrd by default (hardware-configuration.nix's
-  # generated module list only covers storage). Without this the NIC never
-  # comes up pre-unlock, which is exactly what the first LUKS-remote-unlock
-  # test hit: initrd SSH just timed out, indistinguishable from the box not
-  # being at the prompt yet, until confirmed on-screen that it genuinely was.
+  # The shared flow lives in modules/nixos/luks-remote-unlock.nix (imported
+  # above); only pegasus's host-specific piece stays here — the onboard
+  # Realtek NIC's driver, which the generated initrd module list (storage
+  # only) omits. Without it the NIC never comes up pre-unlock and initrd SSH
+  # just times out.
   boot.initrd.availableKernelModules = lib.mkAfter [ "r8169" ];
 
   # ── sops-nix ────────────────────────────────────────────────────────────────
@@ -161,17 +140,15 @@ in
   #   ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub
   # then replace the pegasus placeholder in .sops.yaml and run
   #   sops updatekeys secrets/pegasus.yaml
-  sops = lib.mkIf hasSops {
+  sops = {
     defaultSopsFile = ../../secrets/pegasus.yaml;
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
     secrets."tailscale/authKey" = { };
-    # Declarative login password for z (2026-07-11) — without this, a fresh
-    # install leaves the account genuinely passwordless/locked (NixOS doesn't
-    # set one unless told to), which is exactly what caused every SDDM login
-    # attempt to fail PAM auth on first boot here. SSH still worked throughout
-    # since that's key-based, not password-based — see hosts/pegasus/DECISIONS.md.
+    # Declarative login password for z — without this, a fresh install leaves
+    # the account genuinely passwordless/locked (NixOS doesn't set one unless
+    # told to), failing every SDDM/PAM login while key-based SSH still works.
     secrets."z/hashedPassword".neededForUsers = true;
-    # z's outbound SSH key (2026-07-11) — for git/ssh from pegasus itself
+    # z's outbound SSH key — for git/ssh from pegasus itself
     # (GitHub, the other fleet hosts), not to be confused with the host's
     # own SSH key (used as the sops/age identity, above) or the LUKS
     # remote-unlock initrd key (deliberately kept OUTSIDE sops, unencrypted,
@@ -186,8 +163,7 @@ in
     };
   };
 
-  users.users.z.hashedPasswordFile =
-    lib.mkIf hasSops config.sops.secrets."z/hashedPassword".path;
+  users.users.z.hashedPasswordFile = config.sops.secrets."z/hashedPassword".path;
 
   # Elgato Stream Deck — udev rule for non-root /dev/hidraw access. The
   # streamdeck-ui package (installed via home.packages in home.nix) ships
@@ -228,11 +204,7 @@ in
   };
 
   # Four real disks — three SATA plus the NVMe root — so smartd has plenty to
-  # poll (modules/nixos/smart.nix). This is also the host that needs it most
-  # right now: h-XDAS, the 3 TB Toshiba earmarked as galactica's migration
-  # parachute, has never been health-tested and is a ~13-year-old drive.
-  # See hosts/pegasus/HARDWARE-MAP.md §1.
-  #
+  # poll (modules/nixos/smart.nix; inventory in HARDWARE-MAP.md §1).
   # ⚠ smartd will autodetect the NanoKVM's emulated mass-storage device too and
   # find nothing to report on it. Harmless, but do not read its silence as a
   # disk being healthy — it is not a disk.

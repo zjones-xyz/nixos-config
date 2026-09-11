@@ -345,12 +345,14 @@ produced it was sound and only became irrelevant when a real number arrived:
   Protected tier, array-resident, not re-acquirable, no offsite copy — at
   **2.1 TiB**, with all non-media array data at 2.4 TiB.
 
-  **One disk covers it, and it is not one of these.** The parachute lands on
-  pegasus's `h-XDAS` (3 TB Toshiba, empty — `hosts/pegasus/HARDWARE-MAP.md`),
-  off-box, costing zero Tower SATA ports. **The 2 TB disks stay in this drawer
-  permanently**, not pending a migration window.
+  **One disk covers it, and it is not one of these.** The parachute was slated
+  for pegasus's `h-XDAS` (3 TB Toshiba — `hosts/pegasus/HARDWARE-MAP.md`) but
+  was never used: the migration went copy-back-from-`sidepool` instead
+  (`hosts/galactica/DECISIONS.md` §8's banner). **The 2 TB disks stay in this
+  drawer permanently**, not pending a migration window.
 
-  ⚠ **One exception, and it is a real one.** `DESIGN.md` §6.4 — the copy-based
+  ⚠ **One exception, and it is a real one.** `ARCHIVE-DESIGN-snapraid.md` §6.4
+  (extracted from `DESIGN.md`) — the copy-based
   fallback if in-place conversion proves impossible — genuinely does need bulk
   scratch, because there you are evacuating and reformatting 12 TB disks one at a
   time rather than converting them in place. **Aggregate drawer capacity still
@@ -361,9 +363,10 @@ produced it was sound and only became irrelevant when a real number arrived:
   sequence was three careful revisions of a number that never mattered to the path
   actually being taken. Measuring the real requirement took one command and
   replaced all of them.
-- **The photo tier.** Two 4 TB disks in btrfs raid1 remains the shape, but the
-  recording-technology split above means the pair cannot be all-CMR without
-  buying a disk. See the options table.
+- ~~**The photo tier.**~~ 🗑 **Superseded by the ZFS pivot** — photos live as
+  `tank/photos/*` datasets on galactica's RAIDZ1 array
+  (`hosts/galactica/DECISIONS.md` §7), so there is no separate two-disk btrfs
+  raid1 photo tier and the CMR-pair question no longer applies.
 
 ⚠ **Capacity is not the binding constraint on any of these; trust is.** Nothing
 in this drawer has been tested, several are a decade old, one has a known
@@ -376,10 +379,9 @@ number here.
 
 **No budget for a fifth 12 TB disk at present**, and the drive market makes rapid
 replacement of a failed one unlikely. Any Tower layout must therefore work with
-four, and the question of whether to hold one back as a cold spare is analysed in
-`hosts/galactica/DESIGN.md` §5.5 — the short version being that shelving a 12 TB
-costs 12 TB of usable capacity to buy protection that dual parity provides more
-cheaply.
+four — and the built one does: all four are in `tank`'s RAIDZ1, none held back
+as a cold spare (`hosts/galactica/DESIGN.md` §5.5's analysis argued the same
+way).
 
 **Test any disk before it is relied on as a spare**, and periodically thereafter.
 A full surface read/write. An untested spare is a guess, and the moment you

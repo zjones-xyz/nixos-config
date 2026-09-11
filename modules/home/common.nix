@@ -3,8 +3,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared Home Manager layer — portable across platforms.
 # ─────────────────────────────────────────────────────────────────────────────
-# Consumed by every host: nixosConfigurations.{hamilton,hopper,memory-alpha}
-# and darwinConfigurations.serenity. Keep this strictly cross-platform: only
+# Consumed by every host's home.nix, Linux and darwin alike. Keep this
+# strictly cross-platform: only
 # prefs that make sense on Linux *and* macOS. Anything host- or
 # platform-specific (username, homeDirectory, stateVersion, the `nrs`/`nrt`/
 # `npull` rebuild aliases, extra packages) stays in the per-host home.nix.

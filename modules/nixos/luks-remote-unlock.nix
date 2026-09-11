@@ -4,13 +4,8 @@
 # Remote LUKS unlock over initrd SSH — fleet-wide (galactica, memory-alpha,
 # pegasus; any host with an encrypted root).
 # ─────────────────────────────────────────────────────────────────────────────
-# Extracted 2026-09-02 from three near-identical copies in the host configs,
-# which had drifted: pegasus was missing the initrd DHCP unit entirely (its
-# initrd SSH could come up with no address) AND still carried the awk-not-in-
-# storePaths bug galactica fixed (gawk in `path` but never copied into the
-# initrd image, so the flush loop silently never ran); memory-alpha had an
-# older interface-name-specific flush and, like pegasus, only serenity's key.
-# This module is the union of the fixes each host learned separately.
+# Extracted from three drifted per-host copies; this module is the union of
+# the fixes each host learned separately — don't re-inline it.
 #
 # How the unlock works:
 #   1. A tiny SSH server starts in the initrd, before LUKS is unlocked.
@@ -41,10 +36,9 @@
     ssh = {
       enable = true;
       port = 2222;
-      # Both admin machines. This list is separate from the normal system's
-      # authorized_keys (common.nix) and having only serenity's key here was a
-      # gap found live on galactica's first boot ("Permission denied" trying
-      # to unlock from pegasus) — both keys, fleet-wide, on purpose.
+      # Both admin machines, fleet-wide, on purpose — this list is separate
+      # from the normal system's authorized_keys (common.nix), so trimming it
+      # to one key quietly locks the other admin box out of unlocking.
       authorizedKeys = [
         "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCfTHdojQvKOlTaaTYT2RmYMNKQ/6rBQwn6V+bPnrtASaI/G5E7RW67XGbZHi3K7EctyB9UP9Uw54sayEu4ebixI/dNFVVWeZ2byBQ49FoXh5o9Cfok0Qwf0QM7g9Td8O6Iu2ElnI8e+9cr8ThrfPpKmP68e6mpuYDvhQb4omcx8kRhxnsuNxkL2xCTNVxG/jw68o/1KHX++6tRqf0E3PBCjZ3Z8HMTdS8ouEBa8Y96GGeUvslwDJ9cUtLNCUhR5t3mGu3iSS9RYpFg/JujyTT9yhe2O/0og+OhBeSayGZMOXGWngGUEItExlbq2I4rMV5pFB1q+OyqksvlUfkJ/j3yJOii5uwonYvkWLZfR02yhn2b/bgOfYaimO5rfKj5jAC8bMRnWqLJAiG2qRDwtJT+ijyYlTKgLpz73sOGAQVvZygq11Vc35cZMFojlMeqAHdZMGi6XkUHnfZt8gyplw6VPV5EQnyDI4bRfY9sknuFvjHqdEzNyNrIEXtlmIB870s= z@Serenity.local"
         "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICjzi98Mik0CUMxSpUBf7+LA8co0grMtDb5NqwhVZ7nF z@pegasus"
@@ -72,11 +66,10 @@
   # interfaces as "connected (externally)" and skips its own DHCP negotiation
   # — the only thing that populates /etc/resolv.conf. Net effect without this:
   # routing works, DNS is empty, every boot. Fully tear the network down right
-  # before switch-root so NM always starts clean. This is the widened version
-  # proven on galactica (2026-09-01): stop networkd outright and bring links
-  # admin-down, not just flush addresses — NM's "externally configured"
-  # heuristic can key off either. kmsg markers make "did this even run"
-  # answerable without relying on journal transfer across switch-root.
+  # before switch-root so NM always starts clean: stop networkd outright AND
+  # bring links admin-down, not just flush addresses — NM's "externally
+  # configured" heuristic can key off either. kmsg markers make "did this even
+  # run" answerable without relying on journal transfer across switch-root.
   boot.initrd.systemd.services.flush-network-before-switch-root = {
     description = "Flush initrd DHCP state so NetworkManager re-negotiates DNS";
     before = [ "initrd-switch-root.target" ];

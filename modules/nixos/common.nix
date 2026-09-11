@@ -131,6 +131,8 @@
     jq
     openssl
 
+    dnsutils
+
     # Edit this host's own secrets/<host>.yaml using its SSH host key as the age
     # identity: `sops-hostkey secrets/galactica.yaml`. The key is root-only, so
     # plain `sops` never finds it.

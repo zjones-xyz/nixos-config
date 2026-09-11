@@ -19,7 +19,7 @@ should not be rewritten with it. Several of them cost hours.
 |---|---|
 | **`PLATFORM.md`** (this) | *What the machine does.* BIOS quirks, BMC access, controller firmware, bus speeds, and how to tell which of them is the limit. |
 | **`HARDWARE-MAP.md`** | *What is plugged into what.* Disks, cages, controllers, ports, and the label strings for each. |
-| **`DESIGN.md`** | *What is being built and why.* SnapRAID + mergerfs on bare metal, the case against staying on Unraid, and the storage layout. |
+| **`DESIGN.md`** | *What was built and why.* The case against staying on Unraid. Its SnapRAID/mergerfs storage half is superseded (the array is ZFS RAIDZ1) and archived in `ARCHIVE-DESIGN-snapraid.md`. |
 | **`DECISIONS.md`** | *Why it is this way.* Decision → alternatives → rationale, plus what is still open. |
 
 Fleet-wide disk naming and labelling conventions live in `docs/DISK-LABELLING.md`;
@@ -363,8 +363,8 @@ Two consequences, and the second is the useful one:
 ⚠ **Replacing the battery clears CMOS**, so everything below has to be set again
 afterwards:
 
-- [ ] `PCI Express Port - Gen X` = **Gen2** (explicitly, not Auto) — or run §6e's
-      test and find out you no longer need it
+- [ ] `PCI Express Port - Gen X` = **Gen3** (explicitly, not Auto — §6e's test
+      answered this: Gen3 strictly dominates Gen2 on this board)
 - [ ] `Detect Non-Compliance Device` = **Enabled**
 - [ ] Boot order — the Unraid flash ahead of, or trivially selectable against,
       the NixOS root disk

@@ -27,22 +27,26 @@ Three reasons it holds:
   absorbing another machine's obligation is how that cost quietly grows.
 
 ⚠ The corollary is that holding someone's backup does **not** discharge your own.
-Tower holds Serenity's Time Machine copy and is itself unbacked.
+Tower holds Serenity's Time Machine copy — and was itself unbacked when this
+document was written, which is the gap §2 has since closed.
 
-## 2. Current state, honestly
+## 2. Current state (updated 2026-09 — the borgmatic rollout is live)
 
 | Host | Local redundancy | Offsite | Declarative? |
 |---|---|---|---|
 | **serenity** (Mac) | — | **Three paths:** iDrive subscription; Time Machine to a drive kept at the makerspace; Time Machine to a drive kept at family. | No — all outside Nix |
-| **galactica / Tower** | Dual parity (Unraid today, SnapRAID planned) + btrfs on pools | ⚠ **None** | n/a |
-| **pegasus** | btrbk local snapshots (`modules/nixos/btrfs-snapshots.nix`) | ⚠ **None** | Snapshots yes |
-| memory-alpha, hopper, hamilton | ⟨unsurveyed⟩ | ⟨unsurveyed⟩ | ⟨unsurveyed⟩ |
+| **galactica / Tower** | ZFS RAIDZ1 `tank` + btrfs snapshots on the root | **borgmatic → BorgBase**, live 2026-09-03 (`hosts/galactica/borgmatic.nix`, `BACKUP-BORG.md`) | Yes |
+| **pegasus** | btrbk local snapshots (`modules/nixos/btrfs-snapshots.nix`) | **borgmatic → BorgBase** (`hosts/pegasus/borgmatic.nix`, home dirs) | Yes |
+| **memory-alpha** | btrfs snapshots | **borgmatic → BorgBase**, live 2026-09-04 (`hosts/memory-alpha/borgmatic.nix`) | Yes |
+| hopper, hamilton | staged, not in service | n/a | n/a |
 
-**Nothing in this fleet runs declarative backup software.** A grep for `restic`,
-`borgbackup`, `rclone` and `kopia` across every `.nix` returns nothing. The only
-adjacent thing is btrbk on pegasus, whose own module comment is emphatic that it
-is not a backup: every snapshot sits on the same filesystem, same disk, inside
-the same LUKS container as the data.
+The survey below was written when **nothing in the fleet ran declarative backup
+software** — that grep for `restic`, `borgbackup`, `rclone` and `kopia` came
+back empty, and the only adjacent thing was btrbk on pegasus, whose own module
+comment is emphatic that it is not a backup (every snapshot sits on the same
+filesystem, same disk, inside the same LUKS container as the data). The
+analysis that follows is what produced the borgmatic decision; kept as the
+record of why.
 
 **Serenity's arrangement is good and needs no help.** It comfortably exceeds
 3-2-1, and the two rotated drives are *air-gapped*, which no cloud target is.
@@ -50,9 +54,9 @@ Note the logistics: **the drives live at those sites permanently and the laptop
 travels to them.** Nothing has to be carried, which is exactly why the habit
 survives.
 
-⚠ **Parity is not a backup.** Tower's dual parity covers a disk dying. It does
-not cover deletion, ransomware, filesystem corruption written through to parity,
-fire, or theft.
+⚠ **Parity is not a backup.** Tower's RAIDZ1 redundancy covers a disk dying. It
+does not cover deletion, ransomware, filesystem corruption written through to
+parity, fire, or theft.
 
 ## 3. Tower's scope
 
@@ -793,6 +797,9 @@ There, *adopting* iDrive is the effort, and it is effort discarded at renewal:
 onto borgmatic alongside Tower.** It closes pegasus's gap sooner, with the tooling
 that is being kept rather than the tooling being retired.
 
+✅ Adopted — `hosts/pegasus/borgmatic.nix` is live against its own BorgBase
+repo (`pegasus-home`), so the "no offsite copy at all" above is history.
+
 ⚠ Updated 2026-08-07 — this said *restic* before borg + borgmatic was chosen
 (§4). The reasoning is unchanged: iDrive's Linux client is not packaged, so
 adopting it on a NixOS host is effort discarded at renewal, while borgmatic is
@@ -1181,19 +1188,21 @@ box, can you get `documents` back? Anything less is rehearsing the easy half.
   differentiating property. Object storage, including iDrive e2 and B2, was
   already out once borg was chosen; Proton Drive was rejected earlier for
   offering no scoped credentials.
-- **Create the repository in `repokey` mode**, not `keyfile` (§4) — it collapses
-  key custody to one secret and is decided once, at creation.
-- **Verify append-only actually works** on BorgBase (§3). This is the
-  security-relevant one, and it is now a concrete test rather than a provider
-  question: with Tower's append-only key in place, run `borgmatic prune` and
-  confirm the *server* refuses. Also set up the second, prunable key on the admin
-  machine, since retention cannot run from Tower.
+- ~~**Create the repository in `repokey` mode**~~ — **done**: galactica's repo
+  is `repokey-blake2` (`BACKUP-BORG.md`, checklist item 1).
+- ~~**Verify append-only actually works** on BorgBase (§3).~~ **Resolved
+  2026-09-03, with a corrected premise** (`BACKUP-BORG.md`, checklist item 2):
+  `prune` *succeeds* under an append-only key (manifest-level delete, no
+  server-side delete right needed), so no second prunable key is required —
+  only `compact` is forbidden, and BorgBase exposes that as a manual dashboard
+  action.
 - **Design key custody** (§5) *before* the first backup runs, not after.
 - **Set the 2027-02 renewal reminder** (§4b) so the iDrive decision is made
   deliberately rather than by the date arriving.
 - **Turn on BorgBase's own inactivity alerting** (§3), as a heartbeat that does
   not depend on hopper being up — the one gap a self-hosted watcher cannot cover.
-- **Decide pegasus's target** (§4b) — borgmatic now, or iDrive until renewal.
+- ~~**Decide pegasus's target** (§4b)~~ — **decided and live**: borgmatic
+  (`hosts/pegasus/borgmatic.nix`).
 - **Retention numbers for the hot and cold classes** (§4). The hot/cold split was
   taken on 2026-08-08 *because* the two want different policies; until the numbers
   differ, the split is cost without benefit. Critical requires versioning, so hot
@@ -1201,7 +1210,8 @@ box, can you get `documents` back? Anything less is rehearsing the easy half.
 - **Work out a dump path per database** (§4d) before the first backup runs. A
   file-level copy of a live database is the most common way a backup turns out
   worthless, and it is also the migration's prerequisite.
-- ⭐ **Run the pilot** — `hosts/galactica/DESIGN.md` §6.6. Wire `partdb` for
+- ⭐ **Run the pilot** — `hosts/galactica/ARCHIVE-DESIGN-snapraid.md` §6.6
+  (extracted from `DESIGN.md`). Wire `partdb` for
   backup, then test-migrate and restore it onto memory-alpha. It proves this
   document's whole design end to end at a size where being wrong is free: the
   borgmatic config shape, the native database hook, BorgBase's append-only

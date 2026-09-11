@@ -1,10 +1,9 @@
 # galactica — manual steps (gated on being physically at Tower, or on the ISO)
 
-`configuration.nix`, `disko.nix`, and `home.nix` exist now, but
-`nixosConfigurations.galactica` is deliberately not yet in `flake.nix` —
-`hardware-configuration.nix` doesn't exist and can't be evaluated blind. See
-the header comment in `configuration.nix` for why. Everything below closes
-that gap, roughly in order.
+galactica is installed and in the flake: `nixosConfigurations.galactica`
+evaluates with the real `hardware-configuration.nix`, and the host is live.
+The steps below record the bring-up, roughly in order — done ones are checked
+or ✅-marked; unchecked items are still pending.
 
 An opus review agent independently checked this whole plan on 2026-08-31 —
 several fixes below exist because of it, credited inline where they matter.
@@ -111,9 +110,9 @@ generator will NOT reproduce on its own, all caught by the opus review:
   set up (see §7) — the overprovisioning/endurance plan for those depends on
   discards actually reaching the physical disks, same mechanism as root.
 
-## 3. Wire the flake up — the mechanical last step
+## 3. ✅ Wire the flake up — done (galactica is in `flake.nix`, age key enrolled)
 
-Once `hardware-configuration.nix` is real:
+The steps as they were, for the record:
 
 - Add `galactica` to `nixosConfigurations` in `flake.nix`, matching
   `memory-alpha`'s shape (no extra inputs needed — it's a plain x86_64-linux
@@ -137,9 +136,9 @@ Once `hardware-configuration.nix` is real:
 step — see the crypttab fix already applied to configuration.nix, caught by
 the opus review before it could bite here.)
 
-## 4. midden's logs keyfile
+## 4. ✅ midden's logs keyfile — done (crypttab carries the real UUID, `luks/middenKeyFile` is in sops)
 
-Only `cryptlogs` needs this now — `/var/cache/nix-build` is unencrypted
+Only `cryptlogs` needed this — `/var/cache/nix-build` is unencrypted
 (reversed 2026-08-31, see disko.nix's `nixBuildScratch` comment for why).
 Once `disko.nix` has run and the LUKS partition exists:
 
@@ -264,13 +263,14 @@ if it turns out to matter.
 
 ### Doing the cutover
 
-1. [ ] **galactica first.** The mounts are `access denied` until the exports
+1. [x] **galactica first.** The mounts are `access denied` until the exports
    exist:
    ```bash
    sudo nixos-rebuild switch --flake .#galactica
    sudo exportfs -v          # expect the three paths above, with their fsids
    ```
-2. [ ] **Then memory-alpha:**
+2. [x] **Then memory-alpha** (both switched — the cutover is live, per the
+   NFS-mounts note in `hosts/memory-alpha/configuration.nix`):
    ```bash
    sudo nixos-rebuild switch --flake .#memory-alpha
    ls /mnt/media /mnt/unmanaged    # automount triggers on access
@@ -364,7 +364,7 @@ against the source, plus the Unraid flash+config insurance into
    > (silent verify pass). `move_aside/` was confirmed to be only the already
    > migrated array shares. So only the physical case work remains; nothing on
    > sidepool is still needed. Mappers closed again afterward.
-4. [ ] **NFS re-exports** — written; §8 carries the export table, the two
+4. [x] **NFS re-exports** — live; §8 carries the export table, the two
    fsids held back and why, and the switch-galactica-first sequence.
 
 The original forward-looking notes below are now mostly satisfied; kept for
@@ -1012,3 +1012,156 @@ and the existing collection imported rather than migrated in place) and
 SABnzbd is deliberately **outside** the VPN — usenet is already TLS to a paid
 provider, so the tunnel would only cap throughput; `nixflix.nix` says so at
 the option.
+
+## 13. AdGuard/Unbound DNS — declarative config, migrating off the router
+
+`configuration.nix` now imports `modules/nixos/dns.nix` and declares the
+rewrites that previously lived only in the router's (GL.iNet, AdGuard bundled
+in its firmware) mutable UI state. `mutableSettings = false` on that module
+means AdGuard here won't accept UI edits that survive a rebuild — by design,
+this is meant to become the one declarative source of truth, with
+AdGuardHome-Sync replicating it out to the router (and later hopper/hamilton)
+rather than each instance being hand-edited.
+
+1. [x] **Set AdGuard admin credentials.** Done — `services.adguardhome.settings
+   .users` declares `admin` with a bcrypt hash (`htpasswd -B -C 10 -n -b`),
+   committed directly in `configuration.nix` per the reasoning above (can't be
+   a sops secret: this config renders at build time, before secrets decrypt on
+   the target host). Confirm login works after the first deploy, then change
+   the password through the AdGuard UI is *not* an option under
+   `mutableSettings = false` — a real rotation means generating a new hash and
+   redeploying.
+2. [x] **`.xyz` split-horizon scope — decided.** `.xyz` is the owner's
+   convention for externally-routable names, terminated by Pangolin via a
+   Newt tunnel — not Traefik, so the earlier "no Traefik router" framing here
+   was checking the wrong layer. Resolved: `arr.zjones.xyz` is dropped
+   entirely (the *arr stack doesn't need off-network access). `jellyfin` and
+   `guesthome` keep the split-horizon treatment — meant to work both on- and
+   off-network without Tailscale, so the AdGuard rewrite is a LAN-side
+   shortcut alongside Pangolin's tunnel, not a replacement for it.
+   `homeassistant` deliberately gets no `.xyz` name at all — stays
+   Tailscale/LAN-only. Still worth confirming in Pangolin's own admin config
+   (not this repo) that `jellyfin.zjones.xyz` and `guesthome.zjones.xyz`
+   actually have resources configured, pointing at the right targets
+   (memory-alpha for jellyfin, galactica for guesthome) — Newt itself only
+   runs on memory-alpha in this repo (`newt.nix`), which is fine since Newt's
+   targets aren't restricted to localhost.
+3. [x] **Deploy and verify — done 2026-09-06.** Deployed, then two real bugs
+   found live and fixed (see git history): every rewrite loaded
+   `enabled: false` (an undocumented per-rewrite toggle, Go bool zero-value
+   when omitted), and OISD's filter URL had moved (`basic` renamed
+   `small`). After both fixes, exact-match and wildcard rewrites
+   (`tower.internal`, `jellyfin.zjones.dev`, `traefik.galactica.zjones.dev`,
+   `memory-alpha.internal`) all confirmed resolving correctly via
+   `dig @127.0.0.1`. AdGuard's web UI, found stuck on loopback-only, is now
+   routed through Traefik at
+   `adguard.galactica.internal`/`adguard.galactica.zjones.dev`.
+4. [x] **AdGuardHome-Sync — confirmed working end-to-end 2026-09-07.**
+   `modules/nixos/adguardhome-sync.nix` + galactica's own
+   `services.adguardhomeSync` block: galactica as origin, the router as the
+   first replica. Only syncs rewrites, filter lists, and client names —
+   deliberately not `dns.serverConfig`/`dhcp.*`, since the router has its
+   own upstream/DHCP needs that shouldn't be overwritten by galactica's.
+   hopper/hamilton join `replicas` once they're rebuilt as the ephemeral
+   resolvers discussed — not yet, neither exists.
+
+   Getting the router side actually authenticating took a long chain of real
+   bugs, found live, in order: (1) `network_mode: host` was missing, so the
+   container's `127.0.0.1` was its own loopback, not galactica's; (2) the
+   sync tool's own status-API port was never wired to `cfg.port` and
+   defaulted to 8080, colliding with SABnzbd under host networking; (3) an
+   empty replica `username` rendered as bare YAML (`username: `), parsing
+   as `null` and failing the tool's own schema validation; (4) GL.iNet's
+   bundled AdGuard ships with `users: []` — no default login at all, so
+   every credential we tried (`admin`, empty, `root`) correctly failed
+   against nothing; (5) hand-editing the router's `users:` block to add a
+   real `adguardsync` user initially split into two malformed YAML list
+   entries (name and password as separate `-` items) instead of one; (6)
+   the module's `sed`-based secret substitution treated `&`/`\` in a
+   password as sed metacharacters, silently corrupting it — replaced with
+   `envsubst`; (7) the real, final blocker: GL.iNet's bundled AdGuard runs
+   with a `--glinet` flag that routes *all* auth through the router's own
+   webui login, so every one of AdGuard's own auth paths (Basic Auth, even
+   a genuinely valid `/control/login` session cookie) 401'd regardless of
+   correct credentials. Removing `--glinet` from `/etc/init.d/adguardhome`
+   on the router restored normal AdGuard auth, and plain Basic Auth
+   (matching how origin auth already works) then succeeded. A real sync run
+   confirmed live: rewrites, filters, and client settings all applied to
+   the router with no errors.
+
+   Full CRUD confirmed live, not just adds: dropping the retired
+   `nixie.internal`/`*.nixie.internal` rewrites from galactica's declared
+   list (memory-alpha's old name) was deliberately used as a delete-path
+   test — the very next cron cycle cleanly deleted both from the router,
+   no errors, no oscillation.
+
+   Two loose ends from that chain, now resolved or downgraded:
+   - The `--glinet` removal was done interactively via SSH and wasn't
+     persistent — confirmed the hard way when a router firmware update
+     rebooted it and auth broke again exactly as predicted. Fixed
+     properly now; see item 5.
+   - The router's bundled AdGuard (`0.107.73`) is older than galactica's
+     (`0.107.78`); a firmware update was applied hoping to close that gap,
+     but it didn't change AdGuard's version — apparently the newest GL.iNet
+     currently ships. One rewrite (`arr.zjones.dev`) was seen deleted then
+     re-added across two early cycles, but that window coincided with the
+     still-unresolved auth debugging, not a repeatable pattern — several
+     clean cycles since (including the nixie delete test) show no further
+     oscillation. Not chasing this further unless it actually recurs;
+     downgrading galactica's own AdGuard to match would trade a real
+     version back for a cosmetic match, which isn't worth it for a WARN
+     that hasn't caused any actual sync failure.
+5. [x] **`--glinet` removal survives a reboot — verified 2026-09-08.** Fixed
+   in `/etc/rc.local` (a first attempt via `vi` split the `sed` command
+   across two lines, silently breaking it — rewritten with a `cat` heredoc
+   instead to avoid the interactive-editor pitfall):
+   ```
+   sed -i "s/--glinet //g" /etc/init.d/adguardhome
+   service adguardhome restart
+   ```
+   above `exit 0`. Deliberately rebooted the router to confirm rather than
+   wait for an incidental one — `rc.local` correctly stripped `--glinet`
+   again on boot, and Basic Auth against the router's AdGuard still
+   succeeded afterward. Tradeoff accepted knowingly: this also drops the
+   AdGuard stats widget from the GL.iNet router's own dashboard (that
+   integration depends on `--glinet`).
+7. [x] **Fleet-wide inter-host DNS outage, root-caused and fixed —
+   2026-09-08.** SSH to `memory-alpha.internal` started failing the
+   morning after §13 item 4 was confirmed working. Long diagnostic chain,
+   in order, each one ruled out before finding the real cause: dnsmasq's
+   forward-to-AdGuard config (`server=127.0.0.1#3053` — fine), AdGuard's
+   own DNS cache (cleared it, still broken), the `--glinet` flag
+   (temporarily restored it as a test — no effect, ruled out; then
+   discovered it had been left restored from that test and was quietly
+   breaking sync auth again, stripped a second time). The actual cause:
+   `dns.nix`'s `clients.persistent` list never set `use_global_settings`,
+   which defaults to Go's zero-value `false` — disabling AdGuard filtering
+   (rewrites included, since they're implemented as part of the filtering
+   subsystem) specifically for queries sourced *from* the 8 listed fleet
+   IPs, while any unlisted device resolved normally the whole time. This
+   almost certainly broke galactica's own inter-host resolution from the
+   day `clients.persistent` was first added — unnoticed because most
+   testing went through `127.0.0.1`, which isn't on the list. The router
+   replica inherited the identical bug via AdGuardHome-Sync, since sync
+   just mirrors whatever origin reports.
+   Fixed in `dns.nix` (every client now gets `use_global_settings = true`,
+   PR #102) and confirmed live: `dig @192.168.8.1 memory-alpha.internal`
+   resolving correctly, `ssh memory-alpha.internal` working again.
+   Also added: `systemd.services.adguardhome-sync.restartTriggers` on
+   AdGuard's own settings, so a rewrite/client/filter change from `nrs`
+   reaches the router immediately instead of waiting up to 10 minutes for
+   the next cron tick.
+8. [ ] **Repoint DHCP later, not yet.** Once galactica's AdGuard is confirmed
+   correct and stable, add it to the GL.iNet DHCP DNS server list (primary or
+   alongside the router) — a separate, deliberate cutover step, not part of
+   this change.
+   Idea for whenever this happens: DHCP hostname reservations (the
+   `dhcp-host=` lines rendered into the router's dnsmasq config) and
+   AdGuard's rewrites are currently two independently hand-maintained lists
+   that happen to agree — no single source of truth ties a lease's name to
+   its rewrite. Worth figuring out then whether AdGuard's own DHCP handling
+   (`dns.serverConfig`/`dhcp.*`, deliberately excluded from what
+   AdGuardHome-Sync propagates today, per item 4) could take over DHCP
+   entirely and derive rewrites from leases, or whether reservations should
+   just get declared in Nix alongside `clients.persistent` so a name only
+   has to be typed once.

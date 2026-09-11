@@ -699,6 +699,52 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   `mkForce` lines in `modules/nixos/keyring.nix` plus disabling gnome-keyring.
   **Not verified on hardware** — the switch, and which daemon ends up owning
   the bus name afterward, still needs a real login. See MANUAL-STEPS.md §19.
+- **Dual-head bring-up, 2026-08-18 — the pre-existing DP KVM abandoned for
+  now, and a QuickShell crash found and traced along the way.** Root cause
+  and current state are in `HARDWARE-MAP.md` §8 (a ~10 ft passive DisplayPort
+  run from the GPU to the KVM, exceeding what passive DP can carry for 4K60
+  once the switch's own mux and the second cable segment are counted in the
+  same channel); logged here because of what it says about the
+  DankMaterialShell decision above, not for the cabling itself.
+  *The QuickShell crash:* toggling the KVM's input to test the diagnosis
+  repeatedly hotplugged a display, and each hotplug also makes the GPU's
+  DisplayPort-embedded audio sink (an IEC958/S-PDIF-style device) appear and
+  disappear. One of those churns crashed Quickshell — `systemd-coredump`
+  caught a `QAudioContext` thread, stack trace bottoming out in
+  `libpipewire-module-protocol-native`'s event demarshalling, immediately
+  after a `spaVisitChoice: parse error` on that sink's `Spa:Enum:ParamId:
+  EnumFormat`. DMS's `systemd --user` service restarted it within a couple of
+  seconds without help.
+  *Why this doesn't reverse the decision above, but does qualify it:* the
+  crash is in Qt Multimedia's PipeWire audio path, not in DMS's own
+  screen-hotplug handling — `ShellCore`'s surface-recovery logging (`Screen
+  reconnect detected`, `Surface recovery triggered by: screen-reconnect`)
+  ran correctly through the same events and never dropped a bar. So the
+  multi-monitor case DMS was chosen for is still solid; what's now known is
+  that *any* DP hotplug on this host — a KVM switch, unplugging a monitor,
+  eventually a capture card or a different KVM — can take Quickshell down as
+  a side effect, via audio, not video. Expect it, don't chase it: DMS's own
+  restart is the recovery, `systemctl --user restart dms.service` if it
+  doesn't come back on its own. Not root-caused past "PipeWire's protocol
+  parser doesn't like something about this sink's format announcement" —
+  could be Qt Multimedia, Quickshell, or PipeWire itself; not filed upstream.
+  *The output layout, declared afterward:* niri auto-picked mode/scale/
+  position before this, which produced a real error on first bring-up — the
+  LG came up at 1920x1080 on its 4K panel while the Dell took its preferred
+  3840x2160@59.997, at different scales, so windows resized crossing between
+  them. `niri-settings.nix`'s `outputs` block now declares both explicitly,
+  keyed on EDID identity rather than connector name — during this same
+  bring-up the same monitor appeared as `DP-2` and then `DP-3` across a
+  recabling, which a `DP-N`-keyed config would have silently stopped
+  matching. Scale 1.25 on both gives matching logical heights
+  (3840x2160 / 1.25 = 3072x1728) despite the panels' different physical PPI
+  (LG 31.5" ≈140, Dell 27" ≈163). VRR left off deliberately — the Dell
+  reports it supported-but-disabled and the LG doesn't support it at all, so
+  enabling it is a decision to make on purpose later, not a byproduct of
+  declaring the layout. DMS also drives outputs via wlr-output-management
+  and keeps its own `DisplayConfigState` profile; the niri block is meant to
+  be authoritative — clear DMS's saved profile if the two disagree rather
+  than editing both.
 
 - **DMS settings.json → snapshot/restore script, not a Home-Manager symlink**
   (2026-08-21). *alt:* `config.lib.file.mkOutOfStoreSymlink` pointing
@@ -920,3 +966,308 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   with the caveat called out: a headless service only alerts if monitoring
   is wired up, and a tray app only alerts if it's actually autostarted and
   running.
+- **DDC/CI switching research, 2026-09-07 — findings recorded ahead of the
+  actual script, not yet a decision.** The plan under consideration: replace
+  a hardware KVM with `ddcutil` (already wired in via `hardware.i2c.enable`
+  and the NVIDIA `RMUseSwI2c` fix, both `modules/nixos/nvidia.nix`/
+  `hosts/pegasus/configuration.nix`) commanding a monitor's own input-select
+  VCP feature (0x60) to switch which machine it's showing, for sharing with
+  the Mac and/or a future work laptop. Third monitor for this is a **Dell
+  S2722QC** (corrected from an initial S2721QC guess) — same panel family as
+  the existing S2721QS, but adds USB-C (DP Alt Mode + 65W PD), a USB-A
+  upstream hub, HDMI 2.1, and Dell's own "Auto Select" KVM firmware. The
+  4070 has no native USB-C output, so feeding its USB-C port from pegasus
+  needs a DP-to-USB-C cable — likely unnecessary, since that port reads as
+  intended for the Mac/laptop side, with pegasus on DP or HDMI instead.
+  *DDC/CI only works on the currently active input* — confirmed independently
+  twice, not just inferred: general community consensus, and
+  [`i3v/monitor_input_control`](https://github.com/i3v/monitor_input_control),
+  a prior-art project doing the same kind of switching, which had to run a
+  script on *both* connected PCs because the inactive one can't reliably
+  reach the monitor over DDC. Plan around this from the start rather than
+  discovering it after wiring up pegasus alone.
+  *Auto Select can fight a scripted switch.* Dell's community threads
+  describe the S2722QC-family's own KVM auto-detect firmware disagreeing
+  with an external DDC command about which input should be active. Set
+  Auto Select to **Off** in the OSD (not "Prompt") before relying on
+  `ddcutil` — several reported fixes only worked after that.
+  *A real conflict to watch for, not yet hit:* Dell has a documented bug
+  ([KB000197189](https://www.dell.com/support/kbdoc/en-us/000197189)) where
+  the S2722QC flickers with Apple Silicon Macs set to "Variable" (40-60 Hz)
+  refresh — fixed by macOS ≥13.0.1 and forcing a fixed 60 Hz on the Mac
+  (has to be reset after every Mac reboot, per Dell). One community-reported
+  workaround for the same flicker is **disabling DDC/CI on the monitor** —
+  which would break the switching script for that machine. If the flicker
+  shows up, use the fixed-60Hz fix, not the DDC/CI one.
+  *Lower-confidence, not acted on:* the S2721QS is DisplayPort 1.2, not 1.4
+  — HBR2×4 still comfortably covers the 4K60 8-bit mode already running, but
+  it's a hard ceiling on that monitor, unrelated to the GPU or any cable.
+  Scattered independent reports of a low-brightness flicker on some S2721QS
+  units (unrelated to PWM, which rtings measured as genuinely absent) —
+  sounds like a firmware/batch issue, not confirmed as universal; try
+  maximum brightness as a first diagnostic step if it's ever seen.
+  *Not yet identified:* the existing left-hand monitor reports only
+  `"LG Electronics LG HDR 4K"` over EDID — confirmed to be a generic string
+  LG's GoldStar (`GSM`) vendor code reuses across multiple actual models,
+  not a real model number. No monitor-specific research possible until the
+  real model number comes off the unit itself.
+- **NanoKVM dropped, 2026-09-08 — reversing this repo's own "do not reclaim
+  it" position, with the cost accepted.** The third monitor (Dell S2722QC)
+  took `HDMI-A-1`, and the 4070 has exactly one HDMI output, so an HDMI
+  capture device and a third display cannot both exist on this host.
+  *What this gives up:* the xrdp decision above is explicit that BIOS/UEFI
+  screens, the boot-loader menu and kernel panics are out of scope for any
+  software remote desktop, and `HARDWARE-MAP.md` §1 called the NanoKVM
+  "load-bearing, not incidental" for exactly that reason. Dropping it leaves
+  pegasus with **no out-of-band console**: a failed boot, a firmware menu or
+  a panic now requires being physically at the machine. That is a real
+  regression in recoverability, taken knowingly rather than overlooked.
+  *Why it was acceptable anyway:* pegasus is a desk machine that its owner
+  sits at, not a headless server in another room — the fleet hosts where
+  out-of-band access actually matters (galactica, memory-alpha) have their
+  own paths, and this host's LUKS remote-unlock over initrd SSH covers the
+  one recurring remote case. `boot.kernel.sysctl."kernel.panic" = 600`
+  stays as the concession that matters: ten minutes to read a panic before
+  the box reboots.
+  *The exit, if it is ever wanted back:* DP-3 is free, so a DP→HDMI adapter
+  would restore it without displacing a monitor — or move the S2722QC to
+  DP-3 (it has a DisplayPort input) and give `HDMI-A-1` back. The latter
+  would also change that output's declared refresh from 60.000 to whatever
+  DP negotiates; see the comment in `niri-settings.nix`.
+- **DMS's `session.json` checkpointed too, wholesale rather than filtered
+  (2026-09-09).** Extends the snapshot/restore decision above, which only
+  ever covered two of DMS's three persisted files. The third,
+  `$XDG_STATE_HOME/DankMaterialShell/session.json`, is misnamed for what it
+  holds: despite the state directory it carries durable configuration —
+  `isLightMode`, the wallpaper (including per-monitor and separate
+  light/dark wallpapers), the night-mode and auto-theme schedules, pinned
+  dock and bar apps, tray order, `recentColors`. 110 persisted properties in
+  all, confirmed against `quickshell/Common/SessionData.qml` at the revision
+  in `flake.lock`; the path is set at its line 1590 from
+  `StandardPaths.GenericStateLocation`. Left unhandled, a rebuild from
+  scratch came up with none of it, which is precisely what `seedDmsSettings`
+  exists to prevent.
+  *Wholesale, not a curated subset.* Some of those 110 are genuinely
+  transient — `monitorScrollPositions`, the runtime-discovered
+  `installedTerminals`, the computed `themeModeNextTransition` — so a filter
+  down to the durable ones was the obvious alternative, and would give
+  cleaner diffs. Rejected because the filter is the same bug in a new place:
+  it needs updating every time DMS adds a property, and when it inevitably
+  drifts the failure is silent — a new setting simply is not captured, and
+  nobody finds out until a rebuild loses it. That is the exact failure this
+  entry is fixing. A faithful copy cannot drift. Restoring a stale
+  `monitorScrollPositions` is also harmless in a way that failing to restore
+  a wallpaper is not, so the asymmetry favours copying everything.
+  *Location data, handled by surfacing rather than stripping.* `session.json`
+  carries `latitude`/`longitude` once night mode's location automation is
+  used, and `settings.json` carries `weatherLocation`/`weatherCoordinates` —
+  flagged in the entry above as worth knowing before committing. Filtering
+  them out would have made `restore` a half-restore, so instead
+  `dms-settings.sh` now names them at snapshot time, on stderr, while the
+  diff is still under review. The workflow already required a human to look
+  before committing; this makes that look an informed one rather than one
+  that depends on remembering. ⟨No checkpoint with real coordinates has been
+  committed — `hosts/pegasus/dms-session.json` does not exist until someone
+  runs `snapshot` on the host.⟩
+- **`qt.platformTheme = "qt5ct"` set system-wide, accepting that it changes
+  Qt theming in the Plasma and Dragonized sessions too, 2026-09-09.**
+  DMS's "apply colours to Qt" button reported `failed to apply Qt colors`.
+  The cause is not subtle: DMS's `quickshell/scripts/qt.sh` writes
+  `custom_palette=true` + `color_scheme_path=…/DankMatugen.colors` into
+  `qt5ct.conf`/`qt6ct.conf`, and `exit 1`s outright if neither a `qt5ct`
+  nor a `qt6ct` binary is on `PATH`. Neither was installed anywhere in this
+  flake.
+  *Why the NixOS `qt` module rather than an ad-hoc package + env var:*
+  `qt.platformTheme = "qt5ct"` is the single value that installs *both*
+  `libsForQt5.qt5ct` and `qt6Packages.qt6ct` and sets
+  `QT_QPA_PLATFORMTHEME` to the key both plugins register under —
+  home-manager's own `qt` module independently maps its `qtct` theme to the
+  same string, which is the corroboration that the Qt6 plugin answers to
+  the Qt5 name. `qt.enable` is set explicitly even though `plasma6.nix`
+  already sets it, so Qt theming does not quietly stop working the day the
+  Plasma session is removed.
+  *Why system-wide and not in niri's `environment` block, where DMS's docs
+  put it:* it cannot honestly be scoped there. `niri-settings.nix` already
+  documents that this host's `systemd --user` manager is shared and
+  persistent across session switches and that `niri-session` imports into
+  it — so a "niri-only" `QT_QPA_PLATFORMTHEME` would leak anyway, just
+  non-deterministically, depending on whether a niri session had run since
+  boot. `configuration.nix` states the real scope.
+  *The cost, taken knowingly:* the comment this replaces in
+  `niri-settings.nix` refused `QT_QPA_PLATFORMTHEME=gtk3` precisely because
+  leaking it would displace Plasma's native theming, and that reasoning
+  still holds for `qt5ct` — `plasma-workspace`'s `startplasma.cpp` sets no
+  `QT_QPA_PLATFORMTHEME` of its own, so nothing in the Plasma session wins
+  the argument back. Qt apps under Plasma/Dragonized will take qt6ct's
+  matugen palette instead of Breeze's. Accepted because those sessions are
+  no longer in daily use here (niri has been `defaultSession` since
+  2026-09-01). It is not a lock-in: deleting the `qt` block restores the
+  previous behaviour on the next rebuild.
+  *Still unverified:* the Plasma-side effect above is reasoned from
+  upstream source, not observed. Worth one look at a Plasma session after
+  the first rebuild.
+  *Deliberately left unset:* `qt.style`. It would export
+  `QT_STYLE_OVERRIDE`, which sits on top of the very palette DMS is trying
+  to apply.
+- **DMS's `scripts/qt.sh` is patched in-package (2026-09-08), rather than
+  worked around in the config** — the palette DMS generates for Qt apps had
+  never applied, on this host or any other. Two independent upstream bugs,
+  both in that one script:
+  *1. The palette is written to a file qt6ct cannot parse.* `qt.sh`
+  hardcodes `color_scheme_path` to `$HOME/.local/share/color-schemes/`
+  `DankMatugen.colors` — the **kcolorscheme** template's output, in KDE
+  format (`[KDE]`, `[General]`, `[Colors:*]`). qt6ct's own plugin reads
+  `custom_palette` and `color_scheme_path`, then parses the target for
+  `[ColorScheme]` / `active_colors` / `disabled_colors` /
+  `inactive_colors` (all four strings are present in
+  `libqt6ct-common.so.0.11`). The KDE file has none of them, so the palette
+  comes back empty and Qt apps fall back to stock Fusion grey — with the
+  button still reporting success. Meanwhile each tool's *own* matugen
+  template (`matugen/configs/qt{5,6}ct.toml`, both fed by
+  `templates/qtct-colors.conf`) already writes a correct 21-field
+  `[ColorScheme]` file to `$XDG_CONFIG_HOME/qt{5,6}ct/colors/matugen.conf`,
+  and always has: on this host both files carry the same mtime as
+  `DankMatugen.colors`, i.e. every matugen run has been generating them.
+  The patch shadows `color_scheme_path` inside `update_qt_config` with a
+  path derived from the config file being written, so each tool gets its
+  own scheme.
+  *2. The from-scratch write emits a literal `\n`.* When `qt5ct.conf` /
+  `qt6ct.conf` doesn't exist yet, `qt.sh` creates it with a `printf` whose
+  format string is single-quoted `\\n` — so the file lands as one
+  unparseable line. Masked on any machine where the qt6ct GUI has run
+  once, which is why it survived upstream; it fires on exactly the
+  rebuild-from-scratch case the DMS checkpointing exists to protect. Found
+  while testing fix 1 against a scratch `$HOME`, not by inspection.
+  *Why patch the package, not manage the config declaratively:*
+  `qt{5,6}ct.conf` is not ours to own — qt6ct writes fonts and its own
+  window geometry back into it at runtime, so it cannot be a read-only
+  home-manager symlink, and `qt.sh` `sed`s over the file on every "apply
+  colours to Qt" regardless. Fixing the writer is the only durable place.
+  *Why `--replace-fail` and not a patch file:* both anchors are single
+  lines, unique in the file, and the build fails loudly if upstream
+  changes either — which is the desired behaviour, since the shim should
+  be deleted the moment upstream fixes this rather than silently
+  no-op'ing.
+  *Upstream status, checked 2026-09-08:* unfixed at master HEAD
+  (`8fe918ff`). Only two commits have ever touched `qt.sh` — `24e80050`
+  (monorepo move) and `7c88865d` (pre-commit refactor), both structural —
+  so bumping the flake input will not fix it. No issue or PR reports
+  either bug. Issue #2951 (closed/completed, a different complaint about
+  the template's `BrightText` mapping) is corroboration rather than a
+  duplicate: its reporter's environment block quotes
+  `color_scheme_path=~/.config/qt6ct/colors/matugen.conf`, so upstream has
+  already accepted that as the correct wiring. PR #3019 (merged, qtengine
+  support) states outright that "`qt.sh` is unchanged" and routes around
+  its failure instead.
+  *Verified:* the built script rewritten as intended, and run end-to-end
+  against a scratch `$HOME` with stub `qt5ct`/`qt6ct` binaries — the
+  pre-existing-config path rewrites `color_scheme_path` to
+  `…/qt6ct/colors/matugen.conf`, the from-scratch path writes a proper
+  three-line `[Appearance]` block, and each tool gets its own scheme file.
+  Then confirmed on the hardware after a `nixos-rebuild test` (2026-09-08):
+  both configs held the old `DankMatugen.colors` path before pressing
+  **apply colours to Qt** and each held its own
+  `~/.config/qt{5,6}ct/colors/matugen.conf` after. Whether the palette then
+  renders in a Qt app was then confirmed too: qt6ct shows the matugen
+  palette instead of stock Fusion grey. The feature has never worked on this
+  host until now.
+- **Plasma and COSMIC to be removed, deferred 2026-09-09 — and `desktop-plasma.nix`
+  is not the file to delete when that happens.** Neither session is in daily use
+  since niri became `defaultSession` (2026-09-01) and both had degraded; the
+  removal was scoped, then deliberately postponed until there is time for the
+  downstream work. This entry exists so that work does not have to be
+  rediscovered — and so the trap below is not walked into.
+  *The trap:* `modules/nixos/desktop-plasma.nix` is named for Plasma but owns
+  four unrelated concerns, and exactly **one line** of it is Plasma
+  (`services.desktopManager.plasma6.enable`). The other three are load-bearing
+  for niri: `services.displayManager.sddm` (the sole display manager on this
+  host — no other module enables one), `services.displayManager.defaultSession
+  = "niri"`, and the entire audio stack (`services.pipewire`,
+  `security.rtkit.enable`, `services.pulseaudio.enable = false`). Deleting the
+  file to "remove Plasma" would leave the host with no way to log in and no
+  audio — the latter being the same subsystem whose failure took DMS/QuickShell
+  down during the multi-monitor bring-up. Removing Plasma means editing that
+  file, not deleting it; the SDDM/session/audio blocks want rehoming first.
+  *COSMIC, by contrast, is genuinely trivial:* `desktop-cosmic.nix` is a single
+  option, owns nothing shared, and can go with its import line whenever.
+  *Dragonized goes with Plasma, not separately:* its start script execs
+  `startplasma-wayland` from `kdePackages.plasma-workspace`, so it is a Plasma
+  session wearing a theme. Removing it also frees the `dr460nized-src` and
+  `window-title-applet-src` flake inputs and `modules/nixos/dragonized/`.
+  *What disappears silently:* Okular and Ark arrive via plasma6's default app
+  set, not via any explicit package entry. Two `home.nix` comments are written
+  around them — the `unrar` entry explains that it fixes RAR *in Ark*, and the
+  `zathura` entry explains that zathura is deliberately the lightweight
+  alternative to Okular rather than a replacement. Both comments become wrong
+  the moment plasma6 goes, so re-add whichever apps are wanted explicitly and
+  fix the comments in the same change.
+  *The rest of the surface:* `home.nix`'s `programs.plasma` block, its
+  vicinae-toggle desktop entry and `kbuildsycoca6` activation step, and
+  `flake.nix`'s `plasma-manager` input together with its
+  `home-manager.sharedModules` entry. Only pegasus imports any of the four
+  `desktop-*.nix` modules, so nothing fleet-wide is affected.
+  *Already paid forward:* the qt5ct/qt6ct change sets `qt.enable = true`
+  explicitly rather than relying on `plasma6.nix` setting it (see that entry),
+  so Qt theming survives Plasma's removal untouched.
+- **DMS's generated `niri/dms/colors.kdl` is deliberately not included
+  (2026-09-08).** DMS writes `$XDG_CONFIG_HOME/niri/dms/colors.kdl` on every
+  matugen run, carrying `focus-ring`, `border`, `shadow`, `tab-indicator` and
+  `insert-hint` colours, and its header invites you to `include` it. Nothing in
+  this host's `config.kdl` does, so the focus ring stays niri's default blue
+  rather than tracking the wallpaper. That is a decision, not an oversight —
+  don't "fix" it without reading this.
+  *Why not:* niri treats a missing `include` as a hard parse error, not a
+  skipped line (`failed to read included config … error parsing KDL`,
+  confirmed with `niri validate`). Two consequences. First, niri-flake runs
+  `niri validate -c` on the generated config inside a Nix sandbox
+  (`validated-config-for` in its flake, wired into
+  `xdg.configFile.niri-config.source`), where no `$HOME` exists and the include
+  can never resolve — so the build would fail on every rebuild. Working around
+  that means overriding `xdg.configFile."niri/config.kdl"` with `mkForce` to
+  sidestep validation entirely. Second, at runtime any moment the file is
+  absent — fresh install before DMS's first matugen run, or
+  `matugenTemplateNiri` turned off — invalidates the whole config and takes
+  every keybind with it, needing a `home.activation` stub to paper over.
+  *The trade rejected:* build-time validation is what turns a bad `binds` entry
+  into a failed build instead of a broken session. Trading that for wallpaper-
+  tracking ring colours is a bad exchange on a host whose entire niri config is
+  declarative. If the colours are ever wanted, hardcoding the accent as
+  `focus-ring.active.color` in `niri-settings.nix` gets most of the look at
+  none of the cost — it just won't follow a retheme.
+- **Monitors are referred to through `let` bindings, not repeated identity
+  strings (2026-09-09).** `niri-settings.nix` now opens with `monLeft` /
+  `monCentre` / `monRight`, and the `outputs` attrset is keyed `mon-left` /
+  `mon-centre` / `mon-right` with the identity string moved to niri-flake's
+  `name` attribute.
+  *Why:* niri has no output-alias concept — `outputs`, `open-on-output` and
+  window rules each take a raw connector name or `make model serial` string,
+  so a three-monitor host repeats each panel's identity once per reference.
+  Nothing validates those strings at build time, and both failure modes are
+  silent: a typo in an `outputs` entry leaves that panel on its preferred
+  mode, and one in `open-on-output` drops the window on the focused output
+  instead. One binding per panel makes that a single point of edit when a
+  monitor is replaced, and the readable `outputs` keys say which panel is
+  which without decoding a serial. niri-flake's key/name split (`outputs.<key>.name`,
+  defaulting to the key) is what makes the rekeying behaviour-neutral — the
+  key never reaches niri, it only sorts the emitted `output` nodes and breaks
+  ties for `focus-at-startup`, which this host doesn't set.
+  *Scope limit:* the bindings are file-local. If a monitor identity is ever
+  needed outside `niri-settings.nix` (a DMS setting, Plasma's output config),
+  promote them to a `homelab.*` option rather than copying the strings.
+- **Thunderbird is routed to `Mail` unconditionally, TickTick only at startup
+  (2026-09-09).** The named workspace `Mail` exists to hold Thunderbird, so
+  its window rule carries no `at-startup` matcher — a mid-session launch
+  belongs there too. TickTick's does: "the right monitor's first workspace"
+  is a login-time arrangement, and a rule without `at-startup` would fling
+  every later launch onto another monitor.
+  *The fragile half:* TickTick is placed with `open-on-output` alone, which
+  targets whatever workspace is *active* on that monitor. That is the first
+  one only because nothing else is homed there at login. Home any named
+  workspace to the right monitor and TickTick starts landing on it instead
+  — at which point give TickTick its own named workspace and switch the rule
+  to `open-on-workspace`. Chosen over declaring that workspace now because
+  it keeps the bar to one name; MANUAL-STEPS.md §25 carries the check.
+  *Focus:* both login instances set `open-focused = false`. niri won't focus
+  a window opening on a non-focused output anyway, but which output is
+  focused at startup isn't pinned on this host (no `focus-at-startup`), so
+  without it the choice of which app steals the cursor at login is luck.

@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, self, ... }:
 
 {
   # ── Niri, as a fourth selectable SDDM session ───────────────────────────────
@@ -14,9 +14,8 @@
   # there's no hand-rolled session/wrapper script needed here.
   #
   # NVIDIA fit: explicit sync (the thing that fixes flicker/stutter on NVIDIA
-  # Wayland) needs driver >=555 and kernel >=6.8 — both already satisfied by
-  # this host (modules/nixos/nvidia.nix's production channel, and
-  # boot.kernelPackages = linuxPackages_latest in configuration.nix). Niri
+  # Wayland) needs driver >=555 and kernel >=6.8 — both satisfied by this
+  # host's driver channel and kernel pin. Niri
   # uses smithay, not wlroots, so none of the WLR_*-style NVIDIA workarounds
   # apply. One known quirk: the driver doesn't release VRAM properly under
   # niri (idles around ~1 GiB instead of ~100 MiB) — cosmetic, not addressed
@@ -57,6 +56,20 @@
   # no separate quickshell flake input was needed — see flake.nix.
   programs.dank-material-shell = {
     enable = true;
+
+    # ── Patches two upstream bugs in DMS's scripts/qt.sh ────────────────────
+    # The Qt palette is pointed at a KDE-format file qt6ct cannot parse, and
+    # the from-scratch config write emits a literal "\n". Together: "apply
+    # colours to Qt" reports success and never works. Evidence and upstream
+    # status in DECISIONS.md; recovery when this breaks: issue #110.
+    package = self.inputs.dank-material-shell.packages.${pkgs.stdenv.hostPlatform.system}.dms-shell.overrideAttrs (old: {
+      postFixup = (old.postFixup or "") + ''
+        substituteInPlace $out/share/quickshell/dms/scripts/qt.sh \
+          --replace-fail 'local config_file="$1"' 'local config_file="$1"; local color_scheme_path; color_scheme_path="$(dirname "$config_file")/colors/matugen.conf"' \
+          --replace-fail '[Appearance]\\ncustom_palette=true\\ncolor_scheme_path=%s\\n' '[Appearance]\ncustom_palette=true\ncolor_scheme_path=%s\n'
+      '';
+    });
+
     # Binds dms.service to graphical-session.target, which niri's own
     # packaged systemd units activate on session start — no manual
     # spawn-at-startup entry needed for DMS to come up automatically on
@@ -69,26 +82,10 @@
     # trimmed, nothing here conflicts with anything else on this host.
   };
 
-  # ── Declarative niri config.kdl, added 2026-08-11 ──────────────────────────
-  # hosts/pegasus/niri-settings.nix (imported via home.nix) declares
-  # programs.niri.settings, using niri-flake's homeModules.config — but
-  # deliberately ONLY that module, not niri-flake's nixosModules.niri (which
-  # would disable the programs.niri.enable line above and install
-  # niri-flake's own from-source niri build instead of nixpkgs'). See
-  # flake.nix's niri-flake input comment and DECISIONS.md for the full
-  # reasoning, including a real divergence risk niri-flake's own README
-  # flags for this exact combination (nixpkgs' niri + niri-flake's config
-  # schema) — the short version is: check niri-flake's changelog before
-  # assuming a build failure here is a mistake in niri-settings.nix.
-  #
-  # Also deliberately NOT using DMS's own `homeModules.niri` keybind-
-  # injection module — despite niri-flake now being in use, that module
-  # additionally needs DMS's `homeModules.dank-material-shell` imported at
-  # the home-manager level too (for its own `cfg.enable` reference to
-  # resolve), which would reintroduce the `programs.quickshell` HM-option
-  # exposure this file avoids by using DMS's NixOS module above. DMS's
-  # keybinds are hand-transcribed directly into niri-settings.nix's `binds`
-  # instead — see that file for the full list and the handful of key
-  # conflicts (Mod+Comma, Mod+V, the media keys) that had to be resolved
-  # between niri's own suggested defaults and what DMS wanted.
+  # The niri config itself is declared in hosts/pegasus/niri-settings.nix via
+  # niri-flake's homeModules.config — deliberately ONLY that module, never its
+  # nixosModules.niri (which would disable programs.niri.enable above and swap
+  # in niri-flake's own from-source build). Reasoning and divergence-risk
+  # notes: flake.nix's niri-flake input comment, niri-settings.nix's header,
+  # and hosts/pegasus/DECISIONS.md.
 }
