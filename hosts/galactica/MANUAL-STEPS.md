@@ -1018,7 +1018,11 @@ the option.
 `hosts/galactica/homepages.nix` declares both dashboards (Tower's old
 `homelab-stacks tower/homepage` and `tower/guesthome`, dead since the
 bare-metal cutover) as pinned Homepage containers on loopback ports —
-admin on `127.0.0.1:3010`, guest on `127.0.0.1:3011`. The switch itself
+admin on `127.0.0.1:3010`, guest on `127.0.0.1:3011`. What each dashboard
+*shows* is plain YAML in `hosts/galactica/homepage/{common,admin,guest}/`,
+bind-mounted read-only; edit there and `nrs`, no Nix involved. CI lints
+those files and checks them against each other (`checks/homepage-config`),
+so a bad edit fails the PR rather than the dashboard. The switch itself
 needs no new secrets: the widget keys reuse the existing `nixflix/*` sops
 entries, and Tailscale deliberately has no authKey (see the block in
 `configuration.nix`). What the nix config cannot do is join networks and
@@ -1063,7 +1067,8 @@ works as soon as the switch lands. Steps below are for the tailnet
 6. [ ] **Verify the guest links actually work from outside.** The guest
    dashboard currently lists only Jellyfin (`jellyfin.zjones.dev`) — confirm
    that name resolves and routes publicly (it is also a Pangolin resource);
-   if the public name differs, fix the href in `homepages.nix`. The other
+   if the public name differs, fix the href in
+   `homepage/guest/services.yaml`. The other
    Tower-era guest links (Audiobookshelf, Grimmory, Shelfmark, 13ft) return
    as those services are re-homed.
 

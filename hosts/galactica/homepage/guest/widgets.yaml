@@ -1,0 +1,29 @@
+---
+- search:
+    provider: duckduckgo
+    target: _blank
+
+- datetime:
+    text_size: xl
+    format:
+      timeStyle: short
+      dateStyle: short
+
+# What's coming to the library — direct integrations (no service widgets on
+# this instance; guests don't get queue/stats panels), so these carry their
+# own url/key rather than pointing at a service_group/service_name.
+- calendar:
+    firstDayInWeek: sunday
+    view: agenda
+    maxEvents: 10
+    showTime: true
+    integrations:
+      - type: sonarr
+        url: https://sonarr.arr.zjones.dev
+        key: "{{HOMEPAGE_VAR_SONARR_API_KEY}}"
+      - type: sonarr
+        url: https://sonarr-anime.arr.zjones.dev
+        key: "{{HOMEPAGE_VAR_SONARR_ANIME_API_KEY}}"
+      - type: radarr
+        url: https://radarr.arr.zjones.dev
+        key: "{{HOMEPAGE_VAR_RADARR_API_KEY}}"

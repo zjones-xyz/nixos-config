@@ -1,0 +1,11 @@
+---
+title: Home
+theme: dark
+color: stone
+headerStyle: clean
+target: _blank
+
+layout:
+  Media:
+    style: row
+    columns: 2
