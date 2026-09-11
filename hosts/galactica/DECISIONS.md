@@ -2,8 +2,10 @@
 
 Tower's NixOS identity. Each entry: **decision → alternatives → rationale.**
 
-Nothing here has been activated on hardware. There is no `configuration.nix` yet,
-deliberately — see *Why there is no config here yet* below.
+galactica is installed and live: `configuration.nix` exists and the host runs
+bare-metal NixOS (first boot 2026-08-31). This log predates the install — §3's
+*Why there is no config here yet* records the deliberate documentation-only
+period, and carries its own ✅ superseded banner.
 
 Companion documents: `DESIGN.md` (what is being built and why), `PLATFORM.md`
 (what the machine does), `HARDWARE-MAP.md` (what is plugged into what),
@@ -607,6 +609,10 @@ re-derive why it stopped applying.
   owner-confirmed, twelve standing as proposals that need confirming or
   correcting rather than investigating. The `⟨?⟩` row is empty.
 
+  **⟨Since closed by §7:⟩** the layout question below was settled by the ZFS
+  RAIDZ1 pivot — tiers became inherited `homelab:tier` dataset properties, not
+  places, and the SnapRAID-specific gaps stopped applying. Kept as written:
+
   **What blocks now is the layout, not the data.** `DESIGN.md` §5 was written
   around a two-way split — irreplaceable data gets real-time checksummed
   redundancy, re-acquirable data gets snapshot parity at a 24 h lag — and it now
@@ -627,13 +633,13 @@ re-derive why it stopped applying.
   the array at **17.1 TB used of 24 TB**, and closed the `/mnt/services` btrfs
   question. Caddy labels for the four 12 TB disks are now printable — roles stay
   off them by design (`DISK-LABELLING.md` §3); the map is what carries the role.
-- **Whether to hold a 12 TB back as a cold spare.** There is no budget for a
-  fifth and the drive market makes rapid replacement unlikely. Analysed in
-  `DESIGN.md` §5.5; the short version is that shelving one costs 12 TB of usable
-  capacity to buy protection dual parity provides more cheaply.
-- **The Gen3 retest** (`PLATFORM.md §6e`). One reboot, benign failure mode,
-  and it decides the NVMe root's ceiling. Should happen before any disk placement
-  is finalised.
+- ~~**Whether to hold a 12 TB back as a cold spare.**~~ **Closed by the build,
+  2026-09-01** — all four 12 TB spinners went into `tank`'s RAIDZ1 (§7); none
+  was held back. (`DESIGN.md` §5.5's analysis argued against shelving one, and
+  that is what happened.)
+- ~~**The Gen3 retest** (`PLATFORM.md §6e`).~~ **✅ Answered 2026-08-09** — the
+  ASM1166 trains at Gen3; see the ✅ block under the LSI entry below and
+  `PLATFORM.md` §6e.
 - **The ASM1064's PCIe x1 link.** Four SATA ports on one lane is ~500 MB/s
   shared at Gen2, which a single SATA SSD nearly saturates. Measure it
   (`PLATFORM.md §8`) before it gets mistaken for something else.
@@ -655,7 +661,9 @@ re-derive why it stopped applying.
   One label character still needs confirming at attach time: whether `h25-P4TH`
   is 40 GB or 60 GB. ~~The `0`/`O` in `h-6D0X`~~ **is closed — confirmed a digit
   zero, 2026-08-10**, so the identifier stands and its caddy label is printable.
-- **Tower has no offsite backup, and that is the fleet's real asymmetry.**
+- ~~**Tower has no offsite backup, and that is the fleet's real asymmetry.**~~
+  **✅ Closed 2026-09-03** — borgmatic → BorgBase is live on galactica
+  (`borgmatic.nix`, `BACKUP-BORG.md`). The entry as written:
   Surfaced while classifying `serenity_time_machine` (`SHARES.md` §5). The owner's
   call is that **offsite for Serenity's data is Serenity's responsibility**, on
   the principle that an offsite obligation belongs to the machine that owns the
@@ -684,18 +692,20 @@ re-derive why it stopped applying.
   plan sized staging against the whole 17.1 TB array; measurement put non-media
   data at **2.4 TiB**, of which the parachute is **2.1 TiB**. One disk covers it,
   and the owner's decision to accept the exposure window for media is what makes
-  media not need covering. See §8; the target is pegasus's `h-XDAS`.
-- ⭐ **The pilot — `partdb` on memory-alpha.** `DESIGN.md` §6.6. Wire a small
+  media not need covering. See §8 — whose banner records that the `h-XDAS`
+  parachute path was never used; the migration went through `sidepool` instead.
+- ⭐ **The pilot — `partdb` on memory-alpha.** `ARCHIVE-DESIGN-snapraid.md`
+  §6.6 (extracted from `DESIGN.md`). Wire a small
   service for backup, then test-migrate and restore it before galactica exists.
   `partdb` is the right subject rather than an arbitrary one: it is the service
   that *generated* the paired-appdata rule, so the pilot exercises the exact
   failure that rule guards against, at a size where being wrong is free. ⚠ It
   validates the backup design only — nothing about SnapRAID, mergerfs or the
   migration's exposure window.
-- **CMR disks for the non-SnapRAID tiers.** `DESIGN.md` §6.7. Only one of the
-  three 4 TB drawer disks is CMR, so the photo tier cannot currently be an
-  all-CMR pair. Buying one or two is the smallest sum in this plan that unblocks
-  the most. ⚠ No SnapRAID parity on an EFAX under any outcome.
+- ~~**CMR disks for the non-SnapRAID tiers.**~~ **Mooted by §7** — photos live
+  as `tank/photos/*` datasets on the RAIDZ1 array; there is no separate
+  btrfs-raid1 photo tier to buy CMR disks for. (`DESIGN.md` §6.7 carried the
+  original question.)
 - ⚠ **The LSI 9240-8i, and whether the ASM1166 comes back at all.**
   `DESIGN.md` §6.7 for the case, `PLATFORM.md` §7b for the verification
   procedure. The vendor claims it is already IT-flashed, which is a claim and not

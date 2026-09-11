@@ -119,8 +119,6 @@ in
   sops = {
     defaultSopsFile = ../../secrets/memory-alpha.yaml;
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
-    # Example secret reference:
-    # secrets.example = {};
   };
 
   # ── NFS mounts (galactica's array) ─────────────────────────────────────────

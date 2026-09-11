@@ -86,28 +86,17 @@
   };
 
   # ── DNS rewrites — migrated off the router's AdGuard instance ──────────────
-  # These lived only in the router's mutable UI state (hand-clicked, not
-  # tracked anywhere) until now. Grouped by physical box, not alphabetically,
-  # since several boxes answer to more than one name: galactica is also
-  # `tower`/`arr` (legacy identities it absorbed, DECISIONS.md §2). One
-  # duplicate row (`arr.zjones.dev`, twice in the router's list) was dropped
-  # here, and `nixie` (memory-alpha's own retired legacy name) later too.
+  # Previously only mutable router UI state. Grouped by physical box, not
+  # alphabetically — several boxes answer to more than one name: galactica is
+  # also `tower`/`arr` (legacy identities it absorbed, DECISIONS.md §2).
   #
-  # `.xyz` is the owner's convention for externally-routable names — terminated
-  # by Pangolin (tunneling to a Newt client), not Traefik, so no local router
-  # or cert is expected for these. jellyfin/guest get the split-horizon
-  # treatment (LAN clients hit the box directly instead of round-tripping
-  # through the tunnel) since they're meant to work both on- and off-network
-  # without Tailscale. homeassistant deliberately does NOT — stays
-  # Tailscale/LAN-only, no `.xyz` name at all. The *arr stack's `.xyz` route
-  # was dropped entirely (owner's call: not needed). `home` (the admin
-  # dashboard) also gets no `.xyz` name — it's LAN/tailnet-only by design.
-  # ⚠ `enabled = true` is mapped over every entry below, not written per-line
-  # — AdGuard 0.107.78 added a per-rewrite enable toggle that isn't in most
-  # docs yet, and an omitted bool renders as Go's zero-value (`false`), so
-  # every rewrite loaded silently disabled until this was caught live
-  # (2026-09-06: every dig came back NXDOMAIN via real recursive resolution,
-  # not a rewrite hit).
+  # `.xyz` names are externally-routable, terminated by Pangolin (not Traefik),
+  # so no local router or cert is expected for them; jellyfin/guest get
+  # split-horizon rewrites so LAN clients skip the tunnel, while homeassistant
+  # and the `home` admin dashboard stay Tailscale/LAN-only with no `.xyz` name.
+  # ⚠ `enabled = true` is mapped over every entry, not written per-line —
+  # AdGuard has a per-rewrite enable toggle whose omitted bool renders as Go's
+  # zero-value (false), silently disabling every rewrite.
   services.adguardhome.settings.filtering.rewrites = map (r: r // { enabled = true; }) [
     # router (GL.iNet)
     { domain = "router.internal"; answer = "192.168.8.1"; }
@@ -164,40 +153,31 @@
   ];
 
   # ── AdGuardHome-Sync — galactica (origin) → router (first replica) ─────────
-  # Owner confirmed galactica's rewrites match the router's live list;
-  # enabled 2026-09-06. runOnStart is hardcoded true in the module, so the
-  # first sync fires immediately once this deploys.
-  # hopper/hamilton join `replicas` once they're rebuilt as the ephemeral
-  # resolvers discussed — not yet, since neither exists today.
+  # runOnStart is hardcoded true in the module, so a sync fires on every
+  # deploy. hopper/hamilton join `replicas` once they're rebuilt as the
+  # ephemeral resolvers discussed — not yet, since neither is in service.
   services.adguardhomeSync = {
     enable = true;
     originPasswordFile = config.sops.secrets."adguardhome-sync/originPassword".path;
     replicas = [
       {
-        # GL.iNet's wiki (Integration‐GL.iNet) says to address this with no
-        # port — but a full login+cookie flow against :3000 directly was
-        # confirmed live (200 OK), so that's what's actually proven to work
-        # in this environment; going with evidence over generic advice.
+        # :3000 directly, despite GL.iNet's wiki saying no port — the direct
+        # port is what's proven to work against this router.
         url = "http://192.168.8.1:3000";
-        # GL.iNet ships its bundled AdGuard with users: [] — no default
-        # login at all. `admin` and empty username both correctly 401'd
-        # against nothing; "adguardsync" is a real user hand-created via SSH
-        # (users: block in the router's /etc/AdGuardHome/config.yaml, same
-        # bcrypt-hash mechanism as galactica's own admin above).
-        #
-        # The router's bundled AdGuard also runs with a `--glinet` flag that
-        # gates all access through the GL.iNet webui's own login instead of
-        # AdGuard's — every one of AdGuard's own auth paths (Basic Auth,
-        # even a valid /control/login session cookie) 401's regardless of
-        # correct credentials while that flag is set. Removed from
-        # /etc/init.d/adguardhome on the router itself (non-persistent —
-        # not yet added to /etc/rc.local for boot survival, see
-        # MANUAL-STEPS.md), which restores normal AdGuard Basic Auth.
+        # "adguardsync" is a user hand-created on the router (its bundled
+        # AdGuard ships with users: [] — no login at all). ⚠ Auth only works
+        # while the router's `--glinet` flag stays removed from its AdGuard
+        # init script — MANUAL-STEPS.md tracks that removal's persistence.
         username = "adguardsync";
         passwordFile = config.sops.secrets."adguardhome-sync/routerPassword".path;
       }
     ];
   };
+
+  # Resync AdGuard when settings update.
+  systemd.services.adguardhome-sync.restartTriggers = [
+    (builtins.toJSON config.services.adguardhome.settings)
+  ];
 
   # Mandatory for ZFS. Derived from the hostname (`sha256sum
   # <<<"galactica.internal" | head -c8`) so it is reproducible; no other meaning.
