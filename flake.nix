@@ -118,11 +118,44 @@
   };
 
   outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, niri-flake, nixflix, nixpkgs-orca-slicer, nixpkgs-bambu-studio, dr460nized-src, window-title-applet-src, ... }:
+  let
+    # The HOMEPAGE_VAR_* names one Homepage instance actually receives, read
+    # back out of the rendered sops template rather than restated here — so
+    # checks/homepage-config validates against what the container really gets.
+    # (`content` at this point holds sops-nix's placeholder tokens, not
+    # secrets; the real values are only substituted on the host at activation.)
+    homepageEnvVars = template:
+      let
+        lines = nixpkgs.lib.splitString "\n"
+          self.nixosConfigurations.galactica.config.sops.templates.${template}.content;
+        declarations = builtins.filter (nixpkgs.lib.hasPrefix "HOMEPAGE_VAR_") lines;
+      in
+      map (line: builtins.head (nixpkgs.lib.splitString "=" line)) declarations;
+  in
   {
     formatter = {
       x86_64-linux = nixpkgs.legacyPackages.x86_64-linux.nixfmt-tree;
       aarch64-linux = nixpkgs.legacyPackages.aarch64-linux.nixfmt-tree;
       aarch64-darwin = nixpkgs.legacyPackages.aarch64-darwin.nixfmt-tree;
+    };
+
+    # galactica is x86_64-linux, so this only needs to exist there — on the
+    # Mac `nix flake check` evaluates it and builds nothing.
+    checks.x86_64-linux.homepage-config = import ./checks/homepage-config {
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      configDir = ./hosts/galactica/homepage;
+      instances = {
+        admin = {
+          env = homepageEnvVars "homepage-admin.env";
+          publicFacing = false;
+        };
+        # Reachable from the public internet through Pangolin — links must
+        # resolve off-network, and the key set stays minimal.
+        guest = {
+          env = homepageEnvVars "homepage-guest.env";
+          publicFacing = true;
+        };
+      };
     };
 
     nixosConfigurations = {

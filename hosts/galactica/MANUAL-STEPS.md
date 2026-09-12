@@ -1013,7 +1013,70 @@ SABnzbd is deliberately **outside** the VPN — usenet is already TLS to a paid
 provider, so the tunnel would only cap throughput; `nixflix.nix` says so at
 the option.
 
-## 13. AdGuard/Unbound DNS — declarative config, migrating off the router
+## 13. The homepages — tailnet + Pangolin (owner steps)
+
+`hosts/galactica/homepages.nix` declares both dashboards (Tower's old
+`homelab-stacks tower/homepage` and `tower/guesthome`, dead since the
+bare-metal cutover) as pinned Homepage containers on loopback ports —
+admin on `127.0.0.1:3010`, guest on `127.0.0.1:3011`. What each dashboard
+*shows* is plain YAML in `hosts/galactica/homepage/{common,admin,guest}/`,
+bind-mounted read-only; edit there and `nrs`, no Nix involved. CI lints
+those files and checks them against each other (`checks/homepage-config`),
+so a bad edit fails the PR rather than the dashboard. The switch itself
+needs no new secrets: the widget keys reuse the existing `nixflix/*` sops
+entries, and Tailscale deliberately has no authKey (see the block in
+`configuration.nix`). What the nix config cannot do is join networks and
+create Pangolin objects — that is this section.
+
+Both instances are already routed by the host's own Traefik —
+`home.internal` / `home.zjones.dev` for admin, `guest.internal` /
+`guest.zjones.dev` for guest — with matching AdGuard rewrites
+(§14) pointing all four at galactica's LAN IP, so LAN access to both
+works as soon as the switch lands. Steps below are for the tailnet
+(admin) and public (guest) halves.
+
+1. [ ] **Join the tailnet.** `sudo tailscale up --ssh`, authenticate in the
+   browser as usual. In the admin console, disable key expiry for
+   `galactica` (Machines → galactica → Disable key expiry) — a server, not
+   a laptop.
+
+2. [ ] **Serve the admin homepage over HTTPS on the tailnet:**
+   ```bash
+   sudo tailscale serve --bg --https=443 http://127.0.0.1:3010
+   ```
+   Then check `https://galactica.peacock-koi.ts.net` loads. (`--bg` persists
+   across reboots; the tailnet already has MagicDNS + HTTPS certs enabled —
+   the old tsdproxy names like `home.peacock-koi.ts.net` prove it.)
+
+3. [ ] **Create the Pangolin Site.** Pangolin admin → Sites → create
+   `galactica` (Newt connector). Copy the issued **id** and **secret**.
+
+4. [ ] **Wire Newt up.** `sops secrets/galactica.yaml` → add the secret as
+   `newt/clientSecret`; put the id in the `homelab.newt` block in
+   `configuration.nix` and uncomment it; `nrs`. `systemctl status newt`
+   should show the tunnel registered.
+
+5. [ ] **Re-point the guest Resource.** Pangolin admin → Resources →
+   `guesthome.zjones.xyz` → rename to `guest.zjones.xyz` and move it onto
+   the `galactica` site with target `http://localhost:3011`
+   (host-resolvable — Newt runs on the host, so container names do NOT
+   resolve; `localhost:<published port>` does, same as memory-alpha's
+   Jellyfin resource). Keep whatever auth/SSO the old Tower resource had.
+   Verify from off-LAN (phone on cellular).
+
+6. [ ] **Verify the guest links actually work from outside.** The guest
+   dashboard currently lists only Jellyfin (`jellyfin.zjones.dev`) — confirm
+   that name resolves and routes publicly (it is also a Pangolin resource);
+   if the public name differs, fix the href in
+   `homepage/guest/services.yaml`. The other
+   Tower-era guest links (Audiobookshelf, Grimmory, Shelfmark, 13ft) return
+   as those services are re-homed.
+
+7. [ ] **Retire the Tower stacks.** In homelab-stacks, delete (or mark
+   migrated) `tower/homepage`, `tower/guesthome` and `tower/pangolin-newt`,
+   and delete the old `tower` Site in Pangolin once nothing references it.
+
+## 14. AdGuard/Unbound DNS — declarative config, migrating off the router
 
 `configuration.nix` now imports `modules/nixos/dns.nix` and declares the
 rewrites that previously lived only in the router's (GL.iNet, AdGuard bundled
@@ -1036,16 +1099,17 @@ rather than each instance being hand-edited.
    Newt tunnel — not Traefik, so the earlier "no Traefik router" framing here
    was checking the wrong layer. Resolved: `arr.zjones.xyz` is dropped
    entirely (the *arr stack doesn't need off-network access). `jellyfin` and
-   `guesthome` keep the split-horizon treatment — meant to work both on- and
+   the guest homepage (`guest.zjones.xyz` — renamed from `guesthome`, §13)
+   keep the split-horizon treatment — meant to work both on- and
    off-network without Tailscale, so the AdGuard rewrite is a LAN-side
    shortcut alongside Pangolin's tunnel, not a replacement for it.
-   `homeassistant` deliberately gets no `.xyz` name at all — stays
-   Tailscale/LAN-only. Still worth confirming in Pangolin's own admin config
-   (not this repo) that `jellyfin.zjones.xyz` and `guesthome.zjones.xyz`
-   actually have resources configured, pointing at the right targets
-   (memory-alpha for jellyfin, galactica for guesthome) — Newt itself only
-   runs on memory-alpha in this repo (`newt.nix`), which is fine since Newt's
-   targets aren't restricted to localhost.
+   `homeassistant` and the admin homepage (`home.*`, §13) deliberately get
+   no `.xyz` name at all — stay Tailscale/LAN-only. Still worth confirming
+   in Pangolin's own admin config (not this repo) that `jellyfin.zjones.xyz`
+   and `guest.zjones.xyz` actually have resources configured, pointing at
+   the right targets (memory-alpha for jellyfin, galactica for guest) — Newt
+   itself only runs on memory-alpha in this repo today (`newt.nix`), which
+   is fine since Newt's targets aren't restricted to localhost.
 3. [x] **Deploy and verify — done 2026-09-06.** Deployed, then two real bugs
    found live and fixed (see git history): every rewrite loaded
    `enabled: false` (an undocumented per-rewrite toggle, Go bool zero-value
