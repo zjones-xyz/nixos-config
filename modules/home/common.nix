@@ -26,75 +26,74 @@
     openssl
   ];
 
-  # ── Terminal theme: Rosé Pine ───────────────────────────────────────────────
+  # ── Terminal theme: Catppuccin Macchiato ────────────────────────────────────
   # Colors live here (fleet-wide) so any host's terminal picks up the same
   # palette. alacritty is enabled fleet-wide (replaces the plain package
   # above — programs.alacritty pulls it in itself); kitty is only *themed*
   # here, not enabled — enabling stays per-host (e.g. hosts/pegasus/home.nix,
   # which also owns installing the kitty package — see niri-settings.nix).
-  # ANSI green is upstream's pine (teal) and cyan its rose — deliberate.
   programs.alacritty = {
     enable = true;
     settings.colors = {
       primary = {
-        background = "#191724";
-        foreground = "#e0def4";
+        background = "#24273a";
+        foreground = "#cad3f5";
       };
       cursor = {
-        text = "#e0def4";
-        cursor = "#524f67";
+        text = "#24273a";
+        cursor = "#f4dbd6";
       };
       selection = {
-        background = "#403d52";
-        text = "#e0def4";
+        background = "#f4dbd6";
+        text = "#24273a";
       };
       normal = {
-        black = "#26233a";
-        red = "#eb6f92";
-        green = "#31748f";
-        yellow = "#f6c177";
-        blue = "#9ccfd8";
-        magenta = "#c4a7e7";
-        cyan = "#ebbcba";
-        white = "#e0def4";
+        black = "#494d64";
+        red = "#ed8796";
+        green = "#a6da95";
+        yellow = "#eed49f";
+        blue = "#8aadf4";
+        magenta = "#f5bde6";
+        cyan = "#8bd5ca";
+        white = "#b8c0e0";
       };
       bright = {
-        black = "#6e6a86";
-        red = "#eb6f92";
-        green = "#31748f";
-        yellow = "#f6c177";
-        blue = "#9ccfd8";
-        magenta = "#c4a7e7";
-        cyan = "#ebbcba";
-        white = "#e0def4";
+        black = "#5b6078";
+        red = "#ed8796";
+        green = "#a6da95";
+        yellow = "#eed49f";
+        blue = "#8aadf4";
+        magenta = "#f5bde6";
+        cyan = "#8bd5ca";
+        white = "#a5adcb";
       };
     };
   };
 
   programs.kitty.settings = {
-    background = "#191724";
-    foreground = "#e0def4";
-    selection_background = "#403d52";
-    selection_foreground = "#e0def4";
-    cursor = "#524f67";
-    cursor_text_color = "#e0def4";
+    background = "#24273a";
+    foreground = "#cad3f5";
+    selection_background = "#f4dbd6";
+    selection_foreground = "#24273a";
+    cursor = "#f4dbd6";
+    cursor_text_color = "#24273a";
 
-    color0 = "#26233a";
-    color8 = "#6e6a86";
-    color1 = "#eb6f92";
-    color9 = "#eb6f92";
-    color2 = "#31748f";
-    color10 = "#31748f";
-    color3 = "#f6c177";
-    color11 = "#f6c177";
-    color4 = "#9ccfd8";
-    color12 = "#9ccfd8";
-    color5 = "#c4a7e7";
-    color13 = "#c4a7e7";
-    color6 = "#ebbcba";
-    color14 = "#ebbcba";
-    color7 = "#e0def4";
-    color15 = "#e0def4";
+    color0 = "#494d64";
+    color8 = "#5b6078";
+    color1 = "#ed8796";
+    color9 = "#ed8796";
+    color2 = "#a6da95";
+    color10 = "#a6da95";
+    color3 = "#eed49f";
+    color11 = "#eed49f";
+    color4 = "#8aadf4";
+    color12 = "#8aadf4";
+    color5 = "#f5bde6";
+    color13 = "#f5bde6";
+    color6 = "#8bd5ca";
+    color14 = "#8bd5ca";
+    color7 = "#b8c0e0";
+    color15 = "#a5adcb";
   };
 
   # Prompt.
