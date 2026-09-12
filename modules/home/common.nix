@@ -18,7 +18,6 @@
     micro
     gh
     hyfetch
-    alacritty
 
     # Here as well as modules/nixos/common.nix because this module is the only
     # one serenity (darwin) shares — nixos/common.nix reaches the six NixOS
@@ -26,6 +25,72 @@
     # the split.
     openssl
   ];
+
+  # ── Terminal theme: Catppuccin Mocha ────────────────────────────────────────
+  # Colors live here (fleet-wide) so any host's terminal picks up the same
+  # palette. alacritty is enabled fleet-wide (replaces the plain package
+  # above — programs.alacritty pulls it in itself); kitty is only *themed*
+  # here, not enabled — enabling stays per-host (e.g. hosts/pegasus/home.nix,
+  # which also owns installing the kitty package — see niri-settings.nix).
+  programs.alacritty = {
+    enable = true;
+    settings.colors = {
+      primary = {
+        background = "#1e1e2e";
+        foreground = "#cdd6f4";
+      };
+      cursor = {
+        text = "#1e1e2e";
+        cursor = "#f5e0dc";
+      };
+      normal = {
+        black = "#45475a";
+        red = "#f38ba8";
+        green = "#a6e3a1";
+        yellow = "#f9e2af";
+        blue = "#89b4fa";
+        magenta = "#f5c2e7";
+        cyan = "#94e2d5";
+        white = "#bac2de";
+      };
+      bright = {
+        black = "#585b70";
+        red = "#f38ba8";
+        green = "#a6e3a1";
+        yellow = "#f9e2af";
+        blue = "#89b4fa";
+        magenta = "#f5c2e7";
+        cyan = "#94e2d5";
+        white = "#a6adc8";
+      };
+    };
+  };
+
+  programs.kitty.settings = {
+    background = "#1e1e2e";
+    foreground = "#cdd6f4";
+    selection_background = "#f5e0dc";
+    selection_foreground = "#1e1e2e";
+    cursor = "#f5e0dc";
+    cursor_text_color = "#1e1e2e";
+
+    color0 = "#45475a";
+    color8 = "#585b70";
+    color1 = "#f38ba8";
+    color9 = "#f38ba8";
+    color2 = "#a6e3a1";
+    color10 = "#a6e3a1";
+    color3 = "#f9e2af";
+    color11 = "#f9e2af";
+    color4 = "#89b4fa";
+    color12 = "#89b4fa";
+    color5 = "#f5c2e7";
+    color13 = "#f5c2e7";
+    color6 = "#94e2d5";
+    color14 = "#94e2d5";
+    color7 = "#bac2de";
+    color15 = "#a6adc8";
+  };
 
   # Prompt.
   programs.starship = {
