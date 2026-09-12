@@ -18,6 +18,7 @@
     micro
     gh
     hyfetch
+    alacritty
 
     # Here as well as modules/nixos/common.nix because this module is the only
     # one serenity (darwin) shares — nixos/common.nix reaches the six NixOS
