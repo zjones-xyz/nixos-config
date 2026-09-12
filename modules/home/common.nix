@@ -26,7 +26,7 @@
     openssl
   ];
 
-  # ── Terminal theme: Catppuccin Mocha ────────────────────────────────────────
+  # ── Terminal theme: Kanagawa (Wave) ─────────────────────────────────────────
   # Colors live here (fleet-wide) so any host's terminal picks up the same
   # palette. alacritty is enabled fleet-wide (replaces the plain package
   # above — programs.alacritty pulls it in itself); kitty is only *themed*
@@ -36,60 +36,64 @@
     enable = true;
     settings.colors = {
       primary = {
-        background = "#1e1e2e";
-        foreground = "#cdd6f4";
+        background = "#1f1f28";
+        foreground = "#dcd7ba";
       };
       cursor = {
-        text = "#1e1e2e";
-        cursor = "#f5e0dc";
+        text = "#1f1f28";
+        cursor = "#dcd7ba";
+      };
+      selection = {
+        background = "#2d4f67";
+        text = "#dcd7ba";
       };
       normal = {
-        black = "#45475a";
-        red = "#f38ba8";
-        green = "#a6e3a1";
-        yellow = "#f9e2af";
-        blue = "#89b4fa";
-        magenta = "#f5c2e7";
-        cyan = "#94e2d5";
-        white = "#bac2de";
+        black = "#16161d";
+        red = "#c34043";
+        green = "#76946a";
+        yellow = "#c0a36e";
+        blue = "#7e9cd8";
+        magenta = "#957fb8";
+        cyan = "#6a9589";
+        white = "#c8c093";
       };
       bright = {
-        black = "#585b70";
-        red = "#f38ba8";
-        green = "#a6e3a1";
-        yellow = "#f9e2af";
-        blue = "#89b4fa";
-        magenta = "#f5c2e7";
-        cyan = "#94e2d5";
-        white = "#a6adc8";
+        black = "#727169";
+        red = "#e82424";
+        green = "#98bb6c";
+        yellow = "#e6c384";
+        blue = "#7fb4ca";
+        magenta = "#938aa9";
+        cyan = "#7aa89f";
+        white = "#dcd7ba";
       };
     };
   };
 
   programs.kitty.settings = {
-    background = "#1e1e2e";
-    foreground = "#cdd6f4";
-    selection_background = "#f5e0dc";
-    selection_foreground = "#1e1e2e";
-    cursor = "#f5e0dc";
-    cursor_text_color = "#1e1e2e";
+    background = "#1f1f28";
+    foreground = "#dcd7ba";
+    selection_background = "#2d4f67";
+    selection_foreground = "#dcd7ba";
+    cursor = "#dcd7ba";
+    cursor_text_color = "#1f1f28";
 
-    color0 = "#45475a";
-    color8 = "#585b70";
-    color1 = "#f38ba8";
-    color9 = "#f38ba8";
-    color2 = "#a6e3a1";
-    color10 = "#a6e3a1";
-    color3 = "#f9e2af";
-    color11 = "#f9e2af";
-    color4 = "#89b4fa";
-    color12 = "#89b4fa";
-    color5 = "#f5c2e7";
-    color13 = "#f5c2e7";
-    color6 = "#94e2d5";
-    color14 = "#94e2d5";
-    color7 = "#bac2de";
-    color15 = "#a6adc8";
+    color0 = "#16161d";
+    color8 = "#727169";
+    color1 = "#c34043";
+    color9 = "#e82424";
+    color2 = "#76946a";
+    color10 = "#98bb6c";
+    color3 = "#c0a36e";
+    color11 = "#e6c384";
+    color4 = "#7e9cd8";
+    color12 = "#7fb4ca";
+    color5 = "#957fb8";
+    color13 = "#938aa9";
+    color6 = "#6a9589";
+    color14 = "#7aa89f";
+    color7 = "#c8c093";
+    color15 = "#dcd7ba";
   };
 
   # Prompt.
