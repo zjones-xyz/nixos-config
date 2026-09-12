@@ -1,0 +1,149 @@
+# ── tower / documents → tower-hot ─────────────────────────────────────────────
+#
+# 🔴 Critical tier (`hosts/galactica/SHARES.md` §5) — the one share whose loss is
+# measured in *consequence* rather than grief, and therefore the only one that
+# earns versioning and a tested restore.
+#
+# Deliberately over-classified: SHARES.md's over-classification rule says to
+# classify a share at the level its most valuable content warrants rather than
+# sorting it first. Freeloaders are cheap here; the share is gigabytes.
+#
+# Lands in tower-HOT: small, high churn, deep versioned retention, nightly.
+
+source_directories:
+    - /mnt/user/documents
+
+# ⚠ Load-bearing, not decoration — this is `docs/BACKUP.md` §3b signal 3.
+# `RequiresMountsFor=` does not exist on Unraid, so this is the closest guard we
+# get: if shfs is down, /mnt/user/documents does not exist and borgmatic errors
+# instead of writing a green, *empty* archive that fires the success hook and
+# never grows the repo. It defaults to true — set explicitly so nobody tidies it
+# away later without understanding what it is standing in for.
+#
+# ⚠ It does NOT cover the mounted-but-empty case. The canary file below is the
+# other half, and on Unraid it is mandatory rather than optional.
+source_directories_must_exist: true
+
+repositories:
+      # ⟨Replace with the real BorgBase repo URL once the account exists.⟩
+    - path: ssh://REPLACE@REPLACE.repo.borgbase.com/./tower-hot
+      label: tower-hot
+      # ⚠ `repokey`, not `keyfile` — BACKUP.md §4. Decided once, at creation, and
+      # not changeable afterwards without a new repository. keyfile mode splits
+      # custody in two (key on the client, passphrase protecting it), so losing
+      # the machine loses the key even if the passphrase survives. repokey puts
+      # the key in the repo and collapses custody to ONE secret, which is what
+      # §5's fireproof-box copy assumes.
+      #
+      # blake2 rather than plain: this Xeon E3-1230 v2 (Ivy Bridge) has AES-NI
+      # but predates the SHA extensions, so BLAKE2b should out-run HMAC-SHA256
+      # here. ⟨Judgment call, not measured. Plain `repokey` is a fine answer if
+      # you would rather not carry an unverified assumption.⟩
+      encryption: repokey-blake2
+      #
+      # NOTE: deliberately NOT setting `append_only: true`. Append-only is
+      # enforced by BorgBase's per-key toggle (BACKUP.md §3) — server-side, which
+      # is the whole reason borg beat restic. A repo-level borg flag is a
+      # different, weaker mechanism and setting both invites confusion about
+      # which one is actually protecting you.
+
+# ⚠ Distinct per config, and this is the single highest-consequence setting in
+# these files. Several configs write into ONE repository and each runs its own
+# prune; borgmatic derives `match_archives` from `archive_name_format`, and that
+# derivation is what stops documents' prune from ageing out appdata's archives.
+# borgmatic's default is `{hostname}-…`, under which every config on this host
+# would produce identically-shaped names and each prune would consider the
+# others' archives its own.
+#
+# ⚠ VERIFY THIS IN THE PILOT before trusting it (`DESIGN.md` §6.6): write from
+# two configs into one repo, run `prune --dry-run` on one, and confirm the
+# other's archives are not listed for deletion. How match_archives is derived has
+# moved across borgmatic versions. The failure mode is silent deletion of a
+# different service's history.
+archive_name_format: 'tower-documents-{now:%Y-%m-%dT%H:%M:%S.%f}'
+
+encryption_passcommand: cat /mnt/user/appdata/borgmatic/passphrase
+
+ssh_command: ssh -i /mnt/user/appdata/borgmatic/ssh/id_ed25519 -o UserKnownHostsFile=/mnt/user/appdata/borgmatic/ssh/known_hosts -o StrictHostKeyChecking=yes
+
+# Let borg compress — BACKUP.md §4d. Never pre-compress anything handed to it:
+# content-defined chunking needs the input to change only where the data changed,
+# and compressed input diverges globally from a one-row delta.
+compression: zstd
+
+exclude_caches: true
+exclude_if_present:
+    - .nobackup
+
+# ── Canary — BACKUP.md §3b signal 3 ────────────────────────────────────────────
+# See appdata.yaml's identical block and hosts/galactica/borgmatic/scripts/
+# canary-check.sh for the full rationale. Mandatory on Unraid:
+# source_directories_must_exist catches an unmounted share, not a
+# mounted-but-empty one.
+# ⚠ The canary file itself (`touch /mnt/user/documents/.backup-canary`) is not
+# yet created — a one-time manual step, tracked in README.md.
+commands:
+    - before: action
+      when: [create]
+      run:
+          - /mnt/user/appdata/borgmatic/scripts/canary-check.sh /mnt/user/documents/.backup-canary
+
+# ── Retention — Critical earns real depth ─────────────────────────────────────
+#
+# BACKUP.md §6 carries "retention numbers for the hot and cold classes" as open,
+# and notes the hot/cold split is cost without benefit until the numbers differ.
+# These are a proposal to argue with, not a decision.
+#
+# The point of versioning here is a document that was wrong for three months:
+# a mirror does not give you that, and it is exactly what Critical asks for.
+#
+# ⚠ Prune cannot run from Tower — its BorgBase key is append-only by design, so
+# retention is enforced from the admin machine with the second, prunable key
+# (BACKUP.md §3). These numbers therefore do NOT gate the first backup; they are
+# a decision for whenever prune is first run, weeks later.
+keep_daily: 14
+keep_weekly: 8
+keep_monthly: 24
+keep_yearly: 5
+
+# ── Consistency checks ────────────────────────────────────────────────────────
+# Cheap here because the share is small — this is the repo where checks are
+# affordable, which is half the argument for keeping the photos out of it.
+checks:
+    - name: repository
+      frequency: 2 weeks
+    - name: archives
+      frequency: 1 month
+
+# ── Monitoring — BACKUP.md §3b ────────────────────────────────────────────────
+#
+# Both halves run on hopper, deliberately NOT on Tower: a watcher hosted on the
+# machine it watches goes down with it and reports nothing.
+#
+# The two mechanisms cover each other. ntfy is *pushed from Tower*, so it fails
+# silently when Tower cannot reach hopper. The Kuma push monitor is *absence
+# noticed by hopper*, so it fires precisely in that case. Each one's blind spot
+# is the other's trigger.
+# ⟨Commented out for now — the Kuma push monitor doesn't exist yet, so this
+# would just be a dead REPLACE. Re-enable once it's created (see README.md's
+# still-REPLACE list); no query string in the real push_url, i.e. no "?" and
+# nothing after it.⟩
+# uptime_kuma:
+#     push_url: https://kuma.hopper.internal/api/push/REPLACE
+#     states:
+#         - start
+#         - finish
+#         - fail
+
+ntfy:
+    topic: tower-backup
+    server: https://ntfy.hopper.internal
+    fail:
+        title: tower-hot / documents FAILED
+        message: The Critical tier did not back up. See journalctl on Tower.
+        priority: urgent
+        tags: warning,floppy_disk
+
+# ⚠ Set the Kuma monitor's interval with slack — 26–30 h for a nightly job, not
+# exactly 24, or ordinary jitter and one slow run will cry wolf. A monitor that
+# false-alarms is a monitor that gets muted.

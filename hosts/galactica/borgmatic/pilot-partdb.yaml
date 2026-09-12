@@ -1,0 +1,94 @@
+# ── tower / partdb pilot → tower-pilot-partdb (disposable) ────────────────────
+#
+# `DESIGN.md` §6.6 — rehearse the backup design and the migration mechanics on
+# the smallest, most exacting subject before trusting either at scale.
+#
+# ⚠ `partdb` is **Protected — no offsite** (`SHARES.md` §5). This config exists
+# to prove the mechanism, not to extend the offsite scope. It is NOT one of
+# the three files `README.md` lists as "the whole offsite scope", it writes to
+# its OWN throwaway repository rather than tower-hot/tower-cold, and it should
+# be deleted — config, repository, and BorgBase key — once the rehearsal is
+# done. Nothing here is meant to outlive the pilot.
+#
+# `partdb` is the right subject because it is the case that *generated* the
+# paired-appdata rule: attachments live in `/mnt/user/partdb`, and the
+# database that gives them meaning lives in `/mnt/user/appdata/partdb`.
+# Restoring one without the other reproduces the exact failure the rule
+# exists to prevent — at a size where being wrong costs nothing.
+#
+# What this config is for proving (DESIGN.md §6.6's table):
+#   - Does the borgmatic config shape work at all?
+#   - Does the sqlite_databases hook produce a restorable dump? (restore it on
+#     memory-alpha and open the app)
+#   - Does the paired-appdata rule hold? (restore both together, then
+#     deliberately restore only one and confirm it is useless)
+#   - Does BorgBase's append-only key genuinely refuse `borgmatic prune`
+#     (BACKUP.md §3)?
+#   - Is the tier → source_directories path sound? (same mechanism galactica
+#     will use)
+# It proves nothing about SnapRAID, mergerfs, the array conversion, or
+# hardlink behavior — those are galactica-specific and untestable this way.
+#
+# ⚠ CORRECTS `docs/BACKUP.md` §4d / `DESIGN.md` §6.6, which both describe
+# PartDB's database as MariaDB. Verified from `homelab_stacks`'
+# `tower/inventory/compose.yaml` instead: the `partdb` service sets
+# `DATABASE_URL: sqlite:///%kernel.project_dir%/var/db/app.db` — it's SQLite.
+# The hook below reflects that, not the design docs.
+
+source_directories:
+      # Attachments and uploads (`SHARES.md` §5's Protected `partdb` share).
+    - /mnt/user/partdb
+      # appdata subtree. The live db file itself is excluded below; the
+      # sqlite_databases hook dumps it properly instead of copying it live.
+    - /mnt/user/appdata/partdb
+
+source_directories_must_exist: true
+
+exclude_patterns:
+    - /mnt/user/appdata/partdb/db
+
+sqlite_databases:
+    - name: partdb
+      path: /mnt/user/appdata/partdb/db/app.db
+
+repositories:
+      # ⟨REPLACE — a THIRD BorgBase repo, distinct from tower-hot/tower-cold.
+      # "Repos are unlimited at BorgBase" (BACKUP.md §4). Needs its own
+      # append-only key on Tower and its own prunable key on the admin
+      # machine, same shape as the real repos — this is what lets the pilot
+      # actually test append-only refusal rather than assume it.⟩
+    - path: ssh://REPLACE@REPLACE.repo.borgbase.com/./tower-pilot-partdb
+      label: tower-pilot-partdb
+      encryption: repokey-blake2
+
+# Distinct from every other config's format, per the standing rule (see
+# documents.yaml) — even though this repo has no other writer, a future copy
+# of this file for a second pilot subject would otherwise inherit the
+# default and share match_archives with this one.
+archive_name_format: 'tower-pilot-partdb-{now:%Y-%m-%dT%H:%M:%S.%f}'
+
+# Reuses the same passphrase and SSH key as the real repos. That's a
+# deliberate simplification, not a shortcut: the pilot is testing the real
+# mechanism (same borgmatic container, same credential files, same
+# append-only enforcement path), and a repokey passphrase is not itself
+# repo-specific key material — reusing it across independent repositories
+# doesn't reuse a key, only the secret that unlocks each repo's own one.
+encryption_passcommand: cat /mnt/user/appdata/borgmatic/passphrase
+
+ssh_command: ssh -i /mnt/user/appdata/borgmatic/ssh/id_ed25519 -o UserKnownHostsFile=/mnt/user/appdata/borgmatic/ssh/known_hosts -o StrictHostKeyChecking=yes
+
+compression: zstd
+
+exclude_caches: true
+exclude_if_present:
+    - .nobackup
+
+# No canary, no uptime_kuma, no ntfy. This is a hand-run rehearsal, not an
+# unattended nightly job — a human is watching it directly, which is the
+# thing those signals exist to substitute for when nobody is.
+
+# No `checks:` — the repository won't exist long enough for a scheduled
+# consistency check to matter. Run `borg check` by hand if you want it.
+
+# Retention is irrelevant: this repo gets deleted after the rehearsal, not
+# pruned. Left unset deliberately rather than copied from appdata.yaml.
