@@ -264,10 +264,14 @@
   # ── kitty: launch zsh directly, not the login shell ─────────────────────────
   # Login shell stays bash (predictable non-interactive `ssh z@host cmd`
   # semantics — interactive-zsh.nix) and interactive bash execs into zsh
-  # anyway; pointing kitty at zsh directly just skips that hop.
+  # anyway; pointing kitty at zsh directly just skips that hop. But skipping
+  # the hop also skips the `export SHELL=zsh` that lives in that bash exec, so
+  # $SHELL would otherwise still read the inherited login-shell value (bash);
+  # set it explicitly here to match the shell kitty actually runs.
   programs.kitty = {
     enable = true;
     settings.shell = "${pkgs.zsh}/bin/zsh";
+    environment.SHELL = "${pkgs.zsh}/bin/zsh";
   };
 
   # ── Screenshot annotation (swappy) ──────────────────────────────────────────
