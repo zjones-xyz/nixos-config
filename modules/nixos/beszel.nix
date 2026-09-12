@@ -2,7 +2,7 @@
 
 let
   # No native NixOS module for Beszel, so run the hub + agent as Docker
-  # containers managed by a systemd unit — same shape as the dockge module.
+  # containers managed by a systemd unit — same shape as the traefik module.
   # The hub UI is exposed via Traefik labels on the proxy network; the agent
   # reports this host's metrics to the hub over the internal network.
   composeFile = pkgs.writeText "beszel-compose.yml" ''

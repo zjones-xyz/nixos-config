@@ -159,8 +159,8 @@ in
     description = "Create shared Docker proxy network";
     after = [ "docker.service" ];
     wants = [ "docker.service" ];
-    before = [ "traefik-docker.service" "dockge.service" ];
-    requiredBy = [ "traefik-docker.service" "dockge.service" ];
+    before = [ "traefik-docker.service" ];
+    requiredBy = [ "traefik-docker.service" ];
 
     serviceConfig = {
       User = "z";
