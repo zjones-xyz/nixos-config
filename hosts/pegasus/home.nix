@@ -338,6 +338,26 @@
     };
   };
 
+  # ── Default browser: Vivaldi ───────────────────────────────────────────────
+  # Nothing in the fleet defined a default browser, so links from other apps
+  # had no handler at all. The desktop id is `vivaldi-stable.desktop`, not
+  # `vivaldi.desktop`: nixpkgs rewrites the contents of the .deb's desktop
+  # file but never renames it. Pairs with the Mod+B bind in niri-settings.nix.
+  xdg.mimeApps =
+    let
+      vivaldi = [ "vivaldi-stable.desktop" ];
+    in
+    {
+      enable = true;
+      defaultApplications = {
+        "text/html" = vivaldi;
+        "x-scheme-handler/http" = vivaldi;
+        "x-scheme-handler/https" = vivaldi;
+        "x-scheme-handler/about" = vivaldi;
+        "x-scheme-handler/unknown" = vivaldi;
+      };
+    };
+
   # Vicinae has no built-in global-shortcut support by design — the DE's own
   # shortcut mechanism binds its CLI toggle. A plain single-Exec desktop
   # entry, deliberately NOT plasma-manager's hotkeys.commands (broken:
