@@ -285,6 +285,22 @@
     enable = true;
     settings.shell = "${pkgs.zsh}/bin/zsh";
     environment.SHELL = "${pkgs.zsh}/bin/zsh";
+
+    # ── tmux-style directional splits ─────────────────────────────────────────
+    # kitty's stock layouts only tile automatically; `splits` is what lets a new
+    # window land where you asked, and `stack` stays so ctrl+shift+l still
+    # toggles one full-size window. The arrows shadow stock next/previous_tab
+    # and scroll_line_up/down — those keep ctrl+tab, ctrl+shift+tab and
+    # ctrl+shift+j/k. --cwd=current makes a pane inherit the cwd, not $HOME.
+    settings.enabled_layouts = "splits,stack";
+    keybindings = {
+      "ctrl+shift+d" = "launch --location=hsplit --cwd=current";
+      "ctrl+shift+backslash" = "launch --location=vsplit --cwd=current";
+      "ctrl+shift+left" = "neighboring_window left";
+      "ctrl+shift+right" = "neighboring_window right";
+      "ctrl+shift+up" = "neighboring_window up";
+      "ctrl+shift+down" = "neighboring_window down";
+    };
   };
 
   # ── Screenshot annotation (swappy) ──────────────────────────────────────────
