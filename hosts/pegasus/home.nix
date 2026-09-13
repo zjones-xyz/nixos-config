@@ -300,6 +300,10 @@
       "ctrl+shift+right" = "neighboring_window right";
       "ctrl+shift+up" = "neighboring_window up";
       "ctrl+shift+down" = "neighboring_window down";
+
+      # Rebound from kitty's own ctrl+shift+f3 — keeps the palette off the
+      # F-key row and matches the Alt+Space launcher bind above.
+      "ctrl+shift+space" = "command_palette";
     };
   };
 
