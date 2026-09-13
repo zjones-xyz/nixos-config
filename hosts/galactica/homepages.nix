@@ -75,6 +75,28 @@ in
     };
   };
 
+  # ── Tailnet HTTPS for the admin dashboard ──────────────────────────────────
+  # `tailscale serve` has no nixpkgs option — it is imperative state inside
+  # tailscaled — so converge it on every switch rather than trusting one
+  # hand-run `serve --bg`. `reset` first makes that idempotent and clears
+  # drift; ordering after tailscaled-autoconnect is the module's own advice.
+  systemd.services.tailscale-serve-homepage = {
+    description = "Serve the admin homepage on the tailnet (HTTPS)";
+    after = [ "tailscaled-autoconnect.service" ];
+    wants = [ "tailscaled-autoconnect.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script =
+      let tailscale = lib.getExe config.services.tailscale.package;
+      in ''
+        ${tailscale} serve reset
+        ${tailscale} serve --bg --https=443 http://127.0.0.1:3010
+      '';
+  };
+
   # ── Traefik routes — flat top-level names, not arrExtraUpstreams ───────────
   # `homelab.arrExtraUpstreams` (bazarr.nix's mechanism) only ever produces
   # `*.arr.{internal,zjones.dev}` names, so these dashboards register their

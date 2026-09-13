@@ -308,11 +308,17 @@
   services.scrutinyCollector.enable = true;
 
   # ── Remote access for the dashboards (homepages.nix) ───────────────────────
-  # Tailscale carries the admin homepage (and SSH) over the tailnet. No sops
-  # authKeyFile on purpose: the key would only cover the one-time join, and
-  # this host is already SSH-able — the owner runs `tailscale up` once
-  # (MANUAL-STEPS.md §13) and state persists in /var/lib/tailscale.
-  services.tailscale.enable = true;
+  # Tailscale carries the admin homepage (and SSH) over the tailnet. authKeyFile
+  # so a rebuilt host rejoins headless, same shape as hopper/pegasus/hamilton.
+  # ⚠ The key must be in secrets/galactica.yaml *before* the first switch: a
+  # sops key that isn't there fails activation, not eval (MANUAL-STEPS §13.1).
+  services.tailscale = {
+    enable = true;
+    extraUpFlags = [ "--ssh" ];
+    authKeyFile = config.sops.secrets."tailscale/authKey".path;
+  };
+  networking.firewall.trustedInterfaces = [ "tailscale0" ];
+  networking.firewall.allowedUDPPorts = [ config.services.tailscale.port ];
 
   # The guest homepage's door: Newt tunnels guest.zjones.xyz in from the
   # Pangolin VPS. ⚠ Commented until the Pangolin Site for galactica exists —
@@ -347,6 +353,9 @@
       # runs as root, no User= override.
       "adguardhome-sync/originPassword" = { };
       "adguardhome-sync/routerPassword" = { };
+      # Reusable, non-ephemeral: galactica is a server that must rejoin on
+      # its own after a rebuild, not a one-shot device.
+      "tailscale/authKey" = { };
       # Raw keyfile for all seven array members (slot 0; every disk also
       # carries the fleet recovery passphrase in slot 1). `format = "binary"`
       # is the byte-exact round-trip for raw key material.

@@ -1023,10 +1023,9 @@ admin on `127.0.0.1:3010`, guest on `127.0.0.1:3011`. What each dashboard
 bind-mounted read-only; edit there and `nrs`, no Nix involved. CI lints
 those files and checks them against each other (`checks/homepage-config`),
 so a bad edit fails the PR rather than the dashboard. The switch itself
-needs no new secrets: the widget keys reuse the existing `nixflix/*` sops
-entries, and Tailscale deliberately has no authKey (see the block in
-`configuration.nix`). What the nix config cannot do is join networks and
-create Pangolin objects — that is this section.
+reuses the existing `nixflix/*` sops entries for the widget keys. What the
+nix config cannot do is mint credentials and create Pangolin objects — that
+is this section.
 
 Both instances are already routed by the host's own Traefik —
 `home.internal` / `home.zjones.dev` for admin, `guest.internal` /
@@ -1035,18 +1034,25 @@ Both instances are already routed by the host's own Traefik —
 works as soon as the switch lands. Steps below are for the tailnet
 (admin) and public (guest) halves.
 
-1. [ ] **Join the tailnet.** `sudo tailscale up --ssh`, authenticate in the
-   browser as usual. In the admin console, disable key expiry for
-   `galactica` (Machines → galactica → Disable key expiry) — a server, not
-   a laptop.
+1. [ ] **Put the tailnet auth key in sops, before the first switch.** Mint a
+   *reusable, non-ephemeral* key in the admin console (Settings → Keys), then
+   `sops secrets/galactica.yaml` → add it as `tailscale/authKey`. ⚠ Order
+   matters: `configuration.nix` already references that key, and a sops entry
+   whose key is missing from the file fails **activation**, not eval — so the
+   switch carrying this section errors out if the key isn't in place first.
+   Once it is, the join and the tailnet HTTPS serve both happen on `nrs` with
+   no interactive step: `authKeyFile` brings the node up (`--ssh`), and the
+   `tailscale-serve-homepage` unit in `homepages.nix` converges
+   `serve --https=443 → 127.0.0.1:3010` on every switch. Afterwards check
+   `https://galactica.peacock-koi.ts.net` loads. (The tailnet already has
+   MagicDNS + HTTPS certs enabled — the old tsdproxy names like
+   `home.peacock-koi.ts.net` prove it.)
 
-2. [ ] **Serve the admin homepage over HTTPS on the tailnet:**
-   ```bash
-   sudo tailscale serve --bg --https=443 http://127.0.0.1:3010
-   ```
-   Then check `https://galactica.peacock-koi.ts.net` loads. (`--bg` persists
-   across reboots; the tailnet already has MagicDNS + HTTPS certs enabled —
-   the old tsdproxy names like `home.peacock-koi.ts.net` prove it.)
+2. [ ] **Disable key expiry for `galactica`** (Machines → galactica → Disable
+   key expiry). A server, not a laptop. This one is genuinely console-only —
+   expiry is a control-plane property of the machine, not something the node
+   can set about itself, so it is the only part of the tailnet setup that
+   stays manual.
 
 3. [ ] **Create the Pangolin Site.** Pangolin admin → Sites → create
    `galactica` (Newt connector). Copy the issued **id** and **secret**.
