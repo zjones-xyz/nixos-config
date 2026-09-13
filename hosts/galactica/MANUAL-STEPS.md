@@ -1333,25 +1333,37 @@ organized copy. Sizes: `karakeep` 67M, `ferdium-server` 275M, `paperless` 9.0K
 5. [ ] **Paperless-ngx — not a restore, already repointed.** The Unraid
    `appdata` share's paperless folder was only leftover container config
    (9.0K); the real, live instance was already sitting at
-   `/tank/documents/paperless/{data,media,export,consumption}` (real
-   `db.sqlite3`, real archived documents) — likely mounted there directly on
-   the old setup rather than through the appdata share. `paperless.nix` now
-   points its bind mounts there instead of a fresh `tank/appdata/paperless`
-   tree, so there is nothing to copy. Two things to confirm before the
-   first switch:
-   - **Admin login.** The existing `db.sqlite3` almost certainly already has
-     a superuser from the old setup — if you remember those credentials, use
-     them. `PAPERLESS_ADMIN_USER=z` / the generated password in
+   `/tank/documents/paperless/{data,media,export}` (real `db.sqlite3`, real
+   archived documents) — likely mounted there directly on the old setup
+   rather than through the appdata share. `paperless.nix` now points its
+   bind mounts there instead of a fresh `tank/appdata/paperless` tree, so
+   there is nothing to copy for those three. **Before the first switch:**
+   - [x] **Pre-switch backup — done.** A fresh `borgmatic` offsite run plus
+     `zfs snapshot tank/documents@pre-paperless-nixos`, both against the
+     live data, before the container comes up.
+   - [ ] **Admin login.** 1Password has the original credentials — use
+     those. `PAPERLESS_ADMIN_USER=z` / the generated password in
      `secrets/galactica.yaml` only ever *creates* a user; it will not touch
-     or reset an existing one, so it's a fallback only in case the restored
-     DB turns out to have none.
-   - **Consumption folder.** `paperless.nix` currently points at the old
-     bundled `/tank/documents/paperless/consumption` — confirm that's still
-     meant to be the drop-folder going forward, versus the newer, currently
-     empty `/tank/sort/inbox/paperless-consumption` (which sits alongside
-     your other new `inbox/*` staging folders and may be the intended
-     go-forward convention instead). Update the `liveDir`-relative mount in
-     `paperless.nix` if it's the latter.
+     or reset the existing one, so it's a fallback only in case the
+     restored DB turns out to have no superuser.
+   - [ ] **Chown the existing tree to match `USERMAP_UID`/`GID`.** Not
+     previously set — the paperless-ngx image defaults to a baked-in
+     `1000:1000`, but `paperless.nix` now sets both to user `z`'s uid/gid so
+     the container can also write into the new NFS-exported inbox (below).
+     `chown -R z:users /tank/documents/paperless/{data,media,export}`
+     before first switch, or the webserver may not be able to read/write
+     its own existing files.
+
+   **Scan inbox — new, resolved 2026-09-13:** owner's call, scans land in
+   `/inbox/paperless` on the NVMe root (`fileSystems."/"`, NOT `tank`) —
+   fast, and no redundancy/offsite needed since dropped files are consumed
+   into `tank/documents` (which IS backed up) within moments.
+   `paperless.nix` creates the directory, mounts it as the container's
+   `/usr/src/paperless/consume`, and NFS-exports it (`192.168.8.0/24`,
+   `async` — durability is deliberately traded for speed here, see the
+   file's header). SMB is planned but not built yet; add it when it
+   actually matters, in whatever module ends up owning Samba fleet-wide
+   (none does yet).
 6. [ ] **Key expiry disabled on the four new tsdproxy nodes.** Same trap
    §13 already hit: every `homelab.tsdproxy`-registered name is its own
    Tailscale device with its own expiry, so `ferdium`, `karakeep`,

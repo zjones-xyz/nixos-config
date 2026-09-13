@@ -21,18 +21,23 @@
 # not documents, and fine at the default "painful to rebuild, small,
 # no offsite" appdata tier (SHARES.md).
 #
-# ⚠ Consumption folder is provisional: pointed at the existing
-# `/tank/documents/paperless/consumption` (same one the live instance
-# already had) rather than the newer `/tank/sort/inbox/paperless-consumption`
-# — confirm which one is meant to be the go-forward drop folder before first
-# switch and adjust if it's the latter.
+# Consumption folder is deliberately NOT under tank/documents (nor the old
+# bundled `.../consumption`, nor `tank/sort/inbox/paperless-consumption`):
+# owner's call, scans land in `/inbox/paperless` on the NVMe root instead —
+# fast, and dropped files are consumed (moved into `data`/`media` under
+# tank/documents, which IS backed up) within moments, so the inbox itself
+# needs neither ZFS redundancy nor offsite coverage. NFS-exported now; SMB
+# is planned but not built yet.
 
 let
   webImage = "ghcr.io/paperless-ngx/paperless-ngx:3.1.3";
   brokerImage = "valkey/valkey:9.1-alpine";
   liveDir = "/tank/documents/paperless"; # already exists — do not tmpfiles this
   brokerDataDir = "/tank/appdata/paperless";
+  inboxDir = "/inbox/paperless"; # NVMe root, not tank — see header
   port = 3022;
+  uid = toString config.users.users.z.uid;
+  gid = toString config.users.groups.${config.users.users.z.group}.gid;
 in
 {
   # SECRET_KEY signs sessions/CSRF tokens — required, upstream ships no
@@ -55,11 +60,25 @@ in
     PAPERLESS_ADMIN_MAIL=zoejonestx91@gmail.com
   '';
 
-  # Only the broker's own dir — the live paperless data/media/export/
-  # consumption dirs under tank/documents already exist with real content
-  # and whatever ownership the old setup left them with; tmpfiles has no
-  # business touching that.
-  systemd.tmpfiles.rules = [ "d ${brokerDataDir} 0750 root root - -" ];
+  # Only the broker's dir and the new inbox — the live paperless
+  # data/media/export dirs under tank/documents already exist with real
+  # content and whatever ownership the old setup left them with; tmpfiles
+  # has no business touching that (see the USERMAP_UID/GID note below for
+  # the one thing that DOES need reconciling there).
+  systemd.tmpfiles.rules = [
+    "d ${brokerDataDir} 0750 root root - -"
+    "d /inbox 0755 root root - -"
+    "d ${inboxDir} 0770 ${uid} ${gid} - -"
+  ];
+
+  # NFS export for the inbox — LAN-wide since no specific client is known
+  # yet (same reasoning as bambuddy_library in configuration.nix's export
+  # table). `async` rather than the fleet's usual `sync`: this share
+  # explicitly trades durability for speed (header above), and forcing a
+  # sync on every write would undercut the one property it exists for.
+  services.nfs.server.exports = ''
+    ${inboxDir}  192.168.8.0/24(rw,async,no_subtree_check,fsid=105)
+  '';
 
   # Same reasoning as karakeep.nix's dedicated network: the webserver needs
   # to resolve `paperless-broker` by name, which the default bridge won't do.
@@ -95,13 +114,20 @@ in
         PAPERLESS_REDIS = "redis://paperless-broker:6379";
         PAPERLESS_DBENGINE = "sqlite";
         PAPERLESS_URL = "https://paperless.zjones.dev";
+        # Matches user z on the host, so the container can actually write
+        # into the NFS-exported /inbox/paperless. ⚠ Not previously set (this
+        # image defaults to a baked-in 1000:1000), so the pre-existing
+        # tank/documents/paperless tree needs a one-time chown to match —
+        # MANUAL-STEPS.md §15 carries it.
+        USERMAP_UID = uid;
+        USERMAP_GID = gid;
       };
       environmentFiles = [ config.sops.templates."paperless.env".path ];
       volumes = [
         "${liveDir}/data:/usr/src/paperless/data"
         "${liveDir}/media:/usr/src/paperless/media"
         "${liveDir}/export:/usr/src/paperless/export"
-        "${liveDir}/consumption:/usr/src/paperless/consume"
+        "${inboxDir}:/usr/src/paperless/consume"
       ];
       ports = [ "127.0.0.1:${toString port}:8000" ];
       extraOptions = [ "--network=paperless" ];
