@@ -1071,6 +1071,14 @@ works as soon as the switch lands. Steps below are for the tailnet
    own expiry, so anything added to `homelab.tsdproxy` later needs the same
    treatment or it silently drops off the tailnet in ~6 months.
 
+Steps 1-3 above are done: the admin dashboard is on the LAN and the tailnet,
+and the guest one is on the LAN. What remains — 4-8 below, the public
+`guest.zjones.xyz` door — is tracked as **issue #124**, which carries the same
+checklist plus the two traps worth knowing before starting: the sops entry in
+step 5 must exist *before* the switch that references it (a missing key fails
+activation, not eval), and `guest.zjones.xyz` has a LAN rewrite but no Traefik
+router, so step 6 should be tested from on-network as well as off.
+
 4. [ ] **Create the Pangolin Site.** Pangolin admin → Sites → create
    `galactica` (Newt connector). Copy the issued **id** and **secret**.
 
