@@ -61,6 +61,26 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # zen-browser (used on pegasus) — Zen has no nixpkgs package at all (not
+    # even a removed/replaced stub, unlike opera-flake below). This is the
+    # community flake nixpkgs' own PR discussions point to; `beta` is its
+    # `packages.default`. git+https rather than github: — see
+    # claude-desktop-debian above for why.
+    zen-browser = {
+      url = "git+https://github.com/0xc000022070/zen-browser-flake.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Opera (used on pegasus) — nixpkgs removed `opera` outright ("lack of
+    # maintenance"); this is the same derivation ported into its own
+    # community-maintained flake by one of opera's former nixpkgs
+    # maintainers. git+https rather than github: — see claude-desktop-debian
+    # above for why.
+    opera-flake = {
+      url = "git+https://github.com/YisuiDenghua/opera-flake.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # niri-flake (used on pegasus) — ONLY for its homeModules.config, which
     # provides `programs.niri.settings` (declarative, KDL-validated at build
     # time). Deliberately NOT its nixosModules.niri: that fully disables
@@ -117,12 +137,46 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, niri-flake, nixflix, nixpkgs-orca-slicer, nixpkgs-bambu-studio, dr460nized-src, window-title-applet-src, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, niri-flake, nixflix, nixpkgs-orca-slicer, nixpkgs-bambu-studio, dr460nized-src, window-title-applet-src, ... }:
+  let
+    # The HOMEPAGE_VAR_* names one Homepage instance actually receives, read
+    # back out of the rendered sops template rather than restated here — so
+    # checks/homepage-config validates against what the container really gets.
+    # (`content` at this point holds sops-nix's placeholder tokens, not
+    # secrets; the real values are only substituted on the host at activation.)
+    homepageEnvVars = template:
+      let
+        lines = nixpkgs.lib.splitString "
+"
+          self.nixosConfigurations.galactica.config.sops.templates.${template}.content;
+        declarations = builtins.filter (nixpkgs.lib.hasPrefix "HOMEPAGE_VAR_") lines;
+      in
+      map (line: builtins.head (nixpkgs.lib.splitString "=" line)) declarations;
+  in
   {
     formatter = {
       x86_64-linux = nixpkgs.legacyPackages.x86_64-linux.nixfmt-tree;
       aarch64-linux = nixpkgs.legacyPackages.aarch64-linux.nixfmt-tree;
       aarch64-darwin = nixpkgs.legacyPackages.aarch64-darwin.nixfmt-tree;
+    };
+
+    # galactica is x86_64-linux, so this only needs to exist there — on the
+    # Mac `nix flake check` evaluates it and builds nothing.
+    checks.x86_64-linux.homepage-config = import ./checks/homepage-config {
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      configDir = ./hosts/galactica/homepage;
+      instances = {
+        admin = {
+          env = homepageEnvVars "homepage-admin.env";
+          publicFacing = false;
+        };
+        # Reachable from the public internet through Pangolin — links must
+        # resolve off-network, and the key set stays minimal.
+        guest = {
+          env = homepageEnvVars "homepage-guest.env";
+          publicFacing = true;
+        };
+      };
     };
 
     nixosConfigurations = {
@@ -166,6 +220,29 @@
             # hosts/pegasus/home.nix and DECISIONS.md.
             home-manager.extraSpecialArgs = {
               claudeDesktop = claude-desktop-debian.packages.x86_64-linux.claude-desktop-fhs;
+              # Askimo (multi-LLM desktop chat client) — not in nixpkgs at
+              # all, unlike claudeDesktop/orcaSlicerNewer/bambuStudioNewer
+              # above (which are all upstream packages nixpkgs just hasn't
+              # caught up to yet). pkgs/askimo.nix unpacks upstream's own
+              # jpackage .deb release and runs it on nixpkgs' jdk25 — see
+              # that file for why. callPackage against the main nixpkgs
+              # rather than a pin: no version-skew concern since there's no
+              # nixpkgs copy of this package to skew against.
+              askimoDesktop = nixpkgs.legacyPackages.x86_64-linux.callPackage ./pkgs/askimo.nix { };
+              # Zen and Opera: same "no HM module, just a package" shape as
+              # claudeDesktop/askimoDesktop above — neither flake ships one.
+              zenBrowser = zen-browser.packages.x86_64-linux.default;
+              # opera-flake's pinned deb (129.0.5823.65) 404s — Opera's CDN
+              # only serves a handful of recent stable builds and the flake
+              # hasn't re-run its own update.sh since that commit. Override
+              # to the current live build until upstream catches up.
+              operaBrowser = opera-flake.packages.x86_64-linux.opera.overrideAttrs (old: rec {
+                version = "135.0.5973.133";
+                src = nixpkgs.legacyPackages.x86_64-linux.fetchurl {
+                  url = "https://download3.operacdn.com/ftp/pub/opera/desktop/${version}/linux/opera-stable_${version}_amd64.deb";
+                  hash = "sha256-EAmqAX4XKllVk1bN8sNBRcetUhIA0huoIu4jVNMlb0k=";
+                };
+              });
               orcaSlicerNewer = nixpkgs-orca-slicer.legacyPackages.x86_64-linux.orca-slicer;
               # bambu-studio is unfree (agpl3Plus + unfree, marked as of the
               # pinned commit) — legacyPackages defaults to allowUnfree =

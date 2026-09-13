@@ -1,0 +1,147 @@
+---
+# Admin dashboard — the full service directory, LAN/tailnet only.
+#
+# Widget and link URLs go through Traefik's public-DNS names (real LE certs,
+# split-horizon to the LAN address) — NOT 127.0.0.1, which inside the container
+# is the container.
+#
+# `siteMonitor` mirrors `href` on every entry: Homepage runs its own periodic
+# HTTP status check against that URL (independent of any `widget:` block) and
+# shows a colored up/down dot next to the service name. checks/homepage-config
+# fails the build if an entry has `href` without a matching `siteMonitor`.
+#
+# Live services only. The Tower services not yet re-homed (Jellyseerr,
+# Audiobookshelf, Grimmory, Shelfmark, Immich, Paperless, Karakeep, ARM, 13ft,
+# Bambuddy) come back one group entry at a time as each migrates —
+# homelab-stacks tower/homepage/config/services.yaml is the reference for what
+# each entry looked like.
+#
+# Any `{{HOMEPAGE_VAR_*}}` used here must be defined in this instance's sops
+# env template (homepages.nix) — also enforced by checks/homepage-config.
+
+- Media:
+    - Jellyfin:
+        href: https://jellyfin.zjones.dev
+        siteMonitor: https://jellyfin.zjones.dev
+        icon: jellyfin.png
+        description: Streaming (memory-alpha)
+    - Navidrome:
+        href: https://navidrome.arr.zjones.dev
+        siteMonitor: https://navidrome.arr.zjones.dev
+        icon: navidrome.png
+        description: Music
+
+- Media Management:
+    - Sonarr:
+        href: https://sonarr.arr.zjones.dev
+        siteMonitor: https://sonarr.arr.zjones.dev
+        icon: sonarr.png
+        description: TV
+        widget:
+          type: sonarr
+          url: https://sonarr.arr.zjones.dev
+          key: "{{HOMEPAGE_VAR_SONARR_API_KEY}}"
+    - Sonarr (Anime):
+        href: https://sonarr-anime.arr.zjones.dev
+        siteMonitor: https://sonarr-anime.arr.zjones.dev
+        icon: sonarr.png
+        description: Anime
+        widget:
+          type: sonarr
+          url: https://sonarr-anime.arr.zjones.dev
+          key: "{{HOMEPAGE_VAR_SONARR_ANIME_API_KEY}}"
+    - Radarr:
+        href: https://radarr.arr.zjones.dev
+        siteMonitor: https://radarr.arr.zjones.dev
+        icon: radarr.png
+        description: Movies
+        widget:
+          type: radarr
+          url: https://radarr.arr.zjones.dev
+          key: "{{HOMEPAGE_VAR_RADARR_API_KEY}}"
+    - Lidarr:
+        href: https://lidarr.arr.zjones.dev
+        siteMonitor: https://lidarr.arr.zjones.dev
+        icon: lidarr.png
+        description: Music
+        widget:
+          type: lidarr
+          url: https://lidarr.arr.zjones.dev
+          key: "{{HOMEPAGE_VAR_LIDARR_API_KEY}}"
+    - Bazarr:
+        href: https://bazarr.arr.zjones.dev
+        siteMonitor: https://bazarr.arr.zjones.dev
+        icon: bazarr.png
+        description: Subtitles
+    - Bazarr (Anime):
+        href: https://bazarr-anime.arr.zjones.dev
+        siteMonitor: https://bazarr-anime.arr.zjones.dev
+        icon: bazarr.png
+        description: Anime subtitles
+    - Prowlarr:
+        href: https://prowlarr.arr.zjones.dev
+        siteMonitor: https://prowlarr.arr.zjones.dev
+        icon: prowlarr.png
+        description: Indexers
+        widget:
+          type: prowlarr
+          url: https://prowlarr.arr.zjones.dev
+          key: "{{HOMEPAGE_VAR_PROWLARR_API_KEY}}"
+
+- Downloads:
+    - qBittorrent:
+        href: https://qbittorrent.arr.zjones.dev
+        siteMonitor: https://qbittorrent.arr.zjones.dev
+        icon: qbittorrent.png
+        description: Torrents
+    - SABnzbd:
+        href: https://usenet.arr.zjones.dev
+        siteMonitor: https://usenet.arr.zjones.dev
+        icon: sabnzbd.png
+        description: Usenet
+        widget:
+          type: sabnzbd
+          url: https://usenet.arr.zjones.dev
+          key: "{{HOMEPAGE_VAR_SABNZBD_API_KEY}}"
+
+- Infrastructure:
+    - Traefik:
+        href: https://traefik.arr.zjones.dev
+        siteMonitor: https://traefik.arr.zjones.dev
+        icon: traefik.png
+        description: Reverse proxy (this host)
+    - Uptime Kuma:
+        href: https://kuma.monitor.zjones.dev
+        siteMonitor: https://kuma.monitor.zjones.dev
+        icon: uptime-kuma.png
+        description: Uptime monitoring
+    - Beszel:
+        href: https://beszel.monitor.zjones.dev
+        siteMonitor: https://beszel.monitor.zjones.dev
+        icon: sh-beszel
+        description: Host monitoring
+    - Scrutiny:
+        href: https://scrutiny.monitor.zjones.dev
+        siteMonitor: https://scrutiny.monitor.zjones.dev
+        icon: scrutiny.png
+        description: Disk health
+    - Dozzle:
+        href: https://dozzle.monitor.zjones.dev
+        siteMonitor: https://dozzle.monitor.zjones.dev
+        icon: dozzle.png
+        description: Container logs
+    - ntfy:
+        href: https://ntfy.monitor.zjones.dev
+        siteMonitor: https://ntfy.monitor.zjones.dev
+        icon: ntfy.png
+        description: Notifications
+    - Arcane:
+        href: https://arcane.monitor.zjones.dev
+        siteMonitor: https://arcane.monitor.zjones.dev
+        icon: sh-arcane
+        description: Container management
+    - Dockge:
+        href: https://dockge.memory-alpha.zjones.dev
+        siteMonitor: https://dockge.memory-alpha.zjones.dev
+        icon: dockge.png
+        description: Compose stacks

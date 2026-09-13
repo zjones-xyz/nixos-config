@@ -1,4 +1,4 @@
-{ config, pkgs, lib, claudeDesktop, orcaSlicerNewer, bambuStudioNewer, ... }:
+{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, orcaSlicerNewer, bambuStudioNewer, ... }:
 
 {
   imports = [
@@ -26,6 +26,8 @@
     nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#pegasus";
     nrt = "sudo nixos-rebuild test --flake ~/nixos-config#pegasus";
     npull = "~/nixos-config/scripts/npull.sh";
+    # A script, not "npull && nrs" — an alias would put the PR number on nrs.
+    npullnrs = "~/nixos-config/scripts/npull-rebuild.sh nixos-rebuild pegasus";
     ipmi-tower = ''~/nixos-config/scripts/ipmi-remote.sh run towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-open-tty = ''~/nixos-config/scripts/ipmi-remote.sh console towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-set-bios-next-boot = ''~/nixos-config/scripts/ipmi-remote.sh bios-next-boot towerbmc.internal "op://System Keys/tower ipmi/password"'';
@@ -42,8 +44,9 @@
   # ── Desktop apps ────────────────────────────────────────────────────────────
   # allowUnfree is already set globally in modules/nixos/common.nix, which
   # pegasus imports — vscode/google-chrome/vivaldi/1Password/discord/spotify/
-  # ticktick/obsidian/bambu-studio are all unfree and need it; firefox/
-  # ferdium/signal-desktop/openscad/orca-slicer/streamdeck-ui are free/open.
+  # ticktick/obsidian/bambu-studio/operaBrowser are all unfree and need it;
+  # firefox/ferdium/signal-desktop/openscad/orca-slicer/streamdeck-ui/
+  # floorp-bin/zenBrowser are free/open.
   #
   # Brain.fm was left out — no nixpkgs package, no native Linux client
   # anywhere (subscription web app only); usable via firefox/chrome.
@@ -53,7 +56,24 @@
     google-chrome
     firefox
     vivaldi
+    # nixpkgs' upstream `floorp` was replaced with this prebuilt variant —
+    # building it from source became unfeasible starting with its 12.x line.
+    floorp-bin
     claude-code
+    antigravity
+    # Google's terminal coding agent, the CLI counterpart to claude-code
+    # above — nixpkgs' own npm-sourced build (gemini-cli-bin, the prebuilt
+    # binary variant, also exists but isn't used here for the same
+    # build-from-source-when-available reason claude-code isn't the -bin
+    # variant either).
+    gemini-cli
+    # ChatGPT desktop: nixpkgs' `chatgpt` package unpacks a .dmg and is
+    # darwin-only (see hosts/serenity, via modules/darwin/homebrew.nix) —
+    # OpenAI ships no official Linux client. The only Linux option is a
+    # third-party repackaging of the extracted macOS Electron app, which
+    # re-hosts a proprietary binary outside OpenAI's own build pipeline —
+    # not worth the trust trade for a client that's also just a browser tab
+    # away. Same call as Brain.fm below: web app via firefox/chrome.
 
     discord
     ferdium
@@ -228,6 +248,21 @@
     # flake.nix — the FHS-wrapped variant, needed for MCP servers to work
     # (they shell out to npx/uvx/etc. expecting a standard FHS layout).
     claudeDesktop
+    # Askimo — multi-LLM desktop chat client (ChatGPT/Claude/Gemini/Ollama),
+    # not in nixpkgs. askimoDesktop comes from pkgs/askimo.nix via
+    # home-manager.extraSpecialArgs in flake.nix — see that file's comment
+    # and pkgs/askimo.nix itself for why it's a hand-written derivation
+    # rather than a flake input like claudeDesktop above.
+    askimoDesktop
+    # Zen — no nixpkgs package at all. zenBrowser comes from the zen-browser
+    # flake input via home-manager.extraSpecialArgs in flake.nix — see that
+    # file's comment.
+    zenBrowser
+    # Opera — nixpkgs dropped its own `opera` derivation outright. operaBrowser
+    # comes from the opera-flake input (the same derivation, carried forward
+    # by a former nixpkgs maintainer) via home-manager.extraSpecialArgs in
+    # flake.nix.
+    operaBrowser
     # 02.05.00.67, with the real upstream withNvidiaGLWorkaround applied —
     # fixes the blank Prepare/Preview build plate on this host's NVIDIA GPU.
     # From the separate nixpkgs-bambu-studio input (see flake.nix); this
@@ -244,10 +279,14 @@
   # ── kitty: launch zsh directly, not the login shell ─────────────────────────
   # Login shell stays bash (predictable non-interactive `ssh z@host cmd`
   # semantics — interactive-zsh.nix) and interactive bash execs into zsh
-  # anyway; pointing kitty at zsh directly just skips that hop.
+  # anyway; pointing kitty at zsh directly just skips that hop. But skipping
+  # the hop also skips the `export SHELL=zsh` that lives in that bash exec, so
+  # $SHELL would otherwise still read the inherited login-shell value (bash);
+  # set it explicitly here to match the shell kitty actually runs.
   programs.kitty = {
     enable = true;
     settings.shell = "${pkgs.zsh}/bin/zsh";
+    environment.SHELL = "${pkgs.zsh}/bin/zsh";
   };
 
   # ── Screenshot annotation (swappy) ──────────────────────────────────────────
@@ -300,6 +339,26 @@
       _launch = "Alt+Space";
     };
   };
+
+  # ── Default browser: Vivaldi ───────────────────────────────────────────────
+  # Nothing in the fleet defined a default browser, so links from other apps
+  # had no handler at all. The desktop id is `vivaldi-stable.desktop`, not
+  # `vivaldi.desktop`: nixpkgs rewrites the contents of the .deb's desktop
+  # file but never renames it. Pairs with the Mod+B bind in niri-settings.nix.
+  xdg.mimeApps =
+    let
+      vivaldi = [ "vivaldi-stable.desktop" ];
+    in
+    {
+      enable = true;
+      defaultApplications = {
+        "text/html" = vivaldi;
+        "x-scheme-handler/http" = vivaldi;
+        "x-scheme-handler/https" = vivaldi;
+        "x-scheme-handler/about" = vivaldi;
+        "x-scheme-handler/unknown" = vivaldi;
+      };
+    };
 
   # Vicinae has no built-in global-shortcut support by design — the DE's own
   # shortcut mechanism binds its CLI toggle. A plain single-Exec desktop

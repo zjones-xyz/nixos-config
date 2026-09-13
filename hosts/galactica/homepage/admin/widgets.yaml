@@ -1,0 +1,35 @@
+---
+- resources:
+    label: System
+    cpu: true
+    memory: true
+    disk: /
+
+- search:
+    provider: duckduckgo
+    target: _blank
+
+- datetime:
+    text_size: xl
+    format:
+      timeStyle: short
+      dateStyle: short
+
+# Upcoming releases, pulled through the service widgets in services.yaml.
+# Each service_group/service_name pair below must resolve to a real entry
+# there — checks/homepage-config fails the build if one dangles.
+- calendar:
+    firstDayInWeek: sunday
+    view: agenda
+    maxEvents: 10
+    showTime: true
+    integrations:
+      - type: sonarr
+        service_group: Media Management
+        service_name: Sonarr
+      - type: sonarr
+        service_group: Media Management
+        service_name: Sonarr (Anime)
+      - type: radarr
+        service_group: Media Management
+        service_name: Radarr

@@ -23,7 +23,10 @@
     ../../modules/nixos/dns.nix
     ../../modules/nixos/adguardhome-sync.nix
     ../../modules/nixos/traefik-galactica.nix
+    ../../modules/nixos/newt.nix
+    ../../modules/nixos/tsdproxy.nix
     ./borgmatic.nix
+    ./homepages.nix
     ./nixflix.nix
     ./unpackerr.nix
     ./bazarr.nix
@@ -89,9 +92,9 @@
   # also `tower`/`arr` (legacy identities it absorbed, DECISIONS.md §2).
   #
   # `.xyz` names are externally-routable, terminated by Pangolin (not Traefik),
-  # so no local router or cert is expected for them; jellyfin/guesthome get
-  # split-horizon rewrites so LAN clients skip the tunnel, homeassistant
-  # deliberately stays Tailscale/LAN-only with no `.xyz` name at all.
+  # so no local router or cert is expected for them; jellyfin/guest get
+  # split-horizon rewrites so LAN clients skip the tunnel, while homeassistant
+  # and the `home` admin dashboard stay Tailscale/LAN-only with no `.xyz` name.
   # ⚠ `enabled = true` is mapped over every entry, not written per-line —
   # AdGuard has a per-rewrite enable toggle whose omitted bool renders as Go's
   # zero-value (false), silently disabling every rewrite.
@@ -141,7 +144,13 @@
     { domain = "*.arr.internal"; answer = "192.168.8.190"; }
     { domain = "arr.zjones.dev"; answer = "192.168.8.190"; }
     { domain = "*.arr.zjones.dev"; answer = "192.168.8.190"; }
-    { domain = "guesthome.zjones.xyz"; answer = "192.168.8.190"; }
+    # The two dashboards (hosts/galactica/homepages.nix) — flat names, own
+    # Traefik router pair each, not under arr.* or galactica.*.
+    { domain = "home.internal"; answer = "192.168.8.190"; }
+    { domain = "home.zjones.dev"; answer = "192.168.8.190"; }
+    { domain = "guest.internal"; answer = "192.168.8.190"; }
+    { domain = "guest.zjones.dev"; answer = "192.168.8.190"; }
+    { domain = "guest.zjones.xyz"; answer = "192.168.8.190"; }
   ];
 
   # ── AdGuardHome-Sync — galactica (origin) → router (first replica) ─────────
@@ -304,6 +313,37 @@
   # its own. Local time, not UTC: the module sets the container's TZ.
   services.scrutinyCollector.cronSchedule = "0 1 * * *";
 
+  # ── Remote access for the dashboards (homepages.nix) ───────────────────────
+  # Tailscale carries the admin homepage (and SSH) over the tailnet. authKeyFile
+  # so a rebuilt host rejoins headless, same shape as hopper/pegasus/hamilton.
+  # ⚠ The key must be in secrets/galactica.yaml *before* the first switch: a
+  # sops key that isn't there fails activation, not eval (MANUAL-STEPS §13.1).
+  services.tailscale = {
+    enable = true;
+    extraUpFlags = [ "--ssh" ];
+    authKeyFile = config.sops.secrets."tailscale/authKey".path;
+  };
+
+  networking.firewall.trustedInterfaces = [ "tailscale0" ];
+  networking.firewall.allowedUDPPorts = [ config.services.tailscale.port ];
+
+  # The admin dashboard gets its OWN tailnet name (home.<tailnet>.ts.net) via
+  # tsdproxy, so galactica's own MagicDNS entry stays just the host's — SSH
+  # and nothing else. Reuses the auth key above; a reusable key registers
+  # many nodes. homepages.nix carries the labels that name it.
+  homelab.tsdproxy.enable = true;
+
+  # The guest homepage's door: Newt tunnels guest.zjones.xyz in from the
+  # Pangolin VPS. ⚠ Commented until the Pangolin Site for galactica exists —
+  # the id below is issued at creation (same reasoning as the NUT block: a
+  # made-up id fails at service start, not eval, and would be easy to miss).
+  # §13 has the steps, including the `newt/clientSecret` sops entry this
+  # enables.
+  # homelab.newt = {
+  #   enable = true;
+  #   id = "CONFIRM_ME_FROM_PANGOLIN"; # Pangolin → Sites → create "galactica"
+  # };
+
   # ── NUT — pending: galactica is to be the UPS server ───────────────────────
   # Deliberately NOT modules/nixos/nut.nix (that file is hopper's own server
   # config, not a template). The ready-to-paste config, the naming constraints
@@ -326,6 +366,9 @@
       # runs as root, no User= override.
       "adguardhome-sync/originPassword" = { };
       "adguardhome-sync/routerPassword" = { };
+      # Reusable, non-ephemeral: galactica is a server that must rejoin on
+      # its own after a rebuild, not a one-shot device.
+      "tailscale/authKey" = { };
       # Raw keyfile for all seven array members (slot 0; every disk also
       # carries the fleet recovery passphrase in slot 1). `format = "binary"`
       # is the byte-exact round-trip for raw key material.

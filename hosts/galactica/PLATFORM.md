@@ -1779,7 +1779,7 @@ disks as the zero-cost hedge" reasoning wants them available as an emergency
 exactly as well as a drive spinning in the chassis, and arrives with less wear on
 it. The hedge and the watts are not in tension.
 
-If the in-case session is weeks out, `MANUAL-STEPS.md` §14 has an interim
+If the in-case session is weeks out, `MANUAL-STEPS.md` §15 has an interim
 spin-down — but read §13e first, because two things in this host's own config
 will otherwise undo it.
 
@@ -1979,7 +1979,7 @@ hour and then quietly stops:
    > snapshot at a fresh path per run, and borg's files cache is path-keyed. If
    > that defeats the cache, the nightly run re-reads the whole Critical +
    > Precious set instead of only changed files — the difference between a
-   > metadata sweep and hours of spinning. `MANUAL-STEPS.md` §14 item 10.⟩
+   > metadata sweep and hours of spinning. `MANUAL-STEPS.md` §15 item 10.⟩
 4. **The workload**, for `tank` — §13d, and §13f for the part of it that can be
    moved.
 
@@ -1989,7 +1989,7 @@ cycle or a controller reset. That is the second reason the durable answer for
 
 ### 13f. A separate seed tier — the one change that could let `tank` sleep
 
-**Not yet decided; the preconditions are `MANUAL-STEPS.md` §14 items 6–10.**
+**Not yet decided; the preconditions are `MANUAL-STEPS.md` §15 items 6–10.**
 
 §13d rejects `tank` spin-down because qBittorrent seeds out of
 `/tank/nixflix_media/downloads`. That path is a plain subdirectory of the media
@@ -2038,7 +2038,7 @@ upload *and* contends with in-flight download writes; and this design makes the
 seed tier the one device that is permanently awake, so picking the oldest disk in
 the building for that role puts the most duty on the most likely thing to fail.
 Neither objection bites at a few dozen torrents. Both bite at several hundred —
-hence §14 item 7.
+hence §15 item 7.
 
 ⭐ **`h-SDCP` is genuinely uncommitted.** Its only other candidacy was
 `DESIGN.md` §5's 2 TB photo-tier mirror, which is dead twice over: its proposed
@@ -2059,5 +2059,5 @@ on `tank/photos/immich*` in the ZFS array. Nothing live is waiting on this disk.
 - **Ports and bays fit after the `sidepool` pull**, which frees four 3.5"
   positions and four ports; that puts the machine at eight SATA devices against
   onboard 6 + the HBA. Before the pull it does not fit.
-- **2 TB is a ceiling, not headroom** — §14 item 6 is what says whether it
+- **2 TB is a ceiling, not headroom** — §15 item 6 is what says whether it
   clears the seed set at all.
