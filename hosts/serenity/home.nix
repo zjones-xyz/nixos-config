@@ -106,5 +106,19 @@
     ipmi-tower-set-bios-next-boot = ''~/Code/nixos-config/scripts/ipmi-remote.sh bios-next-boot towerbmc.internal "op://System Keys/tower ipmi/password"'';
   };
 
+  # ── Syncthing ───────────────────────────────────────────────────────────────
+  # Peer of galactica's instance (hosts/galactica/syncthing.nix), reachable
+  # there at syncthing.peacock-koi.ts.net (tsdproxy) or syncthing.zjones.dev
+  # (Traefik) for its GUI. home-manager's syncthing module, not a system
+  # service — nix-darwin has no services.syncthing of its own, and this runs
+  # as a launchd agent under z instead. GUI stays loopback-only; device/folder
+  # pairing happens by hand in the GUI (MANUAL-STEPS.md §15 on galactica).
+  services.syncthing = {
+    enable = true;
+    guiAddress = "127.0.0.1:8384";
+    overrideDevices = false; # pairing happens by hand in the GUI, not here
+    overrideFolders = false; # ditto for which folders are shared
+  };
+
   home.stateVersion = "26.05";
 }

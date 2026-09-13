@@ -25,6 +25,7 @@
     ../../modules/nixos/traefik-galactica.nix
     ../../modules/nixos/newt.nix
     ../../modules/nixos/tsdproxy.nix
+    ./syncthing.nix
     ./borgmatic.nix
     ./homepages.nix
     ./nixflix.nix
@@ -151,6 +152,10 @@
     { domain = "guest.internal"; answer = "192.168.8.190"; }
     { domain = "guest.zjones.dev"; answer = "192.168.8.190"; }
     { domain = "guest.zjones.xyz"; answer = "192.168.8.190"; }
+    # Syncthing (hosts/galactica/syncthing.nix) — flat name, own Traefik
+    # router pair, same shape as the two dashboards above.
+    { domain = "syncthing.internal"; answer = "192.168.8.190"; }
+    { domain = "syncthing.zjones.dev"; answer = "192.168.8.190"; }
   ];
 
   # ── AdGuardHome-Sync — galactica (origin) → router (first replica) ─────────

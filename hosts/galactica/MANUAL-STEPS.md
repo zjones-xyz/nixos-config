@@ -1260,3 +1260,32 @@ rather than each instance being hand-edited.
    entirely and derive rewrites from leases, or whether reservations should
    just get declared in Nix alongside `clients.persistent` so a name only
    has to be typed once.
+
+## 15. Syncthing — owner steps (GUI login + device pairing)
+
+`hosts/galactica/syncthing.nix` runs the hub instance (Docker, host
+networking); `hosts/pegasus/configuration.nix` and `hosts/serenity/home.nix`
+run the two peers (native `services.syncthing` on pegasus, home-manager's
+module under launchd on serenity). All three ship with empty config — none
+of it can be declared before each instance has generated its own device ID,
+so pairing is a one-time manual pass through the GUIs.
+
+1. [ ] **Set galactica's GUI login first.** It ships with authentication
+   OFF, and this instance is the one reachable off-LAN
+   (`syncthing.zjones.dev`) — open `http://127.0.0.1:8384` on galactica (or
+   tunnel over SSH before the DNS/Traefik pieces below are confirmed) and set
+   a username/password under Settings → GUI. Same blocking step bazarr.nix's
+   MANUAL-STEPS item took, and for the same reason.
+2. [ ] **Confirm the two remote-access paths.** `syncthing.internal` /
+   `syncthing.zjones.dev` (Traefik, LAN + public) and
+   `syncthing.peacock-koi.ts.net` (tsdproxy, tailnet) should all serve the
+   login page. The AdGuard rewrites for the first two are declarative
+   (`configuration.nix`) and need no separate step, same as home/guest's.
+3. [ ] **Exchange device IDs.** On each of the three instances (galactica,
+   pegasus, serenity), Actions → Show ID, then Add Device on the other two,
+   pasting each other's ID. `overrideDevices = false` on pegasus/serenity
+   means pairing done this way survives a `nrs`/`drs` rebuild rather than
+   being deleted on the next switch.
+4. [ ] **Add the folders to share, on each side of each pair.** Same
+   `overrideFolders = false` reasoning — created and shared through the GUI,
+   they persist across rebuilds without ever being declared in Nix.
