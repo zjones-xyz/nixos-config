@@ -64,8 +64,9 @@ in
       ports = [ "127.0.0.1:3010:3000" ];
       volumes = mkConfigMounts [ ./homepage/common ./homepage/admin ];
       # Picked up by homelab.tsdproxy, which registers a tailnet node of this
-      # name. ⚠ The port here is the *published* one (3010), not the
-      # container's 3000 — tsdproxy dials targetHostname:port on the host.
+      # name. ⚠ The port is the *published* one (3010), not the container's
+      # 3000 — tsdproxy dials targetHostname:port on the host. Confirmed live;
+      # the stacks this replaced published 3000:3000 and could not show it.
       labels = {
         "tsdproxy.enable" = "true";
         "tsdproxy.name" = "home";

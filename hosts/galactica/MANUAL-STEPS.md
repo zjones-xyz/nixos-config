@@ -1041,21 +1041,34 @@ works as soon as the switch lands. Steps below are for the tailnet
    the switch: `configuration.nix` references that key, and a sops entry whose
    key is absent from the file fails **activation**, not eval.
 
-2. [ ] **Switch, then check the tailnet URL.** The join and the HTTPS serve
-   both happen on `nrs` with no interactive step — `authKeyFile` brings the
-   node up (`--ssh`), and the `tailscale-serve-homepage` unit in
-   `homepages.nix` converges `serve --https=443 → 127.0.0.1:3010` every
-   switch. Then check `https://galactica.peacock-koi.ts.net` loads. (The
-   tailnet already has MagicDNS + HTTPS certs enabled — the old tsdproxy
-   names like `home.peacock-koi.ts.net` prove it.) If the serve unit is the
-   thing that failed, `systemctl status tailscale-serve-homepage` and
-   `tailscale serve status` are where to look.
+2. [x] **Switch — tailnet access confirmed.** Both halves happen on `nrs`
+   with no interactive step: `authKeyFile` joins galactica itself (`--ssh`),
+   and `homelab.tsdproxy` registers a *separate* node named `home` for the
+   admin dashboard, so `https://home.peacock-koi.ts.net` serves it while
+   galactica's own MagicDNS entry stays just the host's. Verified live.
 
-3. [ ] **Disable key expiry for `galactica`** (Machines → galactica → Disable
-   key expiry). A server, not a laptop. This one is genuinely console-only —
-   expiry is a control-plane property of the machine, not something the node
-   can set about itself, so it is the only part of the tailnet setup that
-   stays manual.
+   Why a second node rather than `tailscale serve`: MagicDNS maps names to
+   devices and the `ts.net` zone has no alias, so serve can only ever answer
+   on the node's own name. `modules/nixos/tsdproxy.nix` has the details.
+
+   Two things this cost on the way in, both now fixed in-tree, recorded so
+   the next host does not repeat them:
+
+   - tsdproxy runs with host networking, so its dashboard shares the host's
+     port space. Upstream's default 8080 is SABnzbd's on any nixflix host —
+     the same collision `modules/nixos/adguardhome-sync.nix` documents. It
+     now defaults to 8091 via `homelab.tsdproxy.port`.
+   - `tsdproxy.port.1` takes the **published** host port, not the container's
+     internal one: `443/https:3010/http` against a container publishing
+     `127.0.0.1:3010:3000`. The stacks this replaced published `3000:3000`,
+     so they could not distinguish the two.
+
+3. [x] **Key expiry disabled for `galactica`** — done in the admin console
+   (Machines → galactica → Disable key expiry). A server, not a laptop, and
+   genuinely console-only: expiry is a control-plane property of the machine,
+   not something the node can set about itself. ⚠ The `home` node tsdproxy
+   registers is a separate device and has its own expiry — disable it there
+   too, or the dashboard silently drops off the tailnet in ~6 months.
 
 4. [ ] **Create the Pangolin Site.** Pangolin admin → Sites → create
    `galactica` (Newt connector). Copy the issued **id** and **secret**.
