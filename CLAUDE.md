@@ -74,9 +74,11 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
   in brackets, e.g. `[memory-alpha] …`, `[pegasus] …`, `[all] …`.
 - **Branch names carry no agent prefix and no generated words.** `nfs-cutover`,
   not `claude/nfs-cutover` or `claude/nice-wozniak-vp619a` — name the branch for
-  the work, not for who did it. A session handed a prefixed or generated branch
-  renames it before opening the PR; rename it on GitHub's branches page so an
-  open PR follows, since deleting and recreating the branch closes that PR.
+  the work, not for who did it. A session spawning another names the branch up
+  front (`create_session`'s `outcome_branch`); the generated shape is only what
+  you get when nobody passes one. A session already holding such a branch renames
+  it before opening the PR, via GitHub's branches page so an open PR follows —
+  pushing the new name and deleting the old one closes that PR instead.
 - Validate with `nix flake check` / `nix eval`. On the Mac (aarch64-darwin) the
   Linux closures can be *evaluated* but not *built* (no Linux builder); building
   and every `switch` happen on the target host.
