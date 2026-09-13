@@ -19,6 +19,12 @@ stay consistent. This file documents the repo's structure and patterns.
 - **`modules/home/<name>.nix`** — Home Manager modules shared across hosts/platforms
   (e.g. `common.nix`, consumed by both a NixOS host and a darwin host).
 - **`secrets/<host>.yaml`** — sops-encrypted, per host. Policy in `.sops.yaml`.
+- **`checks/<name>/`** — a `checks.<system>.<name>` flake output and whatever it
+  runs (linter config, validator script). For app config the fleet hand-maintains
+  as data rather than Nix — e.g. `checks/homepage-config` over
+  `hosts/galactica/homepage/*.yaml`. ⚠ `nix flake check --no-build` only
+  *evaluates* these; anything that has to actually run needs its own
+  `nix build .#checks.…` step in `.github/workflows/nix-check.yml`.
 - **`docs/<topic>.md`** — fleet-wide documentation that belongs to no single host
   (e.g. `DISK-LABELLING.md`, the physical disk naming and cable-labelling
   convention; `DISK-DRAWER.md`, unassigned spare disks; `BACKUP.md`, which host

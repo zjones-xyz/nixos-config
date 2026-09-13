@@ -73,13 +73,14 @@ jobs:
             nix eval ".#darwinConfigurations.$attr.config.system.build.toplevel.drvPath"
           done
 
+      # `nix flake check --no-build` above only *evaluates* check derivations —
+      # anything that has to actually run (yamllint, a validator script, a
+      # nixosTest) is evaluated, skipped, and reported as a pass. So every
+      # `checks` output that does real work needs an explicit build step here.
+      # Cheap ones go first: this fails in seconds on a bad dashboard edit,
+      # rather than after the ~10-minute memory-alpha build below.
+      - name: Run flake checks (x86_64-linux)
+        run: nix build --no-link --print-build-logs .#checks.x86_64-linux.homepage-config
+
       - name: Build memory-alpha (x86_64-linux, native)
         run: nix build .#nixosConfigurations.memory-alpha.config.system.build.toplevel --no-link
-
-      # NOTE for whoever adds the next `checks` output: the first step above
-      # runs `nix flake check --no-build`, which *evaluates* check derivations
-      # without ever building them. Eval-time assertions (a `throw` in a `let`)
-      # fire under that; anything needing to actually run — a nixosTest, an
-      # xmllint on a hand-maintained file — is evaluated, skipped, and reported
-      # as a pass. Those need an explicit `nix build .#checks.<system>.<name>`
-      # step here. This repo had one until the liskov VFIO checks were removed.

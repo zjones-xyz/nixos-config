@@ -1,0 +1,29 @@
+---
+# yamllint rules for hosts/galactica/homepage. Deliberately close to yamllint's
+# `default` preset — the point is catching what silently breaks a dashboard,
+# not enforcing house style on hand-edited config.
+#
+# `key-duplicates` earns its keep on repeated *fields* — a second `icon:` under
+# one service parses fine and the first value just vanishes. It cannot see a
+# repeated group or service *name*, because Homepage nests those as list
+# entries (`- Navidrome:`) rather than keys in a shared mapping; validate.py
+# covers that half. Verified both ways before relying on the split.
+extends: default
+
+rules:
+  # Homepage nests `- Group:` -> `- Service:` -> fields, two columns per level.
+  indentation:
+    spaces: 2
+    indent-sequences: true
+
+  # Long service URLs and the explanatory comment blocks both run past 80.
+  line-length:
+    max: 100
+
+  # Every file starts with `---`; keeps the diff of a new config file honest.
+  document-start:
+    present: true
+
+  # `on:`/`yes:` aren't meaningful keys here, and Homepage uses real booleans.
+  truthy:
+    check-keys: false

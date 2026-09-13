@@ -156,6 +156,14 @@ in
 
   homelab.letsencryptStaging = false;
 
+  # This host's Pangolin site — tunnels the public-facing services here
+  # (jellyfin.nix documents its resource target). Was hardcoded in newt.nix
+  # before galactica grew its own site.
+  homelab.newt = {
+    enable = true;
+    id = "n83mhpnryi0lrid";
+  };
+
   # Real NVMe behind a real controller, so smartd has something to poll
   # (modules/nixos/smart.nix). `smartctl` itself ships fleet-wide regardless.
   homelab.smart.monitor = true;
