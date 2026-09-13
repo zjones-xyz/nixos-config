@@ -1063,12 +1063,13 @@ works as soon as the switch lands. Steps below are for the tailnet
      `127.0.0.1:3010:3000`. The stacks this replaced published `3000:3000`,
      so they could not distinguish the two.
 
-3. [x] **Key expiry disabled for `galactica`** — done in the admin console
-   (Machines → galactica → Disable key expiry). A server, not a laptop, and
-   genuinely console-only: expiry is a control-plane property of the machine,
-   not something the node can set about itself. ⚠ The `home` node tsdproxy
-   registers is a separate device and has its own expiry — disable it there
-   too, or the dashboard silently drops off the tailnet in ~6 months.
+3. [x] **Key expiry disabled — on `galactica` *and* on `home`.** Both done in
+   the admin console (Machines → … → Disable key expiry). Servers, not
+   laptops, and genuinely console-only: expiry is a control-plane property of
+   the machine, not something a node can set about itself. ⚠ Two devices, not
+   one — every name tsdproxy registers is its own Tailscale device with its
+   own expiry, so anything added to `homelab.tsdproxy` later needs the same
+   treatment or it silently drops off the tailnet in ~6 months.
 
 4. [ ] **Create the Pangolin Site.** Pangolin admin → Sites → create
    `galactica` (Newt connector). Copy the issued **id** and **secret**.
