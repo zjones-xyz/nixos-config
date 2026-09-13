@@ -1953,13 +1953,22 @@ hour and then quietly stops:
    which issues a full attribute read to every autodetected disk — spinning a
    standby drive straight back up. This is why `homelab.smart.standbyAware`
    exists and why `configuration.nix` sets it; the module explains the flag.
-2. **The Scrutiny collector, daily at midnight.** It runs privileged with every
+2. **The Scrutiny collector, daily at 01:00.** It runs privileged with every
    block device visible and sweeps them all, with no standby awareness and no
    per-device exclusion. One guaranteed spin-up per disk per day. The wear is
    negligible (one start/stop cycle a day against a 50k rating) — the problem is
    that **the drive does not go back down**, because nothing re-arms the standby
    timer. A spin-down meant to hold has to arm the drive's *own* timer
    (`hdparm -S`), not just issue one standby command.
+   > Moved off the upstream midnight default so it lands in the same night-time
+   > window as borgmatic's 01:30 rather than opening a second one. ⚠ That is
+   > only true because the module now sets the container's `TZ`; the collector's
+   > cron reads UTC otherwise, and a schedule written as local time fires hours
+   > off with nothing visible to say so.
+   > **Adjacent is not yet merged**, though: with a 10-minute standby timer the
+   > disks would sleep at ~01:10 and wake again at 01:30. Closing the gap (01:25,
+   > or a timer longer than the gap) folds the two into one wake — worth doing
+   > when the spin-down is actually armed, not before.
 3. **borgmatic, nightly at 01:30.** Its scope is property-driven
    (`org.torsion.borgmatic:backup=auto` — `BACKUP-BORG.md`), which today means
    `tank/documents` and `tank/photos/immich*`: bulk data on the RAIDZ1

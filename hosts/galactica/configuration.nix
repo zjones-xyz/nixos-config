@@ -299,6 +299,11 @@
   # stays the local alerter.
   services.scrutinyCollector.enable = true;
 
+  # 01:00 rather than the default midnight — the sweep wakes every disk, so it
+  # belongs in the same night-time window as borgmatic's 01:30 rather than in
+  # its own. Local time, not UTC: the module sets the container's TZ.
+  services.scrutinyCollector.cronSchedule = "0 1 * * *";
+
   # ── NUT — pending: galactica is to be the UPS server ───────────────────────
   # Deliberately NOT modules/nixos/nut.nix (that file is hopper's own server
   # config, not a template). The ready-to-paste config, the naming constraints

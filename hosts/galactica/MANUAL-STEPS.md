@@ -1256,9 +1256,11 @@ survive a power cycle.
    machine, so it is the wrong place to accept an unknown.
 9. [ ] **Settle the two blockers §13f does not remove**, before concluding that
    a seed tier bought spin-down:
-   - The **Scrutiny collector's** midnight sweep wakes every disk and nothing
-     re-arms the standby timer afterwards (§13e item 2). Needs standby
-     awareness, a device exclusion, or a re-arm timer.
+   - The **Scrutiny collector's** nightly sweep wakes every disk (§13e item 2).
+     Now at 01:00 local, alongside borgmatic's 01:30 rather than in a window of
+     its own — but 30 minutes apart is still two wakes if the standby timer is
+     shorter than the gap. Close it to ~01:25, or set a timer longer than the
+     gap, once a spin-down is actually armed.
    - Whether **Jellyfin's and the \*arrs' scheduled scans stay metadata-only**.
      All metadata is on the special vdev, so an unchanged library *should* walk
      from SSD + ARC without waking a spinner. Plausible, unverified, decisive.
