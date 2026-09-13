@@ -22,6 +22,25 @@
     '';
   };
 
+  options.homelab.smart.standbyAware = lib.mkOption {
+    type = lib.types.bool;
+    default = false;
+    description = ''
+      Skip a disk's SMART poll while it is in standby, rather than spinning it
+      up to read attributes.
+
+      Defaults to false: on a host where nothing parks a disk the clause is
+      inert, and on one where something does, skipping checks should be a
+      deliberate choice rather than a fleet default. Enable it on hosts that
+      deliberately park disks — the 30-minute poll otherwise defeats every
+      spin-down on the box (galactica's PLATFORM.md §13e).
+
+      Deliberately *without* smartd's `,q` suffix: the "is in STANDBY mode"
+      line each skipped poll logs is the only cheap confirmation that the
+      spin-down is actually holding.
+    '';
+  };
+
   config = lib.mkMerge [
     # Unconditional: the tool itself, everywhere.
     { environment.systemPackages = [ pkgs.smartmontools ]; }
@@ -34,7 +53,8 @@
         # Full attribute set + the drive's own offline collection/autosave.
         # Deliberately no `-s` self-test schedule until alerts go somewhere
         # a person actually reads (see below).
-        defaults.monitored = "-a -o on -S on";
+        defaults.monitored = "-a -o on -S on"
+          + lib.optionalString config.homelab.smart.standbyAware " -n standby";
 
         # Wall messages: useless headless, noisy on a desktop.
         notifications.wall.enable = false;

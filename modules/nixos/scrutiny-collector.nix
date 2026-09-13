@@ -40,6 +40,12 @@ let
           # Without this every node reports under the container's hostname and
           # the hub cannot tell whose disks are whose.
           - COLLECTOR_HOST_ID=${cfg.hostId}
+          # ⚠ The collector's cron runs UTC without this, so a schedule written
+          # as local time fires hours off with nothing to show for it
+          # (arcane.nix and speedtest-tracker.nix set TZ for the same reason).
+          # Follows the host's own time.timeZone rather than a second hardcoded
+          # copy; UTC when that is unset, which is the container's own default.
+          - TZ=${if config.time.timeZone == null then "UTC" else config.time.timeZone}
   '';
 in
 {
@@ -70,7 +76,15 @@ in
     cronSchedule = lib.mkOption {
       type = lib.types.str;
       default = "0 0 * * *";
-      description = "Collector cron schedule (upstream default: daily at midnight).";
+      description = ''
+        Collector cron schedule. Upstream's default is daily at midnight, and
+        the container now reads it in the host's timezone (see the TZ line in
+        the compose above) rather than UTC.
+
+        Each run sweeps every block device, so on a host that parks disks this
+        is a guaranteed daily spin-up — worth placing next to whatever else
+        already wakes them. galactica's PLATFORM.md §13e has the reasoning.
+      '';
     };
 
     image = lib.mkOption {
