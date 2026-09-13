@@ -1034,35 +1034,38 @@ Both instances are already routed by the host's own Traefik —
 works as soon as the switch lands. Steps below are for the tailnet
 (admin) and public (guest) halves.
 
-1. [ ] **Put the tailnet auth key in sops, before the first switch.** Mint a
-   *reusable, non-ephemeral* key in the admin console (Settings → Keys), then
-   `sops secrets/galactica.yaml` → add it as `tailscale/authKey`. ⚠ Order
-   matters: `configuration.nix` already references that key, and a sops entry
-   whose key is missing from the file fails **activation**, not eval — so the
-   switch carrying this section errors out if the key isn't in place first.
-   Once it is, the join and the tailnet HTTPS serve both happen on `nrs` with
-   no interactive step: `authKeyFile` brings the node up (`--ssh`), and the
-   `tailscale-serve-homepage` unit in `homepages.nix` converges
-   `serve --https=443 → 127.0.0.1:3010` on every switch. Afterwards check
-   `https://galactica.peacock-koi.ts.net` loads. (The tailnet already has
-   MagicDNS + HTTPS certs enabled — the old tsdproxy names like
-   `home.peacock-koi.ts.net` prove it.)
+1. [x] **Tailnet auth key in sops — done.** A reusable, non-ephemeral key
+   (admin console → Settings → Keys) is in `secrets/galactica.yaml` as
+   `tailscale/authKey`, encrypted to all three recipients the `.sops.yaml`
+   rule names, galactica's own host key included. ⚠ This had to land *before*
+   the switch: `configuration.nix` references that key, and a sops entry whose
+   key is absent from the file fails **activation**, not eval.
 
-2. [ ] **Disable key expiry for `galactica`** (Machines → galactica → Disable
+2. [ ] **Switch, then check the tailnet URL.** The join and the HTTPS serve
+   both happen on `nrs` with no interactive step — `authKeyFile` brings the
+   node up (`--ssh`), and the `tailscale-serve-homepage` unit in
+   `homepages.nix` converges `serve --https=443 → 127.0.0.1:3010` every
+   switch. Then check `https://galactica.peacock-koi.ts.net` loads. (The
+   tailnet already has MagicDNS + HTTPS certs enabled — the old tsdproxy
+   names like `home.peacock-koi.ts.net` prove it.) If the serve unit is the
+   thing that failed, `systemctl status tailscale-serve-homepage` and
+   `tailscale serve status` are where to look.
+
+3. [ ] **Disable key expiry for `galactica`** (Machines → galactica → Disable
    key expiry). A server, not a laptop. This one is genuinely console-only —
    expiry is a control-plane property of the machine, not something the node
    can set about itself, so it is the only part of the tailnet setup that
    stays manual.
 
-3. [ ] **Create the Pangolin Site.** Pangolin admin → Sites → create
+4. [ ] **Create the Pangolin Site.** Pangolin admin → Sites → create
    `galactica` (Newt connector). Copy the issued **id** and **secret**.
 
-4. [ ] **Wire Newt up.** `sops secrets/galactica.yaml` → add the secret as
+5. [ ] **Wire Newt up.** `sops secrets/galactica.yaml` → add the secret as
    `newt/clientSecret`; put the id in the `homelab.newt` block in
    `configuration.nix` and uncomment it; `nrs`. `systemctl status newt`
    should show the tunnel registered.
 
-5. [ ] **Re-point the guest Resource.** Pangolin admin → Resources →
+6. [ ] **Re-point the guest Resource.** Pangolin admin → Resources →
    `guesthome.zjones.xyz` → rename to `guest.zjones.xyz` and move it onto
    the `galactica` site with target `http://localhost:3011`
    (host-resolvable — Newt runs on the host, so container names do NOT
@@ -1070,7 +1073,7 @@ works as soon as the switch lands. Steps below are for the tailnet
    Jellyfin resource). Keep whatever auth/SSO the old Tower resource had.
    Verify from off-LAN (phone on cellular).
 
-6. [ ] **Verify the guest links actually work from outside.** The guest
+7. [ ] **Verify the guest links actually work from outside.** The guest
    dashboard currently lists only Jellyfin (`jellyfin.zjones.dev`) — confirm
    that name resolves and routes publicly (it is also a Pangolin resource);
    if the public name differs, fix the href in
@@ -1078,7 +1081,7 @@ works as soon as the switch lands. Steps below are for the tailnet
    Tower-era guest links (Audiobookshelf, Grimmory, Shelfmark, 13ft) return
    as those services are re-homed.
 
-7. [ ] **Retire the Tower stacks.** In homelab-stacks, delete (or mark
+8. [ ] **Retire the Tower stacks.** In homelab-stacks, delete (or mark
    migrated) `tower/homepage`, `tower/guesthome` and `tower/pangolin-newt`,
    and delete the old `tower` Site in Pangolin once nothing references it.
 
@@ -1197,7 +1200,7 @@ rather than each instance being hand-edited.
    integration depends on `--glinet`).
 7. [x] **Fleet-wide inter-host DNS outage, root-caused and fixed —
    2026-09-08.** SSH to `memory-alpha.internal` started failing the
-   morning after §13 item 4 was confirmed working. Long diagnostic chain,
+   morning after §14 item 4 was confirmed working. Long diagnostic chain,
    in order, each one ruled out before finding the real cause: dnsmasq's
    forward-to-AdGuard config (`server=127.0.0.1#3053` — fine), AdGuard's
    own DNS cache (cleared it, still broken), the `--glinet` flag
