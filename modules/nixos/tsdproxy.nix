@@ -42,6 +42,18 @@ in
       '';
     };
 
+    port = lib.mkOption {
+      type = lib.types.port;
+      default = 8091;
+      description = ''
+        tsdproxy's own dashboard/API port (config `http.port`). Deliberately
+        not upstream's 8080: with host networking this shares the host's whole
+        port space, and 8080 is SABnzbd's on any host running nixflix — the
+        same collision adguardhome-sync.nix already documents. No
+        allowedTCPPorts entry, so the firewall keeps it off the LAN.
+      '';
+    };
+
     targetHostname = lib.mkOption {
       type = lib.types.str;
       default = "127.0.0.1";
@@ -64,6 +76,10 @@ in
         local:
           host: ${cfg.dockerHost}
           targetHostname: ${cfg.targetHostname}
+
+      http:
+        hostname: 0.0.0.0
+        port: ${toString cfg.port}
 
       tailscale:
         providers:
@@ -88,9 +104,9 @@ in
         "${config.sops.templates."tsdproxy.yaml".path}:/config/tsdproxy.yaml:ro"
       ];
       # Host networking, not the `proxy` bridge: tsdproxy must reach both the
-      # socket proxy and each service on 127.0.0.1. Its own :8080 dashboard
-      # then binds every interface, which the host firewall already drops —
-      # galactica opens 22/53/80/443/2049/45876 and nothing else.
+      # socket proxy and each service on 127.0.0.1. That shares the host's
+      # port space, hence the non-default `port` above; the dashboard binds
+      # every interface and the host firewall is what keeps it off the LAN.
       extraOptions = [ "--network=host" ];
     };
   };
