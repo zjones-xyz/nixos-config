@@ -94,6 +94,8 @@
   home.shellAliases = {
     drs = "sudo darwin-rebuild switch --flake ~/Code/nixos-config#serenity";
     npull = "~/Code/nixos-config/scripts/npull.sh";
+    # A script, not "npull && drs" — an alias would put the PR number on drs.
+    npulldrs = "~/Code/nixos-config/scripts/npull-rebuild.sh darwin-rebuild serenity";
     unlock-memory-alpha = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh memory-alpha.internal "op://System Keys/memory-alpha luks/password"'';
     unlock-pegasus = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh pegasus.internal "op://System Keys/pegasus luks/password"'';
     # "tower", not "galactica" — matching every other alias for the physical

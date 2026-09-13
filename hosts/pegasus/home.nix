@@ -26,6 +26,8 @@
     nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#pegasus";
     nrt = "sudo nixos-rebuild test --flake ~/nixos-config#pegasus";
     npull = "~/nixos-config/scripts/npull.sh";
+    # A script, not "npull && nrs" — an alias would put the PR number on nrs.
+    npullnrs = "~/nixos-config/scripts/npull-rebuild.sh nixos-rebuild pegasus";
     ipmi-tower = ''~/nixos-config/scripts/ipmi-remote.sh run towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-open-tty = ''~/nixos-config/scripts/ipmi-remote.sh console towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-set-bios-next-boot = ''~/nixos-config/scripts/ipmi-remote.sh bios-next-boot towerbmc.internal "op://System Keys/tower ipmi/password"'';
@@ -369,6 +371,26 @@
       _launch = "Alt+Space";
     };
   };
+
+  # ── Default browser: Vivaldi ───────────────────────────────────────────────
+  # Nothing in the fleet defined a default browser, so links from other apps
+  # had no handler at all. The desktop id is `vivaldi-stable.desktop`, not
+  # `vivaldi.desktop`: nixpkgs rewrites the contents of the .deb's desktop
+  # file but never renames it. Pairs with the Mod+B bind in niri-settings.nix.
+  xdg.mimeApps =
+    let
+      vivaldi = [ "vivaldi-stable.desktop" ];
+    in
+    {
+      enable = true;
+      defaultApplications = {
+        "text/html" = vivaldi;
+        "x-scheme-handler/http" = vivaldi;
+        "x-scheme-handler/https" = vivaldi;
+        "x-scheme-handler/about" = vivaldi;
+        "x-scheme-handler/unknown" = vivaldi;
+      };
+    };
 
   # Vicinae has no built-in global-shortcut support by design — the DE's own
   # shortcut mechanism binds its CLI toggle. A plain single-Exec desktop

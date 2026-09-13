@@ -300,6 +300,13 @@ in
         hotkey-overlay.title = "Open a Terminal: kitty";
         action = spawn "kitty";
       };
+      # Browser: vivaldi, picked from the several installed on this host.
+      # --new-window because a bare `vivaldi` raises the running instance
+      # rather than opening a second window.
+      "Mod+B" = {
+        hotkey-overlay.title = "Open a Browser: Vivaldi";
+        action = spawn "vivaldi" "--new-window";
+      };
       # Mod+D (launcher) and the original Super+Alt+L->swaylock dropped/
       # replaced — DMS owns both roles now (Mod+Space spotlight below,
       # Super+Alt+L -> DMS's own lock screen). Neither fuzzel nor swaylock

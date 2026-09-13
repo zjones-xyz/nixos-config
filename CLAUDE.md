@@ -19,6 +19,12 @@ stay consistent. This file documents the repo's structure and patterns.
 - **`modules/home/<name>.nix`** — Home Manager modules shared across hosts/platforms
   (e.g. `common.nix`, consumed by both a NixOS host and a darwin host).
 - **`secrets/<host>.yaml`** — sops-encrypted, per host. Policy in `.sops.yaml`.
+- **`checks/<name>/`** — a `checks.<system>.<name>` flake output and whatever it
+  runs (linter config, validator script). For app config the fleet hand-maintains
+  as data rather than Nix — e.g. `checks/homepage-config` over
+  `hosts/galactica/homepage/*.yaml`. ⚠ `nix flake check --no-build` only
+  *evaluates* these; anything that has to actually run needs its own
+  `nix build .#checks.…` step in `.github/workflows/nix-check.yml`.
 - **`docs/<topic>.md`** — fleet-wide documentation that belongs to no single host
   (e.g. `DISK-LABELLING.md`, the physical disk naming and cable-labelling
   convention; `DISK-DRAWER.md`, unassigned spare disks; `BACKUP.md`, which host
@@ -66,10 +72,13 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
   items get a checkbox.
 - `.nix`/config changes → feature branch + PR, title prefixed with the host scope
   in brackets, e.g. `[memory-alpha] …`, `[pegasus] …`, `[all] …`.
-- **Branch names carry no agent prefix.** `nfs-cutover`, not `claude/nfs-cutover`
-  — name the branch for the work, not for who did it. Where a session is handed
-  a prefixed branch by its harness, that one is out of our hands; every branch
-  created from inside the repo follows this.
+- **Branch names carry no agent prefix and no generated words.** `nfs-cutover`,
+  not `claude/nfs-cutover` or `claude/nice-wozniak-vp619a` — name the branch for
+  the work, not for who did it. A session spawning another names the branch up
+  front (`create_session`'s `outcome_branch`); the generated shape is only what
+  you get when nobody passes one. A session already holding such a branch renames
+  it before opening the PR, via GitHub's branches page so an open PR follows —
+  pushing the new name and deleting the old one closes that PR instead.
 - Validate with `nix flake check` / `nix eval`. On the Mac (aarch64-darwin) the
   Linux closures can be *evaluated* but not *built* (no Linux builder); building
   and every `switch` happen on the target host.

@@ -1,0 +1,15 @@
+/* JetBrains Darcula ramp, shared by both instances. Homepage builds its UI
+   from the .theme-<color> Tailwind ramp; `color: stone` in each settings.yaml
+   is what this override targets. */
+.theme-stone {
+  --color-50: 211 211 211;   /* #D3D3D3  lightest text   */
+  --color-100: 187 187 187;  /* #BBBBBB  UI text          */
+  --color-200: 169 183 198;  /* #A9B7C6  Darcula default text */
+  --color-300: 140 152 163;  /* muted                     */
+  --color-400: 104 151 187;  /* #6897BB  number blue      */
+  --color-500: 75 110 175;   /* #4B6EAF  accent / highlight */
+  --color-600: 60 63 65;     /* #3C3F41  panel            */
+  --color-700: 49 51 53;     /* #313335                   */
+  --color-800: 43 43 43;     /* #2B2B2B  Darcula editor bg */
+  --color-900: 30 30 30;     /* #1E1E1E  deepest bg        */
+}
