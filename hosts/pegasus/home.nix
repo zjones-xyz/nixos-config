@@ -1,4 +1,4 @@
-{ config, pkgs, lib, claudeDesktop, askimoDesktop, orcaSlicerNewer, bambuStudioNewer, ... }:
+{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, orcaSlicerNewer, bambuStudioNewer, ... }:
 
 {
   imports = [
@@ -42,8 +42,9 @@
   # ── Desktop apps ────────────────────────────────────────────────────────────
   # allowUnfree is already set globally in modules/nixos/common.nix, which
   # pegasus imports — vscode/google-chrome/vivaldi/1Password/discord/spotify/
-  # ticktick/obsidian/bambu-studio are all unfree and need it; firefox/
-  # ferdium/signal-desktop/openscad/orca-slicer/streamdeck-ui are free/open.
+  # ticktick/obsidian/bambu-studio/operaBrowser are all unfree and need it;
+  # firefox/ferdium/signal-desktop/openscad/orca-slicer/streamdeck-ui/
+  # floorp-bin/zenBrowser are free/open.
   #
   # Brain.fm was left out — no nixpkgs package, no native Linux client
   # anywhere (subscription web app only); usable via firefox/chrome.
@@ -53,6 +54,9 @@
     google-chrome
     firefox
     vivaldi
+    # nixpkgs' upstream `floorp` was replaced with this prebuilt variant —
+    # building it from source became unfeasible starting with its 12.x line.
+    floorp-bin
     claude-code
     antigravity
     # Google's terminal coding agent, the CLI counterpart to claude-code
@@ -248,6 +252,15 @@
     # and pkgs/askimo.nix itself for why it's a hand-written derivation
     # rather than a flake input like claudeDesktop above.
     askimoDesktop
+    # Zen — no nixpkgs package at all. zenBrowser comes from the zen-browser
+    # flake input via home-manager.extraSpecialArgs in flake.nix — see that
+    # file's comment.
+    zenBrowser
+    # Opera — nixpkgs dropped its own `opera` derivation outright. operaBrowser
+    # comes from the opera-flake input (the same derivation, carried forward
+    # by a former nixpkgs maintainer) via home-manager.extraSpecialArgs in
+    # flake.nix.
+    operaBrowser
     # 02.05.00.67, with the real upstream withNvidiaGLWorkaround applied —
     # fixes the blank Prepare/Preview build plate on this host's NVIDIA GPU.
     # From the separate nixpkgs-bambu-studio input (see flake.nix); this
@@ -264,10 +277,14 @@
   # ── kitty: launch zsh directly, not the login shell ─────────────────────────
   # Login shell stays bash (predictable non-interactive `ssh z@host cmd`
   # semantics — interactive-zsh.nix) and interactive bash execs into zsh
-  # anyway; pointing kitty at zsh directly just skips that hop.
+  # anyway; pointing kitty at zsh directly just skips that hop. But skipping
+  # the hop also skips the `export SHELL=zsh` that lives in that bash exec, so
+  # $SHELL would otherwise still read the inherited login-shell value (bash);
+  # set it explicitly here to match the shell kitty actually runs.
   programs.kitty = {
     enable = true;
     settings.shell = "${pkgs.zsh}/bin/zsh";
+    environment.SHELL = "${pkgs.zsh}/bin/zsh";
   };
 
   # ── Screenshot annotation (swappy) ──────────────────────────────────────────

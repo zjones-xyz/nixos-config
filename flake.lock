@@ -132,6 +132,27 @@
         "type": "github"
       }
     },
+    "home-manager_2": {
+      "inputs": {
+        "nixpkgs": [
+          "zen-browser",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1788229478,
+        "narHash": "sha256-G0F2rFORVcFkEvVdE/qWQTnYekIc77YP5/vRF9nZlxU=",
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "rev": "1dc2d1f720ab17fc7981e087346bf54b26d284b1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "type": "github"
+      }
+    },
     "mkdocs-catppuccin": {
       "flake": false,
       "locked": {
@@ -339,6 +360,26 @@
         "url": "https://github.com/NixOS/nixpkgs.git"
       }
     },
+    "opera-flake": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1775577367,
+        "narHash": "sha256-v8MYIVql0+pFghzZDuyFt3PHlz/Qs1MdOHgfcYZlYRA=",
+        "ref": "refs/heads/master",
+        "rev": "3bf0a7ae80c671b97c10841d9bbb5b370ac6f3a5",
+        "revCount": 4,
+        "type": "git",
+        "url": "https://github.com/YisuiDenghua/opera-flake.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://github.com/YisuiDenghua/opera-flake.git"
+      }
+    },
     "plasma-manager": {
       "inputs": {
         "home-manager": [
@@ -375,9 +416,11 @@
         "nixpkgs": "nixpkgs",
         "nixpkgs-bambu-studio": "nixpkgs-bambu-studio",
         "nixpkgs-orca-slicer": "nixpkgs-orca-slicer",
+        "opera-flake": "opera-flake",
         "plasma-manager": "plasma-manager",
         "sops-nix": "sops-nix",
-        "window-title-applet-src": "window-title-applet-src"
+        "window-title-applet-src": "window-title-applet-src",
+        "zen-browser": "zen-browser"
       }
     },
     "sops-nix": {
@@ -485,6 +528,27 @@
         "owner": "Supreeeme",
         "repo": "xwayland-satellite",
         "type": "github"
+      }
+    },
+    "zen-browser": {
+      "inputs": {
+        "home-manager": "home-manager_2",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1789183649,
+        "narHash": "sha256-M08rk8a5WepjMphE6W1pIdP3AhzpcBSMUJ0zzaGMOgM=",
+        "ref": "refs/heads/main",
+        "rev": "f091fa4f590babf9a9ea3ac12524512cbb132e29",
+        "revCount": 1295,
+        "type": "git",
+        "url": "https://github.com/0xc000022070/zen-browser-flake.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://github.com/0xc000022070/zen-browser-flake.git"
       }
     }
   },
