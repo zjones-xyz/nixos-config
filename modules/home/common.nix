@@ -95,6 +95,15 @@
     color14 = "#8bd5ca";
     color7 = "#b8c0e0";
     color15 = "#a5adcb";
+
+    # Only cells using the *default* background go translucent — anything
+    # painting its own (vim's statusline, a powerline prompt, an editor theme
+    # with a background set) stays opaque, so set backgrounds here rather than
+    # in those themes. dynamic_background_opacity arms kitty's stock
+    # ctrl+shift+a>m/l/1/d chords; it is ignored on config reload, so turning
+    # it on needs a fresh kitty rather than ctrl+shift+f5.
+    background_opacity = "0.92";
+    dynamic_background_opacity = true;
   };
 
   # Prompt.
