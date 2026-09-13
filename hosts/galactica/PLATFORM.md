@@ -1890,9 +1890,14 @@ produces one as a side effect.
 
 ### 13d. ⚠ Rejected — recorded so they are not re-proposed
 
-**Spinning `tank` down.** Nominally the biggest number on the page — 4× He12 from
-5.0 W idle to ~1.0 W standby is ~16 W — and it does not work here for reasons
-that are structural rather than tunable:
+**Spinning `tank` down — as the stack stands today.** Nominally the biggest
+number on the page: 4× He12 from 5.0 W idle to ~1.0 W standby is ~16 W. It does
+not work *against the current layout*, for reasons that are structural rather
+than tunable:
+
+> ⚠ **§13f revisits the first bullet, and only the first.** Moving the seed set
+> off `tank` is the one change that dissolves it. The others below are unchanged
+> by that, which is why §13f is a candidate and not a conclusion.
 
 - **qBittorrent seeds out of `/tank/nixflix_media/downloads`.** That is a plain
   subdirectory of the media dataset, deliberately (`nixflix.nix`'s layout rule:
@@ -1939,9 +1944,9 @@ the fix is still in the BIOS, not in Nix.
 router as a sync replica), the NFS server memory-alpha mounts, and the
 acquisition half of the media stack. There is no idle window to suspend into.
 
-### 13e. ⚠ Three things independently wake a sleeping disk on this host
+### 13e. ⚠ Four things independently wake a sleeping disk on this host
 
-Any spin-down has to survive all three, or it looks like it worked for half an
+Any spin-down has to survive all four, or it looks like it worked for half an
 hour and then quietly stops:
 
 1. **smartd, every 30 minutes.** `modules/nixos/smart.nix` monitors with `-a`,
@@ -1955,8 +1960,95 @@ hour and then quietly stops:
    that **the drive does not go back down**, because nothing re-arms the standby
    timer. A spin-down meant to hold has to arm the drive's *own* timer
    (`hdparm -S`), not just issue one standby command.
-3. **The workload**, for `tank` — §13d.
+3. **borgmatic, nightly at 01:30.** Its scope is property-driven
+   (`org.torsion.borgmatic:backup=auto` — `BACKUP-BORG.md`), which today means
+   `tank/documents` and `tank/photos/immich*`: bulk data on the RAIDZ1
+   spinners, since only metadata and `tank/appdata` sit on the special vdev.
+   Bounded, and unavoidable — but it is a nightly wake, so no spin-down plan
+   gets a full 24-hour idle window.
+   > ⟨Worth measuring rather than assuming: borgmatic's ZFS hook mounts each
+   > snapshot at a fresh path per run, and borg's files cache is path-keyed. If
+   > that defeats the cache, the nightly run re-reads the whole Critical +
+   > Precious set instead of only changed files — the difference between a
+   > metadata sweep and hours of spinning. `MANUAL-STEPS.md` §14 item 10.⟩
+4. **The workload**, for `tank` — §13d, and §13f for the part of it that can be
+   moved.
 
 ⚠ **The ATA standby timer is volatile.** `hdparm -S` does not survive a power
 cycle or a controller reset. That is the second reason the durable answer for
 `sidepool` is a screwdriver rather than a systemd unit.
+
+### 13f. A separate seed tier — the one change that could let `tank` sleep
+
+**Not yet decided; the preconditions are `MANUAL-STEPS.md` §14 items 6–10.**
+
+§13d rejects `tank` spin-down because qBittorrent seeds out of
+`/tank/nixflix_media/downloads`. That path is a plain subdirectory of the media
+dataset *on purpose* — hardlinks cannot cross datasets, so the \*arrs' imports
+would otherwise become copies (`nixflix.nix`'s layout rule). Move the seed set
+onto its own device and the trickle of random reads stops; the accepted price is
+that every import becomes a **copy** instead of a hardlink.
+
+That price is smaller than it sounds: an import is one sequential write that
+spins the pool up for a couple of minutes and lets it go again. The continuous
+load is what blocks spin-down, not the occasional one.
+
+#### What it does and does not buy
+
+| | |
+|---|---|
+| Removes | The only *continuous* toucher of the spinners |
+| Does **not** remove | §13e's other three — smartd (fixed), the Scrutiny sweep (**not** fixed), borgmatic's nightly window |
+| Untested | Whether Jellyfin's and the \*arrs' scheduled scans stay metadata-only. All metadata is on the special vdev, so a stat-walk of an unchanged library *should* be served from SSD + ARC without waking a spinner — plausible, unverified, and decisive |
+
+So this is **necessary but not sufficient**. Two config items stand between it
+and a pool that actually sleeps: the Scrutiny collector needs standby awareness
+or a re-arm, and the scan behaviour needs confirming.
+
+#### Candidate devices
+
+`h-SDCP` (the drawer's WD Blue WD20EZRZ, 2 TB, CMR, made 2017) against a bought
+2 TB SATA SSD:
+
+| | `h-SDCP` | 2 TB SATA SSD |
+|---|---|---|
+| Saved while `tank` sleeps | −16 W | −16 W |
+| Cost of the seed tier itself | +3.3 W | +0.5 W |
+| **Net** | **≈ −12.6 W** | ≈ −15.5 W |
+| Money | none — already owned | ~$100–150 |
+| Concurrency | ~75–100 IOPS; a large swarm is seek-bound | not a constraint |
+| Age | 9 years, never burned in | new |
+
+⭐ **On watts alone the spinner wins and it is not close.** The SSD's extra ~3 W
+is ~25 kWh/yr — call it $7 at local rates, against $100–150. Fifteen-plus-year
+payback.
+
+⚠ **The argument for the SSD is not power, it is the other two rows.** A single
+5400-class disk serving a large actively-seeded swarm is seek-bound, which caps
+upload *and* contends with in-flight download writes; and this design makes the
+seed tier the one device that is permanently awake, so picking the oldest disk in
+the building for that role puts the most duty on the most likely thing to fail.
+Neither objection bites at a few dozen torrents. Both bite at several hundred —
+hence §14 item 7.
+
+⭐ **`h-SDCP` is genuinely uncommitted.** Its only other candidacy was
+`DESIGN.md` §5's 2 TB photo-tier mirror, which is dead twice over: its proposed
+partner `h-8742` was designated archival 2026-08-08 for the SMART-write firmware
+defect, and the whole two-disk btrfs photo tier was superseded when photos landed
+on `tank/photos/immich*` in the ZFS array. Nothing live is waiting on this disk.
+
+#### If it gets built
+
+- **ext4, not btrfs.** Torrent writes on a CoW filesystem fragment savagely
+  without `chattr +C` on the target directory. midden is the precedent — both
+  its partitions are ext4 + `noatime`.
+- **LUKS via the stage-2 crypttab**, sops keyfile, `nofail` — the `cryptlogs`
+  pattern exactly.
+- **No redundancy, on purpose.** Downloads are reacquirable by definition, so a
+  single disk is the right risk profile: a failure costs re-downloading and the
+  seed history, not data.
+- **Ports and bays fit after the `sidepool` pull**, which frees four 3.5"
+  positions and four ports; that puts the machine at eight SATA devices against
+  onboard 6 + the HBA. Before the pull it does not fit.
+- **2 TB is a ceiling, not headroom** — §14 item 6 is what says whether it
+  clears the seed set at all.

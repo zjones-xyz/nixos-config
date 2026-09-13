@@ -1235,3 +1235,36 @@ survive a power cycle.
    failure that landmine is exposed to, and steps 3–5 here plus §9 step 3 all
    want the same case-open visit. Doing them together is what makes the
    controller swap safe rather than a new dependency on an unreplaced 2011 cell.
+6. [ ] **Measure the seed set.** The number that decides §13f, and the cheapest
+   of the three. It is the *active seed* total, not just what is in flight:
+   ```sh
+   du -sh /tank/nixflix_media/downloads
+   # and, for what qBittorrent is actually still seeding, its own total —
+   # WebUI → Statistics, or sum "total_size" over the torrents list
+   ```
+   Under ~1.5 TB and a 2 TB tier is comfortable; near or over 2 TB and the whole
+   option needs a bigger device or a seeding-retention policy first.
+7. [ ] **Count concurrently seeded torrents.** This is what picks `h-SDCP` over
+   a bought SSD, not the power figures — a single 5400-class spinner is
+   ~75–100 IOPS and a large swarm is seek-bound. A few dozen: the spinner is
+   fine. Several hundred: buy the SSD. `PLATFORM.md` §13f has the table.
+8. [ ] **Burn `h-SDCP` in before trusting it, and read its hours first.** Drawer
+   stock is untested by convention (`docs/DISK-DRAWER.md`, `PLATFORM.md` §12).
+   `smartctl -a` for `Power_On_Hours` — a 2017 Blue at 45k hours is a different
+   proposition from one at 800 — then `badblocks -wsv` or `f3`, plus a SMART
+   long test. ⚠ It would become the one permanently-awake device in the
+   machine, so it is the wrong place to accept an unknown.
+9. [ ] **Settle the two blockers §13f does not remove**, before concluding that
+   a seed tier bought spin-down:
+   - The **Scrutiny collector's** midnight sweep wakes every disk and nothing
+     re-arms the standby timer afterwards (§13e item 2). Needs standby
+     awareness, a device exclusion, or a re-arm timer.
+   - Whether **Jellyfin's and the \*arrs' scheduled scans stay metadata-only**.
+     All metadata is on the special vdev, so an unchanged library *should* walk
+     from SSD + ARC without waking a spinner. Plausible, unverified, decisive.
+     Watch the He12s' `Start_Stop_Count` across a scan rather than guessing.
+10. [ ] **Check whether borgmatic's nightly run re-reads everything.** Its ZFS
+    hook mounts each snapshot at a fresh path per run and borg's files cache is
+    path-keyed; if that defeats the cache, 01:30 becomes hours of spinning
+    rather than a metadata sweep (§13e item 3). Compare the job's duration and
+    read volume against the amount of data that actually changed that day.
