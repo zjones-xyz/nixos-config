@@ -1267,12 +1267,13 @@ rather than each instance being hand-edited.
 four as containers, routed by this host's Traefik (`*.internal`/`*.zjones.dev`,
 matching rewrites in §14/`configuration.nix`) and given their own tsdproxy
 tailnet node each (§13 has the "why a separate node per name" reasoning).
-All four start on **fresh** appdata: nobody has done the per-container
-inventory pass on `tank/backups/sidepool-pools` yet (`SHARES.md` still flags
-that as outstanding), so restoring Ferdium/Karakeep/Paperless-ngx's actual
-Unraid data is a separate, later step — item 4 below. Syncthing's old appdata
-was owner-confirmed junk and was never backed up, so it has nothing to
-restore.
+
+**The inventory pass (2026-09-13) found the real Unraid appdata backup at
+`/tank/sort/unraid_appdata/<service>`, NOT `tank/backups/sidepool-pools`** —
+that path was the raw drive image; `unraid_appdata` is the already-extracted,
+organized copy. Sizes: `karakeep` 67M, `ferdium-server` 275M, `paperless` 9.0K
+(leftover container config only — see item 5), `syncthing` 126K
+(owner-confirmed junk, matches the earlier decision to leave it dropped).
 
 1. [x] **Secrets generated and `sops`-ed in.** `karakeep/nextAuthSecret`,
    `karakeep/meiliMasterKey`, `paperless/secretKey`, and
@@ -1298,21 +1299,66 @@ restore.
    account model; its GUI is unauthenticated by default — set a GUI
    password in Settings before relying on it, since it's reachable over the
    tailnet.
-4. [ ] **Appdata restore — blocked on the inventory pass.** Once
-   `SHARES.md`'s `du -sh /mnt/user/appdata/* | sort -h`-style pass (or
-   equivalent against `tank/backups/sidepool-pools`) locates Ferdium's,
-   Karakeep's, and Paperless-ngx's old Unraid container data, stop the
-   relevant container(s), copy the old data into place (`tank/appdata/
-   {ferdium,karakeep,paperless}/...`, matching each file's `dataDir` layout),
-   fix ownership, and restart. Do this per-service as each is located —
-   no need to block all three on the slowest.
-5. [ ] **Key expiry disabled on the four new tsdproxy nodes.** Same trap
+4. [ ] **Ferdium + Karakeep restore — new datasets, not directories in the
+   shared `tank/appdata`.** Owner's call: these two get their own ZFS
+   datasets so they can be tagged for offsite backup independently of
+   bazarr/nixflix's appdata (`SHARES.md` §5, `BACKUP-BORG.md`'s "First
+   appdata subtrees promoted" section carries the `homelab:tier=precious` +
+   `org.torsion.borgmatic:backup=auto` commands). Stop both containers
+   first (`docker stop ferdium karakeep-web karakeep-chrome
+   karakeep-meilisearch`), then:
+
+   ```
+   # Ferdium — backup's data/ and recipes/ are siblings, matching
+   # ferdium.nix's mount layout (dataDir root -> /data, dataDir/recipes ->
+   # /app/build/recipes) exactly.
+   mkdir -p /tank/appdata/ferdium/recipes
+   cp -a /tank/sort/unraid_appdata/ferdium-server/data/. /tank/appdata/ferdium/
+   cp -a /tank/sort/unraid_appdata/ferdium-server/recipes/. /tank/appdata/ferdium/recipes/
+
+   # Karakeep — the backup's top level (assets/, data/, db.db, queue.db) IS
+   # the old container's whole /data; meilisearch/ was the separate
+   # meilisearch container's /meili_data, bundled in the same Unraid folder.
+   # .tailscale_state is a leftover Unraid-side sidecar, not needed here.
+   mkdir -p /tank/appdata/karakeep/data /tank/appdata/karakeep/meilisearch
+   cp -a /tank/sort/unraid_appdata/karakeep/assets /tank/sort/unraid_appdata/karakeep/data \
+         /tank/sort/unraid_appdata/karakeep/db.db /tank/sort/unraid_appdata/karakeep/queue.db \
+         /tank/appdata/karakeep/data/
+   cp -a /tank/sort/unraid_appdata/karakeep/meilisearch/. /tank/appdata/karakeep/meilisearch/
+   ```
+
+   `cp -a` preserves the backup's existing ownership (root-run containers on
+   Unraid, same as these fresh ones default to) — no chown needed. Restart
+   both afterward.
+5. [ ] **Paperless-ngx — not a restore, already repointed.** The Unraid
+   `appdata` share's paperless folder was only leftover container config
+   (9.0K); the real, live instance was already sitting at
+   `/tank/documents/paperless/{data,media,export,consumption}` (real
+   `db.sqlite3`, real archived documents) — likely mounted there directly on
+   the old setup rather than through the appdata share. `paperless.nix` now
+   points its bind mounts there instead of a fresh `tank/appdata/paperless`
+   tree, so there is nothing to copy. Two things to confirm before the
+   first switch:
+   - **Admin login.** The existing `db.sqlite3` almost certainly already has
+     a superuser from the old setup — if you remember those credentials, use
+     them. `PAPERLESS_ADMIN_USER=z` / the generated password in
+     `secrets/galactica.yaml` only ever *creates* a user; it will not touch
+     or reset an existing one, so it's a fallback only in case the restored
+     DB turns out to have none.
+   - **Consumption folder.** `paperless.nix` currently points at the old
+     bundled `/tank/documents/paperless/consumption` — confirm that's still
+     meant to be the drop-folder going forward, versus the newer, currently
+     empty `/tank/sort/inbox/paperless-consumption` (which sits alongside
+     your other new `inbox/*` staging folders and may be the intended
+     go-forward convention instead). Update the `liveDir`-relative mount in
+     `paperless.nix` if it's the latter.
+6. [ ] **Key expiry disabled on the four new tsdproxy nodes.** Same trap
    §13 already hit: every `homelab.tsdproxy`-registered name is its own
    Tailscale device with its own expiry, so `ferdium`, `karakeep`,
    `paperless`, and `syncthing` each need Machines → … → Disable key
    expiry in the admin console, or they silently drop off the tailnet in
    ~6 months.
-6. [ ] **Dashboard icons.** `homepage/admin/services.yaml`'s new `Apps`
+7. [ ] **Dashboard icons.** `homepage/admin/services.yaml`'s new `Apps`
    group references `ferdium.png`, `karakeep.png`, `paperless-ngx.png`, and
    `syncthing.png` — Homepage pulls these from its bundled icon set
    (walkxcode/dashboard-icons) by name at runtime, un-validated by
