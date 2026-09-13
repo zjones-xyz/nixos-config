@@ -85,6 +85,36 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
 
 ## Other decisions
 
+- **kitty layouts → `splits` first, then `*`; ctrl+shift+l is a zoom flip, not
+  next_layout (2026-09-13).** *alt:* `enabled_layouts splits,stack`, which is
+  what this started as. *Why the alt was wrong:* it rested on the belief that
+  `splits` is absent from kitty's default `enabled_layouts`. It is not —
+  the default is `*`, and `parse_layout_names` expands that to
+  `sorted(all_layouts)`, which includes `Splits`. So naming two layouts never
+  *enabled* splits; it disabled the other five.
+  *What the option does earn:* `enabled_layouts` is an absolute list with no
+  append syntax, and its first entry is the startup layout. Leading with
+  `splits` matters because `launch --location=hsplit|vsplit` is, per kitty's
+  own `launch.py`, "only used by the `splits` layout" — in any other layout the
+  split binds would open a window in a layout-dependent spot instead. `*`
+  after it restores the remaining six (expansion order verified against the
+  real parser plus its order-preserving `uniq`: splits, fat, grid, horizontal,
+  stack, tall, vertical).
+  *Why the cycle is not simply shortened:* `enabled_layouts` gates both
+  directions. `next_layout` walks the list by index with no skip mechanism,
+  and `goto_layout` matches against the same list, logging
+  `Unknown or disabled layout` otherwise. A three-entry list would therefore
+  also make the other four unreachable by name. Rebinding ctrl+shift+l to
+  `toggle_layout stack` buys the two-state flip without disabling anything;
+  `ctrl+shift+m>…` covers explicit jumps.
+  *Why the jumps are bound at all:* the command palette lists unmapped actions
+  using bare action names (`add_unmapped_actions` sets
+  `'definition': action.name`), so its free `goto_layout` entry would run
+  without the layout name it requires. Only a *mapped* binding carries its
+  argument into the palette (`'definition': definition`). Binding the seven
+  makes them palette-searchable; `next_layout` needs no such help, since its
+  `delta` argument defaults and the bare entry works.
+
 - **Storage / OS layout → drive-per-OS, not shared partitions.** *alt:* shrink
   CachyOS's existing LUKS+btrfs NVMe and carve partitions for NixOS (and later
   Windows) out of it. *Why:* CachyOS's free space is inside the encrypted btrfs
