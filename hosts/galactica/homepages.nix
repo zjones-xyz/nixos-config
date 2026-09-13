@@ -4,7 +4,7 @@
 # (homelab-stacks tower/homepage and tower/guesthome, dead since the
 # bare-metal cutover.) Same Homepage app twice, different audiences:
 #   admin — full service directory; home.{internal,zjones.dev} (Traefik) +
-#           galactica.peacock-koi.ts.net (Tailscale serve).
+#           home.peacock-koi.ts.net (its own tsdproxy tailnet node).
 #   guest — friends-and-family links; guest.{internal,zjones.dev} (Traefik,
 #           LAN) and guest.zjones.xyz (Pangolin tunnel, off-network —
 #           homelab.newt in configuration.nix).
@@ -51,7 +51,7 @@ in
   '';
 
   # Loopback-only publishes: both instances are reached through Traefik
-  # (router pairs below) or, for admin, Tailscale serve — nothing dials
+  # (router pairs below) or, for admin, its tsdproxy node — nothing dials
   # either port from the LAN directly. Guest also gets a Pangolin tunnel
   # (homelab.newt) for its public `.zjones.xyz` name; that's a DNS-level
   # split-horizon and a Newt resource target, not a second Traefik route.
@@ -59,10 +59,18 @@ in
     homepage-admin = {
       inherit image;
       environment.HOMEPAGE_ALLOWED_HOSTS =
-        "home.internal,home.zjones.dev,galactica.peacock-koi.ts.net";
+        "home.internal,home.zjones.dev,home.peacock-koi.ts.net";
       environmentFiles = [ config.sops.templates."homepage-admin.env".path ];
       ports = [ "127.0.0.1:3010:3000" ];
       volumes = mkConfigMounts [ ./homepage/common ./homepage/admin ];
+      # Picked up by homelab.tsdproxy, which registers a tailnet node of this
+      # name. ⚠ The port here is the *published* one (3010), not the
+      # container's 3000 — tsdproxy dials targetHostname:port on the host.
+      labels = {
+        "tsdproxy.enable" = "true";
+        "tsdproxy.name" = "home";
+        "tsdproxy.port.1" = "443/https:3010/http";
+      };
     };
 
     homepage-guest = {
@@ -73,28 +81,6 @@ in
       ports = [ "127.0.0.1:3011:3000" ];
       volumes = mkConfigMounts [ ./homepage/common ./homepage/guest ];
     };
-  };
-
-  # ── Tailnet HTTPS for the admin dashboard ──────────────────────────────────
-  # `tailscale serve` has no nixpkgs option — it is imperative state inside
-  # tailscaled — so converge it on every switch rather than trusting one
-  # hand-run `serve --bg`. `reset` first makes that idempotent and clears
-  # drift; ordering after tailscaled-autoconnect is the module's own advice.
-  systemd.services.tailscale-serve-homepage = {
-    description = "Serve the admin homepage on the tailnet (HTTPS)";
-    after = [ "tailscaled-autoconnect.service" ];
-    wants = [ "tailscaled-autoconnect.service" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-    };
-    script =
-      let tailscale = lib.getExe config.services.tailscale.package;
-      in ''
-        ${tailscale} serve reset
-        ${tailscale} serve --bg --https=443 http://127.0.0.1:3010
-      '';
   };
 
   # ── Traefik routes — flat top-level names, not arrExtraUpstreams ───────────

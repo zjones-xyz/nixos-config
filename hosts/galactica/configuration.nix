@@ -24,6 +24,7 @@
     ../../modules/nixos/adguardhome-sync.nix
     ../../modules/nixos/traefik-galactica.nix
     ../../modules/nixos/newt.nix
+    ../../modules/nixos/tsdproxy.nix
     ./borgmatic.nix
     ./homepages.nix
     ./nixflix.nix
@@ -317,8 +318,15 @@
     extraUpFlags = [ "--ssh" ];
     authKeyFile = config.sops.secrets."tailscale/authKey".path;
   };
+
   networking.firewall.trustedInterfaces = [ "tailscale0" ];
   networking.firewall.allowedUDPPorts = [ config.services.tailscale.port ];
+
+  # The admin dashboard gets its OWN tailnet name (home.<tailnet>.ts.net) via
+  # tsdproxy, so galactica's own MagicDNS entry stays just the host's — SSH
+  # and nothing else. Reuses the auth key above; a reusable key registers
+  # many nodes. homepages.nix carries the labels that name it.
+  homelab.tsdproxy.enable = true;
 
   # The guest homepage's door: Newt tunnels guest.zjones.xyz in from the
   # Pangolin VPS. ⚠ Commented until the Pangolin Site for galactica exists —
