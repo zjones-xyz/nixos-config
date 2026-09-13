@@ -1260,3 +1260,61 @@ rather than each instance being hand-edited.
    entirely and derive rewrites from leases, or whether reservations should
    just get declared in Nix alongside `clients.persistent` so a name only
    has to be typed once.
+
+## 15. Ferdium, Karakeep, Paperless-ngx, Syncthing — owner steps before first switch
+
+`hosts/galactica/{ferdium,karakeep,paperless,syncthing}.nix` declare all
+four as containers, routed by this host's Traefik (`*.internal`/`*.zjones.dev`,
+matching rewrites in §14/`configuration.nix`) and given their own tsdproxy
+tailnet node each (§13 has the "why a separate node per name" reasoning).
+All four start on **fresh** appdata: nobody has done the per-container
+inventory pass on `tank/backups/sidepool-pools` yet (`SHARES.md` still flags
+that as outstanding), so restoring Ferdium/Karakeep/Paperless-ngx's actual
+Unraid data is a separate, later step — item 4 below. Syncthing's old appdata
+was owner-confirmed junk and was never backed up, so it has nothing to
+restore.
+
+1. [x] **Secrets generated and `sops`-ed in.** `karakeep/nextAuthSecret`,
+   `karakeep/meiliMasterKey`, `paperless/secretKey`, and
+   `paperless/adminPassword` are in `secrets/galactica.yaml` (random,
+   `openssl rand`). ⚠ This had to land *before* the switch, same reasoning as
+   every other sops-backed secret on this host: a referenced key missing from
+   the file fails **activation**, not eval. Ferdium and Syncthing need no
+   secrets of their own.
+2. [ ] **First switch — `nrs`, then verify all four containers come up.**
+   `docker ps` should show `ferdium`, `karakeep-web`/`karakeep-chrome`/
+   `karakeep-meilisearch`, `paperless-webserver`/`paperless-broker`, and
+   `syncthing`. Check each `*.internal` URL loads over the LAN before
+   touching the tailnet or `.zjones.dev` halves (cert issuance can lag a
+   few minutes on first request).
+3. [ ] **Create your account on each, then lock signups down.** Ferdium and
+   Karakeep both start with registration open (an empty database with
+   signups disabled can never be logged into) — create your account through
+   the UI, then flip `IS_REGISTRATION_ENABLED` to `"false"` in
+   `ferdium.nix` and set `DISABLE_SIGNUPS=true` in `karakeep.nix`'s
+   `karakeep-web` environment, `nrs`. Paperless-ngx's admin account is
+   already created headlessly via `PAPERLESS_ADMIN_USER`/`_PASSWORD` — log
+   in as `z` with the password in `secrets/galactica.yaml`. Syncthing has no
+   account model; its GUI is unauthenticated by default — set a GUI
+   password in Settings before relying on it, since it's reachable over the
+   tailnet.
+4. [ ] **Appdata restore — blocked on the inventory pass.** Once
+   `SHARES.md`'s `du -sh /mnt/user/appdata/* | sort -h`-style pass (or
+   equivalent against `tank/backups/sidepool-pools`) locates Ferdium's,
+   Karakeep's, and Paperless-ngx's old Unraid container data, stop the
+   relevant container(s), copy the old data into place (`tank/appdata/
+   {ferdium,karakeep,paperless}/...`, matching each file's `dataDir` layout),
+   fix ownership, and restart. Do this per-service as each is located —
+   no need to block all three on the slowest.
+5. [ ] **Key expiry disabled on the four new tsdproxy nodes.** Same trap
+   §13 already hit: every `homelab.tsdproxy`-registered name is its own
+   Tailscale device with its own expiry, so `ferdium`, `karakeep`,
+   `paperless`, and `syncthing` each need Machines → … → Disable key
+   expiry in the admin console, or they silently drop off the tailnet in
+   ~6 months.
+6. [ ] **Dashboard icons.** `homepage/admin/services.yaml`'s new `Apps`
+   group references `ferdium.png`, `karakeep.png`, `paperless-ngx.png`, and
+   `syncthing.png` — Homepage pulls these from its bundled icon set
+   (walkxcode/dashboard-icons) by name at runtime, un-validated by
+   `checks/homepage-config`, so confirm each actually renders after the
+   switch and adjust the name if any come back as broken images.

@@ -11,10 +11,10 @@
 # fails the build if an entry has `href` without a matching `siteMonitor`.
 #
 # Live services only. The Tower services not yet re-homed (Jellyseerr,
-# Audiobookshelf, Grimmory, Shelfmark, Immich, Paperless, Karakeep, ARM, 13ft,
-# Bambuddy) come back one group entry at a time as each migrates —
-# homelab-stacks tower/homepage/config/services.yaml is the reference for what
-# each entry looked like.
+# Audiobookshelf, Grimmory, Shelfmark, Immich, ARM, 13ft, Bambuddy) come back
+# one group entry at a time as each migrates — homelab-stacks
+# tower/homepage/config/services.yaml is the reference for what each entry
+# looked like.
 #
 # Any `{{HOMEPAGE_VAR_*}}` used here must be defined in this instance's sops
 # env template (homepages.nix) — also enforced by checks/homepage-config.
@@ -145,3 +145,25 @@
         siteMonitor: https://dockge.memory-alpha.zjones.dev
         icon: dockge.png
         description: Compose stacks
+
+- Apps:
+    - Ferdium:
+        href: https://ferdium.zjones.dev
+        siteMonitor: https://ferdium.zjones.dev
+        icon: ferdium.png
+        description: Chat aggregator
+    - Karakeep:
+        href: https://karakeep.zjones.dev
+        siteMonitor: https://karakeep.zjones.dev
+        icon: karakeep.png
+        description: Bookmarks
+    - Paperless-ngx:
+        href: https://paperless.zjones.dev
+        siteMonitor: https://paperless.zjones.dev
+        icon: paperless-ngx.png
+        description: Documents
+    - Syncthing:
+        href: https://syncthing.zjones.dev
+        siteMonitor: https://syncthing.zjones.dev
+        icon: syncthing.png
+        description: File sync
