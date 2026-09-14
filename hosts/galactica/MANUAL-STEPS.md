@@ -1370,9 +1370,7 @@ organized copy. Sizes: `karakeep` 67M, `ferdium-server` 275M, `paperless` 9.0K
    `paperless`, and `syncthing` each need Machines → … → Disable key
    expiry in the admin console, or they silently drop off the tailnet in
    ~6 months.
-7. [ ] **Dashboard icons.** `homepage/admin/services.yaml`'s new `Apps`
-   group references `ferdium.png`, `karakeep.png`, `paperless-ngx.png`, and
-   `syncthing.png` — Homepage pulls these from its bundled icon set
-   (walkxcode/dashboard-icons) by name at runtime, un-validated by
-   `checks/homepage-config`, so confirm each actually renders after the
-   switch and adjust the name if any come back as broken images.
+7. [x] **Dashboard icons — confirmed rendering, 2026-09-13.**
+   `homepage/admin/services.yaml`'s new `Apps` group's four icons
+   (`ferdium.png`, `karakeep.png`, `paperless-ngx.png`, `syncthing.png`,
+   pulled from walkxcode/dashboard-icons at runtime) all render correctly.
