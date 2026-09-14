@@ -1364,12 +1364,11 @@ organized copy. Sizes: `karakeep` 67M, `ferdium-server` 275M, `paperless` 9.0K
    file's header). SMB is planned but not built yet; add it when it
    actually matters, in whatever module ends up owning Samba fleet-wide
    (none does yet).
-6. [ ] **Key expiry disabled on the four new tsdproxy nodes.** Same trap
-   §13 already hit: every `homelab.tsdproxy`-registered name is its own
-   Tailscale device with its own expiry, so `ferdium`, `karakeep`,
-   `paperless`, and `syncthing` each need Machines → … → Disable key
-   expiry in the admin console, or they silently drop off the tailnet in
-   ~6 months.
+6. [x] **Key expiry disabled on the four new tsdproxy nodes — done
+   2026-09-13.** Same trap §13 already hit: every `homelab.tsdproxy`-
+   registered name is its own Tailscale device with its own expiry.
+   `ferdium`, `karakeep`, `paperless`, and `syncthing` all set in the
+   admin console alongside `home`.
 7. [x] **Dashboard icons — confirmed rendering, 2026-09-13.**
    `homepage/admin/services.yaml`'s new `Apps` group's four icons
    (`ferdium.png`, `karakeep.png`, `paperless-ngx.png`, `syncthing.png`,
