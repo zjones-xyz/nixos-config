@@ -1299,37 +1299,35 @@ organized copy. Sizes: `karakeep` 67M, `ferdium-server` 275M, `paperless` 9.0K
    account model; its GUI is unauthenticated by default — set a GUI
    password in Settings before relying on it, since it's reachable over the
    tailnet.
-4. [ ] **Ferdium + Karakeep restore — new datasets, not directories in the
-   shared `tank/appdata`.** Owner's call: these two get their own ZFS
-   datasets so they can be tagged for offsite backup independently of
-   bazarr/nixflix's appdata (`SHARES.md` §5, `BACKUP-BORG.md`'s "First
-   appdata subtrees promoted" section carries the `homelab:tier=precious` +
-   `org.torsion.borgmatic:backup=auto` commands). Stop both containers
-   first (`docker stop ferdium karakeep-web karakeep-chrome
-   karakeep-meilisearch`), then:
+4. [x] **Ferdium + Karakeep restore — done 2026-09-13.** Both got their own
+   ZFS datasets (not directories in the shared `tank/appdata`), tagged
+   `homelab:tier=precious` + `org.torsion.borgmatic:backup=auto`
+   (`BACKUP-BORG.md`'s "First appdata subtrees promoted" section). The
+   ~10 minutes of fresh throwaway state each had generated since the first
+   switch (empty sqlite DBs, Ferdium's JWT keys) was discarded — nothing
+   in it was worth keeping — then the real Unraid backups were copied in
+   from `/tank/sort/unraid_appdata/{ferdium-server,karakeep}` and both
+   containers restarted.
 
-   ```
-   # Ferdium — backup's data/ and recipes/ are siblings, matching
-   # ferdium.nix's mount layout (dataDir root -> /data, dataDir/recipes ->
-   # /app/build/recipes) exactly.
-   mkdir -p /tank/appdata/ferdium/recipes
-   cp -a /tank/sort/unraid_appdata/ferdium-server/data/. /tank/appdata/ferdium/
-   cp -a /tank/sort/unraid_appdata/ferdium-server/recipes/. /tank/appdata/ferdium/recipes/
+   Two wrinkles hit during the restore, recorded so they aren't a surprise
+   next time:
+   - Karakeep's backup folder turned out to have **two** copies of
+     `db.db`/`queue.db` — the real ones at the top level (1.68M, matches
+     Karakeep's documented `DATA_DIR/db.db` layout) and a second, smaller
+     (585K) pair nested one level down in the backup's own stray `data/`
+     subdirectory — almost certainly orphaned cruft from an earlier
+     Karakeep version's storage layout, not the live data. The top-level
+     pair is what `karakeep.nix`'s mount actually reads; the nested copy
+     landed alongside it harmlessly (Karakeep never looks there) and was
+     deleted for hygiene.
+   - Ferdium's backup `data/` subfolder also had its own leftover
+     `.tailscale_state` (an Unraid-side sidecar, unrelated to this host's
+     tsdproxy) — copied in by the broad `cp -a`, then deleted; harmless,
+     just clutter.
 
-   # Karakeep — the backup's top level (assets/, data/, db.db, queue.db) IS
-   # the old container's whole /data; meilisearch/ was the separate
-   # meilisearch container's /meili_data, bundled in the same Unraid folder.
-   # .tailscale_state is a leftover Unraid-side sidecar, not needed here.
-   mkdir -p /tank/appdata/karakeep/data /tank/appdata/karakeep/meilisearch
-   cp -a /tank/sort/unraid_appdata/karakeep/assets /tank/sort/unraid_appdata/karakeep/data \
-         /tank/sort/unraid_appdata/karakeep/db.db /tank/sort/unraid_appdata/karakeep/queue.db \
-         /tank/appdata/karakeep/data/
-   cp -a /tank/sort/unraid_appdata/karakeep/meilisearch/. /tank/appdata/karakeep/meilisearch/
-   ```
-
-   `cp -a` preserves the backup's existing ownership (root-run containers on
-   Unraid, same as these fresh ones default to) — no chown needed. Restart
-   both afterward.
+   Verified live: Ferdium repackaged 441 real recipes from the restored
+   bundle on startup; Karakeep started clean against the restored DB and
+   Meilisearch index. Both containers healthy, both routes responding.
 5. [ ] **Paperless-ngx — not a restore, already repointed.** The Unraid
    `appdata` share's paperless folder was only leftover container config
    (9.0K); the real, live instance was already sitting at
