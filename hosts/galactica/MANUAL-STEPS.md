@@ -1288,17 +1288,19 @@ organized copy. Sizes: `karakeep` 67M, `ferdium-server` 275M, `paperless` 9.0K
    `syncthing`. Check each `*.internal` URL loads over the LAN before
    touching the tailnet or `.zjones.dev` halves (cert issuance can lag a
    few minutes on first request).
-3. [ ] **Create your account on each, then lock signups down.** Ferdium and
-   Karakeep both start with registration open (an empty database with
-   signups disabled can never be logged into) — create your account through
-   the UI, then flip `IS_REGISTRATION_ENABLED` to `"false"` in
-   `ferdium.nix` and set `DISABLE_SIGNUPS=true` in `karakeep.nix`'s
-   `karakeep-web` environment, `nrs`. Paperless-ngx's admin account is
-   already created headlessly via `PAPERLESS_ADMIN_USER`/`_PASSWORD` — log
-   in as `z` with the password in `secrets/galactica.yaml`. Syncthing has no
-   account model; its GUI is unauthenticated by default — set a GUI
-   password in Settings before relying on it, since it's reachable over the
-   tailnet.
+3. [ ] **Confirm logins, then lock signups down.** Restored data (item 4)
+   meant the original Unraid-era accounts came back with it — the plan
+   changed from "create a new account" to "confirm the old one still logs
+   in," per the reasoning worked out live before the restore.
+   - [x] **Ferdium — confirmed working, 2026-09-13.**
+     `IS_REGISTRATION_ENABLED` flipped to `"false"` in `ferdium.nix`.
+   - [ ] **Karakeep — checking now.** Once confirmed, set
+     `DISABLE_SIGNUPS=true` in `karakeep.nix`'s `karakeep-web` environment.
+   - [x] Paperless-ngx's original admin account already confirmed via
+     1Password (item 5).
+   - [ ] Syncthing has no account model; its GUI is unauthenticated by
+     default — set a GUI password in Settings before relying on it, since
+     it's reachable over the tailnet.
 4. [x] **Ferdium + Karakeep restore — done 2026-09-13.** Both got their own
    ZFS datasets (not directories in the shared `tank/appdata`), tagged
    `homelab:tier=precious` + `org.torsion.borgmatic:backup=auto`

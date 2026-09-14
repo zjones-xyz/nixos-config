@@ -37,11 +37,9 @@ in
       DB_CONNECTION = "sqlite";
       DATA_DIR = "/data";
       JWT_USE_PEM = "true";
-      # Registration stays open until the owner has created an account on
-      # this fresh database — an empty DB with signups off can never be
-      # logged into. MANUAL-STEPS.md has the follow-up to flip this once
-      # done.
-      IS_REGISTRATION_ENABLED = "true";
+      # Locked down 2026-09-13 — account confirmed working against the
+      # restored data (MANUAL-STEPS.md §15).
+      IS_REGISTRATION_ENABLED = "false";
       IS_CREATION_ENABLED = "true";
       IS_DASHBOARD_ENABLED = "true";
       CONNECT_WITH_FRANZ = "false";
