@@ -73,9 +73,9 @@ in
         BROWSER_WEB_URL = "http://karakeep-chrome:9222";
         DATA_DIR = "/data"; # DON'T CHANGE — see the upstream compose's own warning
         NEXTAUTH_URL = "https://karakeep.zjones.dev";
-        # Signups stay open until the owner has an account on this fresh
-        # database — same reasoning as ferdium's IS_REGISTRATION_ENABLED.
-        # Flip DISABLE_SIGNUPS to true afterwards (MANUAL-STEPS.md).
+        # Locked down 2026-09-13 — account confirmed working against the
+        # restored data (MANUAL-STEPS.md §15).
+        DISABLE_SIGNUPS = "true";
       };
       environmentFiles = [ config.sops.templates."karakeep.env".path ];
       volumes = [ "${dataDir}/data:/data" ];

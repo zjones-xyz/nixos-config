@@ -1294,8 +1294,9 @@ organized copy. Sizes: `karakeep` 67M, `ferdium-server` 275M, `paperless` 9.0K
    in," per the reasoning worked out live before the restore.
    - [x] **Ferdium — confirmed working, 2026-09-13.**
      `IS_REGISTRATION_ENABLED` flipped to `"false"` in `ferdium.nix`.
-   - [ ] **Karakeep — checking now.** Once confirmed, set
-     `DISABLE_SIGNUPS=true` in `karakeep.nix`'s `karakeep-web` environment.
+   - [x] **Karakeep — confirmed working, 2026-09-13.**
+     `DISABLE_SIGNUPS=true` set in `karakeep.nix`'s `karakeep-web`
+     environment.
    - [x] Paperless-ngx's original admin account already confirmed via
      1Password (item 5).
    - [ ] Syncthing has no account model; its GUI is unauthenticated by
