@@ -1260,3 +1260,38 @@ rather than each instance being hand-edited.
    entirely and derive rewrites from leases, or whether reservations should
    just get declared in Nix alongside `clients.persistent` so a name only
    has to be typed once.
+
+---
+
+## 15. The reading stack — owner steps
+
+Written alongside `READING-STACK.md`; the services themselves are not deployed
+yet. Datasets and secrets get added here as the implementation lands.
+
+1. [ ] ⚠ **Land ONE reading service first, and check the journal before adding
+   the rest.** The `read.*` domain group requests **no certificate at all while
+   it is empty** — the wildcard is issued the moment the first service registers
+   in `homelab.readUpstreams`. And `homelab.letsencryptStaging = false` is
+   already set for this host, so that first issuance goes straight to
+   **production**, with no staging dry-run available: flipping the flag would
+   move the *media* stack's certs to staging storage too and warn on every
+   `*.arr.zjones.dev` name meanwhile.
+
+   The budget is shared. Production allows 50 certificates per **registered
+   domain** per week, and `read.zjones.dev` and `arr.zjones.dev` are both
+   `zjones.dev` — the same allowance §12 item 6 already spent ten of, when
+   `arr`'s un-deduped first switch issued per-subdomain certs before the
+   wildcard arrived. So repeat that item's check for this group:
+
+   ```bash
+   journalctl -u traefik -f
+   ```
+
+   Exactly one `Obtaining bundled SAN certificate` for
+   `read.zjones.dev` + `*.read.zjones.dev`, two DNS-01 challenges (the base
+   name and the wildcard each need their own TXT), and **no per-subdomain
+   requests**. Only once that holds, add the remaining services.
+2. [ ] **Point the tailnet at AdGuard**, or none of the `.zjones.dev` names
+   resolve off-LAN and the Tailscale half of `READING-STACK.md` §7 does nothing.
+   Tailscale admin console → DNS → nameservers. Not expressible in Nix, which
+   is why it is here.

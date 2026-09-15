@@ -722,6 +722,42 @@ weekly quota). So the implementation generalises `mkRouterPair`/`mkRouters` to
 take a domain group with its own shared wildcard — declared **once** as
 `*.read.zjones.dev` — rather than adding routers by hand.
 
+### ⚠ What an empty group means for the certificate — and why the rollout is staged
+
+Verified while implementing the group: **an empty group publishes no router, so
+it requests no certificate at all.** The `*.read.zjones.dev` wildcard is issued
+the moment the *first* reading service registers in `homelab.readUpstreams`.
+
+That first issuance goes straight to **production**: `letsencryptStaging = false`
+is already set for this host, and there is no staging dry-run available for one
+group — flipping the flag would move the media stack's certs to staging storage
+too and warn on every `*.arr.zjones.dev` name meanwhile.
+
+⚠ **The allowance is shared with the media stack.** Production allows 50
+certificates per **registered domain** per week, and `read.zjones.dev` and
+`arr.zjones.dev` are both `zjones.dev` — the same budget `MANUAL-STEPS.md` §12
+item 6 records spending **ten** of, when `arr`'s un-deduped first switch issued
+per-subdomain certificates before the wildcard arrived.
+
+**So the rollout is staged deliberately: land one service, check the journal for
+exactly one issuance, then add the rest.** `MANUAL-STEPS.md` §15 item 1 carries
+the command and what to look for.
+
+### ⚠ Router names are flat across groups
+
+A hazard this group *introduces*, and worth stating because the module now guards
+it: router and service names are **group-independent** (`<name>`, `<name>-dev`,
+`<name>-svc` — no group prefix). The attrset merge means a name claimed in two
+groups would **silently drop one of the two routes** rather than failing. §5b's
+Chaptarr-as-Readarr discussion makes a collision imaginable. An assertion now
+rejects it by name, alongside the existing `dashboard`/`traefik` reservation —
+which is reserved in *every* group, since a `traefik.*` service would be a trap
+under any domain.
+
+⟨Minor and symmetric with `arr`: the apex rewrites (`read.internal`,
+`read.zjones.dev`) resolve, but no router serves an apex in either group, so they
+answer 404 from Traefik's default certificate. Not a "reachable name".⟩
+
 ### DNS
 
 Four rewrites alongside galactica's existing block in `configuration.nix`
