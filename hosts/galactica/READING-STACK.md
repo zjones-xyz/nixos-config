@@ -341,17 +341,77 @@ to drop** — Shelfmark plus Grimmory's BookDrop is a complete, much smaller sta
    ⚠ Upstream's named failure mode for a starved Chromium is repeated
    `403 detected; switching to bypasser` — if that appears, suspect memory, not
    the indexer.
-2. ⚠ **Direct-download mode leaves the host's own IP.** In Prowlarr mode
-   Shelfmark hands off to qBittorrent (already confined to the `wg` namespace) and
-   nothing changes. In *direct* mode the container fetches over HTTP itself,
-   unconfined. Confining it means `vpnConfinement` on a container unit — and then
-   reaching loopback FlareSolverr needs the bridge address, the same wrinkle
-   `nixflix.nix` documents for Traefik → the confined qBittorrent WebUI
-   (`192.168.15.5`). Decide deliberately; do not let it default.
+2. ⚠⚠ **Direct-download mode leaves the host's own IP, and the obvious fix
+   silently does not work.** In Prowlarr mode Shelfmark hands off to qBittorrent
+   (already confined to `wg`) and nothing changes. In *direct* mode the container
+   fetches over HTTP itself. **See §5a** — putting `vpnConfinement` on the
+   container's unit evaluates cleanly and confines nothing.
 3. **Two ingest paths, kept separate on purpose.** Chaptarr imports into its own
    root folders; Shelfmark delivers into Grimmory's `/bookdrop`. Different
    destinations means the two acquisition paths never race for the same file, and
    Grimmory's watched-folder ingestion is what closes the loop for Shelfmark.
+
+### 5a. ⚠⚠ `vpnConfinement` does not work on a Docker container — verified 2026-09-15
+
+**This is the most dangerous finding in this document**, because it fails in the
+direction that looks like success.
+
+`systemd.services."docker-<name>".vpnConfinement` **type-checks, merges, and
+renders** `NetworkNamespacePath=/run/netns/wg` onto the generated unit. But with
+the Docker backend that unit's process is the **`docker` CLI client** — the
+container itself is created by `dockerd`, a different unit with no namespace
+path. So the confinement moves the *client* into the tunnel and leaves the
+container in dockerd's namespaces.
+
+**What you would observe:** the unit starts, `-p 127.0.0.1:…` still publishes
+(dockerd does that), the app works — and every packet leaves on the host's own
+IP. ⚠ **Nothing in the config, the unit, or the logs says "not confined."**
+`--network=host` makes it strictly worse: host mode means *the daemon's*
+namespace, i.e. the initial one.
+
+⟨**Podman would work** — there the container is a descendant of the unit, and
+podman also accepts `--network=ns:/run/netns/wg`, which Docker's `--network` does
+not (it takes only `bridge|host|none|container:<id>|<name>`). It is not available
+to us: `virtualisation.oci-containers.backend` is one global enum for the host and
+`traefik-galactica.nix:214` sets `docker` deliberately, for the socket proxy, the
+Beszel agent and Dockge. Flipping it would move **every** container on galactica.⟩
+
+**The pattern that does work: confine a native proxy, leave the container on the
+bridge.** Shelfmark only needs *outbound HTTP* in the tunnel, so the tunnel-side
+process can be a native unit:
+
+- A native `tinyproxy`/`privoxy` listening on `vpnNamespaces.wg.namespaceAddress`
+  (`192.168.15.1`), with `vpnConfinement` on **its** unit — a real systemd
+  service, where confinement works.
+- `vpnNamespaces.wg.portMappings` for the proxy port. ⚠ `openVPNPorts` is the
+  wrong tool: it opens on `wg0`, not the veth.
+- The Docker bridge subnet added to `nixflix.vpn.accessibleFrom`, or the proxy's
+  replies route down the tunnel instead of back to the container. ⚠ That subnet
+  must be **pinned** (the shared `proxy` network has no fixed subnet today) or the
+  config drifts silently.
+- The container gets `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` and keeps ordinary port
+  publishing, so its Traefik route is unchanged.
+- ⚠ If Shelfmark cannot be made to honour a proxy, the honest answer is *"not
+  confinable on this host as a container"* — not a workaround.
+
+⟨Rejected: a gluetun-style VPN container plus `--network=container:vpn` is the
+mainstream Docker answer, but it means a **second** ProtonVPN WireGuard session —
+second config, second port-forward, and the NAT-PMP sidecar does not cover it.⟩
+
+**For anything that genuinely does run inside the namespace**, three things must
+all hold, and none is `networking.firewall.allowedTCPPorts`:
+
+1. It must **bind the namespace address**, never loopback — the same reason
+   `nixflix.nix` has Traefik dial `connectionAddress`.
+2. Reaching a host-loopback service (FlareSolverr on `8191`) means dialling the
+   **bridge address `192.168.15.5`**, plus `vpnNamespaces.wg.allowedEgress` for
+   that destination — ⚠ the single address, **not** `192.168.15.0/24`, which
+   collides with the connected veth route and fails `wg.service` on switch — plus
+   `networking.firewall.interfaces."wg-br".allowedTCPPorts`. Nothing in this repo
+   touches `wg-br` today.
+3. LAN reachability comes from `portMappings` **and** `accessibleFrom` together;
+   because the packet is DNAT'd it is forwarded, so the host firewall never sees
+   it and the netns INPUT rule is the real gate.
 
 ### Manga — Suwayomi
 
@@ -564,9 +624,14 @@ password compromises everything else in this document.
 
 ## Still open
 
-- ⚠ **Shelfmark's direct-download path and the VPN namespace** (§5) — the one
-  exposure question §7 does not answer, because it is about outbound traffic
-  rather than inbound. Decide deliberately rather than by default.
+- ⚠ **Shelfmark's direct downloads: confine, or don't?** §5a turned this from a
+  checkbox into a real choice, because confinement now costs a native proxy, a
+  pinned bridge subnet and routing work. Three honest options: **(a)** the
+  confined-proxy pattern in §5a; **(b)** accept that direct downloads leave on the
+  host's IP, and write that down; **(c)** turn direct mode off and use Shelfmark
+  in Prowlarr mode only, so every grab goes through the already-confined
+  qBittorrent — no new machinery at all, at the cost of the sources Prowlarr
+  cannot reach, which were part of why Shelfmark was chosen.
 - **Secrets.** Every value `secrets/galactica.yaml` will need, and ⚠ the
   `nixflix.nix` precedent: *every* secret must exist before sops-nix activates or
   the switch fails.
@@ -592,9 +657,13 @@ in this document.
        the detail, the ZFS reflink nuance, and the safety argument this turned up.
 3. [ ] **Is BookLore's MariaDB volume in `tank/backups/sidepool-pools`?** (§4.4 —
        decides import versus rebuild.)
-4. [ ] **Does `vpnConfinement` work on an `oci-containers` unit?** The fleet's
-       only uses of it are native systemd services (`nixflix.nix`'s NAT-PMP
-       sidecar). Needed for §5's finding 2.
+4. [x] **Does `vpnConfinement` work on an `oci-containers` unit?** ✅ **Answered
+       2026-09-15 — no, and silently.** §5a carries the verdict, why Podman is not
+       an option here, and the confined-proxy pattern that does work.
+       ⚠ Worth proving once on the host so the negative is on record: add
+       `vpnConfinement` to a throwaway container, then compare
+       `docker exec <c> curl -s ifconfig.me` against
+       `ip netns exec wg curl -s ifconfig.me`. The same IP as the host confirms it.
 5. [x] **What database does BookBridge need**, and does it want the same
        pre-snapshot dump treatment as Grimmory's MariaDB? ✅ **Answered
        2026-09-15** — SQLite in WAL mode, and yes: §4.5 carries the shapes that
