@@ -10,8 +10,10 @@ owns DNS, who is on the tailnet) that no single host's docs can weigh against
 each other. Once a host is chosen, the implementation record moves to
 `hosts/<host>/`.
 
-**Nothing here is built.** This is an argument and a shopping list, not a
-record of state. Dates are UTC.
+**Partly built.** §12 items 11–12 are implemented and on this branch; the rest
+is an argument and a shopping list. ⚠ This file was reviewed on 2026-09-15 and
+carries corrections from it — several marked ⚠ are places an earlier revision
+was **wrong**, kept visible rather than silently rewritten. Dates are UTC.
 
 ---
 
@@ -60,9 +62,11 @@ path and a mesh that heals; Bluetooth has neither, is a pure proximity
 technology, and is genuinely awkward inside a container. §6 is rewritten around
 that.
 
-**Still open**, and much smaller: whether Zigbee runs through ZHA or a
-Zigbee2MQTT add-on, which coordinator chip is in the stick, and which other
-add-ons are in use. §12 carries them.
+**Still open**, and smaller: whether Zigbee runs through ZHA or a Zigbee2MQTT
+add-on, which coordinator chip is in the stick (and whether a replacement can
+take its EUI64 — §6.1), which other add-ons are in use, and the Bluetooth
+device inventory §6.2 needs to size proxies. §12 section A carries them, along
+with two hardware checks that could still move the host choice (§5.2).
 
 ---
 
@@ -138,13 +142,37 @@ one service whose whole job is to be there when you flip a switch, that is a
 genuine downgrade, and it deserves an explicit answer rather than a discovery
 at 3 a.m.
 
-Three answers, and the first is probably right:
+⚠ **And it is worse than "power cuts", three ways this file originally
+missed:**
+
+- **The UPS makes the long outage *deterministic*, not shorter.**
+  `modules/nixos/nut-client.nix` puts memory-alpha on **galactica's** UPS as a
+  `type = "secondary"` monitor with `SHUTDOWNCMD = "systemctl poweroff"`. So a
+  long outage is *guaranteed* to end with memory-alpha cleanly powered off,
+  needing a human. The UPS removes the brief-blip case; it does not soften the
+  real one.
+- ⭐ **Every kernel update now costs an unlock**, and this undercuts the
+  document's own headline goal. The Pi updated in place and rebooted itself.
+  "Update with the rest of the fleet" means `nixos-rebuild switch` on the
+  fleet's cadence — and **every kernel bump is a reboot of the Home Assistant
+  host that a person has to attend.** The plan increases the frequency of the
+  event it calls its largest risk.
+- ⚠ **Does the host even power back on?** memory-alpha is a Framework 13
+  *laptop* mainboard. After NUT powers it off, mains returning does not
+  necessarily start it — that needs a "Power On AC Attach" BIOS setting, which
+  is BIOS-version-dependent on Framework. If it is absent, the LUKS question is
+  moot and the failure is worse: nothing happens at all. **Verify before
+  treating the UPS as a mitigation** (§12).
+
+Four answers, and the first is probably right — but the fourth is the one
+nobody thinks of:
 
 | Option | Assessment |
 |---|---|
 | **Accept it, lean on the UPS** | The fleet already has NUT — `modules/nixos/nut-client.nix` runs on memory-alpha, and galactica is slated to become the UPS server (`MANUAL-STEPS.md` §6). A UPS turns the common case (a brief outage) into no reboot at all. The uncommon case — a long outage, or a panic — costs a manual unlock. **Cheapest, most honest, and consistent with the rest of the fleet.** ⚠ It also makes finishing §6 of galactica's manual steps a prerequisite rather than a nicety. |
-| **TPM2 auto-unlock** (`systemd-cryptenroll --tpm2-device=auto`) | Removes the manual step entirely. It is *not* a weakening of the posture this fleet already holds: `hosts/galactica/DESIGN.md` §3.2 states outright that the move to sops-held keyfiles made encryption "protect a powered-off stolen chassis, not a running one." TPM2 sealing is the same trade applied to root. ⚠ Needs a TPM — unverified on the Framework mainboard and on the X9SCM-F (a 2011-era board; likely TPM 1.2 header at best, i.e. **not available on galactica**). Also forks the fleet's one unlock story, which `DECISIONS.md` §7 specifically valued. |
+| **TPM2 auto-unlock** (`systemd-cryptenroll --tpm2-device=auto`) | Removes the manual step entirely. It is *not* a weakening of the posture this fleet already holds: `hosts/galactica/DESIGN.md` §3.2 states outright that the move to sops-held keyfiles made encryption "protect a powered-off stolen chassis, not a running one." ⚠ **But not the *same* trade, as this row originally claimed.** The sops arrangement still needs a human passphrase to reach the keyfiles, so a stolen powered-off chassis yields nothing. TPM2-sealing root means the machine unlocks *itself*: a thief who takes the chassis and presses power gets a booted system. PCR policy defends against moving the disk elsewhere, not against booting the machine. `--tpm2-with-pin` keeps most of the resistance and keeps a human in the loop. ⚠ Needs a TPM — a **Framework 13 Gen 1 mainboard ships TPM 2.0** (it is Windows-11-capable), so this is one `systemd-cryptenroll --tpm2-device=list` from settled, not "unverified"; the X9SCM-F is a 2011-era board, TPM 1.2 header at best, i.e. **not available on galactica**. Also forks the fleet's one unlock story, which `DECISIONS.md` §7 specifically valued. |
 | **Network-bound unlock (Clevis/Tang)** | Circular in a single-site homelab: the Tang server has to be up and unencrypted for the encrypted host to boot. Would need a dedicated always-on unencrypted node — hopper or hamilton could be it, but both are shelved. **Not recommended.** |
+| ⭐ **Stop needing HA to be up** | The answer the other three all miss, because they treat this as an unlock problem. **Zigbee group bindings** (a switch bound directly to a bulb, no hub in the path) and **ESPHome on-device automations** keep running with the hub dead. Costs no hardware, and it is the only option that also covers "HA itself crashed" rather than just "the host is off." ⚠ Does not cover cloud integrations, the dashboard or the mobile app — but it covers the lights, which is the 3 a.m. case. **Do this regardless of which of the other three is chosen.** |
 
 **Recommendation: accept it, and finish the UPS work first.** Record the
 trade where the host records its decisions; do not let it be an unremarked
@@ -175,17 +203,33 @@ path of least resistance on memory-alpha and someone will suggest it.
 > **Option B stands.** The body below is the argument, kept as provenance.
 
 **Home Assistant Container, with its compose file declared in Nix** as
-`modules/nixos/home-assistant.nix`, in exactly the shape this repo already uses
-three times over — `modules/nixos/beszel.nix`, `dockge.nix` and `traefik.nix`
-are all `pkgs.writeText` compose files driven by a systemd unit, with the image
-tag pinned in-repo.
+`modules/nixos/home-assistant.nix`, in the shape this repo already uses —
+`modules/nixos/beszel.nix`, `dockge.nix` and `traefik.nix` are all
+`pkgs.writeText` compose files driven by a systemd unit.
+
+⚠ **Correction, and it matters for the next bullet: none of those three pins a
+version.** They run `traefik:v3`, `tecnativa/docker-socket-proxy:latest`,
+`louislam/dockge:1`, `henrygd/beszel:latest`. A floating tag means `docker
+compose up` on an unchanged compose file does not re-pull, so those services
+update on a schedule that has nothing to do with `nixos-rebuild`. Home
+Assistant pinning an exact release is therefore a **departure from** the
+existing three, not a copy of them — and it is what makes the fleet-cadence
+claim below true for HA specifically. (Also: `beszel.nix` is hopper-shaped and
+unused here, so the compose-in-Nix shape really exists twice on this host.)
 
 Why this and not the native module:
 
-- **It is the only form that migrates rather than rebuilds.** The Pi's
-  `/config` — `.storage/`, every integration's config entry, every long-lived
-  token, the recorder DB — copies across and starts. Option A means
-  re-authenticating every cloud integration by hand.
+- ⭐ **Option A cannot ingest the Pi's state at all.** This is the decisive
+  fact and it is not a matter of convenience: the Pi runs **2026.9.x**, the pin
+  carries **2026.5.4**, and Home Assistant's `.storage` schema migrations are
+  **one-way**. A config directory that has been opened by 2026.9 cannot be
+  restored into 2026.5. Option A is disqualified until nixpkgs catches up, and
+  "catches up" means the next channel bump, not a backport.
+  ⚠ The weaker version of this argument — *"option A means re-authenticating
+  every cloud integration by hand"* — was what this bullet used to say, and it
+  is wrong: `services.home-assistant.configDir` can be pointed at a
+  hand-placed config directory, which §8 itself describes doing. The version
+  lag is the blocker; the ergonomics are not.
 - **It keeps "update with the fleet" honest in both readings.** Bumping the pin
   is a repo commit; applying it is `npullnrs`, same as everything else. And the
   version being bumped *to* is the real current HA.
@@ -199,6 +243,28 @@ hand-written config, option A is strictly better.~~ **Not met** — see the
 banner above. Kept because the condition is the reason to trust the
 recommendation: it was written down before the answer was known, and it was
 allowed to fail.
+
+### ⚠ 4.2 The option this file missed: a standalone pinned nixpkgs
+
+`flake.nix` already solves "stable is too old for this one package" **twice** —
+`nixpkgs-orca-slicer` and `nixpkgs-bambu-studio` are standalone inputs pinned
+to a single commit so one package can be newer than the channel, each with a
+comment arguing that bumping the *shared* nixpkgs for one app is the wrong
+move. A third such input for `home-assistant` would dissolve §2's version-lag
+argument entirely, and this document should have named it.
+
+**Rejected, on its merits rather than by omission.** Those two precedents
+override a *package*. Home Assistant is a package **and** a NixOS module that
+moves in lockstep with it — the module's `extraComponents`, `defaultIntegrations`
+and capability logic track the package's internals. Taking a newer HA means
+`disabledModules` plus importing the module from the same pin, i.e. carrying a
+second module tree, not a second derivation. That is a materially bigger
+commitment than overriding a slicer, and it buys a Core install upstream still
+does not support.
+
+Worth revisiting if nixpkgs ever ships HA as a more loosely-coupled package.
+
+---
 
 What A would buy, to be fair to it: `extraComponents`, `customComponents`,
 `customLovelaceModules`, `themes`, per-domain `blueprints`, `lovelaceConfig`
@@ -214,6 +280,27 @@ stick does not need hand-written hardening exceptions.
 manual drop into a writable `custom_components/`, which is precisely the
 mutable state option A exists to eliminate. Under option B it just works. If
 the Pi runs HACS, that is most of the argument settled.
+
+---
+
+### ⚠ 4.3 What updating HA costs after it lands
+
+§2 spends its length on *nixpkgs'* cadence and never states **HA's own**, which
+is what this host will actually live with. Under a pinned container you inherit
+Home Assistant's monthly release train, its per-release breaking changes, and
+its "never skip more than a year" `.storage` rule.
+
+- **The policy, stated:** read the release notes, bump the tag in a
+  `[memory-alpha]` PR, apply with `npullnrs`, monthly. If nobody owns that,
+  the pin silently becomes a year-old HA and the *next* bump is the dangerous
+  one.
+- ⭐ **`nixos-rebuild --rollback` does not roll Home Assistant back.** Once
+  2026.10 has opened the config directory, `.storage` has migrated and the tag
+  cannot go back. This is the single biggest behavioural difference between HA
+  and every other service in this flake, and a document selling "declarative,
+  reviewable, rollback-able" has to say it out loud.
+- **So snapshot `/config` before each tag bump.** The bump is the irreversible
+  act; the snapshot is the only thing that makes it reversible.
 
 ---
 
@@ -241,22 +328,97 @@ deployment, and 32 GB of RAM against HA's ~1 GB is not a contest.
 
 Two things memory-alpha needs that it does not have:
 
-1. **Tailscale.** galactica has it, memory-alpha does not — and the existing
-   posture for `homeassistant` is explicitly *Tailscale/LAN-only, no `.xyz`
-   name*. Importing `modules/nixos/tailscale.nix` and adding a
-   `tailscale/authKey` sops entry is ~10 lines and closes a gap that exists
-   independently of this migration. `homelab.tsdproxy` on top would give HA its
-   own tailnet name, the same treatment the admin dashboard gets on galactica.
+1. **Tailscale — as a *migration*, not an import.** ⚠ This entry originally
+   said memory-alpha "has no Tailscale" and that importing
+   `modules/nixos/tailscale.nix` was "~10 lines". Wrong three ways:
+   - **memory-alpha is already on the tailnet.** `configuration.nix` loads
+     `ip_tables`/`iptable_nat`/`xt_MASQUERADE` specifically for *"Tailscale's
+     kernel-mode router (`TS_USERSPACE=false`)"* — a **container** env var. It
+     runs a Tailscale container from `homelab-stacks`. The true gap is
+     config hygiene: no `services.tailscale` **in this repo**.
+   - **Standing `services.tailscale` up beside a live tailscaled container
+     fights it** over `/var/lib/tailscale` and the interface. That is a
+     cutover, with its own planning.
+   - **`modules/nixos/tailscale.nix` is hopper's**: `useRoutingFeatures =
+     "server"` plus `--advertise-exit-node`. `hosts/pegasus/configuration.nix`
+     says in as many words *"do not reuse the hopper-flavoured
+     modules/nixos/tailscale.nix here"*, and galactica, pegasus and hamilton
+     each inline `services.tailscale` instead. Importing it would advertise
+     memory-alpha as an exit node.
+
+   ⚠ **And this is a prerequisite of the cutover, not an independent nicety**
+   — see §9.1. `homelab.tsdproxy` is not free either: its `dockerHost` defaults
+   to galactica's socket proxy, and `targetHostname` dials a container's
+   *published* port, which a `network_mode: host` container does not have.
 2. **An answer on USB** — see §6, and the answer is probably "don't use USB."
 
-> ### ✅ Strengthened 2026-09-15 — the USB objection is gone
+> ### 2026-09-15 — the USB objection is gone, and that is neutral
 >
-> The one argument that could have overridden this was physical: if the radios
-> were immovable and the antenna had to live where the tower is, galactica
-> would win regardless of coupling. §6 dissolves it instead of answering it —
-> **network-attaching Zigbee and proxying Bluetooth means neither radio is
-> attached to either host.** The USB contention row above stops mattering, and
-> memory-alpha is the recommendation without qualification.
+> §6 dissolves the one argument that could have overridden coupling: with
+> Zigbee network-attached and Bluetooth proxied, **neither radio is attached to
+> either host.** ⚠ But this removes an argument *for galactica* while also
+> retiring the "⚠ Contended USB" row *against* memory-alpha — it is a wash, not
+> a strengthening, and an earlier revision of this banner claimed otherwise.
+> The comparison collapses back onto coupling alone, which §5.1 says is thinner
+> than it looks.
+
+### ⚠ 5.1 What this recommendation does not price
+
+Honest accounting, added after review. **The recommendation stands, but not for
+the reason §5's table gives**, and two unchecked facts could overturn it.
+
+**"32 GB against HA's ~1 GB is not a contest" is the wrong axis.** RAM was never
+the contended resource. `hosts/memory-alpha/HARDWARE-MAP.md` is loud about the
+ones that are:
+
+- **Disk, structurally.** §1: *"No spare capacity and no second disk … nobody
+  has checked how much there is."* §4: one M.2 2280 socket, so there is
+  nowhere to add one. HA's recorder is a continuous-write SQLite workload
+  landing on the same NVMe as Jellyfin, the Nix store and the aarch64 build
+  scratch. §8.1 asks how big the recorder DB is only to decide whether to
+  *copy* it — never whether this host has room for it to **grow**.
+- **Thermals.** A 15 W Tiger Lake **laptop** part in a **printed plastic case**,
+  with *"Nothing in `configuration.nix` manages any of this today"* and an
+  envelope *"contended three ways"* (CPU inference, iGPU, Jellyfin transcode).
+  HA makes four — and it is the one expected to answer in under a second.
+- **Bursty contention.** memory-alpha is the fleet's **aarch64 build host**,
+  described as *"memory-hungry and bursty … precisely the workload where a
+  missing swap turns into an OOM kill."* A latency-sensitive always-up service
+  on the box that periodically pegs every core under QEMU is a coupling cost of
+  the same kind §5 rejects galactica for — just less visible, because it is
+  compute rather than storage.
+
+**And the single-point-of-failure count runs the other way.** memory-alpha
+already carries Traefik (the fleet's ingress), Jellyfin, dockge, the
+Beszel/Scrutiny/Arcane hubs, the Newt/Pangolin site, Uptime Kuma, ntfy and the
+aarch64 build role. That is more surface than galactica's DNS + array, not
+less.
+
+**The decoupling is also only partial.** HA on memory-alpha still depends on
+galactica for **DNS** (galactica is primary AdGuard), for the **NFS mounts**
+this host holds open, and for the **UPS** — `nut-client.nix` powers
+memory-alpha off when galactica's UPS signals FSD (§3.1). Local Zigbee- and
+BLE-driven automations survive a galactica outage; the dashboard, the mobile
+app and every cloud integration do not.
+
+### ⚠ 5.2 Two unchecked facts that could send this to galactica
+
+Both bear on §3.1, which this document calls its largest risk — so they are
+worth checking *before* building, not after. They are §12 items.
+
+1. **Can memory-alpha power itself on after mains returns?** (§3.1.) If the
+   Framework mainboard has no "Power On AC Attach", it stays off until someone
+   presses a button.
+2. **galactica has a BMC and memory-alpha does not.** `towerbmc.internal` plus
+   `scripts/ipmi-remote.sh` can power galactica on *and* drive the initrd
+   unlock remotely, with serial-over-LAN (`homelab.serialConsole`) as the
+   console. That is a concrete answer to the cold-boot problem that
+   memory-alpha simply does not have.
+
+**If (1) is absent and (2) holds, galactica is strictly better on the
+availability axis** — and availability is the axis this plan says matters most.
+⟨Owner's call; this file does not flip its own recommendation on unchecked
+facts.⟩
 
 ---
 
@@ -281,10 +443,21 @@ a time. Zigbee2MQTT has the equivalent through its own coordinator backup.
 ⚠ **How cleanly that lands depends on the chip**, which is why §12 asks which
 stick it is:
 
-| Swap | Expectation |
+⭐ **The question is the EUI64, not the chip family.** What actually decides
+whether devices rejoin silently is whether the replacement can take the old
+coordinator's **IEEE/EUI64 address**. zigpy's backup format tries to write it;
+most stacks allow the IEEE to be overwritten exactly **once** (EFR32, CC2652
+via znp) and some do not allow it at all — ConBee/deCONZ being the notable one.
+Chip family is a proxy for that question, not the question.
+
+| Can the replacement take the old EUI64? | Expectation |
 |---|---|
-| Same chip family (EFR32 → EFR32, CC2652 → CC2652) | Clean. Network settings restore, devices rejoin. |
-| Across families | Network settings restore via zigpy's Open Coordinator Backup Format, but with more caveats. Budget for re-pairing stragglers, and do it on a day when the house can be odd for an hour. |
+| **Yes** | Clean. Network settings restore, devices rejoin. |
+| **No** | Devices keep their network keys and polling works, but anything with a **binding or reporting config pointing at the old coordinator's IEEE** silently stops acting — the classic *"it rejoined, but the button does nothing."* Budget re-pairing for **every bound device**, not just stragglers. |
+
+⚠ Either way: sleepy end devices may not notice until their next check-in
+(hours), and a known set of devices — older Aqara especially — are notorious
+for refusing to rejoin at all.
 
 ⚠ **Mesh topology moves even when the network does.** Battery-powered end
 devices rejoin on their own; mains-powered routers generally do too. But a
@@ -292,6 +465,11 @@ coordinator that moves from a Pi on a shelf into a server means a different set
 of first-hop neighbours, and a coordinator inside a metal chassis surrounded by
 USB 3 and NVMe is a materially worse radio position. **USB 3 at 2.4 GHz is a
 well-documented interference problem**, not a folk belief.
+
+⚠ **Sequence this *after* the host move, not during it** — §7.1's rule about
+not running two migrations at once applies to this recommendation too, and a
+coordinator swap is the highest-blast-radius change in the whole plan. Move the
+host on the existing USB stick; network-attach afterwards as its own PR (§11).
 
 ⭐ **Recommendation: network-attach the coordinator** (SLZB-06 or similar,
 Ethernet or PoE) and talk to it over TCP. It decouples the radio's physical
@@ -328,12 +506,35 @@ Assistant over WiFi. This:
 
 - **Removes the problem from the migration entirely** — no adapter to move, no
   D-Bus to plumb, no BlueZ on memory-alpha, nothing in the compose file.
-- **Improves coverage rather than preserving it.** Several proxies beat one
-  adapter anywhere in the house, including the Pi's current position. This is
-  the rare migration step that leaves things better than it found them.
-- **Is already supported by the fleet's tooling** — `services.esphome` (2026.5.1
-  in the pin) is a NixOS service, so the proxies' firmware is built and served
-  from a declared, git-tracked config like everything else.
+- **Improves coverage for the common case.** Several proxies beat one adapter
+  anywhere in the house, including the Pi's current position — for *passive
+  BLE advertisement* devices (BTHome, Xiaomi/Govee sensors), which is most
+  homes.
+
+⚠ **They are not a superset of a local adapter, though**, and the plan should
+size them from the actual device list rather than assume:
+
+- **No Bluetooth Classic at all.** ESP32 proxies relay BLE only, so any
+  Classic-based integration — Classic presence `device_tracker`, Classic audio
+  or remote integrations — simply stops existing.
+- **Active connections are few and finite.** Connection-oriented devices
+  (SwitchBot, many locks, Airthings, LED controllers) need
+  `bluetooth_proxy: active: true`, and each ESP32 holds roughly **three**
+  concurrent connections. A dozen such devices means proxy count is driven by
+  connection budget, not coverage.
+- **Bonding/pairing over a proxy is limited**, and some provisioning flows
+  still want a local adapter.
+- ⚠ **BLE now rides WiFi**, and a proxy is useless if HA is down — so this
+  compounds §3.1's availability concern rather than being orthogonal to it.
+- **Has a NixOS service to run it** — `services.esphome`, 2026.5.1 in the pin.
+  ⚠ But only the *dashboard*: the module's whole option set is `address`,
+  `allowedDevices`, `enable`, `enableUnixSocket`, `environment`,
+  `environmentFile`, `openFirewall`, `package`, `port`, `usePing`. **There is
+  no declarative device-config option** — per-device YAML lives in mutable
+  state under `/var/lib/private/esphome` and is edited through a web UI, which
+  is the exact thing §7 celebrates escaping. Git-tracking the proxy firmware is
+  its own piece of work (a bind-mounted repo, or generating the YAML into the
+  store), and this file should not have implied it came for free.
 
 ⚠ **Sequence this before the cutover, not after.** The proxies should be up and
 adopted while the Pi is still authoritative, so BLE coverage is proven before
@@ -398,8 +599,15 @@ work:
   `/config` directly, so the copy is a plain `rsync`. ⚠ This requires adding an
   add-on to a machine being decommissioned, which is mildly perverse but by far
   the shortest path.
-- **Unpack a full backup.** Trigger it from the UI, copy the tarball off, and
-  extract its inner `homeassistant.tar.gz` — that archive *is* `/config`.
+- **Unpack a full backup.** ⚠ **Not a plain `tar xzf`.** Since HA's 2025.1
+  backup rework, backups are **encrypted by default** with a generated key (the
+  "emergency kit"); the inner members are `securetar` AES streams and a plain
+  extract yields garbage. Either create the backup with encryption explicitly
+  disabled, or retrieve the emergency-kit key and decrypt with `securetar` /
+  the HA CLI. And the inner `homeassistant.tar.gz` unpacks to a **`data/`
+  directory whose contents** are `/config` — it is not itself `/config`.
+  **This is the step the whole migration hinges on, and as originally written
+  it would have failed on the first attempt.**
 
 Either way the sequence is the same:
 
@@ -416,6 +624,16 @@ Either way the sequence is the same:
    token, and the ZHA network state that saves re-pairing the mesh.
 4. **Start the container.** It should come up as the same instance: same UI,
    same integrations, same devices.
+
+⚠ **Some config entries will not survive the Supervisor, and that is
+expected.** `/config` carries entries that only exist under HA OS: the
+`hassio` integration itself will fail to load and **will** raise a repair
+issue, and any add-on-created entry pointing at a Supervisor DNS name — the
+official Mosquitto add-on's MQTT entry targets `core-mosquitto`, which resolves
+nowhere in Container — needs re-pointing by hand. So §11's verification
+criterion is **"no repair warnings other than these"**, not "no repair
+warnings"; write the expected list down before cutting over, or the check
+cannot be passed.
 
 ⚠ **What does not come across is add-on data.** The backup tarball carries it,
 but under option B there is nowhere to put it — add-ons are replaced per §7,
@@ -438,12 +656,21 @@ largest, busiest file in the config directory. Two things follow:
 - It belongs in borgmatic's `sqlite_databases` list on the chosen host, exactly
   like `jellyfin.db` and `kuma.db` in `hosts/memory-alpha/borgmatic.nix` — a
   real `.backup` dump alongside the file copy.
+- ⚠ **`recorder:`'s `purge_keep_days` and `exclude:` are the actual lever**,
+  and they are what stops the DB growing into a host whose free space nobody
+  has measured (§5). Set them at the same time; a default recorder on a
+  single-NVMe box is how this ends badly six months out.
+- ⚠ **Long-term statistics live in the same database**, so "leave the history
+  behind" and "lose long-term statistics" are one loss, not two choices.
 - ⚠ Migrating it is optional. It is history, not state; `.storage/` is state.
   If it is large and the copy window matters, leave it behind and start fresh —
   losing long-term statistics is a real but bounded cost, and it should be a
   decision rather than an accident. If long-term history matters, consider
   moving recorder to PostgreSQL on the target while everything is stopped
-  anyway, since that is the natural moment.
+  anyway, since that is the natural moment. ⚠ That is a whole new service with
+  its own backup path (`postgresql_databases`, not `sqlite_databases`), and it
+  would **invalidate** §10's "the existing design does the right thing with no
+  help." Don't treat it as a free upgrade.
 
 ---
 
@@ -469,8 +696,62 @@ Docker labels for Traefik's Docker provider to read.
 ⭐ **The fleet already solved this.** `modules/nixos/traefik.nix` routes
 Jellyfin — also not on the `proxy` network — through Traefik's **file
 provider**, pointed at `http://host.docker.internal:8096`. Home Assistant takes
-the same treatment at `:8123`, and it is a copy of a proven pattern rather than
-a new one.
+the same treatment at `:8123`.
+
+⚠ **Copy the shape, not the cert resolver.** Jellyfin's file-provider router is
+`Host(`jellyfin.zjones.dev`)` with `certResolver: letsencrypt` — a *public*
+name. HA wants the `.internal` + `tls: {}` self-signed shape the dashboard and
+dockge routers use, per the no-public-name posture above. As built, the router
+is **`ha.memory-alpha.internal`**, which the existing `*.memory-alpha.internal`
+rewrite already resolves — so the parallel-run phase needs **no DNS change at
+all**, and `homeassistant.internal` stays pointed at the Pi until cutover.
+
+⚠ **Host networking binds 8123 on every interface**, so "reachable only
+through Traefik" is enforced by `networking.firewall` alone, not by Docker. The
+module deliberately does not open 8123; Traefik reaches it over the already-
+trusted `br-proxy` bridge. Don't "helpfully" add it to `allowedTCPPorts`.
+
+⚠ The `websecure` entrypoint applies `secure-headers@docker` — including
+`frameDeny=true` — to everything the file provider routes. Jellyfin already
+lives with it, so it is probably inert here too, but it would break embedding
+an HA dashboard in an iframe (the admin homepage can do that). Check before
+assuming.
+
+### ⚠ 9.1 The mobile app, external access and webhooks
+
+Named once in §11's verification list and never resolved. All of it flows from
+the no-public-name posture, and the owner should choose it knowingly:
+
+- The companion app stores the instance URL **and a per-device long-lived
+  token** in `.storage`. An internal-only instance works on WiFi and over the
+  tailnet and is **dead off-network** — so push notifications and location
+  tracking degrade the moment the phone leaves. That is a decision, not an
+  accident.
+- ⭐ **Tailscale on the phone therefore becomes a hard dependency** for remote
+  control, which makes §5's Tailscale item a **prerequisite of the cutover**,
+  not the independent nicety it was first called.
+- **`external_url` / `internal_url`** in `.storage/core.config` still point at
+  the Pi and need changing, or the app's URL logic and OAuth-style integrations
+  misbehave.
+- ⚠ **Webhook-based integrations** (IFTTT, Withings, `mobile_app` location,
+  anything with a cloud callback) key off `external_url` or Nabu Casa. If any
+  exist they break **silently** at cutover — they need their own verification
+  step, because nothing surfaces them.
+- Anything on **Nabu Casa / HA Cloud**, Alexa and Google included, is tied to
+  the instance and needs its own check.
+
+### ⚠ 9.2 HomeKit and Matter
+
+§11 uses "HomeKit discovery populated" as the test for host networking. But if
+the Pi actually runs the **HomeKit Bridge integration**, moving the instance
+moves the bridge: pairing binds to the bridge's persistent identity in
+`.storage/homekit.*` plus its mDNS setup-id and port, and *"every accessory
+shows No Response after the move"* is the well-known outcome. If HomeKit is in
+use it needs its own line beside the Zigbee questions.
+
+§1.1 establishing **no Thread/Matter** is genuinely useful — but note that
+adding Matter later **reintroduces the local-radio problem §6 just dissolved**,
+because a Thread border router is a radio that has to be somewhere.
 
 **Behind a proxy, HA needs to be told so**, or it rejects the requests outright:
 
@@ -502,17 +783,39 @@ borg archive.
 **Backups.** memory-alpha's borgmatic already backs up `/home/z` wholesale with
 an exclusion list — deliberately, so that a new service is covered by default
 rather than by remembering to add it. So `/home/z/home-assistant` is backed up
-the moment it exists, and the only required change is adding the recorder DB to
-`sqlite_databases` (§8.1) and excluding HA's own `backups/` and `tts/`
-directories, which are regenerable bulk. **The existing design does the right
-thing here with no help.**
+the moment it exists, and excluding HA's own `backups/` and `tts/` directories
+is the only free part. **The existing design does the right thing here with no
+help.**
 
-**Monitoring.** A Beszel system already reports memory-alpha. Add an
-Uptime Kuma HTTP check against `https://homeassistant.internal` and — worth
-more than the check itself — an `OnFailure=` unit routing to ntfy, matching the
-pattern `DESIGN.md` §3.1 calls "the real gap" for services with no built-in
-alerting. Home Assistant going quiet is otherwise noticed by a person flipping
-a switch that does nothing.
+⚠ **Adding the recorder DB is not just one more list entry.** The hook runs
+`sqlite3 .backup` against a WAL database held open by a container running as
+root — the same class of problem that already forced `CAP_DAC_OVERRIDE` into
+this unit's `CapabilityBoundingSet` by hand (the comment in `borgmatic.nix`
+explains it). And a *missing* file fails the whole nightly run, taking every
+other database on the host with it. So the entry is **commented out until
+`/config` is migrated**, and uncommenting it needs a verified successful dump,
+not just an edit.
+
+**Monitoring.** Home Assistant going quiet is otherwise noticed by a person
+flipping a switch that does nothing, so this is worth more than it looks.
+
+⚠ **But not from memory-alpha.** Uptime Kuma and ntfy both run *on*
+memory-alpha (`/home/z/uptime-kuma`, `/home/z/ntfy` — dockge stacks, not the
+hopper-shaped `modules/nixos/{uptime-kuma,ntfy}.nix`, which belong to a shelved
+host). Under §3.1's scenario — memory-alpha down after a cold boot — **the
+watcher and the alert sink are down with it**, and the one event you most need
+to hear about is the one event that guarantees silence.
+
+`docs/BACKUP.md` §3b already makes this argument in the fleet's own words:
+*"they run on hopper, not Tower … it survives the fleet being down, which is
+the case a self-hosted watcher cannot cover."* So the check belongs **off**
+memory-alpha: on galactica, or as an external heartbeat (a Kuma push monitor
+from elsewhere, healthchecks.io, or provider-side alerting of the kind §3b
+argues for with BorgBase).
+
+⚠ Note also that §7's "reviewed commit rather than a web form" claim does not
+extend to this work: the live Kuma and ntfy instances are dockge stacks in
+another repo, so configuring them is clicks in two web UIs.
 
 **Dashboards.** HA appears on neither homepage today. The admin dashboard
 (`hosts/galactica/homepage/admin/services.yaml`) is where it belongs; the guest
@@ -524,13 +827,28 @@ failing silently, which is the intent.
 
 ## 11. Cutover and rollback
 
-The good news is that this migration has a free rollback for as long as anyone
-wants it, because the two instances are independent and the Pi is not needed
-for anything else.
+The two instances are independent and the Pi is not needed for anything else,
+so the rollback is nearly free — but **not for as long as an earlier revision
+of this section claimed**, and the step order is what spends it.
+
+> ### ⚠ The point of no return is the coordinator migration, not the DNS switch
+>
+> A rollback is one DNS line only while **the Zigbee mesh still belongs to the
+> Pi**. The moment the coordinator is migrated, reverting that line returns you
+> to a Home Assistant with no Zigbee. Everything after it is one-way for the
+> Zigbee half of the house.
+>
+> **So: cut DNS over first, let it settle, and migrate the coordinator as its
+> own change afterwards.** That also honours §7.1's own rule — don't run two
+> migrations at once — which §6.1 otherwise quietly breaks by recommending a
+> coordinator swap (quite possibly a chip-family swap) in the middle of a host
+> move. §12 is ordered accordingly.
 
 1. **Build alongside.** Stand the new instance up on a different name
-   (`ha-new.memory-alpha.internal`) while the Pi keeps serving
-   `homeassistant.internal`. Nothing about the house changes.
+   (**`ha.memory-alpha.internal`**, which the existing `*.memory-alpha.internal`
+   rewrite already resolves — so no DNS work) while the Pi keeps serving
+   `homeassistant.internal`. Nothing about the house changes. ⭐ **Built** —
+   §12 items 11–12.
 2. **Copy `/config` and start it.** Both instances now exist; only one is
    authoritative. ⚠ **Two HA instances must not talk to the same Zigbee
    coordinator at once** — this is the one way to make this step destructive,
@@ -543,10 +861,11 @@ for anything else.
    populated (the test for whether host networking is right), and the mobile
    app reconnecting.
 4. **Switch DNS** (§9). Clients follow within a TTL.
-5. **Shut the Pi down but do not wipe it.** It is a complete, working rollback
-   for the price of one DNS line — keep it for a few weeks of real use,
-   including at least one full cold boot of the new host, which is the event
-   §3.1 is about.
+5. **Shut the Pi down but do not wipe it.** Until the coordinator moves, it is
+   a complete rollback for the price of one DNS line — keep it for a few weeks
+   of real use, including at least one full cold boot of the new host, which is
+   the event §3.1 is about. ⚠ After the coordinator moves, the rollback still
+   covers cloud integrations and automations, but **not Zigbee**.
 6. **Then decommission.** The Pi 5 is a plausible replacement for shelved
    hopper/hamilton in the ephemeral-resolver plan, or — more interestingly —
    the unencrypted always-on node a Tang server would need, if §3.1's second
@@ -556,60 +875,88 @@ for anything else.
 
 ## 12. Pending — in order
 
-§1.1's answers closed the two items that led this list and turned the rest into
-a sequence. Items 1–3 are the new information-gathering, and they are small.
+> ⚠ **Rewritten after review.** The previous revision of this list had a real
+> structural bug: it referenced *"the migrated `secrets.yaml`"* while **no step
+> in it ever copied `/config`** — that lived only in §11's separate sequence.
+> Two numbered lists that never referenced each other, with the single most
+> important data step present in one and absent from the other, is exactly how
+> it gets skipped. One list now.
+>
+> Host-side doing is tracked in `hosts/memory-alpha/MANUAL-STEPS.md`; this is
+> the whole-project order.
 
-1. [ ] **Confirm whether Zigbee runs through ZHA or a Zigbee2MQTT add-on.**
-   Decides whether the mesh restores for free with `/config` (§8) or whether
-   `services.zigbee2mqtt` + `services.mosquitto` is the like-for-like
-   replacement. Either way §7.1 holds: **do not change stacks during the move.**
-2. [ ] **Identify the Zigbee coordinator chip** (EFR32, CC2652, ConBee…).
-   Decides how cleanly a network restore lands on a replacement coordinator
-   (§6.1) and therefore how much re-pairing to budget for.
-3. [ ] **List the add-ons in use**, and which of them hold state worth keeping.
-   This is the only part of the migration with no shortcut (§8), so it is also
-   the only part whose size is currently unknown.
-4. [ ] Confirm the recorder DB's size, and decide whether history migrates at
-   all (§8.1).
-5. [ ] Decide the §3.1 cold-boot answer. ⚠ **Still the largest open risk in the
-   plan** — it is the one thing that is strictly worse after the move, and it
-   is unaffected by everything §1.1 settled. Check whether memory-alpha's
-   Framework mainboard actually has a usable TPM 2.0 before assuming that
-   option exists.
-6. [ ] **Finish `hosts/galactica/MANUAL-STEPS.md` §6 (NUT/UPS)** if §3.1 is
-   answered with "accept it" — that makes the UPS a prerequisite of this
-   migration rather than an unrelated backlog item.
+### A. Check before building (cheap, and two of them can move the host choice)
 
-**Then the hardware, which is on the critical path and has lead time:**
+1. [ ] **Can memory-alpha power on after mains returns?** (§3.1, §5.2.) If the
+   Framework board has no "Power On AC Attach", the UPS mitigation is hollow.
+2. [ ] **Confirm galactica's BMC can drive the initrd unlock remotely** (§5.2)
+   — `towerbmc.internal`, `scripts/ipmi-remote.sh`, serial-over-LAN. ⭐ If 1 is
+   absent and this holds, **re-open the host decision before building
+   further.**
+3. [ ] `systemd-cryptenroll --tpm2-device=list` on memory-alpha — settles §3.1's
+   TPM2 row in one command.
+4. [ ] **ZHA or a Zigbee2MQTT add-on?** Decides whether the mesh restores with
+   `/config`. Either way §7.1 holds: don't change stacks during the move.
+5. [ ] **Which coordinator chip, and can the replacement take its EUI64?**
+   (§6.1.) This, not chip family, sets the re-pairing budget.
+6. [ ] **List the add-ons**, and which hold state worth carrying (§8).
+7. [ ] **Inventory the Bluetooth devices** (§6.2): any Bluetooth *Classic*?
+   how many connection-oriented? Proxy count follows from the answer.
+8. [ ] **Is HomeKit Bridge in use?** (§9.2.) If so it needs its own plan.
+9. [ ] **Any webhook/Nabu Casa integrations?** (§9.1.) They break silently at
+   cutover and nothing surfaces them.
+10. [ ] Recorder DB size, and set `purge_keep_days`/`exclude:` (§8.1).
 
-7. [ ] Order the network-attached Zigbee coordinator (§6.1) and the ESP32
-   boards for Bluetooth proxies (§6.2).
-8. [ ] **Stand up the Bluetooth proxies while the Pi is still authoritative**
-   and confirm BLE coverage before anything depends on it (§6.2). Needs
-   `services.esphome` on the target first.
+### B. Build (no hardware needed)
 
-**Then the build:**
+11. [x] `modules/nixos/home-assistant.nix` — HA Container, compose in Nix,
+    host networking, exact image pin. **Done.**
+12. [x] Traefik file-provider route for `ha.memory-alpha.internal` (§9), and
+    HA's `backups/`/`tts/` borgmatic exclusions. **Done.**
+13. [ ] **Migrate Tailscale to `services.tailscale`** on memory-alpha (§5) —
+    a cutover from the running container, **not** an import of the
+    hopper-flavoured module, and a **prerequisite of the cutover** because the
+    phone depends on it (§9.1).
+14. [ ] Put the availability check **off** memory-alpha (§10) — galactica or an
+    external heartbeat. A watcher on the watched host cannot see the one event
+    that matters.
+15. [ ] Add **Zigbee group bindings / ESPHome on-device automations** for the
+    lights that must work with the hub dead (§3.1). Independent of everything
+    else here, and worth doing regardless.
 
-9. [ ] Add `modules/nixos/tailscale.nix` + a `tailscale/authKey` sops entry to
-   memory-alpha (§5) — worth doing on its own merits, independent of this.
-10. [ ] Write `modules/nixos/home-assistant.nix` (HA Container, compose in Nix,
-    host networking, image tag pinned in-repo). PR titled `[memory-alpha] …`.
-11. [ ] Traefik file-provider route to `:8123`, copying Jellyfin's pattern, and
-    HA's `use_x_forwarded_for` / `trusted_proxies` (§9).
-12. [ ] Extract the migrated `secrets.yaml` into sops — a step, not a follow-up,
-    or the plaintext lives on inside LUKS and in every borg archive (§10).
-13. [ ] Recorder DB into borgmatic's `sqlite_databases`; HA's `backups/` and
-    `tts/` into `exclude_patterns` (§10).
-14. [ ] Migrate the Zigbee coordinator (§6.1) — the step with the most visible
-    blast radius. Pick a day the house can be odd for an hour.
+### C. Migrate the data
 
-**Then the cutover:**
+16. [ ] **Take a full backup on the Pi** — ⚠ with encryption disabled, or
+    retrieve the emergency-kit key first (§8).
+17. [ ] **Stop Home Assistant on the Pi** before copying (§8) — `BACKUP.md`
+    §4d; `/config` holds two live SQLite databases.
+18. [ ] **Copy `/config`** to `/home/z/home-assistant/config`, preserving
+    `.storage/` (§8).
+19. [ ] Hand-edits to the migrated config: `use_x_forwarded_for` /
+    `trusted_proxies` (§9), and `external_url` / `internal_url` (§9.1).
+20. [ ] **Extract the plaintext `secrets.yaml` into sops** (§10) — ⚠ *before*
+    the first borgmatic run after step 18, or it is already in an archive.
+21. [ ] Uncomment the recorder DB in `borgmatic.nix` and **verify the dump
+    actually succeeds** (§10).
 
-15. [ ] Move the `homeassistant.internal` rewrite to the new address (§9) —
-    ⚠ **last**, after verification, and the trivially revertible rollback.
-16. [ ] Add HA to the admin homepage (§10).
-17. [ ] Keep the Pi intact through at least one full cold boot of memory-alpha
-    (§3.1 is about that event), then decommission (§11).
-18. [ ] Record the outcome in `hosts/memory-alpha/DECISIONS.md` — which does not
-    exist yet and would be created by this work — including the §3.1 trade, and
-    retire this file to historical.
+### D. Cut over
+
+22. [ ] Verify against the **still-running Pi** (§11): integrations loaded,
+    automations listed, history present, discovery populated, mobile app
+    reconnecting, and **no repair warnings beyond the expected Supervisor ones**
+    (§8).
+23. [ ] Move the `homeassistant.internal` rewrite to `192.168.8.99` (§9).
+24. [ ] Add HA to the admin homepage (§10).
+25. [ ] Keep the Pi intact through **at least one full cold boot** of the new
+    host (§3.1), then decommission (§11).
+
+### E. Only after the cutover has settled
+
+26. [ ] **Network-attach the Zigbee coordinator** (§6.1). ⚠ **This is the point
+    of no return** — after it, the Pi is no longer a rollback for Zigbee (§11).
+27. [ ] **Stand up the Bluetooth proxies** — needs `services.esphome`, and
+    ⚠ per §6.2 that module gives you the dashboard, not git-tracked firmware
+    config.
+28. [ ] Write `hosts/memory-alpha/DECISIONS.md` (it does not exist) recording
+    the §3.1 trade and the §5 host argument, set the **monthly HA tag-bump
+    policy and owner** (§4.3), and retire this file to historical.

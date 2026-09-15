@@ -36,12 +36,16 @@ reversible by deleting a directory.
 
 4. [ ] Take a **full backup** from the Pi's UI and land the tarball on
    `ha_backup` on `tank` — the share exists for this.
+   ⚠ **Disable encryption on the backup, or retrieve the emergency-kit key
+   first.** HA has encrypted backups by default since 2025.1; the inner members
+   are `securetar` AES streams and a plain `tar xzf` yields garbage.
 5. [ ] **Stop Home Assistant on the Pi** before copying. `docs/BACKUP.md` §4d:
    a file-level copy of a live SQLite database is not a backup, and `/config`
    holds two (the recorder DB, and `zigbee.db` under ZHA).
 6. [ ] Copy `/config` into `/home/z/home-assistant/config` on this host —
    either from the Pi's Samba/SSH add-on, or by extracting the backup
-   tarball's inner `homeassistant.tar.gz`, which *is* `/config`.
+   tarball's inner `homeassistant.tar.gz` — which unpacks to a **`data/`
+   directory whose contents** are `/config`, not to `/config` itself.
    ⚠ `.storage/` is the part that matters: config entries, long-lived tokens,
    and the ZHA network state that saves re-pairing the mesh. Preserve it.
    The module creates the directory but never chowns it — HA runs as root in
@@ -52,7 +56,10 @@ reversible by deleting a directory.
 `/config` is migrated mutable state, so `configuration.yaml` is not managed by
 Nix under this deployment form. These are hand-edits, once.
 
-7. [ ] **Tell HA it is behind a proxy**, or every request through Traefik comes
+7. [ ] **Point `external_url` / `internal_url`** (in `.storage/core.config`)
+   at this host — they still name the Pi, and the companion app's URL logic and
+   any OAuth-style integration follow them.
+8. [ ] **Tell HA it is behind a proxy**, or every request through Traefik comes
    back 400:
 
    ```yaml
@@ -63,14 +70,18 @@ Nix under this deployment form. These are hand-edits, once.
        - 127.0.0.1
    ```
 
-8. [ ] **Extract the plaintext `secrets.yaml`** that arrives with the migrated
-   config into `secrets/memory-alpha.yaml` (sops). ⚠ A step, not a follow-up:
-   left alone, the plaintext lives on inside LUKS *and* in every borg archive
-   from the next nightly run onward.
+9. [ ] **Extract the plaintext `secrets.yaml`** that arrives with the migrated
+   config into `secrets/memory-alpha.yaml` (sops). ⚠ **Before the first
+   borgmatic run after step 6**, not after: the nightly job will otherwise have
+   written the plaintext into an archive that then has to be dealt with
+   separately. ⚠ Needs a mechanism, not just intent — sops-nix renders to
+   `/run/secrets-rendered/…` and the container only bind-mounts
+   `/home/z/home-assistant/config`, so this wants a second bind mount readable
+   by root in the container, with the unit ordered after sops activation.
 
 ### 1.4 Then, and only then
 
-9. [ ] **Uncomment the recorder DB** in `hosts/memory-alpha/borgmatic.nix` —
+10. [ ] **Uncomment the recorder DB** in `hosts/memory-alpha/borgmatic.nix` —
    it is commented precisely because borgmatic's sqlite hook fails the whole
    nightly run on a missing file, which would take every other database on
    this host down with it. Uncomment in the PR that lands the migrated config,
@@ -78,12 +89,15 @@ Nix under this deployment form. These are hand-edits, once.
 10. [ ] Verify against the **still-running Pi**: integrations loaded, no repair
     warnings, automations listed, history present, discovery populated (the
     test for whether host networking is doing its job), mobile app
-    reconnecting.
-11. [ ] Move the `homeassistant.internal` rewrite in
+    reconnecting. ⚠ Expect the `hassio` integration to fail and raise a repair
+    issue, and any add-on-created entry pointing at a Supervisor DNS name (the
+    Mosquitto add-on's `core-mosquitto`) to need re-pointing — so the bar is
+    "no repair warnings *beyond these*".
+12. [ ] Move the `homeassistant.internal` rewrite in
     `hosts/galactica/configuration.nix` from `192.168.8.142` to
     `192.168.8.99`. ⚠ **Last**, after verification — it is the cutover, and
     also the whole rollback.
-12. [ ] Keep the Pi shut down but **intact** through at least one full cold
+13. [ ] Keep the Pi shut down but **intact** through at least one full cold
     boot of this host. That boot is the event the migration doc's §3.1 is
     about, and the Pi is a complete rollback for the price of one DNS line.
 
@@ -97,5 +111,12 @@ Nix under this deployment form. These are hand-edits, once.
   Bluetooth gets ESPHome proxies. `home-assistant.nix` says so where someone
   would otherwise "fix" the omission; migration doc §6 has the argument.
 - **`services.esphome`**, which the Bluetooth proxies need, is not yet on this
-  host. It is the next piece of Nix work and has hardware lead time in front
-  of it (§12 steps 7–8).
+  host. ⚠ And it provides the *dashboard* only — no declarative device config,
+  so git-tracking the proxy firmware is separate work (migration doc §6.2).
+- **Network-attaching the Zigbee coordinator** is deliberately *after* the
+  cutover, not before: it is the point at which the Pi stops being a rollback
+  for Zigbee (migration doc §11).
+- **Tailscale** on this host is a container from `homelab-stacks`, not
+  `services.tailscale`. Moving it into this repo is a cutover with its own
+  planning, and ⚠ **not** an import of `modules/nixos/tailscale.nix`, which is
+  hopper's exit-node flavour.
