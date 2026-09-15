@@ -1282,26 +1282,27 @@ organized copy. Sizes: `karakeep` 67M, `ferdium-server` 275M, `paperless` 9.0K
    every other sops-backed secret on this host: a referenced key missing from
    the file fails **activation**, not eval. Ferdium and Syncthing need no
    secrets of their own.
-2. [ ] **First switch — `nrs`, then verify all four containers come up.**
-   `docker ps` should show `ferdium`, `karakeep-web`/`karakeep-chrome`/
-   `karakeep-meilisearch`, `paperless-webserver`/`paperless-broker`, and
-   `syncthing`. Check each `*.internal` URL loads over the LAN before
-   touching the tailnet or `.zjones.dev` halves (cert issuance can lag a
-   few minutes on first request).
-3. [ ] **Confirm logins, then lock signups down.** Restored data (item 4)
-   meant the original Unraid-era accounts came back with it — the plan
-   changed from "create a new account" to "confirm the old one still logs
-   in," per the reasoning worked out live before the restore.
+2. [x] **First switch — done and verified, 2026-09-13.** All seven
+   containers came up healthy; all eight routes (`*.internal` +
+   `*.zjones.dev` × four services) returned correct codes; all four LE
+   certs issued cleanly. Hit one real, unrelated incident along the way —
+   a stray, Nix-untracked `tailscale serve` config on galactica's own
+   tailnet identity blocked Traefik's port 443 rebind — fixed live and
+   the stray config since cleared.
+3. [x] **Confirm logins, then lock signups down — all done 2026-09-13.**
+   Restored data (item 4) meant the original Unraid-era accounts came back
+   with it — the plan changed from "create a new account" to "confirm the
+   old one still logs in," per the reasoning worked out live before the
+   restore. (Paperless-ngx's own admin-login confirmation is tracked
+   separately under item 5 — its data was never touched by a restore, so
+   it was never in scope here.)
    - [x] **Ferdium — confirmed working, 2026-09-13.**
      `IS_REGISTRATION_ENABLED` flipped to `"false"` in `ferdium.nix`.
    - [x] **Karakeep — confirmed working, 2026-09-13.**
      `DISABLE_SIGNUPS=true` set in `karakeep.nix`'s `karakeep-web`
      environment.
-   - [x] Paperless-ngx's original admin account already confirmed via
-     1Password (item 5).
-   - [ ] Syncthing has no account model; its GUI is unauthenticated by
-     default — set a GUI password in Settings before relying on it, since
-     it's reachable over the tailnet.
+   - [x] **Syncthing GUI password set, 2026-09-13.** Was unauthenticated by
+     default; now has one, since its GUI is reachable over the tailnet.
 4. [x] **Ferdium + Karakeep restore — done 2026-09-13.** Both got their own
    ZFS datasets (not directories in the shared `tank/appdata`), tagged
    `homelab:tier=precious` + `org.torsion.borgmatic:backup=auto`
@@ -1342,15 +1343,16 @@ organized copy. Sizes: `karakeep` 67M, `ferdium-server` 275M, `paperless` 9.0K
    - [x] **Pre-switch backup — done.** A fresh `borgmatic` offsite run plus
      `zfs snapshot tank/documents@pre-paperless-nixos`, both against the
      live data, before the container comes up.
-   - [ ] **Admin login.** 1Password has the original credentials — use
-     those. `PAPERLESS_ADMIN_USER=z` / the generated password in
+   - [ ] **Admin login — credentials retrieved from 1Password, login not
+     yet confirmed.** `PAPERLESS_ADMIN_USER=z` / the generated password in
      `secrets/galactica.yaml` only ever *creates* a user; it will not touch
      or reset the existing one, so it's a fallback only in case the
      restored DB turns out to have no superuser.
-   - [ ] **Chown the existing tree to match `USERMAP_UID`/`GID`.** Not
-     previously set — the paperless-ngx image defaults to a baked-in
-     `1000:1000`, but `paperless.nix` now sets both to user `z`'s uid/gid so
-     the container can also write into the new NFS-exported inbox (below).
+   - [x] **Chowned the existing tree to match `USERMAP_UID`/`GID` — done
+     2026-09-13.** Not previously set — the paperless-ngx image defaults to
+     a baked-in `1000:1000`, but `paperless.nix` now sets both to user
+     `z`'s uid/gid so the container can also write into the new
+     NFS-exported inbox (below).
      `chown -R z:users /tank/documents/paperless/{data,media,export}`
      before first switch, or the webserver may not be able to read/write
      its own existing files.
