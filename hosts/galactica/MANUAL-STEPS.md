@@ -1295,3 +1295,52 @@ yet. Datasets and secrets get added here as the implementation lands.
    resolve off-LAN and the Tailscale half of `READING-STACK.md` §7 does nothing.
    Tailscale admin console → DNS → nameservers. Not expressible in Nix, which
    is why it is here.
+3. [ ] **Create the datasets, before anything starts.** ⚠ Docker materialises a
+   missing bind-mount source as an empty root-owned directory, which then sits on
+   the mountpoint `zfs create` needs — so these come first, not after a switch.
+   ```bash
+   zfs create tank/books
+   zfs set homelab:tier=protected tank/books
+   mkdir -p /tank/books/library /tank/books/bookdrop
+   # Podcasts are Re-acquirable, and tier is a dataset property — so NOT under
+   # tank/books, which would back up re-downloadable audio as Protected forever.
+   zfs create tank/podcasts
+   zfs set homelab:tier=re-acquirable tank/podcasts
+   ```
+   `bookdrop` is a **sibling** of `library`, not inside it, so a half-imported
+   drop is never scanned as library content.
+4. [ ] **Own the library tree, and check the two numbers first.** Group ownership
+   of what Grimmory writes comes from the **setgid bit**, not from a `GROUP_ID` —
+   there is no numeric `media` gid to hand it (`READING-STACK.md` §4.7).
+   ```bash
+   getent group media        # confirm it exists; note its number
+   id -u z                   # confirm 1000 before using it below
+   chown 1000:media /tank/books/library /tank/books/bookdrop
+   chmod 2775 /tank/books/library /tank/books/bookdrop
+   ```
+   ⚠ While you are there: §4.7 records that the evaluated `media` group's members
+   are `["unpackerr"]` and do **not** include `z`, despite
+   `nixflix.mediaUsers = [ "z" ]`. That is pre-existing, affects the media stack
+   rather than this one, and wants looking at on the live host — not a blind fix.
+5. [ ] **Create the four sops secrets** in `secrets/galactica.yaml`. ⚠ All must
+   exist *before* the switch or sops-nix fails it — the nixflix precedent.
+   - `reading/grimmoryDbPassword` — one value, rendered into both Grimmory's
+     `DATABASE_PASSWORD` and MariaDB's `MARIADB_PASSWORD`.
+   - `reading/grimmoryDbRootPassword` — also the account a borgmatic dump uses.
+   - `reading/bookbridgeSecretKey` — the Fernet key (§4.5: it must not be
+     generated into `/data`, beside the ciphertext it protects).
+   - `reading/bookbridgeWebSecretKey` — so sessions survive a restore.
+
+   ⚠ MariaDB reads its two values **only while initialising an empty datadir**;
+   rotating either afterwards is an `ALTER USER` inside the database, not a
+   switch. And no template carries `restartUnits` (matching `homepages.nix` and
+   `nixflix.nix`), so rotating any of these needs a manual container restart.
+6. [ ] **Expect Grimmory to fail once on first boot**, and do not chase it.
+   `oci-containers` has no equivalent of compose's `depends_on: service_healthy`,
+   so its first start races MariaDB initialising its datadir. The restart *is*
+   the wait loop (`RestartSec = 15`, paced so the start limit cannot make a slow
+   first boot fatal).
+7. [ ] ⚠ **Verify BookBridge can actually reach Audiobookshelf** — it may not,
+   and it is the whole point of running it. `READING-STACK.md` §4.6 has the two
+   levers. Grimmory it reaches as `http://grimmory:6060` on the `proxy` network;
+   Audiobookshelf is native on loopback, and a container cannot dial that.

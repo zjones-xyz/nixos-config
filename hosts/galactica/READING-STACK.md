@@ -199,6 +199,14 @@ metadata and read-progress into an import instead of a rebuild.
 
 ---
 
+### ⚠ Aside: `audiobookshelf.dataDir` is a name, not a path
+
+Small but it invalidates an assumption: this document says service state belongs
+under `/tank/appdata/<service>` "matching `nixflix.nix`", which reads as if the
+module supports it. It does not — `services.audiobookshelf.dataDir` is a *name*
+under `/var/lib`, used as `StateDirectory`. Moving its state onto the appdata
+mirror means overriding `ExecStart` to pass absolute `--config`/`--metadata`.
+
 ### 4.5 ⚠ BookBridge holds the keys to everything else — verified 2026-09-15
 
 Read out of BookBridge's source at tag `7.6.0`. It is **SQLite only**
@@ -252,6 +260,52 @@ Alembic config hardcodes that path and never consults the variable, so a custom
 works on 5757, and Traefik narrows routes better anyway. Pin
 `ghcr.io/cporcellijr/bookbridge:7.6.0` (GHCR only; the `-cuda` variant is ~800 MB
 larger and only for NVIDIA Whisper, which this host has no GPU for).
+
+### 4.6 ⚠⚠ Open: BookBridge may not be able to reach Audiobookshelf at all
+
+Found while implementing, and it goes to whether BookBridge can do its job.
+Its sync targets are configured in its own UI, and **from inside a container
+`127.0.0.1` is that container's own namespace** — so the loopback publishes the
+rest of this stack uses are not reachable from it.
+
+- **Grimmory it can reach**: both are containers on the `proxy` network, so
+  Docker's embedded DNS resolves `http://grimmory:6060`.
+- ⚠ **Audiobookshelf it may not.** It is native and bound to `127.0.0.1`, so the
+  only route is its Traefik name — and **Docker refuses a loopback nameserver**
+  from the host's `resolv.conf`, falling back to public DNS, where
+  `*.read.zjones.dev` does not exist. The container therefore may never resolve
+  the name at all.
+
+**Verify on the host before trusting the sync.** If it fails, two levers, and the
+choice is not obvious:
+
+1. `--add-host` pinning `audiobookshelf.read.zjones.dev` to `192.168.8.190`.
+   Keeps the real wildcard certificate; costs a hardcoded address in Nix.
+2. Bind Audiobookshelf where the bridge can see it, plus
+   `networking.firewall.interfaces."docker0".allowedTCPPorts`. No hardcoded
+   address; widens what else on the bridge can reach it.
+
+⚠ Do **not** reach for `audiobookshelf.read.internal` — that hands BookBridge
+Traefik's self-signed certificate, which §7 already warns about for apps.
+
+### 4.7 ⚠ There is no numeric `media` gid on this host
+
+`config.users.groups.media.gid` evaluates to **null**: the pinned nixflix does not
+set it, so the number is allocated at activation and is unknowable at evaluation
+time. Two consequences worth carrying beyond this stack:
+
+- ⚠ **`nixflix.globals.gids.media` (169) is a constant the host does not honour.**
+  Do not trust it anywhere.
+- Grimmory is given no `GROUP_ID`; the group of everything it writes comes from
+  the **setgid bit** on the library tree instead (`chmod 2775`).
+
+⟨Also observed and *not* introduced here: the evaluated `media` group's members
+are `["unpackerr"]` — `z` is not among them, despite `nixflix.mediaUsers = [ "z" ]`.
+That is a pre-existing condition of the media stack, not of this one, and worth a
+look on the live host rather than a change made blind. Whether to pin `media`'s
+gid is likewise a separate decision: read `getent group media` first, because
+changing it would orphan the group ownership of everything already under
+`/tank/nixflix_media`.⟩
 
 ## 5. Acquisition
 
@@ -673,6 +727,13 @@ dataset is not merely affordable here — it is the safer arrangement.
   recreated on every upgrade — write churn on whichever dataset holds them. Keep
   both roots on `tank/books` unless there is a reason not to. (Related open
   upstream issue: `RescanAuthor` walks only a single path.)
+
+⚠ **Podcasts need a dataset of their own, and §6 did not say so.** §1 inherits
+`podcasts_audiobookshelf` at ✅ **Re-acquirable** while `books` is 🛡 Protected —
+and this section's whole argument is that tier is a *dataset* property. Podcasts
+under `/tank/books` would therefore be backed up as Protected forever, which is
+exactly the over-classification `SHARES.md` §5 warns against. A separate
+`tank/podcasts` at Re-acquirable.
 
 **So: correct tiering, copies accepted.** ⚠ Record this in `DECISIONS.md` too,
 because a reader who knows the one layout rule will see a separate dataset as the
