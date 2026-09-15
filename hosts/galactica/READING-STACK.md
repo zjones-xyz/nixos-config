@@ -28,7 +28,7 @@ All four content types are in: **ebooks, comics/manga, audiobooks, podcasts.**
 |---|---|---|---|
 | **Grimmory** | ebooks, comics/manga, audiobook files | OCI container + **MariaDB** | ❌ container only |
 | **Audiobookshelf** | audiobooks, podcasts | `services.audiobookshelf` | ✅ native module |
-| **BookBridge** | read/listen progress sync between the two | OCI container + own DB | ❌ container only |
+| **BookBridge** | read/listen progress sync between the two | OCI container + SQLite | ❌ container only |
 | **Chaptarr** | acquisition: monitoring ebooks + audiobooks | OCI container + SQLite | ❌ container only |
 | **Shelfmark** | acquisition: on-demand search across many sources | OCI container (**Lite**) | ❌ container only |
 | **Suwayomi** | acquisition: manga | `services.suwayomi-server` | ✅ native module |
@@ -175,7 +175,8 @@ Two consequences:
    `mariadb-dump` (borgmatic has a native MariaDB hook), and the two footguns
    already recorded for the deferred Immich Postgres hook apply unchanged:
    `format: plain` + `compression: none` so Borg can dedup, and a database hook
-   silently forcing `read_special` tree-wide.
+   silently forcing `read_special` tree-wide. ⚠ It is not the only database here —
+   BookBridge's SQLite needs its own treatment, §4.5.
 
 ### 4.4 The BookLore database is probably recoverable — verify early
 
@@ -195,6 +196,60 @@ metadata and read-progress into an import instead of a rebuild.
        finishing in one pass rather than tripping over the leftovers later.
 
 ---
+
+### 4.5 ⚠ BookBridge holds the keys to everything else — verified 2026-09-15
+
+Read out of BookBridge's source at tag `7.6.0`. It is **SQLite only**
+(`/data/database.db`; no Postgres or MySQL anywhere in the tree), runs as **root**
+inside the container (no `USER` directive, no `PUID`/`PGID`, non-root untested by
+upstream), and serves on **one port, 5757** — on Flask's **Werkzeug development
+server**, with no gunicorn or waitress. It stays behind Traefik; it is never
+exposed directly.
+
+**Why its data outranks its size.** BookBridge must replay credentials verbatim to
+the services it syncs, so it stores them Fernet-encrypted in its own database —
+including the Audiobookshelf **API token** and, notably, **Grimmory's account
+password** (a real password, not a token). `database.db` **plus** `secret.key`
+together therefore decrypt every linked account. Upstream says as much outright:
+*"Protect it like the server itself."*
+
+**So set `BOOKBRIDGE_SECRET_KEY` from sops.** Left unset, BookBridge generates the
+key into `/data/secret.key` — i.e. beside the ciphertext it protects, which makes a
+stolen dataset snapshot a full credential leak. Supplied from sops (env only; it is
+deliberately never read from the DB), the same snapshot is inert ciphertext. Also
+worth setting `WEB_SECRET_KEY`, so sessions survive a restore.
+
+⚠ **A live file copy of its data directory is NOT a valid backup.** It runs in
+**WAL** mode on local storage with `synchronous = NORMAL`, so `database.db`,
+`-wal` and `-shm` copied at different instants restore stale or inconsistent, and
+taking `database.db` alone silently loses everything since the last checkpoint.
+Three workable shapes, in upstream's order of preference:
+
+1. **Dump first**, via the script the image already ships
+   (`/app/scripts/backup_db.sh` — SQLite's online-backup API plus
+   `PRAGMA integrity_check`), then snapshot `/data` excluding its own
+   `backups/`. This is the only path that verifies integrity.
+2. **Stop → snapshot → start**, upstream's "safest simple backup".
+3. A **ZFS snapshot alone** is filesystem-atomic, so it captures the three files at
+   one instant and SQLite recovers it — acceptable, and worth pairing with (1)
+   for the integrity check.
+
+⚠ Two restore traps: a database restored **without its matching key** leaves every
+credential undecryptable (it presents as settings reading "not configured"), and
+only a whole-`/data` backup preserves `audio_cache/`, without which transcripts are
+recomputed from scratch.
+
+⚠ **Keep `/data` on local storage.** On NFS/CIFS/fuse BookBridge silently
+downgrades to `DELETE` journal mode — relevant on a host that exports NFS for a
+living.
+
+Two fixed points for the implementation: **`DATA_DIR` must stay `/data`** (its
+Alembic config hardcodes that path and never consults the variable, so a custom
+`DATA_DIR` has migrations and the app pointing at different files), and
+**`KOSYNC_PORT` stays unset** — split-port mode is purely additive, KOSync already
+works on 5757, and Traefik narrows routes better anyway. Pin
+`ghcr.io/cporcellijr/bookbridge:7.6.0` (GHCR only; the `-cuda` variant is ~800 MB
+larger and only for NVIDIA Whisper, which this host has no GPU for).
 
 ## 5. Acquisition
 
@@ -235,6 +290,30 @@ pin. Rejected: it runs retired upstream code, and its ebook/audiobook handling i
 precisely the awkwardness Chaptarr was forked to fix. Noted for the record that
 rreading-glasses' author does not endorse Chaptarr — this is a live rivalry, not a
 tidy succession, so revisit if Chaptarr stalls.⟩
+
+#### Chaptarr's runtime knobs — verified in source, 2026-09-15
+
+Read out of Chaptarr's own source (`develop`), not inferred from the fork:
+
+- ⚠ **`PUID`/`PGID` default to `99:100`** — Unraid's `nobody:users`, inherited
+  from its Docker-first heritage. Wrong for this host: they must be set to match
+  the dataset's ownership or every import lands unreadable.
+- ⚠ **`UMASK`** is honoured by the entrypoint, and upstream recommends `002` when
+  other containers share the media group. Same fix, same reason as the
+  `UMask = "0002"` override `nixflix.nix` already applies to qBittorrent.
+- ⚠ **`CopyUsingHardlinks` is not declarable.** It lives in the `Config` table of
+  `chaptarr.db`; env vars only reach `config.xml`-level settings (port, API key,
+  log level). So it is UI state or a one-shot
+  `PUT /api/v1/config/mediamanagement`. Its default is `true`, which is harmless
+  here — see §6 — so the honest answer is to leave it and note it in
+  `MANUAL-STEPS.md` rather than pretend Nix owns it.
+- **Seeding is preserved by default.** An import is Copy (not Move) until the
+  download client reports the item removable, so the torrent stays put. Chaptarr
+  adds a per-indexer **"Keep seeding permanently"** and a per-client
+  `copyUnmanagedDownloads`; ⚠ conversely, without `Remove Completed Downloads`
+  plus real seed limits, copies accumulate on the downloads dataset forever.
+- ⚠ **Log level wants staying at Info** — that is where the import path reports
+  which transfer it actually performed (§6).
 
 ### Shelfmark — the on-demand half
 
@@ -318,6 +397,49 @@ matters:
   An EPUB is megabytes; an audiobook is hundreds of megabytes to a few gigabytes.
   Against a 4×12 TB array, a copy-on-import is noise. The rule was never about
   hardlinks as a principle — it was about not duplicating video.
+
+### What the source actually does — verified 2026-09-15
+
+Chaptarr's `DiskTransferService.TransferFile` uses `HardLinkOrCopy` for imports, so
+across datasets:
+
+- The `link()` attempt fails `EXDEV`, is caught, logged at **Trace**, and returns
+  false. **No exception, no failed import** — the copy path is a designed
+  fallback, not an error path.
+- It then logs at **Info** which transfer it performed, with both mount roots and
+  filesystem types — a Chaptarr addition (upstream Readarr logs nothing here) with
+  a regression test behind it. That line is the only way to tell the two outcomes
+  below apart.
+- ⟨**A ZFS surprise, in our favour:** when *both* sides are ZFS it first tries a
+  **reflink** (`FICLONE`), which is a block clone — near-instant and near-free.
+  Conditions: same pool, `feature@block_cloning` active, `zfs_bclone_enabled=1`,
+  x86_64. ⚠ That tunable has **defaulted to 0** in released OpenZFS 2.2.x since
+  the 2023 block-cloning corruption bug, and what nixos-26.05 ships is unverified
+  — so plan for honest copies and treat reflinks as a bonus if the log says
+  `created reflink instead`. Do **not** enable the tunable to chase it.⟩
+
+**A second argument for the separate dataset, found while verifying the first.**
+Chaptarr has a `FileMutationSafetyService` that exists because mutating a
+*hardlinked* import (audio tag writing, `FileDate`, chmod) would corrupt the file
+the torrent client is still seeding; it works around this by copying to a sibling
+and moving it over. Across datasets there are no hardlinks, so **that entire class
+of "Chaptarr retagged my seeding torrent" problem cannot occur.** The separate
+dataset is not merely affordable here — it is the safer arrangement.
+
+**The costs, stated honestly:**
+
+- ⚠ **Space doubles until the torrent is removed.** Size the downloads and library
+  datasets to hold both concurrently, not either/or.
+- ⚠ **There is effectively no pre-import free-space guard on the copy path**
+  (inherited from Readarr, not a Chaptarr regression). A full library dataset
+  presents as a failed-and-rolled-back copy rather than a pre-flight rejection.
+  The copy is size-verified with rollback, so the failure is clean — a missing
+  book, never a truncated one.
+- ⚠ **If the ebook and audiobook roots end up on *different* datasets**, Chaptarr's
+  ebook-colocation replica files are full copies too, and are deleted and
+  recreated on every upgrade — write churn on whichever dataset holds them. Keep
+  both roots on `tank/books` unless there is a reason not to. (Related open
+  upstream issue: `RescanAuthor` walks only a single path.)
 
 **So: correct tiering, copies accepted.** ⚠ Record this in `DECISIONS.md` too,
 because a reader who knows the one layout rule will see a separate dataset as the
@@ -427,7 +549,11 @@ Keycloak or Pocket ID, and no auth middleware on any Traefik router. So every
 service uses its own login, with credentials in `secrets/galactica.yaml`.
 
 Grimmory, Shelfmark and BookBridge all *speak* OIDC, so a provider later is
-wiring rather than a rethink. ⟨Deferred deliberately: standing one up is its own
+wiring rather than a rethink. BookBridge additionally implements
+**trusted-proxy header auth** (`REMOTE_AUTH_ENABLED`/`REMOTE_AUTH_HEADER`/
+`REMOTE_AUTH_TRUSTED_PROXIES`) — undocumented upstream but present in 7.6.0, and
+⚠ it defaults to loopback-only, so Traefik's address must be listed explicitly for
+it to work at all. ⟨Deferred deliberately: standing one up is its own
 project with its own decisions, and it would hold the reading stack behind it.⟩
 
 ⚠ **BookBridge's own login matters more than its size suggests** — it holds
@@ -460,14 +586,17 @@ in this document.
 1. [ ] **Does Chaptarr present as Readarr to Prowlarr?** Its docs do not mention
        Prowlarr at all; nixflix's app-sync enum only knows `"Readarr"`
        (`modules/prowlarr/applications.nix`). Probable as a fork, unverified.
-2. [ ] **Does Chaptarr hardlink its imports?** Undocumented. §6 makes this cheap
-       to get wrong either way, which is the point — but confirm it rather than
-       assume it.
+2. [x] **Does Chaptarr hardlink its imports?** ✅ **Answered 2026-09-15** from
+       source — it hardlinks when it can and falls back to a size-verified copy
+       when it cannot, silently and by design, logging which at Info. §6 carries
+       the detail, the ZFS reflink nuance, and the safety argument this turned up.
 3. [ ] **Is BookLore's MariaDB volume in `tank/backups/sidepool-pools`?** (§4.4 —
        decides import versus rebuild.)
 4. [ ] **Does `vpnConfinement` work on an `oci-containers` unit?** The fleet's
        only uses of it are native systemd services (`nixflix.nix`'s NAT-PMP
        sidecar). Needed for §5's finding 2.
-5. [ ] **What database does BookBridge need**, and does it want the same
-       pre-snapshot dump treatment as Grimmory's MariaDB? It ships alembic
-       migrations; the type was not documented.
+5. [x] **What database does BookBridge need**, and does it want the same
+       pre-snapshot dump treatment as Grimmory's MariaDB? ✅ **Answered
+       2026-09-15** — SQLite in WAL mode, and yes: §4.5 carries the shapes that
+       are actually restorable, plus the credential-exposure finding that came
+       with it.
