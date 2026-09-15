@@ -164,8 +164,9 @@ in
 
   config = {
     # The dashboard pair claims the router names `dashboard`/`dashboard-dev`
-    # and the host `traefik`; an upstream taking either would silently lose —
-    # in any group, since router names are group-independent.
+    # and the host `traefik`; an upstream taking either would silently lose.
+    # Reserved in every group: router names are group-independent, and a
+    # `traefik.*` service would be a trap under any domain.
     assertions = [
       {
         assertion = !(lib.elem "dashboard" upstreamNames) && !(lib.elem "traefik" upstreamNames);
