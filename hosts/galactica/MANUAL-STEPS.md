@@ -1318,10 +1318,17 @@ yet. Datasets and secrets get added here as the implementation lands.
    chown 1000:media /tank/books/library /tank/books/bookdrop
    chmod 2775 /tank/books/library /tank/books/bookdrop
    ```
-   ⚠ While you are there: §4.7 records that the evaluated `media` group's members
-   are `["unpackerr"]` and do **not** include `z`, despite
-   `nixflix.mediaUsers = [ "z" ]`. That is pre-existing, affects the media stack
-   rather than this one, and wants looking at on the live host — not a blind fix.
+   ⚠⚠ **Read `READING-STACK.md` §4.7 before this step — it is blocking.** Two
+   nixflix modules `mkForce` the `media` group to an empty set, so it has **no
+   gid** and `z` is **not a member**, both of which affect the existing media
+   stack too. Until that is resolved the acquisition services cannot write to the
+   shared trees. Start by capturing the live state, which every option below
+   depends on:
+   ```bash
+   getent group media                     # the number actually in use
+   id z                                   # is z in media at runtime?
+   find /tank/nixflix_media -maxdepth 2 -printf '%g\n' | sort -u
+   ```
 5. [ ] **Create the four sops secrets** in `secrets/galactica.yaml`. ⚠ All must
    exist *before* the switch or sops-nix fails it — the nixflix precedent.
    - `reading/grimmoryDbPassword` — one value, rendered into both Grimmory's

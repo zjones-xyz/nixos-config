@@ -288,24 +288,47 @@ choice is not obvious:
 ⚠ Do **not** reach for `audiobookshelf.read.internal` — that hands BookBridge
 Traefik's self-signed certificate, which §7 already warns about for apps.
 
-### 4.7 ⚠ There is no numeric `media` gid on this host
+### 4.7 ⚠⚠ BLOCKING: two nixflix modules wipe the `media` group
 
-`config.users.groups.media.gid` evaluates to **null**: the pinned nixflix does not
-set it, so the number is allocated at activation and is unknowable at evaluation
-time. Two consequences worth carrying beyond this stack:
+**Root cause found, and it is upstream's.** `config.users.groups.media` carries
+**two `mkForce { }` definitions** — from nixflix's `torrentClients/qbittorrent.nix`
+and its `navidrome` module. `mkForce` is priority 50, so it beats nixflix's *own*
+`users.groups.media = { gid = globals.gids.media; members = mediaUsers; }` at
+normal priority, and beats anything this fleet adds. Established by reading
+`options.users.groups.definitionsWithLocations` on the evaluated host, after a
+literal `gid = 1699` in our own module was silently discarded.
 
-- ⚠ **`nixflix.globals.gids.media` (169) is a constant the host does not honour.**
-  Do not trust it anywhere.
-- Grimmory is given no `GROUP_ID`; the group of everything it writes comes from
-  the **setgid bit** on the library tree instead (`chmod 2775`).
+Consequences, in order of how much they matter:
 
-⟨Also observed and *not* introduced here: the evaluated `media` group's members
-are `["unpackerr"]` — `z` is not among them, despite `nixflix.mediaUsers = [ "z" ]`.
-That is a pre-existing condition of the media stack, not of this one, and worth a
-look on the live host rather than a change made blind. Whether to pin `media`'s
-gid is likewise a separate decision: read `getent group media` first, because
-changing it would orphan the group ownership of everything already under
-`/tank/nixflix_media`.⟩
+1. ⚠ **`media` has no gid at evaluation time**, so nothing can hand a container a
+   numeric `PGID`/`GROUP_ID`. `toString null` renders the **empty string**, which
+   container entrypoints read as "use my default group" — silently placing what
+   they write outside `media`. Both acquisition containers therefore ship with
+   **no `PGID` at all** and cannot write into the shared `root:media` trees; the
+   file says so at the top.
+2. ⚠ **`nixflix.globals.gids.media` (169) is a constant the host does not
+   honour.** Do not trust it anywhere.
+3. ⚠ **`z` is not in the `media` group.** The evaluated members are
+   `["unpackerr"]` — contributed by `unpackerr.nix`'s `extraGroups`, not by
+   `nixflix.mediaUsers = [ "z" ]`, which the same `mkForce` discards. **This
+   affects the existing media stack, not only the reading stack.**
+
+**Three ways out, none free — owner's decision:**
+
+- **`lib.mkOverride 40`** on `users.groups.media.gid` to out-prioritise the
+  `mkForce`. One line, works immediately. ⚠ But it *changes a live group's
+  number*: read `getent group media` on the host first, and if it differs, plan a
+  recursive `chgrp` over `/tank/nixflix_media` or everything there is orphaned.
+- **A fourth hand-carried nixflix patch** (`DECISIONS.md` §10 tracks three
+  already) removing the two `mkForce`es, which also restores `z`'s membership.
+  Fixes the cause rather than the symptom; adds to the carried debt.
+- **A dedicated `reading` group** with a gid this fleet pins, used by the reading
+  services instead of `media`. Avoids touching the live group entirely — but the
+  acquisition services also need **write** access to nixflix's downloads
+  directory to clean up after an import, and that is `root:media`, so this does
+  not fully escape the problem.
+
+Until one is chosen, the acquisition half is **not deployable**.
 
 ## 5. Acquisition
 
