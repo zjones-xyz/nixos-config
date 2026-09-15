@@ -199,6 +199,14 @@ metadata and read-progress into an import instead of a rebuild.
 
 ---
 
+### ⚠ Aside: `audiobookshelf.dataDir` is a name, not a path
+
+Small but it invalidates an assumption: this document says service state belongs
+under `/tank/appdata/<service>` "matching `nixflix.nix`", which reads as if the
+module supports it. It does not — `services.audiobookshelf.dataDir` is a *name*
+under `/var/lib`, used as `StateDirectory`. Moving its state onto the appdata
+mirror means overriding `ExecStart` to pass absolute `--config`/`--metadata`.
+
 ### 4.5 ⚠ BookBridge holds the keys to everything else — verified 2026-09-15
 
 Read out of BookBridge's source at tag `7.6.0`. It is **SQLite only**
@@ -252,6 +260,94 @@ Alembic config hardcodes that path and never consults the variable, so a custom
 works on 5757, and Traefik narrows routes better anyway. Pin
 `ghcr.io/cporcellijr/bookbridge:7.6.0` (GHCR only; the `-cuda` variant is ~800 MB
 larger and only for NVIDIA Whisper, which this host has no GPU for).
+
+### 4.6 ⚠⚠ Open: BookBridge may not be able to reach Audiobookshelf at all
+
+Found while implementing, and it goes to whether BookBridge can do its job.
+Its sync targets are configured in its own UI, and **from inside a container
+`127.0.0.1` is that container's own namespace** — so the loopback publishes the
+rest of this stack uses are not reachable from it.
+
+- **Grimmory it can reach**: both are containers on the `proxy` network, so
+  Docker's embedded DNS resolves `http://grimmory:6060`.
+- ⚠ **Audiobookshelf it may not.** It is native and bound to `127.0.0.1`, so the
+  only route is its Traefik name — and **Docker refuses a loopback nameserver**
+  from the host's `resolv.conf`, falling back to public DNS, where
+  `*.read.zjones.dev` does not exist. The container therefore may never resolve
+  the name at all.
+
+**Verify on the host before trusting the sync.** If it fails, two levers, and the
+choice is not obvious:
+
+1. `--add-host` pinning `audiobookshelf.read.zjones.dev` to `192.168.8.190`.
+   Keeps the real wildcard certificate; costs a hardcoded address in Nix.
+2. Bind Audiobookshelf where the bridge can see it, plus
+   `networking.firewall.interfaces."docker0".allowedTCPPorts`. No hardcoded
+   address; widens what else on the bridge can reach it.
+
+⚠ Do **not** reach for `audiobookshelf.read.internal` — that hands BookBridge
+Traefik's self-signed certificate, which §7 already warns about for apps.
+
+### 4.7 ⚠⚠ BLOCKING: two nixflix modules wipe the `media` group
+
+**Root cause found, and it is upstream's.** `config.users.groups.media` carries
+**two `mkForce { }` definitions** — from nixflix's `torrentClients/qbittorrent.nix`
+and its `navidrome` module. `mkForce` is priority 50, so it beats nixflix's *own*
+`users.groups.media = { gid = globals.gids.media; members = mediaUsers; }` at
+normal priority, and beats anything this fleet adds. Established by reading
+`options.users.groups.definitionsWithLocations` on the evaluated host, after a
+literal `gid = 1699` in our own module was silently discarded.
+
+Consequences, in order of how much they matter:
+
+1. ⚠ **`media` has no gid at evaluation time**, so nothing can hand a container a
+   numeric `PGID`/`GROUP_ID`. `toString null` renders the **empty string**, which
+   container entrypoints read as "use my default group" — silently placing what
+   they write outside `media`. Both acquisition containers therefore ship with
+   **no `PGID` at all** and cannot write into the shared `root:media` trees; the
+   file says so at the top.
+2. ⚠ **`nixflix.globals.gids.media` (169) is a constant the host does not
+   honour.** Do not trust it anywhere.
+3. ⚠ **`z` is not in the `media` group.** The evaluated members are
+   `["unpackerr"]` — contributed by `unpackerr.nix`'s `extraGroups`, not by
+   `nixflix.mediaUsers = [ "z" ]`, which the same `mkForce` discards. **This
+   affects the existing media stack, not only the reading stack.**
+
+**Four ways out — owner's decision. The fourth looks best.**
+
+1. ⭐ **Resolve the gid at *runtime*, not at evaluation.** It does not exist when
+   Nix evaluates, but it does exist when a unit starts. A `oneshot` writes
+   `PGID=$(getent group media | cut -d: -f3)` into an env file under `/run`, and
+   each container adds that file to `environmentFiles` (read by `docker run
+   --env-file` at start) and orders after it. **Touches no live group, needs no
+   nixflix patch, renumbers nothing, and self-corrects if the gid ever moves.**
+2. **`lib.mkOverride 40` — but on the WHOLE submodule value, not on `.gid`.**
+   ⚠ The nested form silently does nothing: the `mkForce`es apply to the
+   `users.groups.media` *value*, and `filterOverrides` discards every
+   normal-priority definition at that level **before** the submodule is
+   evaluated, so a priority-40 marker nested inside one is never seen. This was
+   reproduced against the pinned `lib`. The form that works is
+   `users.groups.media = lib.mkOverride 40 { gid = <n>; };`
+   It is also safer than it sounds: `members` comes from the group submodule's
+   *own* `config` block, derived from every user's `extraGroups` — which is why
+   `["unpackerr"]` survives the `mkForce` today — so overriding the whole value
+   keeps that membership. Getting `z` in is then
+   `users.users.z.extraGroups = [ "media" ]`, not `members`. ⚠ Still read
+   `getent group media` first: if the live number differs from what you pin, plan
+   a recursive `chgrp` over `/tank/nixflix_media`.
+3. **A fourth hand-carried nixflix patch** (`DECISIONS.md` §10 tracks three)
+   removing the two `mkForce`es. Fixes the cause, restores `z`'s membership at
+   normal priority, and adds to the carried debt.
+4. ~~**A dedicated `reading` group.**~~ ⚠ **Dead, not merely imperfect.**
+   Chaptarr's cleanup path needs **unlink** rights in nixflix's downloads
+   directory, which nixflix's own tmpfiles pin at `root:media 0775` — a
+   `reading`-grouped service cannot delete there at all.
+
+⟨A fifth, uglier option if none of the above appeals: default POSIX ACLs granting
+the two uids rwx on the shared trees via `systemd.tmpfiles` `a+` lines — no gid
+needed anywhere, at the cost of ACLs on the array.⟩
+
+Until one is chosen, the acquisition half is **not deployable**.
 
 ## 5. Acquisition
 
@@ -674,6 +770,13 @@ dataset is not merely affordable here — it is the safer arrangement.
   both roots on `tank/books` unless there is a reason not to. (Related open
   upstream issue: `RescanAuthor` walks only a single path.)
 
+⚠ **Podcasts need a dataset of their own, and §6 did not say so.** §1 inherits
+`podcasts_audiobookshelf` at ✅ **Re-acquirable** while `books` is 🛡 Protected —
+and this section's whole argument is that tier is a *dataset* property. Podcasts
+under `/tank/books` would therefore be backed up as Protected forever, which is
+exactly the over-classification `SHARES.md` §5 warns against. A separate
+`tank/podcasts` at Re-acquirable.
+
 **So: correct tiering, copies accepted.** ⚠ Record this in `DECISIONS.md` too,
 because a reader who knows the one layout rule will see a separate dataset as the
 exact mistake that rule exists to prevent.
@@ -721,6 +824,42 @@ warns about (per-host `domains` lose a cold-start race and burn ~a fifth of the
 weekly quota). So the implementation generalises `mkRouterPair`/`mkRouters` to
 take a domain group with its own shared wildcard — declared **once** as
 `*.read.zjones.dev` — rather than adding routers by hand.
+
+### ⚠ What an empty group means for the certificate — and why the rollout is staged
+
+Verified while implementing the group: **an empty group publishes no router, so
+it requests no certificate at all.** The `*.read.zjones.dev` wildcard is issued
+the moment the *first* reading service registers in `homelab.readUpstreams`.
+
+That first issuance goes straight to **production**: `letsencryptStaging = false`
+is already set for this host, and there is no staging dry-run available for one
+group — flipping the flag would move the media stack's certs to staging storage
+too and warn on every `*.arr.zjones.dev` name meanwhile.
+
+⚠ **The allowance is shared with the media stack.** Production allows 50
+certificates per **registered domain** per week, and `read.zjones.dev` and
+`arr.zjones.dev` are both `zjones.dev` — the same budget `MANUAL-STEPS.md` §12
+item 6 records spending **ten** of, when `arr`'s un-deduped first switch issued
+per-subdomain certificates before the wildcard arrived.
+
+**So the rollout is staged deliberately: land one service, check the journal for
+exactly one issuance, then add the rest.** `MANUAL-STEPS.md` §15 item 1 carries
+the command and what to look for.
+
+### ⚠ Router names are flat across groups
+
+A hazard this group *introduces*, and worth stating because the module now guards
+it: router and service names are **group-independent** (`<name>`, `<name>-dev`,
+`<name>-svc` — no group prefix). The attrset merge means a name claimed in two
+groups would **silently drop one of the two routes** rather than failing. §5b's
+Chaptarr-as-Readarr discussion makes a collision imaginable. An assertion now
+rejects it by name, alongside the existing `dashboard`/`traefik` reservation —
+which is reserved in *every* group, since a `traefik.*` service would be a trap
+under any domain.
+
+⟨Minor and symmetric with `arr`: the apex rewrites (`read.internal`,
+`read.zjones.dev`) resolve, but no router serves an apex in either group, so they
+answer 404 from Traefik's default certificate. Not a "reachable name".⟩
 
 ### DNS
 

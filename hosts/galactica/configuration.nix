@@ -30,6 +30,10 @@
     ./nixflix.nix
     ./unpackerr.nix
     ./bazarr.nix
+    # The reading stack, split so the client and acquisition halves stay
+    # separately readable — READING-STACK.md is the spec for both.
+    ./reading-library.nix
+    ./reading-acquisition.nix
   ];
 
   networking.hostName = "galactica";

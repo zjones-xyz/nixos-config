@@ -1260,3 +1260,139 @@ rather than each instance being hand-edited.
    entirely and derive rewrites from leases, or whether reservations should
    just get declared in Nix alongside `clients.persistent` so a name only
    has to be typed once.
+
+---
+
+## 15. The reading stack — owner steps
+
+Written alongside `READING-STACK.md`; the services themselves are not deployed
+yet. Datasets and secrets get added here as the implementation lands.
+
+1. [ ] ⚠ **Land ONE reading service first, and check the journal before adding
+   the rest.** The `read.*` domain group requests **no certificate at all while
+   it is empty** — the wildcard is issued the moment the first service registers
+   in `homelab.readUpstreams`. And `homelab.letsencryptStaging = false` is
+   already set for this host, so that first issuance goes straight to
+   **production**, with no staging dry-run available: flipping the flag would
+   move the *media* stack's certs to staging storage too and warn on every
+   `*.arr.zjones.dev` name meanwhile.
+
+   The budget is shared. Production allows 50 certificates per **registered
+   domain** per week, and `read.zjones.dev` and `arr.zjones.dev` are both
+   `zjones.dev` — the same allowance §12 item 6 already spent ten of, when
+   `arr`'s un-deduped first switch issued per-subdomain certs before the
+   wildcard arrived. So repeat that item's check for this group:
+
+   ```bash
+   journalctl -u traefik -f
+   ```
+
+   Exactly one `Obtaining bundled SAN certificate` for
+   `read.zjones.dev` + `*.read.zjones.dev`, two DNS-01 challenges (the base
+   name and the wildcard each need their own TXT), and **no per-subdomain
+   requests**. Only once that holds, add the remaining services.
+2. [ ] **Point the tailnet at AdGuard**, or none of the `.zjones.dev` names
+   resolve off-LAN and the Tailscale half of `READING-STACK.md` §7 does nothing.
+   Tailscale admin console → DNS → nameservers. Not expressible in Nix, which
+   is why it is here.
+3. [ ] **Create the datasets, before anything starts — including before the
+   first `nixos-rebuild switch`.** ⚠ Two things will occupy the mountpoint if the
+   dataset is not there first: Docker materialises a missing bind-mount source as
+   an empty root-owned directory, **and `systemd-tmpfiles` creates
+   `/tank/books/library/{ebooks,audiobooks,manga}` on every run** — those three
+   are declared in `reading-acquisition.nix`, so a switch is enough to do it.
+   ```bash
+   zfs create tank/books
+   zfs set homelab:tier=protected tank/books
+   mkdir -p /tank/books/library /tank/books/bookdrop
+   # Podcasts are Re-acquirable, and tier is a dataset property — so NOT under
+   # tank/books, which would back up re-downloadable audio as Protected forever.
+   zfs create tank/podcasts
+   zfs set homelab:tier=re-acquirable tank/podcasts
+   ```
+   `bookdrop` is a **sibling** of `library`, not inside it, so a half-imported
+   drop is never scanned as library content.
+4. [ ] **Own the library tree, and check the two numbers first.** Group ownership
+   of what Grimmory writes comes from the **setgid bit**, not from a `GROUP_ID` —
+   there is no numeric `media` gid to hand it (`READING-STACK.md` §4.7).
+   ```bash
+   getent group media        # confirm it exists; note its number
+   id -u z                   # confirm 1000 before using it below
+   chown 1000:media /tank/books/library /tank/books/bookdrop
+   chmod 2775 /tank/books/library /tank/books/bookdrop
+   ```
+   ⚠⚠ **Read `READING-STACK.md` §4.7 before this step — it is blocking.** Two
+   nixflix modules `mkForce` the `media` group to an empty set, so it has **no
+   gid** and `z` is **not a member**, both of which affect the existing media
+   stack too. Until that is resolved the acquisition services cannot write to the
+   shared trees. Start by capturing the live state, which every option below
+   depends on:
+   ```bash
+   getent group media                     # the number actually in use
+   id z                                   # is z in media at runtime?
+   find /tank/nixflix_media -maxdepth 2 -printf '%g\n' | sort -u
+   ```
+5. [ ] **Create the five sops secrets** in `secrets/galactica.yaml`. ⚠ All must
+   exist *before* the switch or sops-nix fails it — the nixflix precedent.
+   - `reading/grimmoryDbPassword` — one value, rendered into both Grimmory's
+     `DATABASE_PASSWORD` and MariaDB's `MARIADB_PASSWORD`.
+   - `reading/grimmoryDbRootPassword` — also the account a borgmatic dump uses.
+   - `reading/bookbridgeSecretKey` — the Fernet key (§4.5: it must not be
+     generated into `/data`, beside the ciphertext it protects).
+   - `reading/bookbridgeWebSecretKey` — so sessions survive a restore.
+   - `reading/chaptarrApiKey` — ⚠ also the value to paste into Chaptarr's UI. If
+     Chaptarr generates its own instead, Prowlarr's application entry mismatches.
+   ⚠ `secrets/galactica.yaml` has no `reading:` block at all yet.
+
+   ⚠ MariaDB reads its two values **only while initialising an empty datadir**;
+   rotating either afterwards is an `ALTER USER` inside the database, not a
+   switch. And no template carries `restartUnits` (matching `homepages.nix` and
+   `nixflix.nix`), so rotating any of these needs a manual container restart.
+6. [ ] **Expect Grimmory to fail once on first boot**, and do not chase it.
+   `oci-containers` has no equivalent of compose's `depends_on: service_healthy`,
+   so its first start races MariaDB initialising its datadir. The restart *is*
+   the wait loop (`RestartSec = 15`, paced so the start limit cannot make a slow
+   first boot fatal).
+7. [ ] ⚠ **Verify BookBridge can actually reach Audiobookshelf** — it may not,
+   and it is the whole point of running it. `READING-STACK.md` §4.6 has the two
+   levers. Grimmory it reaches as `http://grimmory:6060` on the `proxy` network;
+   Audiobookshelf is native on loopback, and a container cannot dial that.
+8. [ ] **Own `/tank/podcasts`.** `zfs create` leaves it `root:root 0755` and
+   Audiobookshelf runs as `audiobookshelf:media`, so it cannot write there.
+   Also create its libraries in the UI — the module has no option for them.
+9. [ ] ⚠ **Pin the Docker bridge subnet.** `reading-acquisition.nix` hardcodes
+   `172.17.0.0/16` — Docker's default — and two things depend on it being true
+   (tinyproxy's allow-list and the namespace's return route). Read the live value
+   (`ip -4 addr show docker0`), then pin it with
+   `virtualisation.docker.daemon.settings.bip` so the literal is true by
+   construction rather than by luck.
+10. [ ] ⚠ **The acceptance test for the whole egress design** (§5a/§5c/§5d):
+    ```bash
+    docker exec shelfmark curl -s https://ifconfig.me   # must be the Proton exit
+    ip netns exec wg curl -s https://ifconfig.me        # the same address
+    curl -s https://ifconfig.me                         # the house IP
+    ```
+    If the first shows the house IP, the proxy is not carrying it. The failure
+    mode is fail-closed (with `HTTP_PROXY` set and the proxy unreachable
+    `requests` raises rather than going direct), so a *broken* proxy shows as
+    errors, not as a silent leak.
+11. [ ] **Add Chaptarr's download clients by hand**, at
+    `http://192.168.8.190:8080` (SABnzbd) and `http://192.168.15.1:8282`
+    (qBittorrent). ⚠ **Not `localhost`** — inside the container that is the
+    container. These two addresses are the likeliest thing to get wrong.
+12. [ ] **First-run accounts**, none of which can come from Nix: Chaptarr's login
+    (its `AuthOptions` has no username/password env path at all), Shelfmark's
+    builtin-auth admin, and Grimmory's, Audiobookshelf's and BookBridge's first
+    users. ⚠ Do **not** set `Chaptarr__Auth__Method` to force Forms first — env
+    wins on every start and would lock you out of creating the account.
+13. [ ] **Suwayomi needs an extension repository** added before anything works.
+14. [ ] ⚠ **Test the Prowlarr → Chaptarr sync early** — §5b calls it the single
+    biggest risk here, with two open upstream bugs on the path. When registering
+    the application, **widen the synced categories to include `3000` and `3030`**
+    or audiobook search issues zero queries and reports "no results",
+    indistinguishable from an empty shelf. Hand-entered Newznab/Torznab indexers
+    in Chaptarr are the fallback if the sync will not come up.
+15. [ ] **`CopyUsingHardlinks` is not declarable** — it lives in Chaptarr's
+    SQLite `Config` table, and env only reaches `config.xml`-level settings.
+    Leave it at its default (`true`, harmless across datasets: one `link()` that
+    fails `EXDEV` per import) or change it in the UI.
