@@ -1387,7 +1387,11 @@ organized copy. Sizes: `karakeep` 67M, `ferdium-server` 275M, `paperless` 9.0K
      ran fully as root under `--network=host` — confirmed via `docker top`.
      Fixed by pinning `users.users.z.uid = 1000` in `configuration.nix`
      (matches the uid `z` already had — a no-op for the running system,
-     but now gives Nix eval a real value).
+     but now gives Nix eval a real value). One follow-up the fix itself
+     caused: `/tank/appdata/syncthing`'s config/certs/db had all been
+     created while it ran as root, so once it correctly started dropping
+     to uid 1000 it couldn't read its own files and crash-looped —
+     `chown -R z:users /tank/appdata/syncthing` once, live, resolved it.
    - **Paperless login 403'd on two of its three hostnames.** Only
      `PAPERLESS_URL` was set, so Django's `CSRF_TRUSTED_ORIGINS` held only
      `paperless.zjones.dev` — confirmed live with a raw login POST:
