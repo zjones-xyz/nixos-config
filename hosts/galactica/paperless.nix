@@ -7,27 +7,15 @@
 
 # Paperless-ngx — document management. Two containers (webserver + a Valkey
 # broker for its Celery task queue), same shape as upstream's
-# docker-compose.sqlite.yml. SQLite, not Postgres: this is a single-user
-# instance and the sqlite compose is upstream's own recommended minimal
-# deployment.
+# docker-compose.sqlite.yml. NOT a migration target like ferdium/karakeep:
+# `liveDir` below is an already-live, populated instance, not fresh state —
+# see MANUAL-STEPS.md §15 and SHARES.md for the full reasoning (backup
+# tiers, why the inbox lives on the NVMe root instead of tank).
 #
-# NOT a migration target like ferdium/karakeep: `/tank/documents/paperless`
-# is already a live, populated instance (real db.sqlite3 + archived
-# documents) — the Unraid `appdata` share's own paperless folder was only
-# 9K of leftover container config. `tank/documents` already carries
-# `org.torsion.borgmatic:backup=auto` (Critical tier, BACKUP-BORG.md), so
-# this data is offsite-covered with no extra tagging. Only the broker's own
-# transient queue state lives under `tank/appdata` — Celery scratch state,
-# not documents, and fine at the default "painful to rebuild, small,
-# no offsite" appdata tier (SHARES.md).
-#
-# Consumption folder is deliberately NOT under tank/documents (nor the old
-# bundled `.../consumption`, nor `tank/sort/inbox/paperless-consumption`):
-# owner's call, scans land in `/inbox/paperless` on the NVMe root instead —
-# fast, and dropped files are consumed (moved into `data`/`media` under
-# tank/documents, which IS backed up) within moments, so the inbox itself
-# needs neither ZFS redundancy nor offsite coverage. NFS-exported now; SMB
-# is planned but not built yet.
+# ⚠ `inboxDir` sits on the `@` btrfs subvolume, which IS hourly-snapshotted
+# (modules/nixos/btrfs-snapshots.nix, up to 8 weeks retention) — "no ZFS
+# redundancy or offsite" doesn't mean "no copies at all" for whatever's
+# in-flight there.
 
 let
   webImage = "ghcr.io/paperless-ngx/paperless-ngx:3.1.3";
@@ -101,6 +89,20 @@ in
     };
   };
 
+  # Every crypttab entry for `tank` is `nofail` (configuration.nix) — a
+  # degraded boot with the array unimported is a real, supported state on
+  # this host, and without this, docker.service (only ordered `after`
+  # local-fs.target, never blocked by it) would start these anyway. Same
+  # pattern as nixflix.nix's serviceDependencies / bazarr.nix's
+  # RequiresMountsFor — missing here would mean paperless-webserver runs its
+  # migrations into a fresh empty database at the bind-mount source instead
+  # of failing closed.
+  systemd.services.docker-paperless-webserver.unitConfig.RequiresMountsFor = [
+    liveDir
+    brokerDataDir
+  ];
+  systemd.services.docker-paperless-broker.unitConfig.RequiresMountsFor = [ brokerDataDir ];
+
   virtualisation.oci-containers.containers = {
     paperless-broker = {
       image = brokerImage;
@@ -114,11 +116,17 @@ in
         PAPERLESS_REDIS = "redis://paperless-broker:6379";
         PAPERLESS_DBENGINE = "sqlite";
         PAPERLESS_URL = "https://paperless.zjones.dev";
+        # Django only trusts PAPERLESS_URL for CSRF by default — every other
+        # name this is reachable under (paperless.internal, the tsdproxy
+        # tailnet name) 403s on login otherwise, confirmed live. PROXY_SSL_HEADER
+        # is needed alongside it: without it Django doesn't know the request
+        # was HTTPS (Traefik terminates TLS and forwards plain HTTP), so
+        # `request.is_secure()` is false and the trusted-origin check fails
+        # regardless of the list above.
+        PAPERLESS_CSRF_TRUSTED_ORIGINS = "https://paperless.zjones.dev,https://paperless.internal,https://paperless.peacock-koi.ts.net";
+        PAPERLESS_PROXY_SSL_HEADER = ''["HTTP_X_FORWARDED_PROTO", "https"]'';
         # Matches user z on the host, so the container can actually write
-        # into the NFS-exported /inbox/paperless. ⚠ Not previously set (this
-        # image defaults to a baked-in 1000:1000), so the pre-existing
-        # tank/documents/paperless tree needs a one-time chown to match —
-        # MANUAL-STEPS.md §15 carries it.
+        # into the NFS-exported /inbox/paperless.
         USERMAP_UID = uid;
         USERMAP_GID = gid;
       };

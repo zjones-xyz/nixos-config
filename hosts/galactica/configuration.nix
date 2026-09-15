@@ -44,6 +44,14 @@
   networking.hostName = "galactica";
   networking.networkmanager.enable = true;
 
+  # Pinned to the uid `z` already has here (confirmed live, `id z`) — a no-op
+  # for the running system, but it's what lets `config.users.users.z.uid`
+  # evaluate at all: `isNormalUser` with no explicit uid leaves it `null` at
+  # eval time (real allocation happens at activation), so anything in
+  # ferdium.nix/karakeep.nix/paperless.nix/syncthing.nix that interpolates it
+  # was silently rendering an empty string before this.
+  users.users.z.uid = 1000;
+
   # BIOS SOL covers POST and the bootloader only — the kernel needs its own
   # console= or SOL goes dark when it takes over (live-iso.nix, PLATFORM.md §2).
   homelab.serialConsole.device = "ttyS1,115200n8";

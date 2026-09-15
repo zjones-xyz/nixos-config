@@ -12,8 +12,9 @@
 # The three need to resolve each other by container name, which the default
 # Docker bridge does not provide — hence the dedicated `karakeep` network,
 # same pattern as traefik-galactica.nix's `proxy` network for the socket
-# proxy. Appdata migration from Unraid is deferred (see ferdium.nix's header
-# — same reasoning, same outstanding inventory pass); this starts empty.
+# proxy. Appdata restored from the old Unraid backup — see MANUAL-STEPS.md
+# §15 (dataDir is its own ZFS dataset, not a directory in the shared
+# tank/appdata).
 
 let
   webImage = "ghcr.io/karakeep-app/karakeep:0.33.2";
@@ -25,9 +26,7 @@ in
 {
   # NEXTAUTH_SECRET signs session tokens; MEILI_MASTER_KEY authenticates the
   # web/worker processes against Meilisearch — both required, and must differ
-  # from each other. Neither exists yet: MANUAL-STEPS.md carries generating
-  # and `sops`-ing them in before the first switch (a referenced key missing
-  # from secrets/galactica.yaml fails activation, not eval).
+  # from each other.
   sops.secrets."karakeep/nextAuthSecret" = { };
   sops.secrets."karakeep/meiliMasterKey" = { };
 
@@ -65,6 +64,16 @@ in
     };
   };
 
+  # tank's crypttab entries are all `nofail` (configuration.nix) — a degraded
+  # boot with the array unimported is a real state on this host, and without
+  # this docker.service would start these anyway against empty bind-mount
+  # sources. Same pattern as nixflix.nix/bazarr.nix. karakeep-chrome doesn't
+  # touch tank, so it's not listed here.
+  systemd.services.docker-karakeep-web.unitConfig.RequiresMountsFor = [ "${dataDir}/data" ];
+  systemd.services.docker-karakeep-meilisearch.unitConfig.RequiresMountsFor = [
+    "${dataDir}/meilisearch"
+  ];
+
   virtualisation.oci-containers.containers = {
     karakeep-web = {
       image = webImage;
@@ -73,8 +82,7 @@ in
         BROWSER_WEB_URL = "http://karakeep-chrome:9222";
         DATA_DIR = "/data"; # DON'T CHANGE — see the upstream compose's own warning
         NEXTAUTH_URL = "https://karakeep.zjones.dev";
-        # Locked down 2026-09-13 — account confirmed working against the
-        # restored data (MANUAL-STEPS.md §15).
+        # Locked down — see MANUAL-STEPS.md §15.
         DISABLE_SIGNUPS = "true";
       };
       environmentFiles = [ config.sops.templates."karakeep.env".path ];

@@ -27,6 +27,12 @@ in
 {
   systemd.tmpfiles.rules = [ "d ${dataDir} 0750 ${uid} ${gid} - -" ];
 
+  # tank's crypttab entries are all `nofail` (configuration.nix) — a degraded
+  # boot with the array unimported is a real state on this host, and without
+  # this docker.service would start the container anyway against an empty
+  # bind-mount source. Same pattern as nixflix.nix/bazarr.nix.
+  systemd.services.docker-syncthing.unitConfig.RequiresMountsFor = [ dataDir ];
+
   virtualisation.oci-containers.containers.syncthing = {
     inherit image;
     environment = {

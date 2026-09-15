@@ -7,11 +7,9 @@
 
 # Ferdium-server — recipe/account backend for the Ferdium desktop client.
 #
-# Appdata migration from the old Unraid `appdata` share is DEFERRED: nobody
-# has done the per-container inventory pass on `tank/backups/sidepool-pools`
-# yet (SHARES.md still flags that as outstanding), so this starts on a fresh
-# SQLite database. MANUAL-STEPS.md carries the restore as a follow-up once
-# the old data is located.
+# Appdata restored from the old Unraid backup — see MANUAL-STEPS.md §15 for
+# the restore record (dataDir is its own ZFS dataset, not a directory in the
+# shared tank/appdata).
 #
 # No nixpkgs module exists for the server component (only the desktop
 # Electron client is packaged), hence a container — same shape as the
@@ -29,6 +27,12 @@ in
     "d ${dataDir}/recipes 0750 root root - -"
   ];
 
+  # tank's crypttab entries are all `nofail` (configuration.nix) — a degraded
+  # boot with the array unimported is a real state on this host, and without
+  # this docker.service would start the container anyway against an empty
+  # bind-mount source. Same pattern as nixflix.nix/bazarr.nix.
+  systemd.services.docker-ferdium.unitConfig.RequiresMountsFor = [ dataDir ];
+
   virtualisation.oci-containers.containers.ferdium = {
     inherit image;
     environment = {
@@ -37,8 +41,7 @@ in
       DB_CONNECTION = "sqlite";
       DATA_DIR = "/data";
       JWT_USE_PEM = "true";
-      # Locked down 2026-09-13 — account confirmed working against the
-      # restored data (MANUAL-STEPS.md §15).
+      # Locked down — see MANUAL-STEPS.md §15.
       IS_REGISTRATION_ENABLED = "false";
       IS_CREATION_ENABLED = "true";
       IS_DASHBOARD_ENABLED = "true";

@@ -1376,3 +1376,38 @@ organized copy. Sizes: `karakeep` 67M, `ferdium-server` 275M, `paperless` 9.0K
    `homepage/admin/services.yaml`'s new `Apps` group's four icons
    (`ferdium.png`, `karakeep.png`, `paperless-ngx.png`, `syncthing.png`,
    pulled from walkxcode/dashboard-icons at runtime) all render correctly.
+8. [x] **Three real bugs found by review, fixed and verified — done
+   2026-09-14.**
+   - **Syncthing was running as root.** `config.users.users.z.uid`
+     evaluates to `null` (normal users get their uid at activation, not
+     eval), so `PUID`/`USERMAP_UID`/every tmpfiles rule referencing it
+     were silently rendering an empty string. Paperless came out fine by
+     coincidence (its entrypoint falls back to a baked-in uid 1000, which
+     happens to equal `z`'s real one); Syncthing has no such fallback and
+     ran fully as root under `--network=host` — confirmed via `docker top`.
+     Fixed by pinning `users.users.z.uid = 1000` in `configuration.nix`
+     (matches the uid `z` already had — a no-op for the running system,
+     but now gives Nix eval a real value).
+   - **Paperless login 403'd on two of its three hostnames.** Only
+     `PAPERLESS_URL` was set, so Django's `CSRF_TRUSTED_ORIGINS` held only
+     `paperless.zjones.dev` — confirmed live with a raw login POST:
+     `paperless.internal` (and by the same mechanism, the dashboard's own
+     `paperless.peacock-koi.ts.net` link) hit a hard `403 CSRF
+     verification failed`; `paperless.zjones.dev` passed clean. Fixed with
+     `PAPERLESS_CSRF_TRUSTED_ORIGINS` (all three names) and
+     `PAPERLESS_PROXY_SSL_HEADER` (Django couldn't otherwise tell the
+     Traefik-terminated request was HTTPS).
+   - **None of the four services declared a dependency on `tank` being
+     mounted**, unlike the established `nixflix.nix`/`bazarr.nix` pattern.
+     Every crypttab entry for `tank` is deliberately `nofail`, so a
+     degraded boot with the array unimported is a real, supported state on
+     this host — in it, these containers would start anyway and
+     Paperless would run its migrations into a fresh empty database over
+     the live document archive. Added `RequiresMountsFor` to every
+     container unit that touches a `/tank` path, matching the existing
+     pattern.
+
+   Also cleaned up stale comments in `ferdium.nix`/`karakeep.nix` that
+   still described the appdata as fresh/deferred after the restore landed,
+   and trimmed `paperless.nix`'s header, which had drifted well past this
+   repo's comment-budget convention.
