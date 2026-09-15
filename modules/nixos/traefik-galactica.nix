@@ -155,9 +155,10 @@ in
     example = lib.literalExpression ''{ grimmory = "http://127.0.0.1:6060"; }'';
     description = ''
       Subdomain → upstream-URL pairs to publish under `read.internal` and
-      `read.zjones.dev`, the reading stack's own domain group. Each gets the
-      same router pair as an `arr.*` service, wildcard certificate included —
-      but from this group's own wildcard, `*.read.zjones.dev`.
+      `read.zjones.dev`, the reading stack's own domain group. Nothing like
+      nixflix generates these, so every reading service registers itself here.
+      Each gets the same router pair as an `arr.*` service, on this group's own
+      wildcard certificate.
     '';
   };
 
