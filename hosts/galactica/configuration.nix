@@ -144,6 +144,12 @@
     { domain = "*.arr.internal"; answer = "192.168.8.190"; }
     { domain = "arr.zjones.dev"; answer = "192.168.8.190"; }
     { domain = "*.arr.zjones.dev"; answer = "192.168.8.190"; }
+    # read.* — the reading stack's own group in the same Traefik instance
+    # (READING-STACK.md §7), so its own wildcard rather than arr.*'s.
+    { domain = "read.internal"; answer = "192.168.8.190"; }
+    { domain = "*.read.internal"; answer = "192.168.8.190"; }
+    { domain = "read.zjones.dev"; answer = "192.168.8.190"; }
+    { domain = "*.read.zjones.dev"; answer = "192.168.8.190"; }
     # The two dashboards (hosts/galactica/homepages.nix) — flat names, own
     # Traefik router pair each, not under arr.* or galactica.*.
     { domain = "home.internal"; answer = "192.168.8.190"; }
