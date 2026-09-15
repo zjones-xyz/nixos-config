@@ -147,23 +147,30 @@
         description: Compose stacks
 
 - Apps:
+    # Tailscale (tsdproxy) addresses, not *.zjones.dev — deliberate: this
+    # dashboard is itself reached over the tailnet from off-LAN (home.*),
+    # and *.zjones.dev only resolves for LAN clients (galactica is not an
+    # exit node/subnet router), so those links would be dead exactly when
+    # this dashboard is being used remotely. ⚠ siteMonitor will show red:
+    # this container has no route to Tailscale's MagicDNS to actually poll
+    # these — a known, accepted tradeoff, not a bug to fix.
     - Ferdium:
-        href: https://ferdium.zjones.dev
-        siteMonitor: https://ferdium.zjones.dev
+        href: https://ferdium.peacock-koi.ts.net
+        siteMonitor: https://ferdium.peacock-koi.ts.net
         icon: ferdium.png
         description: Chat aggregator
     - Karakeep:
-        href: https://karakeep.zjones.dev
-        siteMonitor: https://karakeep.zjones.dev
+        href: https://karakeep.peacock-koi.ts.net
+        siteMonitor: https://karakeep.peacock-koi.ts.net
         icon: karakeep.png
         description: Bookmarks
     - Paperless-ngx:
-        href: https://paperless.zjones.dev
-        siteMonitor: https://paperless.zjones.dev
+        href: https://paperless.peacock-koi.ts.net
+        siteMonitor: https://paperless.peacock-koi.ts.net
         icon: paperless-ngx.png
         description: Documents
     - Syncthing:
-        href: https://syncthing.zjones.dev
-        siteMonitor: https://syncthing.zjones.dev
+        href: https://syncthing.peacock-koi.ts.net
+        siteMonitor: https://syncthing.peacock-koi.ts.net
         icon: syncthing.png
         description: File sync
