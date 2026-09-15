@@ -5,12 +5,12 @@ stack (`nixflix.nix`, `MANUAL-STEPS.md` §12). Companion to `SHARES.md` (which
 shares this inherits and their tiers) and `DECISIONS.md` (why, for anything here
 that looks arbitrary).
 
-**Status: spec in progress.** Owner-settled 2026-09-15: the *client* half — what
-serves and what reads (§1–§4) — and the *acquisition* half (§5). ⚠ The storage
-layout (§6) and exposure/names/auth (§7) are **proposals awaiting confirmation**,
-not decisions. What remains beyond them is secrets and the borgmatic hook; see
-"Still open" at the end. **Nothing is implemented yet:** no
-`reading.nix`, no secrets, no Traefik routers, no datasets.
+**Status: spec settled, not implemented.** Owner-settled 2026-09-15: the *client*
+half (§1–§4), the *acquisition* half (§5), the storage layout (§6) and
+exposure/names/auth (§7). One decision remains open — Shelfmark's direct-download
+path (§5a) — along with secrets, the Homepage entries and the borgmatic hooks; see
+"Still open" at the end. **Nothing is implemented yet:** no `reading.nix`, no
+secrets, no Traefik routers, no datasets.
 
 ⚠ **Seven units for one subsystem** — Grimmory, MariaDB, Audiobookshelf,
 BookBridge, Chaptarr, Shelfmark, Suwayomi — plus reuse of Prowlarr, FlareSolverr,
@@ -351,6 +351,71 @@ to drop** — Shelfmark plus Grimmory's BookDrop is a complete, much smaller sta
    destinations means the two acquisition paths never race for the same file, and
    Grimmory's watched-folder ingestion is what closes the loop for Shelfmark.
 
+### 5b. Chaptarr ↔ Prowlarr: the protocol matches, the sync is unproven — 2026-09-15
+
+**The good half, verified in both codebases** (not inferred from the fork):
+Chaptarr serves `/api/v1` with `X-Api-Key`, keeps both Newznab and Torznab
+implementations, and its own settings carry Prowlarr-specific fields whose help
+text reads *"Only needed when this indexer was added via Prowlarr."* Prowlarr's
+Readarr app calls only `/api/v1/indexer*` and `/api/v1/system/status`, with **no
+version or app-identity check**. So:
+
+- **Use `implementationName = "Readarr"`.** ✅ **No nixflix enum change is needed** —
+  its application list is already complete and correct.
+- None is coming upstream either: Prowlarr #2578 (rename to Chaptarr) is **closed
+  as not planned**; #2772 (add Chaptarr) is open and untriaged, and itself names
+  Readarr as the workaround.
+- ⚠ **Port 8789**, not Readarr's 8787 — `baseUrl` must be explicit.
+
+**The bad half: two open, unacknowledged Chaptarr bugs sit directly on the sync
+path.** Both filed within the last month, neither with a maintainer response, no
+fix through 0.9.964.0:
+
+- **#84 — HTTP 500 on `GET /api/v1/indexer/schema`.** Prowlarr's app test fails
+  ("cannot connect to Readarr"); an identical `curl` from the same host succeeds,
+  and nothing reaches Chaptarr's request log, so it throws in early middleware.
+  That endpoint feeds Prowlarr's schema cache, so it blocks the test **and all
+  syncing**.
+- **#131 — 400 on indexer create, and `forceSave` does not rescue it.** Chaptarr
+  tests on create whenever the definition is enabled (which Prowlarr always sets),
+  and hard validation errors throw regardless — so `forceSave` suppresses only
+  *warnings* and the indexer never lands.
+
+⚠ **Treat Prowlarr → Chaptarr sync as unproven on this fleet until tested on the
+host.** It is the single biggest risk in this document. **The escape hatch, and it
+is a real one:** Chaptarr accepts **hand-entered Newznab/Torznab indexers** pointed
+straight at the indexer, bypassing Prowlarr entirely. And note Shelfmark talks to
+Prowlarr *directly* for both indexers and clients (§5), so it is unaffected — if
+Chaptarr's sync will not come up, the on-demand half of the stack still works.
+
+**⚠ The silent failure mode: category mismatch.** Chaptarr routes by media type —
+audiobook searches use only selected **Audio (3000–3999)** categories, ebook
+searches only **Books (7000–7999)** — and Prowlarr's category matching is an
+**exact-ID intersection with no parent→child expansion**. So an indexer advertising
+`3000 Audio` but not `3030 Audio/Audiobook` gets *no* audio category pushed:
+**ebook search works while audiobook search issues zero queries and reports "No
+results found"**, indistinguishable from a genuinely empty result (Chaptarr #128).
+**Mitigation: widen the synced categories to include `3000` and `3030`.** Related
+quiet behaviour: an empty intersection makes Prowlarr skip the indexer with only a
+`Debug` log, and a FullSync *deletes* a previously-synced indexer that stops
+matching.
+
+**Two nixflix gotchas for whoever implements this:**
+
+1. ⚠ `prowlarr.config.applications` is `mkDefault`, and the `prowlarr-applications`
+   unit **deletes every Prowlarr application not in the configured list**. Adding
+   Chaptarr by assigning the option replaces the whole list — **Sonarr, Radarr and
+   Lidarr must be re-listed** or they are wiped.
+2. ⚠ `prowlarr-applications.service` orders itself after radarr/sonarr/
+   sonarr-anime/lidarr only, and the script runs `set -eu` and exits 1 on a failed
+   PUT. Nothing orders it after a Chaptarr unit, so a cold boot can fail before
+   Chaptarr is listening — add Chaptarr to its `after`/`requires`.
+
+⟨Undetermined and worth a diagnostic: Chaptarr exposes media-type-scoped roots
+(`/ebook/api/v1/…`, `/audiobook/api/v1/…`). Pointing Prowlarr at the plain root
+looks right — indexers carry no media-type field — but that is read from code, not
+documented, and scoping the app URL is worth trying if #84 or #128 bite.⟩
+
 ### 5a. ⚠⚠ `vpnConfinement` does not work on a Docker container — verified 2026-09-15
 
 **This is the most dangerous finding in this document**, because it fails in the
@@ -439,8 +504,9 @@ been demonstrated yet. Add it if Suwayomi's coverage proves to be the gap.⟩
 
 ## 6. Storage layout — a separate dataset, inverting nixflix's rule
 
-**Proposed, NOT yet owner-confirmed.** `tank/books` (and the audiobook tree) as
-their **own dataset**, not a subdirectory of `tank/nixflix_media`.
+**Owner-confirmed 2026-09-15.** `tank/books` (and the audiobook tree) as their
+**own dataset**, not a subdirectory of `tank/nixflix_media`; copy-on-import
+accepted.
 
 This deliberately contradicts `nixflix.nix`'s "one layout rule", so the reasoning
 matters:
@@ -509,12 +575,10 @@ exact mistake that rule exists to prevent.
 
 ## 7. Exposure, names and auth
 
-⚠ **Proposed, NOT yet owner-confirmed** — unlike §1–§5, nothing in this section
-has been decided by the owner. It reads as: **its own domain group** —
-`*.read.internal` and `*.read.zjones.dev` — reached off-LAN over Tailscale, with
-**local accounts** for now and OIDC as a follow-up. The findings below (the
-certificate trap, the DNS rewrites, the two inherited wiring rules) hold whichever
-way the naming goes; the choices do not.
+**Owner-settled 2026-09-15:** its own domain group — `*.read.internal` and
+`*.read.zjones.dev` — reached off-LAN over **Tailscale**, with **local accounts**
+now, OIDC as a follow-up, and **Pangolin deliberately deferred until after that
+follow-up lands** (§7's phasing below).
 
 | Service | Name |
 |---|---|
@@ -580,12 +644,16 @@ per-service exposure, no tunnel and no tsdproxy node**.
   certificate warning on a mobile browser and outright failure in some apps. The
   `.internal` pair exists so the stack works on a LAN with no outbound path, not
   as the everyday name.
+- ⚠ **Tailnet reachability is all-or-nothing for the group.** The wildcard rewrite
+  resolves every name under `*.read.zjones.dev`, so once the tailnet uses AdGuard,
+  the *acquisition* UIs (Chaptarr, Shelfmark, Suwayomi) are reachable off-LAN too,
+  not only the readers. That is the accepted default — the tailnet is a private
+  device set, so narrowing it buys little. If it is ever unwanted, the lever is a
+  Traefik source-IP middleware or a second name group, **not** DNS.
 - ⟨**tsdproxy** was considered: it gives each service its own MagicDNS name, as
   the admin dashboard already has. Rejected for this stack — it is
   container-driven, so it would cover the five containers and leave native
-  Audiobookshelf and Suwayomi needing a second mechanism. **Pangolin** was
-  rejected as genuinely more exposed for no gain once Tailscale covers the use
-  case.⟩
+  Audiobookshelf and Suwayomi needing a second mechanism.⟩
 
 ### Two wiring rules inherited from the *arr stack
 
@@ -617,8 +685,22 @@ it to work at all. ⟨Deferred deliberately: standing one up is its own
 project with its own decisions, and it would hold the reading stack behind it.⟩
 
 ⚠ **BookBridge's own login matters more than its size suggests** — it holds
-credentials for both libraries, so it is the one service where a weak local
+credentials for both libraries (§4.5), so it is the one service where a weak local
 password compromises everything else in this document.
+
+### The phasing, and why Pangolin waits
+
+1. **Now (this spec).** LAN plus tailnet, local accounts per service.
+2. **Follow-up spec.** An OIDC provider, then wire the three services that speak
+   it — and BookBridge's undocumented forward-auth, if it suits better.
+3. **After that, not before.** Pangolin public exposure (`newt.nix`), the way
+   `guest.zjones.xyz` already works.
+
+⚠ **The order is the point.** Publishing these services with nothing but per-app
+logins is precisely the exposure the auth work exists to remove — and BookBridge,
+the weakest server here (Flask's development server, running as root, holding
+every other service's credentials), would be among the things published. Owner's
+decision, 2026-09-15: Pangolin is wired **after** the auth follow-on.
 
 ---
 
@@ -648,9 +730,11 @@ password compromises everything else in this document.
 These are unknowns that change the design, not preferences. Each wants an answer
 in this document.
 
-1. [ ] **Does Chaptarr present as Readarr to Prowlarr?** Its docs do not mention
-       Prowlarr at all; nixflix's app-sync enum only knows `"Readarr"`
-       (`modules/prowlarr/applications.nix`). Probable as a fork, unverified.
+1. [x] **Does Chaptarr present as Readarr to Prowlarr?** ✅ **Answered
+       2026-09-15 — yes, the protocol matches and no enum change is needed** (§5b).
+       ⚠ But two open upstream bugs sit on the sync path, so the *sync* is
+       unproven: **test it on the host early**, and know that hand-entered
+       indexers in Chaptarr are the fallback.
 2. [x] **Does Chaptarr hardlink its imports?** ✅ **Answered 2026-09-15** from
        source — it hardlinks when it can and falls back to a size-verified copy
        when it cannot, silently and by design, logging which at Info. §6 carries
