@@ -313,20 +313,39 @@ Consequences, in order of how much they matter:
    `nixflix.mediaUsers = [ "z" ]`, which the same `mkForce` discards. **This
    affects the existing media stack, not only the reading stack.**
 
-**Three ways out, none free — owner's decision:**
+**Four ways out — owner's decision. The fourth looks best.**
 
-- **`lib.mkOverride 40`** on `users.groups.media.gid` to out-prioritise the
-  `mkForce`. One line, works immediately. ⚠ But it *changes a live group's
-  number*: read `getent group media` on the host first, and if it differs, plan a
-  recursive `chgrp` over `/tank/nixflix_media` or everything there is orphaned.
-- **A fourth hand-carried nixflix patch** (`DECISIONS.md` §10 tracks three
-  already) removing the two `mkForce`es, which also restores `z`'s membership.
-  Fixes the cause rather than the symptom; adds to the carried debt.
-- **A dedicated `reading` group** with a gid this fleet pins, used by the reading
-  services instead of `media`. Avoids touching the live group entirely — but the
-  acquisition services also need **write** access to nixflix's downloads
-  directory to clean up after an import, and that is `root:media`, so this does
-  not fully escape the problem.
+1. ⭐ **Resolve the gid at *runtime*, not at evaluation.** It does not exist when
+   Nix evaluates, but it does exist when a unit starts. A `oneshot` writes
+   `PGID=$(getent group media | cut -d: -f3)` into an env file under `/run`, and
+   each container adds that file to `environmentFiles` (read by `docker run
+   --env-file` at start) and orders after it. **Touches no live group, needs no
+   nixflix patch, renumbers nothing, and self-corrects if the gid ever moves.**
+2. **`lib.mkOverride 40` — but on the WHOLE submodule value, not on `.gid`.**
+   ⚠ The nested form silently does nothing: the `mkForce`es apply to the
+   `users.groups.media` *value*, and `filterOverrides` discards every
+   normal-priority definition at that level **before** the submodule is
+   evaluated, so a priority-40 marker nested inside one is never seen. This was
+   reproduced against the pinned `lib`. The form that works is
+   `users.groups.media = lib.mkOverride 40 { gid = <n>; };`
+   It is also safer than it sounds: `members` comes from the group submodule's
+   *own* `config` block, derived from every user's `extraGroups` — which is why
+   `["unpackerr"]` survives the `mkForce` today — so overriding the whole value
+   keeps that membership. Getting `z` in is then
+   `users.users.z.extraGroups = [ "media" ]`, not `members`. ⚠ Still read
+   `getent group media` first: if the live number differs from what you pin, plan
+   a recursive `chgrp` over `/tank/nixflix_media`.
+3. **A fourth hand-carried nixflix patch** (`DECISIONS.md` §10 tracks three)
+   removing the two `mkForce`es. Fixes the cause, restores `z`'s membership at
+   normal priority, and adds to the carried debt.
+4. ~~**A dedicated `reading` group.**~~ ⚠ **Dead, not merely imperfect.**
+   Chaptarr's cleanup path needs **unlink** rights in nixflix's downloads
+   directory, which nixflix's own tmpfiles pin at `root:media 0775` — a
+   `reading`-grouped service cannot delete there at all.
+
+⟨A fifth, uglier option if none of the above appeals: default POSIX ACLs granting
+the two uids rwx on the shared trees via `systemd.tmpfiles` `a+` lines — no gid
+needed anywhere, at the cost of ACLs on the array.⟩
 
 Until one is chosen, the acquisition half is **not deployable**.
 

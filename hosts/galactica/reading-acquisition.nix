@@ -125,15 +125,24 @@ in
     };
     "${libraryRoot}/ebooks".d = {
       inherit (nixflix.globals.libraryOwner) user group;
-      mode = "0775";
+      # ⚠ setgid, and tmpfiles is why it must be said: it chmods to exactly
+      # this mode on every run, so a bit inherited from the parent — or set by
+      # hand — is stripped again. The group of what lands here depends on it.
+      mode = "2775";
     };
     "${libraryRoot}/audiobooks".d = {
       inherit (nixflix.globals.libraryOwner) user group;
-      mode = "0775";
+      # ⚠ setgid, and tmpfiles is why it must be said: it chmods to exactly
+      # this mode on every run, so a bit inherited from the parent — or set by
+      # hand — is stripped again. The group of what lands here depends on it.
+      mode = "2775";
     };
     "${libraryRoot}/manga".d = {
       inherit (nixflix.globals.libraryOwner) user group;
-      mode = "0775";
+      # ⚠ setgid, and tmpfiles is why it must be said: it chmods to exactly
+      # this mode on every run, so a bit inherited from the parent — or set by
+      # hand — is stripped again. The group of what lands here depends on it.
+      mode = "2775";
     };
   };
 
@@ -218,9 +227,12 @@ in
       # matching, where `10.*` matches nothing, while the same variable is also
       # read by Shelfmark's own fnmatch mechanism — an exact address is the one
       # form both honour. The namespace address covers the dedicated
-      # FlareSolverr and qBittorrent; the host address covers Prowlarr,
-      # SABnzbd, Chaptarr and Grimmory. Without the first, the call to
-      # FlareSolverr passes no `proxies=` and is dialled through the tunnel.
+      # FlareSolverr and qBittorrent — without it the call to FlareSolverr,
+      # which passes no `proxies=`, is dialled through the tunnel. The host
+      # address covers Prowlarr and SABnzbd, the two that bind 0.0.0.0 and are
+      # opened on docker0 below. ⚠ It does NOT reach Chaptarr or Grimmory:
+      # both publish on loopback only, so Shelfmark cannot talk to them at
+      # all — it delivers into the bookdrop instead (§5, finding 3).
       NO_PROXY = "localhost,127.0.0.1,${nsAddress},${hostAddress}";
 
       USING_EXTERNAL_BYPASSER = "true";
@@ -291,9 +303,18 @@ in
       Listen = nsAddress;
       Port = proxyPort;
       Timeout = 600;
-      # ⚠ Load-bearing: the port mapping's DNAT rule matches on destination
-      # port alone, so without this the proxy is an open relay for the LAN.
-      Allow = [ dockerBridgeSubnet ];
+      # ⚠ Load-bearing twice over. The DNAT rule matches on destination port
+      # alone, so without an Allow list the proxy is an open relay for the LAN.
+      # And the bridge address must be listed or NOTHING passes: the namespace
+      # is not a local address, so a container's packet takes the forward path
+      # through nat POSTROUTING, where Docker masquerades it to the bridge —
+      # tinyproxy sees the bridge address, never 172.17.x.x. The subnet entry
+      # matters only if masquerading is ever turned off. A LAN client is not
+      # masqueraded, so it still fails the list, which is the point.
+      Allow = [
+        dockerBridgeSubnet
+        config.vpnNamespaces.${netns}.bridgeAddress
+      ];
       DisableViaHeader = true;
       LogLevel = "Warning";
       # No `ConnectPort` lines on purpose: tinyproxy permits CONNECT to any
@@ -307,12 +328,14 @@ in
   };
 
   # ── Shelfmark's own FlareSolverr, confined ────────────────────────────────
-  # ⚠ Prowlarr's instance stays on loopback and unconfined: nixflix hardcodes
+  # ⚠ Prowlarr's instance stays unconfined: nixflix hardcodes
   # http://127.0.0.1:8191 for its indexer proxy, and a VPN exit makes
   # Cloudflare *harsher* on the one job FlareSolverr has (§5d.4). Neither
   # instance is routed through Traefik — an unauthenticated endpoint that
   # fetches arbitrary URLs through a real browser (§7).
-  systemd.services.flaresolverr-shelfmark = {
+  # mkIf because the serviceConfig below is inherited from the shared instance:
+  # with that disabled this would render a unit with no ExecStart.
+  systemd.services.flaresolverr-shelfmark = lib.mkIf config.services.flaresolverr.enable {
     description = "FlareSolverr (Shelfmark's own, inside the ${netns} namespace)";
     after = [ "network.target" ];
     wantedBy = [ "multi-user.target" ];
@@ -378,12 +401,14 @@ in
     }
   ];
 
-  # ⚠ Merged with nixflix.nix's LAN entry, not replacing it. Without the route
-  # this adds, the proxy's replies to a container go down the tunnel instead of
-  # back over the veth. `accessibleFrom` and not `allowedEgress`: a reply is
-  # ESTABLISHED and already passes the kill switch, and `allowedEgress` takes
-  # single addresses only — a /24 there collides with the connected veth route
-  # and fails wg.service on switch (§5a).
+  # ⚠ Merged with nixflix.nix's LAN entry, not replacing it. `accessibleFrom`
+  # rather than `allowedEgress` because a reply is ESTABLISHED and already
+  # passes the kill switch. (`allowedEgress` does take a CIDR — but
+  # 192.168.15.0/24 specifically collides with the connected veth route and
+  # fails wg.service on switch, §5a.) ⚠ This route is not what carries replies
+  # today: Docker masquerades the container to the bridge address, so the reply
+  # destination is directly connected. It becomes load-bearing the moment
+  # masquerading is off.
   nixflix.vpn.accessibleFrom = [ dockerBridgeSubnet ];
 
   # ── Ordering: nothing starts before tank is imported ──────────────────────

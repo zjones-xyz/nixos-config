@@ -1295,9 +1295,12 @@ yet. Datasets and secrets get added here as the implementation lands.
    resolve off-LAN and the Tailscale half of `READING-STACK.md` §7 does nothing.
    Tailscale admin console → DNS → nameservers. Not expressible in Nix, which
    is why it is here.
-3. [ ] **Create the datasets, before anything starts.** ⚠ Docker materialises a
-   missing bind-mount source as an empty root-owned directory, which then sits on
-   the mountpoint `zfs create` needs — so these come first, not after a switch.
+3. [ ] **Create the datasets, before anything starts — including before the
+   first `nixos-rebuild switch`.** ⚠ Two things will occupy the mountpoint if the
+   dataset is not there first: Docker materialises a missing bind-mount source as
+   an empty root-owned directory, **and `systemd-tmpfiles` creates
+   `/tank/books/library/{ebooks,audiobooks,manga}` on every run** — those three
+   are declared in `reading-acquisition.nix`, so a switch is enough to do it.
    ```bash
    zfs create tank/books
    zfs set homelab:tier=protected tank/books
@@ -1329,7 +1332,7 @@ yet. Datasets and secrets get added here as the implementation lands.
    id z                                   # is z in media at runtime?
    find /tank/nixflix_media -maxdepth 2 -printf '%g\n' | sort -u
    ```
-5. [ ] **Create the four sops secrets** in `secrets/galactica.yaml`. ⚠ All must
+5. [ ] **Create the five sops secrets** in `secrets/galactica.yaml`. ⚠ All must
    exist *before* the switch or sops-nix fails it — the nixflix precedent.
    - `reading/grimmoryDbPassword` — one value, rendered into both Grimmory's
      `DATABASE_PASSWORD` and MariaDB's `MARIADB_PASSWORD`.
@@ -1337,6 +1340,9 @@ yet. Datasets and secrets get added here as the implementation lands.
    - `reading/bookbridgeSecretKey` — the Fernet key (§4.5: it must not be
      generated into `/data`, beside the ciphertext it protects).
    - `reading/bookbridgeWebSecretKey` — so sessions survive a restore.
+   - `reading/chaptarrApiKey` — ⚠ also the value to paste into Chaptarr's UI. If
+     Chaptarr generates its own instead, Prowlarr's application entry mismatches.
+   ⚠ `secrets/galactica.yaml` has no `reading:` block at all yet.
 
    ⚠ MariaDB reads its two values **only while initialising an empty datadir**;
    rotating either afterwards is an `ALTER USER` inside the database, not a
@@ -1351,3 +1357,42 @@ yet. Datasets and secrets get added here as the implementation lands.
    and it is the whole point of running it. `READING-STACK.md` §4.6 has the two
    levers. Grimmory it reaches as `http://grimmory:6060` on the `proxy` network;
    Audiobookshelf is native on loopback, and a container cannot dial that.
+8. [ ] **Own `/tank/podcasts`.** `zfs create` leaves it `root:root 0755` and
+   Audiobookshelf runs as `audiobookshelf:media`, so it cannot write there.
+   Also create its libraries in the UI — the module has no option for them.
+9. [ ] ⚠ **Pin the Docker bridge subnet.** `reading-acquisition.nix` hardcodes
+   `172.17.0.0/16` — Docker's default — and two things depend on it being true
+   (tinyproxy's allow-list and the namespace's return route). Read the live value
+   (`ip -4 addr show docker0`), then pin it with
+   `virtualisation.docker.daemon.settings.bip` so the literal is true by
+   construction rather than by luck.
+10. [ ] ⚠ **The acceptance test for the whole egress design** (§5a/§5c/§5d):
+    ```bash
+    docker exec shelfmark curl -s https://ifconfig.me   # must be the Proton exit
+    ip netns exec wg curl -s https://ifconfig.me        # the same address
+    curl -s https://ifconfig.me                         # the house IP
+    ```
+    If the first shows the house IP, the proxy is not carrying it. The failure
+    mode is fail-closed (with `HTTP_PROXY` set and the proxy unreachable
+    `requests` raises rather than going direct), so a *broken* proxy shows as
+    errors, not as a silent leak.
+11. [ ] **Add Chaptarr's download clients by hand**, at
+    `http://192.168.8.190:8080` (SABnzbd) and `http://192.168.15.1:8282`
+    (qBittorrent). ⚠ **Not `localhost`** — inside the container that is the
+    container. These two addresses are the likeliest thing to get wrong.
+12. [ ] **First-run accounts**, none of which can come from Nix: Chaptarr's login
+    (its `AuthOptions` has no username/password env path at all), Shelfmark's
+    builtin-auth admin, and Grimmory's, Audiobookshelf's and BookBridge's first
+    users. ⚠ Do **not** set `Chaptarr__Auth__Method` to force Forms first — env
+    wins on every start and would lock you out of creating the account.
+13. [ ] **Suwayomi needs an extension repository** added before anything works.
+14. [ ] ⚠ **Test the Prowlarr → Chaptarr sync early** — §5b calls it the single
+    biggest risk here, with two open upstream bugs on the path. When registering
+    the application, **widen the synced categories to include `3000` and `3030`**
+    or audiobook search issues zero queries and reports "no results",
+    indistinguishable from an empty shelf. Hand-entered Newznab/Torznab indexers
+    in Chaptarr are the fallback if the sync will not come up.
+15. [ ] **`CopyUsingHardlinks` is not declarable** — it lives in Chaptarr's
+    SQLite `Config` table, and env only reaches `config.xml`-level settings.
+    Leave it at its default (`true`, harmless across datasets: one `link()` that
+    fails `EXDEV` per import) or change it in the UI.

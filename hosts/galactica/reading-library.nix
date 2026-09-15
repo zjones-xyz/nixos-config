@@ -150,9 +150,11 @@ in
       ports = [ "127.0.0.1:${toString bookbridgePort}:${toString bookbridgePort}" ];
       # ⚠ /data must stay on local storage: on NFS/CIFS/fuse BookBridge
       # silently drops out of WAL into DELETE journal mode. The library is
-      # read-only — it matches books, it does not manage them. Which libraries
-      # it syncs is set in its own UI; a container cannot reach a loopback
-      # publish, so Audiobookshelf is reached at its Traefik name.
+      # read-only — it matches books, it does not manage them. ⚠ Which
+      # libraries it syncs is set in its own UI, and whether it can reach
+      # Audiobookshelf at all is OPEN — a container cannot dial a loopback
+      # publish, and its Traefik name may not resolve from one either.
+      # READING-STACK.md §4.6 has the two levers; do not assume this works.
       volumes = [
         "${stateDir "bookbridge"}:/data"
         "${booksDir}:/books:ro"
