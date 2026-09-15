@@ -7,8 +7,8 @@ that looks arbitrary).
 
 **Status: spec in progress.** Settled 2026-09-15: the *client* half — what serves
 and what reads (§1–§4) — the *acquisition* half (§5), and the storage layout
-(§6, as a proposal awaiting confirmation). What remains is exposure, secrets and
-wiring; see "Still open" at the end. **Nothing is implemented yet:** no
+(§6, as a proposal awaiting confirmation), and exposure, names and auth (§7).
+What remains is secrets and the borgmatic hook; see "Still open" at the end. **Nothing is implemented yet:** no
 `reading.nix`, no secrets, no Traefik routers, no datasets.
 
 ⚠ **Seven units for one subsystem** — Grimmory, MariaDB, Audiobookshelf,
@@ -324,14 +324,119 @@ exact mistake that rule exists to prevent.
 
 ---
 
+## 7. Exposure, names and auth
+
+Settled 2026-09-15: **its own domain group** — `*.read.internal` and
+`*.read.zjones.dev` — reached off-LAN over Tailscale, with **local accounts** for
+now and OIDC as a follow-up.
+
+| Service | Name |
+|---|---|
+| Grimmory | `grimmory.read.*` |
+| Audiobookshelf | `audiobookshelf.read.*` |
+| Chaptarr | `chaptarr.read.*` |
+| Shelfmark | `shelfmark.read.*` |
+| BookBridge | `bookbridge.read.*` |
+| Suwayomi | `suwayomi.read.*` |
+
+`read.*`, not `arr.*`: the reading stack is its own subsystem, and the *arr names
+were chosen to follow the media stack (`traefik-galactica.nix`) — so borrowing
+them would couple two stacks that relocate independently. The same reasoning
+`configuration.nix` already applies to AdGuard, which sits under `galactica.*`
+rather than `arr.*` precisely because it is not part of the media stack.
+
+### ⚠ The new group needs ONE shared wildcard — this is the trap
+
+Galactica runs **one** Traefik (`traefik-galactica.nix` owns `:80`/`:443` and the
+firewall openings), so `read.*` is a **second domain group inside that instance**,
+never a second module.
+
+How that group gets its certificate is the part that can go quietly wrong.
+AdGuard's router pair in `configuration.nix` is hand-written and therefore has no
+wildcard to dedup against — `traefik-galactica.nix`'s shared `domains` covers only
+`arr.zjones.dev` — so it requests **its own single-name LE cert**, which that
+file's comment calls *"a one-time, deliberate cost, not a repeatable per-router
+one."*
+
+**Six services copying the AdGuard shape is exactly that repeatable cost:** six
+individual certificates, against an allowance `traefik-galactica.nix` already
+warns about (per-host `domains` lose a cold-start race and burn ~a fifth of the
+weekly quota). So the implementation generalises `mkRouterPair`/`mkRouters` to
+take a domain group with its own shared wildcard — declared **once** as
+`*.read.zjones.dev` — rather than adding routers by hand.
+
+### DNS
+
+Four rewrites alongside galactica's existing block in `configuration.nix`
+(galactica is `192.168.8.190`):
+
+```nix
+{ domain = "read.internal";      answer = "192.168.8.190"; }
+{ domain = "*.read.internal";    answer = "192.168.8.190"; }
+{ domain = "read.zjones.dev";    answer = "192.168.8.190"; }
+{ domain = "*.read.zjones.dev";  answer = "192.168.8.190"; }
+```
+
+⚠ `enabled = true` comes from the `map` over the list — AdGuard's omitted bool
+renders as Go's zero value and **silently disables every rewrite**.
+
+### Off-LAN: Tailscale, not a new exposure surface
+
+`services.tailscale` is already enabled on galactica (inline in
+`configuration.nix`, with `tailscale0` trusted), and AdGuard already does
+split-horizon. So the `.zjones.dev` names work from a phone off the LAN with **no
+per-service exposure, no tunnel and no tsdproxy node**.
+
+- ⚠ **Manual step, not Nix:** the tailnet must use AdGuard as its DNS (Tailscale
+  admin console → nameservers) or the rewrites never resolve off-LAN.
+- ⚠ **Use the `.zjones.dev` names on phones and tablets.** `*.read.internal`
+  routers carry `tls = { }` — Traefik's self-signed default — which presents as a
+  certificate warning on a mobile browser and outright failure in some apps. The
+  `.internal` pair exists so the stack works on a LAN with no outbound path, not
+  as the everyday name.
+- ⟨**tsdproxy** was considered: it gives each service its own MagicDNS name, as
+  the admin dashboard already has. Rejected for this stack — it is
+  container-driven, so it would cover the five containers and leave native
+  Audiobookshelf and Suwayomi needing a second mechanism. **Pangolin** was
+  rejected as genuinely more exposed for no gain once Tailscale covers the use
+  case.⟩
+
+### Two wiring rules inherited from the *arr stack
+
+1. ⚠ **Never hardcode `127.0.0.1` as an upstream.** `traefik-galactica.nix` derives
+   every upstream from the service's own `connectionAddress`, because a confined
+   service binds the namespace address instead. Shelfmark may end up confined
+   (§5, finding 2), so it must follow the same rule rather than being special-cased
+   later.
+2. ⚠ **FlareSolverr stays unrouted.** It is deliberately absent from Traefik — an
+   unauthenticated endpoint that fetches arbitrary URLs through a real browser.
+   Shelfmark reaching it over loopback is consistent with that; do not add a route
+   to make the wiring look tidier.
+
+Also: the router names `dashboard` and `traefik` are reserved by an assertion in
+`traefik-galactica.nix`. Nothing above collides, but a future addition could.
+
+### Auth: local accounts, OIDC deferred
+
+There is **no OIDC provider anywhere in this fleet** — no Authelia, Authentik,
+Keycloak or Pocket ID, and no auth middleware on any Traefik router. So every
+service uses its own login, with credentials in `secrets/galactica.yaml`.
+
+Grimmory, Shelfmark and BookBridge all *speak* OIDC, so a provider later is
+wiring rather than a rethink. ⟨Deferred deliberately: standing one up is its own
+project with its own decisions, and it would hold the reading stack behind it.⟩
+
+⚠ **BookBridge's own login matters more than its size suggests** — it holds
+credentials for both libraries, so it is the one service where a weak local
+password compromises everything else in this document.
+
+---
+
 ## Still open
 
-- **Exposure and auth.** Traefik routers (`traefik-galactica.nix`), whether any of
-  this is reachable off-LAN, and whether the three services that speak OIDC
-  (Grimmory, Shelfmark, BookBridge's own logins) are wired to anything or left on
-  local accounts.
-- ⚠ **Shelfmark's direct-download path and the VPN namespace** (§5) — decide
-  deliberately rather than by default.
+- ⚠ **Shelfmark's direct-download path and the VPN namespace** (§5) — the one
+  exposure question §7 does not answer, because it is about outbound traffic
+  rather than inbound. Decide deliberately rather than by default.
 - **Secrets.** Every value `secrets/galactica.yaml` will need, and ⚠ the
   `nixflix.nix` precedent: *every* secret must exist before sops-nix activates or
   the switch fails.
