@@ -7,8 +7,8 @@ that looks arbitrary).
 
 **Status: spec in progress.** Settled 2026-09-15: the *client* half — what serves
 and what reads (§1–§4) — the *acquisition* half (§5), and the storage layout
-(§6, as a proposal awaiting confirmation), and exposure, names and auth (§7).
-What remains is secrets and the borgmatic hook; see "Still open" at the end. **Nothing is implemented yet:** no
+(§6), and exposure, names and auth (§7). What remains is secrets and the
+borgmatic hook; see "Still open" at the end. **Nothing is implemented yet:** no
 `reading.nix`, no secrets, no Traefik routers, no datasets.
 
 ⚠ **Seven units for one subsystem** — Grimmory, MariaDB, Audiobookshelf,
@@ -299,8 +299,8 @@ been demonstrated yet. Add it if Suwayomi's coverage proves to be the gap.⟩
 
 ## 6. Storage layout — a separate dataset, inverting nixflix's rule
 
-**Proposed, needs owner confirmation.** `tank/books` (and the audiobook tree) as
-their **own dataset**, not a subdirectory of `tank/nixflix_media`.
+**Owner-confirmed 2026-09-15.** `tank/books` (and the audiobook tree) as their
+**own dataset**, not a subdirectory of `tank/nixflix_media`.
 
 This deliberately contradicts `nixflix.nix`'s "one layout rule", so the reasoning
 matters:
