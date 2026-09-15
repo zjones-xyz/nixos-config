@@ -478,6 +478,71 @@ all hold, and none is `networking.firewall.allowedTCPPorts`:
    because the packet is DNAT'd it is forwarded, so the host firewall never sees
    it and the netns INPUT rule is the real gate.
 
+### 5c. Shelfmark's egress, read from source — 2026-09-15
+
+**The short version: Shelfmark downloads every byte itself; FlareSolverr only
+fetches *challenged pages*.** So confining Shelfmark is not pointless — but it is
+not sufficient either, and two paths cannot be confined at all.
+
+| Phase | Whose IP touches the origin |
+|---|---|
+| Search / metadata / md5 and partner pages | **Shelfmark** (direct-first) |
+| Any page that comes back challenged | **FlareSolverr** — it fetches the page and returns the body |
+| welib pages | **FlareSolverr** always (forced) |
+| **The file bytes, and resume** | **Shelfmark** (`requests`, `stream=True`) |
+
+⚠ **Corrects an earlier claim in this document's history:** "Prowlarr mode leaks
+nothing" was wrong. Even handing off to a download client, Shelfmark **fetches the
+`.torrent` itself from arbitrary tracker origins** to recover the info_hash, and on
+the NZBGet path always fetches the NZB itself. Only the *payload* transfer is
+delegated.
+
+#### The proxy lever, and the trap in it
+
+Shelfmark honours an outbound proxy — **no client is built with `trust_env`
+disabled anywhere**, and there is no `aiohttp`. But it has two mechanisms and they
+cover different ground:
+
+- ⚠ **Set it in Shelfmark's web UI and you cover 8 of ~52 call sites.** Metadata
+  providers, cover art, `.torrent`/`.nzb` fetches, debrid APIs and OIDC all go
+  **direct**. This is a silent trap.
+- ✅ **Set it as container environment variables and all ~52 are covered**, via
+  `requests`' `trust_env`. That is the lever to use.
+
+Two further traps if env vars are used:
+
+- ⚠ **`NO_PROXY` semantics differ between the two mechanisms.** Shelfmark's own is
+  `fnmatch` (`10.*` works); the env path is urllib/requests **suffix** matching,
+  where `10.*` matches nothing. So the LAN services (Prowlarr, qBittorrent,
+  SABnzbd, Grimmory) must be listed in requests-compatible form or they are dialled
+  through the proxy.
+- ⚠ **The POST to FlareSolverr does not pass `proxies=`**, so FlareSolverr's host
+  must be in `NO_PROXY` or Shelfmark tries to reach it *through* the proxy.
+
+#### Two things no proxy can cover
+
+1. ⚠ **FlareSolverr's own fetches.** Shelfmark's request payload to it is only
+   `cmd`/`url`/`maxTimeout` — **there is no per-request `proxy` field**, so the
+   tidy idea of tunnelling FlareSolverr per-request without confining the shared
+   service **is not available** (it would need a ~3-line patch to carry). The
+   alternative is confining the FlareSolverr *service* — which works, since it is
+   native — but that pushes **Prowlarr's indexer scraping** into the tunnel too.
+2. ⚠⚠ **IRC and DCC cannot be proxied at all.** Raw TCP sockets, no SOCKS
+   monkey-patching anywhere; upstream's own settings text says DCC needs direct
+   connections to arbitrary ports. **Only a network namespace could contain this,
+   which is exactly what Docker cannot give us** (§5a). If IRC is used, it egresses
+   on the host's IP, full stop.
+
+#### Two behaviours worth knowing regardless
+
+- ⚠ **It phones Anna's Archive on boot.** About 15 s after start a daemon thread
+  runs a throwaway search to pre-warm the challenge path — egress with no user
+  action, on every restart.
+- It replaces `socket.getaddrinfo` **process-wide** with a DoH resolver
+  (Cloudflare/Google/Quad9/OpenDNS, rotating on failure), so its name resolution
+  does not use the host's AdGuard.
+- No telemetry, update check or analytics found in the server code.
+
 ### Manga — Suwayomi
 
 `services.suwayomi-server` is in the pin (with a nixpkgs manual page), which makes
@@ -706,14 +771,21 @@ decision, 2026-09-15: Pangolin is wired **after** the auth follow-on.
 
 ## Still open
 
-- ⚠ **Shelfmark's direct downloads: confine, or don't?** §5a turned this from a
-  checkbox into a real choice, because confinement now costs a native proxy, a
-  pinned bridge subnet and routing work. Three honest options: **(a)** the
-  confined-proxy pattern in §5a; **(b)** accept that direct downloads leave on the
-  host's IP, and write that down; **(c)** turn direct mode off and use Shelfmark
-  in Prowlarr mode only, so every grab goes through the already-confined
-  qBittorrent — no new machinery at all, at the cost of the sources Prowlarr
-  cannot reach, which were part of why Shelfmark was chosen.
+- ⚠ **Shelfmark's egress: how far to chase it?** §5c settles the mechanics, and
+  there is **no configuration in which the container produces zero direct
+  egress** — a namespace would be the only complete answer and Docker cannot give
+  us one (§5a). The honest options:
+  **(a)** container-env proxy into a confined tinyproxy — covers all ~52 HTTP call
+  sites, leaves FlareSolverr's challenged-page fetches and IRC/DCC outside;
+  **(a+)** the same, plus confining the native FlareSolverr service — then only
+  IRC/DCC is outside, at the price of Prowlarr's indexer scraping also riding the
+  tunnel;
+  **(b)** accept host-IP egress for Shelfmark and write it down.
+  ⟨Worth weighing against *why* the tunnel exists: `nixflix.nix` says
+  "qBittorrent is the reason the VPN exists", i.e. it was built for P2P exposure —
+  and the torrent traffic is **already** confined. Shelfmark's own egress is HTTP
+  to shadow libraries and metadata providers, which is a different question, not
+  the same one.⟩
 - **Secrets.** Every value `secrets/galactica.yaml` will need, and ⚠ the
   `nixflix.nix` precedent: *every* secret must exist before sops-nix activates or
   the switch fails.
