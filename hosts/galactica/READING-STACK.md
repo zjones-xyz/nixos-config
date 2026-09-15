@@ -5,10 +5,11 @@ stack (`nixflix.nix`, `MANUAL-STEPS.md` §12). Companion to `SHARES.md` (which
 shares this inherits and their tiers) and `DECISIONS.md` (why, for anything here
 that looks arbitrary).
 
-**Status: spec in progress.** Settled 2026-09-15: the *client* half — what serves
-and what reads (§1–§4) — the *acquisition* half (§5), and the storage layout
-(§6), and exposure, names and auth (§7). What remains is secrets and the
-borgmatic hook; see "Still open" at the end. **Nothing is implemented yet:** no
+**Status: spec in progress.** Owner-settled 2026-09-15: the *client* half — what
+serves and what reads (§1–§4) — and the *acquisition* half (§5). ⚠ The storage
+layout (§6) and exposure/names/auth (§7) are **proposals awaiting confirmation**,
+not decisions. What remains beyond them is secrets and the borgmatic hook; see
+"Still open" at the end. **Nothing is implemented yet:** no
 `reading.nix`, no secrets, no Traefik routers, no datasets.
 
 ⚠ **Seven units for one subsystem** — Grimmory, MariaDB, Audiobookshelf,
@@ -299,8 +300,8 @@ been demonstrated yet. Add it if Suwayomi's coverage proves to be the gap.⟩
 
 ## 6. Storage layout — a separate dataset, inverting nixflix's rule
 
-**Owner-confirmed 2026-09-15.** `tank/books` (and the audiobook tree) as their
-**own dataset**, not a subdirectory of `tank/nixflix_media`.
+**Proposed, NOT yet owner-confirmed.** `tank/books` (and the audiobook tree) as
+their **own dataset**, not a subdirectory of `tank/nixflix_media`.
 
 This deliberately contradicts `nixflix.nix`'s "one layout rule", so the reasoning
 matters:
@@ -326,9 +327,12 @@ exact mistake that rule exists to prevent.
 
 ## 7. Exposure, names and auth
 
-Settled 2026-09-15: **its own domain group** — `*.read.internal` and
-`*.read.zjones.dev` — reached off-LAN over Tailscale, with **local accounts** for
-now and OIDC as a follow-up.
+⚠ **Proposed, NOT yet owner-confirmed** — unlike §1–§5, nothing in this section
+has been decided by the owner. It reads as: **its own domain group** —
+`*.read.internal` and `*.read.zjones.dev` — reached off-LAN over Tailscale, with
+**local accounts** for now and OIDC as a follow-up. The findings below (the
+certificate trap, the DNS rewrites, the two inherited wiring rules) hold whichever
+way the naming goes; the choices do not.
 
 | Service | Name |
 |---|---|
