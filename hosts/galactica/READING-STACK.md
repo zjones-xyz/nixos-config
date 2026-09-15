@@ -5,10 +5,17 @@ stack (`nixflix.nix`, `MANUAL-STEPS.md` §12). Companion to `SHARES.md` (which
 shares this inherits and their tiers) and `DECISIONS.md` (why, for anything here
 that looks arbitrary).
 
-**Status: spec in progress.** The *client* half — what serves and what reads —
-is settled as of 2026-09-15 and is §1–§4 below. The *acquisition* half is
-deliberately still open; see "Still open" at the end. Nothing is implemented
-yet: there is no `reading.nix`, no secrets, no Traefik routers.
+**Status: spec in progress.** Settled 2026-09-15: the *client* half — what serves
+and what reads (§1–§4) — the *acquisition* half (§5), and the storage layout
+(§6, as a proposal awaiting confirmation). What remains is exposure, secrets and
+wiring; see "Still open" at the end. **Nothing is implemented yet:** no
+`reading.nix`, no secrets, no Traefik routers, no datasets.
+
+⚠ **Seven units for one subsystem** — Grimmory, MariaDB, Audiobookshelf,
+BookBridge, Chaptarr, Shelfmark, Suwayomi — plus reuse of Prowlarr, FlareSolverr,
+qBittorrent and SABnzbd from the *arr stack. That is the deliberate price of
+covering four content types with two overlapping libraries; §3 and §5 name the
+two pieces to drop first if it proves more than it is worth.
 
 ---
 
@@ -21,6 +28,9 @@ All four content types are in: **ebooks, comics/manga, audiobooks, podcasts.**
 | **Grimmory** | ebooks, comics/manga, audiobook files | OCI container + **MariaDB** | ❌ container only |
 | **Audiobookshelf** | audiobooks, podcasts | `services.audiobookshelf` | ✅ native module |
 | **BookBridge** | read/listen progress sync between the two | OCI container + own DB | ❌ container only |
+| **Chaptarr** | acquisition: monitoring ebooks + audiobooks | OCI container + SQLite | ❌ container only |
+| **Shelfmark** | acquisition: on-demand search across many sources | OCI container (**Lite**) | ❌ container only |
+| **Suwayomi** | acquisition: manga | `services.suwayomi-server` | ✅ native module |
 
 **Reading happens in a desktop browser and in phone/tablet apps** — owner-confirmed
 2026-09-15. This is a selection *criterion*, not trivia: it is why Calibre-Web's
@@ -46,7 +56,7 @@ trap as `music`/Lidarr (`nixflix.nix`): **import copy-not-move.**
 
 ---
 
-## 2. Why these three
+## 2. Why these three clients
 
 ### Grimmory — because BookLore is gone
 
@@ -185,20 +195,170 @@ metadata and read-progress into an import instead of a rebuild.
 
 ---
 
+## 5. Acquisition
+
+**Readarr is officially retired** (Servarr wiki, May 2024) and its metadata
+servers are **gone** — so the `readarr` 0.4.18.2805 sitting in our nixpkgs pin is
+a binary that cannot search or match a book at all. It is not a candidate.
+
+Two services split the job, because they solve different halves of it:
+
+### Chaptarr — the monitoring half
+
+A Readarr fork grown into its own project, explicitly **not affiliated with the
+Servarr team**. GPL-3, ~459 stars, 98 commits on `develop`, v0.9.925 (2026-08-09).
+Ebooks **and** audiobooks in one instance with multi-edition support, so the
+audiobook and ebook of a title sit side by side — which is exactly the shape §3
+needs. Docker-only (building needs .NET 10 + Node + Yarn + FFmpeg; no binaries
+are released). SQLite by default, optional external Postgres.
+
+⚠ **Its metadata is a hard dependency on `api2.chaptarr.com`** — not
+self-hostable, not configurable. This is the *same* dependency shape that killed
+Readarr, and it is beta software by its own description ("Bugs are likely"; one
+data-loss incident in pre-alpha, none in the six months since, 11,000+ users).
+
+**Why that risk is accepted here — the load-bearing reason.** When Readarr's
+metadata died it was fatal *because Readarr was the library manager*. In this
+design **Grimmory owns the library** and does its own metadata lookup (Google
+Books, Open Library). Chaptarr is only the acquisition front-end, so its database
+is **disposable**: if `api2.chaptarr.com` disappears, what is lost is *new* author
+and series matching — not the library, not the shelves, not read-progress.
+
+⚠ Corollary, and it is a design constraint rather than a note: **nothing may come
+to depend on Chaptarr's database being durable.** The day it becomes the only
+place something lives, this whole argument stops holding.
+
+⟨**Readarr + `rreading-glasses`** was the alternative that keeps metadata
+self-hosted, and it is the more declarative one — `services.readarr` exists in the
+pin. Rejected: it runs retired upstream code, and its ebook/audiobook handling is
+precisely the awkwardness Chaptarr was forked to fix. Noted for the record that
+rreading-glasses' author does not endorse Chaptarr — this is a live rivalry, not a
+tidy succession, so revisit if Chaptarr stalls.⟩
+
+### Shelfmark — the on-demand half
+
+MIT, `calibrain/shelfmark`, **feature-stable and maintained best-effort** by
+upstream's own description (core complete; new features out of scope are
+declined). It is a search-and-fetch front end that **deliberately does not manage
+a library** — it delivers to an ingest directory and stops. Metadata for
+discovery from Hardcover, Open Library and Google Books; sources are Prowlarr
+(indexers *and* clients), IRC, usenet, torrent, and direct HTTP (Anna's Archive
+mirrors). Auth is single user/pass, forward auth, or OIDC. Upstream carries the
+obvious legality disclaimer: what you have the right to download is on you.
+
+**Why both.** Chaptarr monitors (authors, series, ongoing releases); Shelfmark
+answers "I want this specific book now" and reaches sources Prowlarr cannot.
+⚠ If Chaptarr's monitoring turns out to go unused, **Chaptarr is the first thing
+to drop** — Shelfmark plus Grimmory's BookDrop is a complete, much smaller stack.
+
+### Three findings that shape the implementation
+
+1. **Use the `Lite` image and the FlareSolverr we already run.** Shelfmark's
+   standard image bundles Chromium for Cloudflare challenges and wants ~2 GB RAM;
+   `Lite` drops it and takes an external resolver. `nixflix.nix` already runs
+   FlareSolverr — including the raised readiness probe that upstream's 30 s
+   default breaks on a cold Chromium launch. Reuse it.
+   ⚠ Upstream's named failure mode for a starved Chromium is repeated
+   `403 detected; switching to bypasser` — if that appears, suspect memory, not
+   the indexer.
+2. ⚠ **Direct-download mode leaves the host's own IP.** In Prowlarr mode
+   Shelfmark hands off to qBittorrent (already confined to the `wg` namespace) and
+   nothing changes. In *direct* mode the container fetches over HTTP itself,
+   unconfined. Confining it means `vpnConfinement` on a container unit — and then
+   reaching loopback FlareSolverr needs the bridge address, the same wrinkle
+   `nixflix.nix` documents for Traefik → the confined qBittorrent WebUI
+   (`192.168.15.5`). Decide deliberately; do not let it default.
+3. **Two ingest paths, kept separate on purpose.** Chaptarr imports into its own
+   root folders; Shelfmark delivers into Grimmory's `/bookdrop`. Different
+   destinations means the two acquisition paths never race for the same file, and
+   Grimmory's watched-folder ingestion is what closes the loop for Shelfmark.
+
+### Manga — Suwayomi
+
+`services.suwayomi-server` is in the pin (with a nixpkgs manual page), which makes
+manga **the only cleanly-solved piece of this stack**: a native module, no
+container, no pinning debt. It downloads CBZ into the tree Grimmory already reads.
+Comics/manga being new appetite (§1), there is nothing to migrate and no legacy
+layout to honour.
+
+⟨**Kapowarr** for Western comics was considered and deferred — not in nixpkgs, so
+a third acquisition container and another pinned tag, for appetite that has not
+been demonstrated yet. Add it if Suwayomi's coverage proves to be the gap.⟩
+
+### Sources
+
+- Readarr retirement: <https://wiki.servarr.com/readarr/status>
+- Chaptarr: <https://github.com/Chaptarr/chaptarr>
+- Shelfmark: <https://github.com/calibrain/shelfmark>
+- `rreading-glasses` (the rejected alternative's metadata proxy):
+  <https://github.com/blampe/rreading-glasses>
+- Pinned nixpkgs: `readarr` 0.4.18.2805 is present and **not** marked broken or
+  vulnerable — absence of a warning is not a signal of health here.
+
+---
+
+## 6. Storage layout — a separate dataset, inverting nixflix's rule
+
+**Proposed, needs owner confirmation.** `tank/books` (and the audiobook tree) as
+their **own dataset**, not a subdirectory of `tank/nixflix_media`.
+
+This deliberately contradicts `nixflix.nix`'s "one layout rule", so the reasoning
+matters:
+
+- **Why that rule exists:** hardlinks cannot cross ZFS datasets, and the *arrs
+  hardlink their imports. A new dataset under `nixflix_media` silently turns every
+  import into a full copy — catastrophic for a 40 GB remux.
+- **Why it inverts here:** `homelab:tier` is a **dataset property**. A
+  subdirectory cannot carry its own tier, so books living inside `nixflix_media`
+  would silently inherit the media stack's tier — and `books` is 🛡 **Protected**
+  (`SHARES.md` §5). There is no way to have both the shared dataset and the
+  correct tier.
+- **Why the trade is cheap:** the cost of losing hardlinks scales with file size.
+  An EPUB is megabytes; an audiobook is hundreds of megabytes to a few gigabytes.
+  Against a 4×12 TB array, a copy-on-import is noise. The rule was never about
+  hardlinks as a principle — it was about not duplicating video.
+
+**So: correct tiering, copies accepted.** ⚠ Record this in `DECISIONS.md` too,
+because a reader who knows the one layout rule will see a separate dataset as the
+exact mistake that rule exists to prevent.
+
+---
+
 ## Still open
 
-- **The acquisition half.** What plays Readarr's role, given Readarr's own
-  upstream status and that nixflix ships no book module. This is the next spec
-  area, and it comes *before* the storage layout because it decides the question
-  below.
-- **Storage layout.** Whether the library lives inside `tank/nixflix_media`
-  (⚠ one dataset, deliberately, so *arr imports can hardlink — `nixflix.nix`'s
-  "one layout rule") or gets its own dataset matching its tier. Only relevant if
-  acquisition hardlink-imports; if it does, a separate dataset silently turns
-  every import into a full copy.
-- **Exposure and auth.** Traefik routers (`traefik-galactica.nix`), whether any
-  of this is reachable off-LAN, and whether Grimmory's OIDC is wired to anything.
+- **Exposure and auth.** Traefik routers (`traefik-galactica.nix`), whether any of
+  this is reachable off-LAN, and whether the three services that speak OIDC
+  (Grimmory, Shelfmark, BookBridge's own logins) are wired to anything or left on
+  local accounts.
+- ⚠ **Shelfmark's direct-download path and the VPN namespace** (§5) — decide
+  deliberately rather than by default.
+- **Secrets.** Every value `secrets/galactica.yaml` will need, and ⚠ the
+  `nixflix.nix` precedent: *every* secret must exist before sops-nix activates or
+  the switch fails.
 - **Homepage entries.** `hosts/galactica/homepage/admin/services.yaml`, and
   whether any of it belongs on the guest dashboard. ⚠ `checks/homepage-config`
   fails the build if a widget references an API key its instance's env file does
   not define.
+- **Borgmatic wiring** for the Protected MariaDB (§4.3) — the `mariadb-dump`
+  hook, and whether it lands in `borgmatic.nix` alongside the still-deferred
+  Immich Postgres hook.
+
+### To verify before implementation
+
+These are unknowns that change the design, not preferences. Each wants an answer
+in this document.
+
+1. [ ] **Does Chaptarr present as Readarr to Prowlarr?** Its docs do not mention
+       Prowlarr at all; nixflix's app-sync enum only knows `"Readarr"`
+       (`modules/prowlarr/applications.nix`). Probable as a fork, unverified.
+2. [ ] **Does Chaptarr hardlink its imports?** Undocumented. §6 makes this cheap
+       to get wrong either way, which is the point — but confirm it rather than
+       assume it.
+3. [ ] **Is BookLore's MariaDB volume in `tank/backups/sidepool-pools`?** (§4.4 —
+       decides import versus rebuild.)
+4. [ ] **Does `vpnConfinement` work on an `oci-containers` unit?** The fleet's
+       only uses of it are native systemd services (`nixflix.nix`'s NAT-PMP
+       sidecar). Needed for §5's finding 2.
+5. [ ] **What database does BookBridge need**, and does it want the same
+       pre-snapshot dump treatment as Grimmory's MariaDB? It ships alembic
+       migrations; the type was not documented.
