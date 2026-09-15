@@ -53,6 +53,11 @@ in
         "/home/z/tdarr/logs"
         "/home/z/tdarr/output"
         "/home/z/tdarr/staging"
+        # Home Assistant: its own backup tarballs (a copy of what borg is
+        # already taking) and the TTS cache. `.storage` and the recorder DB
+        # are the parts worth keeping, and they are not excluded.
+        "/home/z/home-assistant/config/backups"
+        "/home/z/home-assistant/config/tts"
         "/var/lib/jellyfin/metadata"
         "/var/lib/jellyfin/transcodes"
         "/var/lib/jellyfin/log"
@@ -78,6 +83,12 @@ in
         (db "/home/z/beszel/auxiliary.db")
         (db "/home/z/open-webui/webui.db")
         (db "/home/z/dockge/data/dockge.db")
+        # ⚠ Home Assistant's recorder DB is commented until /config is migrated
+        # off the Pi: the sqlite hook shells out to `.backup` and a missing file
+        # fails the whole nightly run, so listing it early breaks every other
+        # database here. Uncomment in the same PR that lands the migrated
+        # config (docs/HOME-ASSISTANT-MIGRATION.md §8.1, §12).
+        # (db "/home/z/home-assistant/config/home-assistant_v2.db")
       ];
 
       repositories = [
