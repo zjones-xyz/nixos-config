@@ -134,12 +134,15 @@ def check_services(groups, where, public_facing, findings) -> None:
                     "has href but no siteMonitor — every entry gets a live up/down "
                     f"dot, so add `siteMonitor: {href}`",
                 )
-            elif monitor != href:
-                findings.add(
-                    label,
-                    f"siteMonitor ({monitor!r}) does not match href ({href!r}); "
-                    "they are kept identical so the dot reflects the link",
-                )
+            # NOT required to equal href. Usually should — the dot is
+            # supposed to reflect the link — but the two legitimately diverge
+            # when href is a name the container itself cannot resolve/reach
+            # (e.g. a Tailscale MagicDNS address, chosen so the link works for
+            # a viewer off-LAN) while a differently-scoped name still can be
+            # polled for liveness. Divergence is a deliberate per-entry
+            # choice at that point, not a drift to catch here.
+            elif not isinstance(monitor, str) or not monitor.startswith(("http://", "https://")):
+                findings.add(label, f"siteMonitor is not an http(s) URL: {monitor!r}")
 
             if public_facing and href.endswith(INTERNAL_SUFFIXES):
                 findings.add(
