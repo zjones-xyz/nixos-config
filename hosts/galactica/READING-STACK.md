@@ -5,18 +5,20 @@ stack (`nixflix.nix`, `MANUAL-STEPS.md` §12). Companion to `SHARES.md` (which
 shares this inherits and their tiers) and `DECISIONS.md` (why, for anything here
 that looks arbitrary).
 
-**Status: spec settled, not implemented.** Owner-settled 2026-09-15: the *client*
-half (§1–§4), the *acquisition* half (§5), the storage layout (§6) and
-exposure/names/auth (§7). One decision remains open — Shelfmark's direct-download
-path (§5a) — along with secrets, the Homepage entries and the borgmatic hooks; see
-"Still open" at the end. **Nothing is implemented yet:** no `reading.nix`, no
-secrets, no Traefik routers, no datasets.
+**Status: spec settled, not implemented.** Every design decision is owner-settled
+as of 2026-09-15 — the *client* half (§1–§4), the *acquisition* half and its
+egress (§5), the storage layout (§6), exposure/names/auth (§7). What remains is
+execution detail, not choices: secrets, the Homepage entries and the borgmatic
+hooks; see "Still open" at the end. **Nothing is implemented yet:** no
+`reading.nix`, no secrets, no Traefik routers, no datasets.
 
-⚠ **Seven units for one subsystem** — Grimmory, MariaDB, Audiobookshelf,
-BookBridge, Chaptarr, Shelfmark, Suwayomi — plus reuse of Prowlarr, FlareSolverr,
-qBittorrent and SABnzbd from the *arr stack. That is the deliberate price of
-covering four content types with two overlapping libraries; §3 and §5 name the
-two pieces to drop first if it proves more than it is worth.
+⚠ **Nine units for one subsystem** — Grimmory, MariaDB, Audiobookshelf,
+BookBridge, Chaptarr, Shelfmark and Suwayomi, plus the confined proxy and the
+second FlareSolverr that §5d adds — on top of reusing Prowlarr, the shared
+FlareSolverr, qBittorrent and SABnzbd from the *arr stack. That is the deliberate
+price of covering four content types with two overlapping libraries and keeping
+the acquisition egress in the tunnel; §3 and §5 name the pieces to drop first if
+it proves more than it is worth.
 
 ---
 
@@ -543,6 +545,46 @@ Two further traps if env vars are used:
   does not use the host's AdGuard.
 - No telemetry, update check or analytics found in the server code.
 
+### 5d. Decided: a dedicated confined FlareSolverr — owner-settled 2026-09-15
+
+Shelfmark's HTTP egress goes through the tunnel; its challenged-page fetches go
+through a **second FlareSolverr of its own**; **IRC is disabled.** The shape:
+
+1. **A native proxy confined to `wg`** (`tinyproxy`/`privoxy`), listening on the
+   namespace address — confinement works here because it is a real systemd
+   service (§5a).
+2. **The proxy reaches Shelfmark as container environment variables**, never as
+   its web-UI setting: env covers all ~52 outbound call sites, the UI setting
+   covers 8 (§5c). ⚠ `NO_PROXY` must be written in **requests-compatible suffix
+   form** (not `10.*`) and must list the dedicated FlareSolverr, Prowlarr,
+   qBittorrent, SABnzbd and Grimmory — the call to FlareSolverr passes no
+   `proxies=`, so without the exclusion Shelfmark dials it *through* the tunnel.
+3. **A second FlareSolverr, confined, on its own port, for Shelfmark alone.**
+   ⚠ It needs the same raised readiness probe the shared one already carries
+   (`nixflix.nix`): upstream's 30 s probe dies inside a cold Chromium launch, an
+   `ExecStartPost` failure kills the unit, and `TimeoutStartSec` must move with it.
+4. ⚠ **Prowlarr's FlareSolverr stays on loopback, untouched.** Two reasons, and
+   both are the point of this arrangement rather than incidental:
+   - `nixflix` **hardcodes** `http://127.0.0.1:8191` for Prowlarr's indexer proxy
+     (`modules/prowlarr/indexerProxies.nix:67`). Confining the shared instance
+     breaks that and buys a fourth hand-carried nixflix patch (`DECISIONS.md` §10).
+   - Routing indexer scraping through a VPN exit is actively harmful: private
+     trackers commonly block or flag datacenter ranges, and **Cloudflare is
+     harsher on known VPN ranges — so it would make FlareSolverr worse at the only
+     job it has.**
+5. ⚠ **IRC and DCC are disabled, not merely unused.** They are raw TCP with no
+   SOCKS support at any layer (§5c); only a network namespace could contain them,
+   and Docker cannot give us one (§5a). Disabled in configuration **with this
+   reason recorded beside it**, so that switching a source on later is a
+   deliberate act and not an accident that quietly egresses on the house IP.
+6. Neither FlareSolverr instance is routed through Traefik — the existing rule in
+   `traefik-galactica.nix`, and it applies to the new one unchanged.
+
+**What remains uncovered, knowingly:** nothing, once IRC is off — with one
+footnote. Shelfmark still **searches Anna's Archive ~15 s after every start**
+(§5c); that egress is proxied like any other, so it rides the tunnel, but it
+happens with no user action and is worth knowing when reading logs.
+
 ### Manga — Suwayomi
 
 `services.suwayomi-server` is in the pin (with a nixpkgs manual page), which makes
@@ -771,21 +813,6 @@ decision, 2026-09-15: Pangolin is wired **after** the auth follow-on.
 
 ## Still open
 
-- ⚠ **Shelfmark's egress: how far to chase it?** §5c settles the mechanics, and
-  there is **no configuration in which the container produces zero direct
-  egress** — a namespace would be the only complete answer and Docker cannot give
-  us one (§5a). The honest options:
-  **(a)** container-env proxy into a confined tinyproxy — covers all ~52 HTTP call
-  sites, leaves FlareSolverr's challenged-page fetches and IRC/DCC outside;
-  **(a+)** the same, plus confining the native FlareSolverr service — then only
-  IRC/DCC is outside, at the price of Prowlarr's indexer scraping also riding the
-  tunnel;
-  **(b)** accept host-IP egress for Shelfmark and write it down.
-  ⟨Worth weighing against *why* the tunnel exists: `nixflix.nix` says
-  "qBittorrent is the reason the VPN exists", i.e. it was built for P2P exposure —
-  and the torrent traffic is **already** confined. Shelfmark's own egress is HTTP
-  to shadow libraries and metadata providers, which is a different question, not
-  the same one.⟩
 - **Secrets.** Every value `secrets/galactica.yaml` will need, and ⚠ the
   `nixflix.nix` precedent: *every* secret must exist before sops-nix activates or
   the switch fails.
@@ -793,9 +820,9 @@ decision, 2026-09-15: Pangolin is wired **after** the auth follow-on.
   whether any of it belongs on the guest dashboard. ⚠ `checks/homepage-config`
   fails the build if a widget references an API key its instance's env file does
   not define.
-- **Borgmatic wiring** for the Protected MariaDB (§4.3) — the `mariadb-dump`
-  hook, and whether it lands in `borgmatic.nix` alongside the still-deferred
-  Immich Postgres hook.
+- **Borgmatic wiring** for the two databases — the `mariadb-dump` hook for
+  Grimmory (§4.3) and the SQLite treatment for BookBridge (§4.5) — and whether
+  they land in `borgmatic.nix` alongside the still-deferred Immich Postgres hook.
 
 ### To verify before implementation
 
@@ -820,7 +847,11 @@ in this document.
        `vpnConfinement` to a throwaway container, then compare
        `docker exec <c> curl -s ifconfig.me` against
        `ip netns exec wg curl -s ifconfig.me`. The same IP as the host confirms it.
-5. [x] **What database does BookBridge need**, and does it want the same
+5. [ ] **Can Shelfmark disable its IRC source outright**, rather than merely
+       leaving it unconfigured? §5d depends on this being a setting and not a
+       habit. If it cannot be disabled, say so here and decide whether that
+       changes the §5d bargain.
+6. [x] **What database does BookBridge need**, and does it want the same
        pre-snapshot dump treatment as Grimmory's MariaDB? ✅ **Answered
        2026-09-15** — SQLite in WAL mode, and yes: §4.5 carries the shapes that
        are actually restorable, plus the credential-exposure finding that came
