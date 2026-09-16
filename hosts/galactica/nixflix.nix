@@ -376,6 +376,8 @@ in
     };
   };
 
+  environment.systemPackages = [ pkgs.libnatpmp ];
+
   # ── ProtonVPN tunnel health check ─────────────────────────────────────────
   # wg.service is a RemainAfterExit oneshot, so an outage AFTER boot is
   # silent: the namespace black-holes qBittorrent's packets and nothing fails.
