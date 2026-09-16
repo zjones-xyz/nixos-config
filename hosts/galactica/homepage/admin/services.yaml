@@ -11,10 +11,10 @@
 # fails the build if an entry has `href` without a matching `siteMonitor`.
 #
 # Live services only. The Tower services not yet re-homed (Jellyseerr,
-# Audiobookshelf, Grimmory, Shelfmark, Immich, Paperless, Karakeep, ARM, 13ft,
-# Bambuddy) come back one group entry at a time as each migrates —
-# homelab-stacks tower/homepage/config/services.yaml is the reference for what
-# each entry looked like.
+# Audiobookshelf, Grimmory, Shelfmark, Immich, ARM, 13ft, Bambuddy) come back
+# one group entry at a time as each migrates — homelab-stacks
+# tower/homepage/config/services.yaml is the reference for what each entry
+# looked like.
 #
 # Any `{{HOMEPAGE_VAR_*}}` used here must be defined in this instance's sops
 # env template (homepages.nix) — also enforced by checks/homepage-config.
@@ -145,3 +145,56 @@
         siteMonitor: https://dockge.memory-alpha.zjones.dev
         icon: dockge.png
         description: Compose stacks
+
+- Apps:
+    # href is the Tailscale (tsdproxy) address, not *.zjones.dev —
+    # deliberate: this dashboard is itself reached over the tailnet from
+    # off-LAN (home.*), and *.zjones.dev only resolves for LAN clients
+    # (galactica is not an exit node/subnet router), so a zjones.dev link
+    # would be dead exactly when this dashboard is being used remotely.
+    # siteMonitor stays on zjones.dev on purpose (checks/homepage-config
+    # allows the two to diverge for exactly this reason): the container has
+    # no route to Tailscale's MagicDNS to poll a *.ts.net name, but it can
+    # already reach zjones.dev, so that's what keeps the up/down dot live
+    # instead of permanently red.
+    - Ferdium:
+        href: https://ferdium.peacock-koi.ts.net
+        siteMonitor: https://ferdium.zjones.dev
+        icon: ferdium.png
+        description: Chat aggregator
+    - Karakeep:
+        href: https://karakeep.peacock-koi.ts.net
+        siteMonitor: https://karakeep.zjones.dev
+        icon: karakeep.png
+        description: Bookmarks
+    - Paperless-ngx:
+        href: https://paperless.peacock-koi.ts.net
+        siteMonitor: https://paperless.zjones.dev
+        icon: paperless-ngx.png
+        description: Documents
+    - Syncthing:
+        href: https://syncthing.peacock-koi.ts.net
+        siteMonitor: https://syncthing.zjones.dev
+        icon: syncthing.png
+        description: File sync
+
+- Maker:
+    # Same href/siteMonitor split as Apps above — see that group's comment.
+    # Flat tsdproxy names (partdb, not partdb.maker): confirmed live that
+    # tsdproxy rejects dotted hostnames (RFC 1123), so only the
+    # zjones.dev/internal side gets the maker.* grouping.
+    - Part-DB:
+        href: https://partdb.peacock-koi.ts.net
+        siteMonitor: https://partdb.maker.zjones.dev
+        icon: part-db.png
+        description: Component inventory
+    - HomeBox:
+        href: https://homebox.peacock-koi.ts.net
+        siteMonitor: https://homebox.maker.zjones.dev
+        icon: homebox.png
+        description: Home inventory
+    - Spoolman:
+        href: https://spoolman.peacock-koi.ts.net
+        siteMonitor: https://spoolman.maker.zjones.dev
+        icon: spoolman.png
+        description: Filament spools
