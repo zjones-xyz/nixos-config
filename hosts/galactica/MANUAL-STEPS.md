@@ -1441,43 +1441,36 @@ opposite. Revisit per-service if that changes.
 call to leave it behind tsdproxy/Traefik only for now. A Traefik BasicAuth
 middleware is the natural fix if that's ever wanted; not built.
 
-1. [x] **Secret generated and `sops`-ed in.** `partdb/appSecret` (random,
-   `openssl rand -hex 32`) is in `secrets/galactica.yaml`. HomeBox and
-   Spoolman need no secrets of their own.
-2. [ ] **First switch — `nrs`, then verify all three containers come up.**
-   `docker ps` should show `partdb`, `homebox`, `spoolman`. Check each
-   `*.maker.internal` URL over the LAN before the tailnet/`.zjones.dev`
-   halves.
-3. [ ] **Restore appdata, then confirm logins.** Stop the three containers,
-   then:
-
-   ```
-   # Part-DB — only db/app.db existed in the backup (no uploads/media were
-   # ever populated); .tailscale_state is the same leftover Unraid sidecar
-   # seen in every other service's backup, skip it.
-   mkdir -p /tank/appdata/partdb/db
-   cp -a /tank/sort/unraid_appdata/partdb/db/app.db /tank/appdata/partdb/db/
-
-   # HomeBox — the whole backup folder IS the container's /data.
-   cp -a /tank/sort/unraid_appdata/homebox/. /tank/appdata/homebox/
-   rm -rf /tank/appdata/homebox/.tailscale_state
-
-   # Spoolman — same; chown to z afterward (see the file's header — the
-   # image runs as a fixed uid 1000, matching z now).
-   cp -a /tank/sort/unraid_appdata/spoolman/. /tank/appdata/spoolman/
-   chown -R z:users /tank/appdata/spoolman
-   ```
-
-   Then restart all three and try logging into Part-DB and HomeBox with
-   whatever credentials you used on the old Unraid setup (same reasoning
-   as §15 — the restored databases already have accounts; creating new
-   ones isn't needed unless the old ones don't work). Spoolman has no
-   login to confirm.
-4. [ ] **Verify container UIDs, per the §15 lesson.** `docker top
-   <name> aux` for each — don't trust `docker exec … id`, it shows the
-   image's declared default user, not necessarily what the running
-   process dropped to. Fix any live ownership mismatch the same way §15's
-   Syncthing one was fixed (`chown -R` the appdata to match, live).
+1. [x] **Secrets generated and `sops`-ed in.** `partdb/appSecret` (random,
+   `openssl rand -hex 32`) and `homebox/apiKeyPepper` (random, `openssl
+   rand -base64 48`) are in `secrets/galactica.yaml`. The pepper wasn't
+   originally planned — HomeBox panics on startup without
+   `HBOX_AUTH_API_KEY_PEPPER` set to ≥32 bytes, confirmed live, undocumented
+   in any compose example checked beforehand. Spoolman needs no secret.
+2. [x] **First switch — done and verified, 2026-09-15/16.** All three
+   containers came up; `*.maker.internal`/`*.maker.zjones.dev` all
+   returned correct codes once the HomeBox pepper fix landed; the shared
+   `maker.zjones.dev` wildcard cert issued cleanly (one cert covering all
+   three, confirmed in the Traefik log — the dedup worked as designed).
+3. [x] **Appdata restored — done 2026-09-15/16.** Stopped all three,
+   copied in from `/tank/sort/unraid_appdata/{partdb,homebox,spoolman}`
+   (Part-DB: only `db/app.db` existed in the backup, no uploads/media were
+   ever populated; HomeBox: the whole backup folder was already shaped
+   like the container's `/data`, its `.tailscale_state` dropped; Spoolman:
+   same, then `chown -R z:users` since the image runs as a fixed uid 1000
+   — deliberately, matching `z` now, not a coincidence this time), restarted.
+   Part-DB went from a hard 500 (`no such table: users` — expected on an
+   empty fresh DB) to a clean 302 once restored.
+   - [ ] **Confirm Part-DB/HomeBox logins** with whatever credentials you
+     used on the old Unraid setup — not yet done, only the restore itself
+     was verified (the routes respond, not that a specific login works).
+     Spoolman has no login to confirm.
+4. [x] **Verified container UIDs, per the §15 lesson — done.** `docker top
+   <name> aux` for each: Part-DB runs as `www-data` (uid 33, the image's
+   own default, matches the backup's ownership via `cp -a`), HomeBox runs
+   as root (its own documented default — no privilege-drop mechanism
+   exists for it, unlike Syncthing), Spoolman runs as `z` (uid 1000,
+   deliberate). No mismatch found this time.
 5. [ ] **Key expiry disabled on the three new tsdproxy nodes** —
    `partdb`, `homebox`, `spoolman` — same trap as every prior batch.
 6. [ ] **Dashboard icons.** New `Maker` group references `part-db.png`,
