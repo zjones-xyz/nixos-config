@@ -852,7 +852,7 @@ item 6 records spending **ten** of, when `arr`'s un-deduped first switch issued
 per-subdomain certificates before the wildcard arrived.
 
 **So the rollout is staged deliberately: land one service, check the journal for
-exactly one issuance, then add the rest.** `MANUAL-STEPS.md` §17 item 1 carries
+exactly one issuance, then add the rest.** `MANUAL-STEPS.md` §18 item 1 carries
 the command and what to look for.
 
 ### ⚠ Router names are flat across groups
@@ -995,10 +995,15 @@ in this document.
        `vpnConfinement` to a throwaway container, then compare
        `docker exec <c> curl -s ifconfig.me` against
        `ip netns exec wg curl -s ifconfig.me`. The same IP as the host confirms it.
-5. [ ] **Can Shelfmark disable its IRC source outright**, rather than merely
-       leaving it unconfigured? §5d depends on this being a setting and not a
-       habit. If it cannot be disabled, say so here and decide whether that
-       changes the §5d bargain.
+5. [x] **Can Shelfmark disable its IRC source outright?** ✅ **Answered — yes,
+       and §5d's bargain holds.** There is no enable flag: the source reports
+       itself available only when all four of `IRC_SERVER`/`IRC_CHANNEL`/
+       `IRC_NICK`/`IRC_SEARCH_BOT` are non-empty, and searches return nothing
+       when it is not. On its own that would only be *unconfigured* — but env
+       beats the database and **an empty string counts as set**, so the settings
+       save path skips those fields and the UI cannot write over them. Setting
+       them empty is therefore a real lock: turning IRC on is an edit to
+       `reading-acquisition.nix`.
 6. [x] **What database does BookBridge need**, and does it want the same
        pre-snapshot dump treatment as Grimmory's MariaDB? ✅ **Answered
        2026-09-15** — SQLite in WAL mode, and yes: §4.5 carries the shapes that

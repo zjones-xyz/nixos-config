@@ -191,11 +191,33 @@ in
       ]
       (_: {
         # docker-proxy-network creates the network above; today only the socket
-        # proxy pulls it in, so these ask for it themselves.
-        after = [ "zfs-mount.service" "docker-proxy-network.service" ];
-        requires = [ "zfs-mount.service" "docker-proxy-network.service" ];
+        # proxy pulls it in, so these ask for it themselves. tank's dependency
+        # is derived from nixflix's own list rather than naming zfs-mount again,
+        # so it follows if the host's storage wiring changes.
+        after = config.nixflix.serviceDependencies ++ [ "docker-proxy-network.service" ];
+        requires = config.nixflix.serviceDependencies ++ [ "docker-proxy-network.service" ];
       })
     )
+
+    # ⚠ RequiresMountsFor as well as the ordering above — the pattern
+    # karakeep.nix and bazarr.nix already set. tank's crypttab entries are all
+    # `nofail`, so a degraded boot with the array unimported is a real state,
+    # and ordering on zfs-mount alone would still let docker.service start these
+    # against empty bind-mount sources, which Docker materialises as root-owned
+    # directories on the root filesystem.
+    {
+      docker-grimmory.unitConfig.RequiresMountsFor = [
+        (stateDir "grimmory")
+        booksDir
+        bookdropDir
+      ];
+      docker-grimmory-mariadb.unitConfig.RequiresMountsFor = [ (stateDir "grimmory-mariadb") ];
+      docker-bookbridge.unitConfig.RequiresMountsFor = [
+        (stateDir "bookbridge")
+        booksDir
+      ];
+      audiobookshelf.unitConfig.RequiresMountsFor = [ absDir ];
+    }
 
     {
       # ⚠ compose's `depends_on: service_healthy` has no oci-containers
@@ -205,12 +227,18 @@ in
       docker-grimmory.serviceConfig.RestartSec = 15;
 
       audiobookshelf = {
-        after = [ "zfs-mount.service" ];
-        requires = [ "zfs-mount.service" ];
+        after = config.nixflix.serviceDependencies;
+        requires = config.nixflix.serviceDependencies;
 
         # ⚠ `services.audiobookshelf.dataDir` is a name under /var/lib, not a
         # path, so the option cannot move state onto the appdata mirror — the
-        # wrapper's --config/--metadata can. mkForce because nixpkgs defines
+        # wrapper's --config/--metadata can, and both are real flags it
+        # getopt-parses and honours absolutely. Safe to write outside the unit's
+        # StateDirectory: the module sets no ProtectSystem, ProtectHome or
+        # ReadWritePaths (verified on the evaluated host), so nothing sandboxes
+        # it. ⚠ StateDirectory stays, so an empty /var/lib/audiobookshelf is
+        # still created and remains the cwd — state is not there.
+        # mkForce because nixpkgs defines
         # ExecStart; the host and port still come from the module's options.
         serviceConfig.ExecStart = lib.mkForce (
           "${lib.getExe abs.package} --host ${abs.host} --port ${toString abs.port}"

@@ -1494,7 +1494,13 @@ middleware is the natural fix if that's ever wanted; not built.
 
 ---
 
-## 17. The reading stack — owner steps
+## 18. The reading stack — owner steps
+
+⚠ **§18, not §17**, and deliberately leaving a gap: PR #113 (galactica's idle
+power draw) has carried its own §17 since 2026-09-10, with five `PLATFORM.md`
+pointers into it. Renumbering here rather than there is the cheaper of the two,
+and a gap is harmless where a duplicate section number is not — that exact
+collision has already merged silently into this file twice, per #113's own notes.
 
 Written alongside `READING-STACK.md`; the services themselves are not deployed
 yet. Datasets and secrets get added here as the implementation lands.

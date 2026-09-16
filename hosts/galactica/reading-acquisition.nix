@@ -44,6 +44,10 @@ let
   # ingest then moves within one dataset instead of copying across two.
   bookdropDir = "${library}/bookdrop";
 
+  # Shelfmark's TMP_DIR. On the array beside the bookdrop — see the tmpfiles
+  # entry for why not appdata.
+  stagingDir = "${library}/staging";
+
   # ── Ports ─────────────────────────────────────────────────────────────────
   # ⚠ Chaptarr is 8789, not Readarr's 8787 (§5b). Suwayomi takes its own
   # upstream default because the nixpkgs module's 8080 is SABnzbd's. The rest
@@ -110,10 +114,14 @@ in
       group = mediaGroup;
       mode = "0755";
     };
-    # Download staging. ⚠ Not left on Shelfmark's default `/tmp/shelfmark`:
-    # that is the container's overlay, i.e. the root NVMe, and an audiobook
-    # staged there fills the boot disk rather than the array.
-    "${appdata}/shelfmark/tmp".d = {
+    # Download staging, on the ARRAY. ⚠ Not Shelfmark's default
+    # `/tmp/shelfmark` (the container overlay, i.e. the root NVMe), and not
+    # under appdata either: that is the special vdev's SSD mirror, so multi-GB
+    # transient staging would land on the latency-critical metadata device —
+    # and delivery into the bookdrop would still cross datasets, the very copy
+    # the bookdropDir binding avoids. Same dataset as the bookdrop, so it does
+    # not.
+    "${stagingDir}".d = {
       user = "shelfmark";
       group = mediaGroup;
       mode = "0775";
@@ -264,7 +272,7 @@ in
 
     volumes = [
       "${appdata}/shelfmark:/config"
-      "${appdata}/shelfmark/tmp:/staging"
+      "${stagingDir}:/staging"
       "${bookdropDir}:/bookdrop"
       # Identical path on both sides: Prowlarr-mode handoff only finds the
       # finished files if Shelfmark and the download client agree on the path.
@@ -334,8 +342,12 @@ in
   # instance is routed through Traefik — an unauthenticated endpoint that
   # fetches arbitrary URLs through a real browser (§7).
   # mkIf because the serviceConfig below is inherited from the shared instance:
-  # with that disabled this would render a unit with no ExecStart.
-  systemd.services.flaresolverr-shelfmark = lib.mkIf config.services.flaresolverr.enable {
+  # with that disabled this would render a unit with no ExecStart. ⚠ Gated on
+  # nixflix's option, not nixpkgs' `services.flaresolverr.enable`: the latter is
+  # what nixflix sets *downstream*, so gating on it would make this twin's
+  # existence depend on an implementation detail of the module that enables it.
+  # Both evaluate true today; this is the one that cannot drift.
+  systemd.services.flaresolverr-shelfmark = lib.mkIf nixflix.flaresolverr.enable {
     description = "FlareSolverr (Shelfmark's own, inside the ${netns} namespace)";
     after = [ "network.target" ];
     wantedBy = [ "multi-user.target" ];
@@ -414,14 +426,31 @@ in
   # ── Ordering: nothing starts before tank is imported ──────────────────────
   # Derived from nixflix's own list rather than naming zfs-mount.service again,
   # so this follows if the host's storage wiring changes.
+  # ⚠ RequiresMountsFor as well as the ordering below, the pattern karakeep.nix
+  # and bazarr.nix already set: tank's crypttab entries are all `nofail`, so a
+  # degraded boot with the array unimported is a real state, and ordering on
+  # zfs-mount alone would still let docker.service start these against empty
+  # bind-mount sources — which Docker then materialises as root-owned
+  # directories on the root filesystem.
   systemd.services = {
     docker-chaptarr = {
       after = nixflix.serviceDependencies;
       requires = nixflix.serviceDependencies;
+      unitConfig.RequiresMountsFor = [
+        "${appdata}/chaptarr"
+        library
+        downloadsDir
+      ];
     };
     docker-shelfmark = {
       after = nixflix.serviceDependencies;
       requires = nixflix.serviceDependencies;
+      unitConfig.RequiresMountsFor = [
+        "${appdata}/shelfmark"
+        stagingDir
+        bookdropDir
+        downloadsDir
+      ];
     };
     suwayomi-server = {
       after = nixflix.serviceDependencies;
