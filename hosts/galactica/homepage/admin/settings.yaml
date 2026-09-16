@@ -21,3 +21,9 @@ layout:
   Infrastructure:
     style: row
     columns: 4
+  Apps:
+    style: row
+    columns: 4
+  Maker:
+    style: row
+    columns: 4

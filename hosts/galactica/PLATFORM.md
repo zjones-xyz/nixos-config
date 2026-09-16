@@ -1779,7 +1779,7 @@ disks as the zero-cost hedge" reasoning wants them available as an emergency
 exactly as well as a drive spinning in the chassis, and arrives with less wear on
 it. The hedge and the watts are not in tension.
 
-If the in-case session is weeks out, `MANUAL-STEPS.md` §15 has an interim
+If the in-case session is weeks out, `MANUAL-STEPS.md` §17 has an interim
 spin-down — but read §13e first, because two things in this host's own config
 will otherwise undo it.
 
@@ -1914,7 +1914,17 @@ than tunable:
 appdata` lives on the special vdev's SSDs** (`DECISIONS.md` §7,
 `MANUAL-STEPS.md` §10), so the *arr databases — much the busiest small-random
 workload on the box — never touch a spinner at all. That was decided for
-redundancy; the idle spinners are a side effect of it.
+redundancy; the idle spinners are a side effect of it. Six of the seven apps
+added since (ferdium, karakeep, partdb, homebox, spoolman, syncthing) follow the
+same rule.
+
+⚠ **Paperless-ngx is the exception, and it is a deliberate one.** Its live
+`data`/`media` sit on `/tank/documents/paperless` — restored in place from the
+Unraid instance rather than moved (`paperless.nix`, `MANUAL-STEPS.md` §15) — and
+that `data` dir holds both the SQLite database and the Whoosh search index. So
+there is now a small-random workload on the **spinners**, which is exactly what
+the appdata decision had otherwise kept off them. Its consumption inbox is on
+the NVMe, deliberately; the archive and index are not.
 
 **ASPM, and `powerManagement.powertop.enable`.** §6c is explicit: Ivy Bridge plus
 a budget controller with newly-enabled link power management is the combination
@@ -1944,9 +1954,9 @@ the fix is still in the BIOS, not in Nix.
 router as a sync replica), the NFS server memory-alpha mounts, and the
 acquisition half of the media stack. There is no idle window to suspend into.
 
-### 13e. ⚠ Four things independently wake a sleeping disk on this host
+### 13e. ⚠ Five things independently wake a sleeping disk on this host
 
-Any spin-down has to survive all four, or it looks like it worked for half an
+Any spin-down has to survive all five, or it looks like it worked for half an
 hour and then quietly stops:
 
 1. **smartd, every 30 minutes.** `modules/nixos/smart.nix` monitors with `-a`,
@@ -1979,9 +1989,14 @@ hour and then quietly stops:
    > snapshot at a fresh path per run, and borg's files cache is path-keyed. If
    > that defeats the cache, the nightly run re-reads the whole Critical +
    > Precious set instead of only changed files — the difference between a
-   > metadata sweep and hours of spinning. `MANUAL-STEPS.md` §15 item 10.⟩
-4. **The workload**, for `tank` — §13d, and §13f for the part of it that can be
-   moved.
+   > metadata sweep and hours of spinning. `MANUAL-STEPS.md` §17 item 10.⟩
+4. **Paperless-ngx**, whenever it is used or runs a periodic task. Its SQLite
+   database and Whoosh index live on `/tank/documents/paperless` (§13d), so
+   indexing, OCR of a consumed document, a sanity check or a classifier run all
+   land on the spinners. Bursty rather than continuous — an unused Paperless is
+   quiet — but it is not something a seed tier moves.
+5. **The rest of the workload**, for `tank` — §13d, and §13f for the part of it
+   that can be moved.
 
 ⚠ **The ATA standby timer is volatile.** `hdparm -S` does not survive a power
 cycle or a controller reset. That is the second reason the durable answer for
@@ -1989,7 +2004,7 @@ cycle or a controller reset. That is the second reason the durable answer for
 
 ### 13f. A separate seed tier — the one change that could let `tank` sleep
 
-**Not yet decided; the preconditions are `MANUAL-STEPS.md` §15 items 6–10.**
+**Not yet decided; the preconditions are `MANUAL-STEPS.md` §17 items 6–10.**
 
 §13d rejects `tank` spin-down because qBittorrent seeds out of
 `/tank/nixflix_media/downloads`. That path is a plain subdirectory of the media
@@ -1997,6 +2012,15 @@ dataset *on purpose* — hardlinks cannot cross datasets, so the \*arrs' imports
 would otherwise become copies (`nixflix.nix`'s layout rule). Move the seed set
 onto its own device and the trickle of random reads stops; the accepted price is
 that every import becomes a **copy** instead of a hardlink.
+
+⚠ **This was written when seeding was the only continuous load on the spinners.
+It no longer is.** Paperless-ngx's database and search index landed on
+`/tank/documents/paperless` (§13d), so there is a second small-random workload
+that a seed tier does not touch. That does not sink the idea — Paperless is
+bursty where seeding is constant, so the idle windows still open — but it does
+mean the seed tier alone buys *shorter* windows than this section originally
+implied, and that §17's measurements should be read against a Paperless that is
+actually in use.
 
 That price is smaller than it sounds: an import is one sequential write that
 spins the pool up for a couple of minutes and lets it go again. The continuous
@@ -2006,8 +2030,8 @@ load is what blocks spin-down, not the occasional one.
 
 | | |
 |---|---|
-| Removes | The only *continuous* toucher of the spinners |
-| Does **not** remove | §13e's other three — smartd (fixed), the Scrutiny sweep (**not** fixed), borgmatic's nightly window |
+| Removes | The largest and steadiest toucher of the spinners |
+| Does **not** remove | §13e's other four — smartd (fixed), the Scrutiny sweep (**not** fixed), borgmatic's nightly window, Paperless's index and database |
 | Untested | Whether Jellyfin's and the \*arrs' scheduled scans stay metadata-only. All metadata is on the special vdev, so a stat-walk of an unchanged library *should* be served from SSD + ARC without waking a spinner — plausible, unverified, and decisive |
 
 So this is **necessary but not sufficient**. Two config items stand between it
@@ -2038,7 +2062,7 @@ upload *and* contends with in-flight download writes; and this design makes the
 seed tier the one device that is permanently awake, so picking the oldest disk in
 the building for that role puts the most duty on the most likely thing to fail.
 Neither objection bites at a few dozen torrents. Both bite at several hundred —
-hence §15 item 7.
+hence §17 item 7.
 
 ⭐ **`h-SDCP` is genuinely uncommitted.** Its only other candidacy was
 `DESIGN.md` §5's 2 TB photo-tier mirror, which is dead twice over: its proposed
@@ -2059,5 +2083,5 @@ on `tank/photos/immich*` in the ZFS array. Nothing live is waiting on this disk.
 - **Ports and bays fit after the `sidepool` pull**, which frees four 3.5"
   positions and four ports; that puts the machine at eight SATA devices against
   onboard 6 + the HBA. Before the pull it does not fit.
-- **2 TB is a ceiling, not headroom** — §15 item 6 is what says whether it
+- **2 TB is a ceiling, not headroom** — §17 item 6 is what says whether it
   clears the seed set at all.
