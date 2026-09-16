@@ -652,6 +652,20 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    The second and third lines together are the kill-switch check: torrent
    traffic leaves via Proton while NFS/SSH/monitoring stay on the LAN.
 
+   **Inbound is its own check** — the port has to be *leased*, *listened on*
+   and *accepted*, and the first two can both be right while the third is
+   not. That reads as "downloads fine, tracker says unconnectable", because
+   outbound-initiated peers ride the namespace's `ESTABLISHED,RELATED` rule
+   and never touch the inbound path:
+   ```bash
+   sudo ip netns exec wg natpmpc -a 1 0 tcp 60 -g 10.2.0.1   # ← leased: "Mapped public port NNNNN"
+   sudo ip netns exec wg iptables -L natpmp -v -n            # ← accepted: the same NNNNN, tcp AND udp
+   ```
+   The `natpmp` chain is the sidecar's, rebuilt on every port change;
+   `vpnNamespaces.wg.openVPNPorts` is empty on purpose and must stay that
+   way — it takes a static port, and Proton has none. qBittorrent's own view
+   is Settings → Connection, and it must show the same number.
+
    ⚠ `ip netns exec` needs root — without `sudo` it fails with `setting the
    network namespace "wg" failed: Operation not permitted`, which reads like
    a broken namespace and isn't. The other three lines are fine unprivileged.
