@@ -1415,3 +1415,72 @@ organized copy. Sizes: `karakeep` 67M, `ferdium-server` 275M, `paperless` 9.0K
    still described the appdata as fresh/deferred after the restore landed,
    and trimmed `paperless.nix`'s header, which had drifted well past this
    repo's comment-budget convention.
+
+## 16. Part-DB, HomeBox, Spoolman — owner steps before first switch
+
+`hosts/galactica/{partdb,homebox,spoolman}.nix` declare all three as
+containers, same shape as §15's four: Traefik router pair, tsdproxy tailnet
+node, appdata restored from the Unraid backup. New this time: a real
+subdomain grouping, `*.maker.{internal,zjones.dev}` — confirmed live that
+tsdproxy rejects dotted node names (`partdb.maker` fails RFC 1123
+validation), so the tailnet name stays flat (`partdb.peacock-koi.ts.net`)
+while Traefik/DNS get the grouping. `configuration.nix` wildcard-rewrites
+`*.maker.{internal,zjones.dev}` rather than one entry per service, and all
+three `-dev` routers request the same `maker.zjones.dev` wildcard cert
+(dedup, same mechanism as `arr.zjones.dev`) instead of three single-name
+certs.
+
+⚠ **Deliberately NOT promoted off the default appdata tier this time** —
+unlike ferdium/karakeep, these three stay as plain directories in the
+shared `tank/appdata` dataset (parity only, no offsite). Part-DB already
+had this decided in `SHARES.md`'s tier table (🛡 Protected); HomeBox and
+Spoolman just default the same way since nothing this time asked for the
+opposite. Revisit per-service if that changes.
+
+⚠ **Spoolman has no authentication at all**, by upstream design — owner's
+call to leave it behind tsdproxy/Traefik only for now. A Traefik BasicAuth
+middleware is the natural fix if that's ever wanted; not built.
+
+1. [x] **Secret generated and `sops`-ed in.** `partdb/appSecret` (random,
+   `openssl rand -hex 32`) is in `secrets/galactica.yaml`. HomeBox and
+   Spoolman need no secrets of their own.
+2. [ ] **First switch — `nrs`, then verify all three containers come up.**
+   `docker ps` should show `partdb`, `homebox`, `spoolman`. Check each
+   `*.maker.internal` URL over the LAN before the tailnet/`.zjones.dev`
+   halves.
+3. [ ] **Restore appdata, then confirm logins.** Stop the three containers,
+   then:
+
+   ```
+   # Part-DB — only db/app.db existed in the backup (no uploads/media were
+   # ever populated); .tailscale_state is the same leftover Unraid sidecar
+   # seen in every other service's backup, skip it.
+   mkdir -p /tank/appdata/partdb/db
+   cp -a /tank/sort/unraid_appdata/partdb/db/app.db /tank/appdata/partdb/db/
+
+   # HomeBox — the whole backup folder IS the container's /data.
+   cp -a /tank/sort/unraid_appdata/homebox/. /tank/appdata/homebox/
+   rm -rf /tank/appdata/homebox/.tailscale_state
+
+   # Spoolman — same; chown to z afterward (see the file's header — the
+   # image runs as a fixed uid 1000, matching z now).
+   cp -a /tank/sort/unraid_appdata/spoolman/. /tank/appdata/spoolman/
+   chown -R z:users /tank/appdata/spoolman
+   ```
+
+   Then restart all three and try logging into Part-DB and HomeBox with
+   whatever credentials you used on the old Unraid setup (same reasoning
+   as §15 — the restored databases already have accounts; creating new
+   ones isn't needed unless the old ones don't work). Spoolman has no
+   login to confirm.
+4. [ ] **Verify container UIDs, per the §15 lesson.** `docker top
+   <name> aux` for each — don't trust `docker exec … id`, it shows the
+   image's declared default user, not necessarily what the running
+   process dropped to. Fix any live ownership mismatch the same way §15's
+   Syncthing one was fixed (`chown -R` the appdata to match, live).
+5. [ ] **Key expiry disabled on the three new tsdproxy nodes** —
+   `partdb`, `homebox`, `spoolman` — same trap as every prior batch.
+6. [ ] **Dashboard icons.** New `Maker` group references `part-db.png`,
+   `homebox.png`, `spoolman.png` — confirm they render; walkxcode/
+   dashboard-icons naming doesn't always match the project's own name
+   exactly.

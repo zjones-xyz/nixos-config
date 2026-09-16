@@ -177,3 +177,24 @@
         siteMonitor: https://syncthing.zjones.dev
         icon: syncthing.png
         description: File sync
+
+- Maker:
+    # Same href/siteMonitor split as Apps above — see that group's comment.
+    # Flat tsdproxy names (partdb, not partdb.maker): confirmed live that
+    # tsdproxy rejects dotted hostnames (RFC 1123), so only the
+    # zjones.dev/internal side gets the maker.* grouping.
+    - Part-DB:
+        href: https://partdb.peacock-koi.ts.net
+        siteMonitor: https://partdb.maker.zjones.dev
+        icon: part-db.png
+        description: Component inventory
+    - HomeBox:
+        href: https://homebox.peacock-koi.ts.net
+        siteMonitor: https://homebox.maker.zjones.dev
+        icon: homebox.png
+        description: Home inventory
+    - Spoolman:
+        href: https://spoolman.peacock-koi.ts.net
+        siteMonitor: https://spoolman.maker.zjones.dev
+        icon: spoolman.png
+        description: Filament spools

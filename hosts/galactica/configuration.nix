@@ -39,6 +39,9 @@
     ./karakeep.nix
     ./paperless.nix
     ./syncthing.nix
+    ./partdb.nix
+    ./homebox.nix
+    ./spoolman.nix
   ];
 
   networking.hostName = "galactica";
@@ -292,6 +295,18 @@
     }
     {
       domain = "syncthing.zjones.dev";
+      answer = "192.168.8.190";
+    }
+
+    # PartDB/HomeBox/Spoolman (partdb.nix, homebox.nix, spoolman.nix) — a
+    # real subdomain group, not flat names like everything else above, so
+    # wildcards here rather than one rewrite per service.
+    {
+      domain = "*.maker.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "*.maker.zjones.dev";
       answer = "192.168.8.190";
     }
   ];
