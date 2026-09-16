@@ -38,7 +38,7 @@ let
   # file-provider treatment as Jellyfin above, for the same reason.
   # ⚠ `.internal` only, no .zjones.dev router: the fleet's standing posture is
   # that Home Assistant stays LAN/Tailscale-only with no public name
-  # (hosts/galactica/configuration.nix, MANUAL-STEPS §13).
+  # (hosts/galactica/configuration.nix, MANUAL-STEPS §14).
   homeAssistantConfig = pkgs.writeText "home-assistant.yml" ''
     http:
       routers:

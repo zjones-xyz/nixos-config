@@ -186,7 +186,7 @@ consequence of the move.
 |---|---|---|---|---|
 | **A. `services.home-assistant`** (NixOS module, Core) | ✅ `nixos-rebuild`, but on nixpkgs' cadence — **2026.5.4 today** | ❌ none — add-ons are a Supervisor concept | ⚠ Partial: unpack the tarball and hand-place `/config`; add-on data has no destination | ⭐ Fully — `config`, `extraComponents`, `themes`, blueprints, Lovelace, all in Nix |
 | **B. HA Container, compose declared in Nix** | ✅ `nixos-rebuild` after bumping a pinned tag in-repo — and it is **upstream's current release** | ❌ none | ✅ `/config` restores verbatim | ⚠ The container is declarative; HA's own config stays mutable state |
-| **C. HA Container under dockge** (`homelab-stacks/`) | ⚠ Updates are a dockge click, out of band with the fleet | ❌ none | ✅ verbatim | ❌ Lives in the other repo |
+| **C. HA Container under the stacks manager** (`homelab-stacks/`) | ⚠ Updates are a click in Arcane, out of band with the fleet | ❌ none | ✅ verbatim | ❌ Lives in the other repo |
 | ~~**D. HA OS in a VM**~~ (libvirt/microvm on galactica) | ❌ HA updates itself, independently of nixpkgs entirely | ⭐ Full Supervisor + add-ons | ⭐ One-click, complete | ❌ Only the VM shell is declarative |
 
 **C is dominated by B** — same container, same restore, but the pin leaves git
@@ -204,18 +204,20 @@ path of least resistance on memory-alpha and someone will suggest it.
 
 **Home Assistant Container, with its compose file declared in Nix** as
 `modules/nixos/home-assistant.nix`, in the shape this repo already uses —
-`modules/nixos/beszel.nix`, `dockge.nix` and `traefik.nix` are all
-`pkgs.writeText` compose files driven by a systemd unit.
+`modules/nixos/traefik.nix`, `arcane.nix` and `beszel.nix` are all
+`pkgs.writeText` compose files driven by a systemd unit. ⚠ Deliberately not
+citing `dockge.nix`, which PR #100 deletes: Dockge is retired fleet-wide in
+favour of Arcane.
 
-⚠ **Correction, and it matters for the next bullet: none of those three pins a
+⚠ **Correction, and it matters for the next bullet: none of those pins a
 version.** They run `traefik:v3`, `tecnativa/docker-socket-proxy:latest`,
-`louislam/dockge:1`, `henrygd/beszel:latest`. A floating tag means `docker
+`henrygd/beszel:latest` (and the now-retired `louislam/dockge:1`). A floating tag means `docker
 compose up` on an unchanged compose file does not re-pull, so those services
 update on a schedule that has nothing to do with `nixos-rebuild`. Home
 Assistant pinning an exact release is therefore a **departure from** the
 existing three, not a copy of them — and it is what makes the fleet-cadence
 claim below true for HA specifically. (Also: `beszel.nix` is hopper-shaped and
-unused here, so the compose-in-Nix shape really exists twice on this host.)
+unused here, so on this host the shape is really traefik + arcane.)
 
 Why this and not the native module:
 
@@ -236,7 +238,7 @@ Why this and not the native module:
 - **It sidesteps the "unsupported upstream" position** for the one service where
   a broken upgrade is most visible to people who did not choose it.
 - **It matches the host.** memory-alpha is already a Docker host with Traefik,
-  dockge and borgmatic pointed at `/home/z`.
+  Arcane and borgmatic pointed at `/home/z`.
 
 ~~⭐ **Reversal condition:** if the Pi runs no add-ons, no HACS, and a small
 hand-written config, option A is strictly better.~~ **Not met** — see the
@@ -309,7 +311,7 @@ its "never skip more than a year" `.storage` rule.
 | | **memory-alpha** | **galactica** |
 |---|---|---|
 | Hardware | Framework 13 Gen 1 mainboard, Tiger Lake, **32 GB RAM**, one 1 TB NVMe | Supermicro X9SCM-F, 12+ disks, ZFS `tank` |
-| Role today | Docker services, Traefik, dockge, monitoring hub (Beszel/Scrutiny/Arcane), Jellyfin, aarch64 build host | Bulk storage, NFS, media stack, **primary DNS**, offsite borg |
+| Role today | Docker services, Traefik, Arcane, monitoring hub (Beszel/Scrutiny), Jellyfin, aarch64 build host | Bulk storage, NFS, media stack, **primary DNS**, offsite borg |
 | Always-on | ✅ Yes, by design | ✅ Yes, but reboots are long — 7 LUKS opens + ZFS import |
 | Docker + Traefik ready | ⭐ Yes — HA Container drops straight in | ⚠ Traefik is the file-provider flavour; Docker is present but the host's services are native Nix |
 | borgmatic | ✅ `/home/z` whole-tree, SQLite dump hooks | ✅ property-driven on `tank` |
@@ -389,8 +391,8 @@ ones that are:
   compute rather than storage.
 
 **And the single-point-of-failure count runs the other way.** memory-alpha
-already carries Traefik (the fleet's ingress), Jellyfin, dockge, the
-Beszel/Scrutiny/Arcane hubs, the Newt/Pangolin site, Uptime Kuma, ntfy and the
+already carries Traefik (the fleet's ingress), Jellyfin, Arcane, the
+Beszel/Scrutiny hubs, the Newt/Pangolin site, Uptime Kuma, ntfy and the
 aarch64 build role. That is more surface than galactica's DNS + array, not
 less.
 
@@ -701,7 +703,7 @@ the same treatment at `:8123`.
 ⚠ **Copy the shape, not the cert resolver.** Jellyfin's file-provider router is
 `Host(`jellyfin.zjones.dev`)` with `certResolver: letsencrypt` — a *public*
 name. HA wants the `.internal` + `tls: {}` self-signed shape the dashboard and
-dockge routers use, per the no-public-name posture above. As built, the router
+Arcane routers use, per the no-public-name posture above. As built, the router
 is **`ha.memory-alpha.internal`**, which the existing `*.memory-alpha.internal`
 rewrite already resolves — so the parallel-run phase needs **no DNS change at
 all**, and `homeassistant.internal` stays pointed at the Pi until cutover.
@@ -800,7 +802,7 @@ not just an edit.
 flipping a switch that does nothing, so this is worth more than it looks.
 
 ⚠ **But not from memory-alpha.** Uptime Kuma and ntfy both run *on*
-memory-alpha (`/home/z/uptime-kuma`, `/home/z/ntfy` — dockge stacks, not the
+memory-alpha (`/home/z/uptime-kuma`, `/home/z/ntfy` — `homelab-stacks` entries, not the
 hopper-shaped `modules/nixos/{uptime-kuma,ntfy}.nix`, which belong to a shelved
 host). Under §3.1's scenario — memory-alpha down after a cold boot — **the
 watcher and the alert sink are down with it**, and the one event you most need
@@ -814,7 +816,7 @@ from elsewhere, healthchecks.io, or provider-side alerting of the kind §3b
 argues for with BorgBase).
 
 ⚠ Note also that §7's "reviewed commit rather than a web form" claim does not
-extend to this work: the live Kuma and ntfy instances are dockge stacks in
+extend to this work: the live Kuma and ntfy instances are `homelab-stacks` entries in
 another repo, so configuring them is clicks in two web UIs.
 
 **Dashboards.** HA appears on neither homepage today. The admin dashboard

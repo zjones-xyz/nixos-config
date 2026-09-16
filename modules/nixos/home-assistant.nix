@@ -8,8 +8,9 @@
 # HA's monthly releases. docs/HOME-ASSISTANT-MIGRATION.md §4 has the argument
 # and the condition under which it reverses.
 #
-# Same shape as dockge.nix/beszel.nix: a pkgs.writeText compose file driven by
+# Same shape as traefik.nix/arcane.nix: a pkgs.writeText compose file driven by
 # a systemd unit, image pinned in-repo so a bump is a reviewed commit.
+# (Not dockge.nix — PR #100 retires it fleet-wide in favour of Arcane.)
 
 let
   # Exact release, never `stable` — see the header. Bumping is a PR.
@@ -59,10 +60,11 @@ in
       User = "z";
       Restart = "on-failure";
       RestartSec = "10s";
-      # mkdir only — no recursive chown. HA runs as root inside the container
-      # and owns /config; chowning it on every start would both fight that and
-      # cost O(config) once the recorder DB and media cache are in there.
-      ExecStartPre = "+${pkgs.bash}/bin/bash -c 'mkdir -p /home/z/home-assistant/config'";
+      # ⚠ The chown is the TOP directory only, never `-R`. HA runs as root
+      # inside the container and owns /config; a recursive chown would fight
+      # that and cost O(config) on every start once the recorder DB is in
+      # there. One level keeps z's home navigable at no cost.
+      ExecStartPre = "+${pkgs.bash}/bin/bash -c 'mkdir -p /home/z/home-assistant/config && chown z:users /home/z/home-assistant'";
       ExecStop = "${config.virtualisation.docker.package}/bin/docker compose -f ${composeFile} --project-name home-assistant down";
     };
 

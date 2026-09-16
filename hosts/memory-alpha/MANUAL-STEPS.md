@@ -82,11 +82,14 @@ Nix under this deployment form. These are hand-edits, once.
 ### 1.4 Then, and only then
 
 10. [ ] **Uncomment the recorder DB** in `hosts/memory-alpha/borgmatic.nix` —
-   it is commented precisely because borgmatic's sqlite hook fails the whole
-   nightly run on a missing file, which would take every other database on
-   this host down with it. Uncomment in the PR that lands the migrated config,
-   not before.
-10. [ ] Verify against the **still-running Pi**: integrations loaded, no repair
+    it is commented precisely because borgmatic's sqlite hook fails the whole
+    nightly run on a missing file, which would take every other database on
+    this host down with it. Uncomment in the PR that lands the migrated
+    config, not before. ⚠ Verify the dump actually **succeeds** rather than
+    just adding the line: this unit already needed `CAP_DAC_OVERRIDE`
+    hand-added for `sqlite3 .backup` on WAL databases, and HA's is held open
+    by a container running as root.
+11. [ ] Verify against the **still-running Pi**: integrations loaded, no repair
     warnings, automations listed, history present, discovery populated (the
     test for whether host networking is doing its job), mobile app
     reconnecting. ⚠ Expect the `hassio` integration to fail and raise a repair
