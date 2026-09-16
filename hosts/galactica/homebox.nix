@@ -23,6 +23,15 @@ let
   ];
 in
 {
+  # Required — HomeBox panics on startup without it ("must be set to at
+  # least 32 bytes"), confirmed live. Peppers API keys; rotating it
+  # invalidates all issued ones, same reasoning as any other signing secret
+  # here.
+  sops.secrets."homebox/apiKeyPepper" = { };
+  sops.templates."homebox.env".content = ''
+    HBOX_AUTH_API_KEY_PEPPER=${config.sops.placeholder."homebox/apiKeyPepper"}
+  '';
+
   systemd.tmpfiles.rules = [ "d ${dataDir} 0750 root root - -" ];
 
   systemd.services.docker-homebox.unitConfig.RequiresMountsFor = [ dataDir ];
@@ -33,6 +42,7 @@ in
       HBOX_DATABASE_DRIVER = "sqlite3";
       HBOX_DATABASE_DATABASE = "/data/homebox.db?_pragma=busy_timeout=2000&_pragma=journal_mode=WAL&_fk=1&_time_format=sqlite";
     };
+    environmentFiles = [ config.sops.templates."homebox.env".path ];
     volumes = [ "${dataDir}:/data" ];
     ports = [ "127.0.0.1:${toString port}:7745" ];
     labels = {
