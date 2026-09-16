@@ -32,6 +32,12 @@
       }
     ];
 
+    # ⟨Follow-up: add galactica's media-stack links as a third group once
+    # hopper is actually serving — hosts/galactica/MANUAL-STEPS.md §12 step 5
+    # carries the list. ⚠ Homepage's live *arr widgets (vs plain links) each
+    # need that service's API key, i.e. galactica's sops secrets on hopper —
+    # decide that separately.⟩
+
     widgets = [
       { resources = { cpu = true; memory = true; disk = "/"; }; }
     ];

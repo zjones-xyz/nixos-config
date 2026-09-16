@@ -1,16 +1,20 @@
-# Tower — share inventory (current Unraid state)
+# Tower — share inventory (the final Unraid state, now migrated)
 
-**What exists today**, read from `/boot/config/shares/*.cfg` on 2026-08-07. This
-is the raw starting point for the data classification that `DESIGN.md` §5's
-storage layout depends on.
+> ✅ **HISTORICAL — the migration this fed is complete.** Unraid is gone: the
+> shares were copied back onto galactica's ZFS array on 2026-09-02
+> (`MANUAL-STEPS.md` §9), and the tier classification argued out below was
+> implemented as inherited `homelab:tier` ZFS user properties on `tank`'s
+> datasets — properties on the pool, not paths. Read this file to trace where
+> a share's data went or why it carries the tier it does; nothing below is
+> live state.
 
-**Classification is in progress** — §5 carries the running verdicts. Three shares
-are confirmed dead; the rest of the tiering is still a proposal to argue with.
-Sizes are ⟨TBD⟩ pending a `du -sh /mnt/user/*` pass.
+**What existed at the end**, read from `/boot/config/shares/*.cfg` on
+2026-08-07. This was the raw starting point for the data classification that
+the storage layout depended on.
 
-**Triage status: 23 of 34 owner-confirmed** (1 parked). The undecided row is
-empty — what remains is **11 proposals awaiting confirmation or correction**, not
-unknowns.
+**Triage status at migration time: 23 of 34 owner-confirmed** (1 parked), the
+rest standing proposals that carried into the dataset tree as tiered — revisit
+a tier by changing the dataset's `homelab:tier` property, not this file.
 
 Dates are UTC.
 
@@ -278,14 +282,24 @@ contents cannot be inferred from configuration.
 | Tier | Protection | Shares |
 |---|---|---|
 | **Critical** | Everything below, **plus versioning and a tested restore** | **`documents`** |
-| **Precious and Irreplaceable** | Real-time redundancy, checksummed, **+ offsite** | **`immich_photos`**, **`immich_photos_archived`** |
+| **Precious and Irreplaceable** | Real-time redundancy, checksummed, **+ offsite** | **`immich_photos`**, **`immich_photos_archived`**, ⚠ `appdata/ferdium`, `appdata/karakeep` *(exception, below)* |
 | **Protected** | Parity. No offsite. | **`music`**, **`books`**, **`bambuddy_library`**, **`partdb`**, **`webdav`**, **`public`**, **`arm`**, **`inbox`**, **`serenity_time_machine`**, ⏸ **`calibre_books`** *(parked)*, `archived_disks` ⟨?⟩ |
-| **Painful to rebuild, small** | Redundancy; cheap because tiny | `appdata`, `arr_config`, `ha_backup` |
+| **Painful to rebuild, small** | Redundancy; cheap because tiny | `appdata` *(default — see the two exceptions above)*, `arr_config`, `ha_backup` |
 | **Re-acquirable** | Snapshot parity, 24 h lag fine | **`podcasts_audiobookshelf`**, `arr_media`, `arr_managed_data`, `jellyfin`, `isos` |
 | **Regenerable** | Parity optional | **`copyparty`**, `domains` ⟨?⟩ |
 | ⚙ **Does not migrate** | n/a — no successor concept | **`swap`**, `system` *(proposed)* |
 | 🗑 **Drop** | n/a — deleted before migrating | **`jellyfin_cache`**, **`ai_models`**, **`SHARE`**, **`manyfold_library`**, **`syncthing`**, **`minishare`**; `appdata_old` + `books_old` suspected |
 | **⟨?⟩ Undecided** | — | *(none — every share is now assigned)* |
+
+⚠ **Two appdata subtrees promoted off the default tier, 2026-09-13.**
+`tank/appdata/ferdium` and `tank/appdata/karakeep` (own ZFS datasets, not
+directories inside the shared `tank/appdata`) carry `homelab:tier=precious`
+and `org.torsion.borgmatic:backup=auto` rather than the generic `appdata`
+default — owner's call, made when standing up those two services
+(`hosts/galactica/{ferdium,karakeep}.nix`), on the grounds that personal
+account/bookmark state is a real loss even though it isn't documents or
+photos. Every other `appdata` subtree stays on the default (parity only, no
+offsite) unless promoted the same explicit way.
 
 ### Critical vs. Precious — consequence against grief
 

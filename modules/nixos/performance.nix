@@ -2,21 +2,10 @@
 
 {
   # ── sched-ext (scx) userspace scheduler — DISABLED, EEVDF for now ───────────
-  # sched-ext is upstream since kernel 6.12, so the stock latest kernel (set in
-  # the host config) is all this needs — no CachyOS/Chaotic kernel.
-  #
-  # DISABLED 2026-08-01: pegasus crashes when games launch under this specific
-  # workload. With the service off, nothing attaches a BPF scheduler and the
-  # kernel keeps every task on its in-tree default, EEVDF — there is no option
-  # to "select" EEVDF, it is simply what runs when sched_ext is not loaded.
-  # This is a workaround, not a verdict on scx; the intent is to return to it.
-  #
-  # To re-enable: flip `enable` back to true. `scheduler` is deliberately left
-  # set (it is inert while disabled) so the previously-running choice is not
-  # lost — scx_lavd = "Latency-Aware Virtual Deadline", tuned for
-  # interactive/gaming desktops. The enum is drawn from pkgs.scx.full.schedulers
-  # (e.g. scx_rusty, scx_bpfland), so trying a different scheduler is a
-  # one-word change if lavd turns out to be the crashing component.
+  # Disabled because pegasus crashed on game launches under it — a workaround,
+  # not a verdict; the intent is to return. `scheduler` is deliberately left
+  # set (inert while disabled) so the previously-running choice isn't lost.
+  # With the service off the kernel simply runs its in-tree EEVDF default.
   services.scx = {
     enable = false;
     scheduler = "scx_lavd";
@@ -40,7 +29,6 @@
     package = pkgs.ananicy-cpp;
   };
 
-  # Periodic TRIM for the NVMe SSD.
   services.fstrim.enable = true;
 
   # ── Never sleep ──────────────────────────────────────────────────────────────

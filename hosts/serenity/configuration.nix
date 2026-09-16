@@ -53,14 +53,9 @@
   # owns the surviving call and caches its dump.
   programs.zsh.enableGlobalCompInit = false;
 
-  # NFS shares to auto-mount via macOS autofs (modules/darwin/nfs-mounts.nix
-  # provides the mechanism; this is host data). STUB — no shares wired up yet.
-  # Uncomment/edit once you know the export + local mount point you want.
-  # Modeled on the Tower NFS exports memory-alpha already mounts.
-  services.macNfsAutomounts = [
-    # { mountPoint = "/mnt/media"; export = "tower.internal:/mnt/user/jellyfin"; }
-    # { mountPoint = "/mnt/arr_managed_data"; export = "tower.internal:/mnt/user/arr_managed_data"; }
-  ];
+  # NFS auto-mounts (modules/darwin/nfs-mounts.nix) — none wired up yet; add
+  # `services.macNfsAutomounts = [ { mountPoint = …; export = …; } ];` when a
+  # share is wanted here.
 
   # nix-darwin state version (integer, unlike NixOS). 7 is the current max for
   # nix-darwin-26.05 (config.system.maxStateVersion); valid range is 1–7.

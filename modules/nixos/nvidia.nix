@@ -30,5 +30,13 @@
     # `config.boot.kernelPackages.nvidiaPackages.latest` if a needed fix or
     # newer-GPU support lands there — see hosts/pegasus/DECISIONS.md.
     package = config.boot.kernelPackages.nvidiaPackages.production;
+
+    # The proprietary driver's hardware I2C engine is well known to misbehave
+    # with monitors' DDC/CI channel (garbled/failed reads) — ddcutil (enabled
+    # in hosts/pegasus/configuration.nix, for monitor brightness/input-source
+    # control) is unusable against it without this. Switches the driver to
+    # its software I2C bit-banging implementation instead, the standard
+    # workaround: https://www.ddcutil.com/nvidia/
+    moduleParams.nvidia.NVreg_RegistryDwords = "RMUseSwI2c=0x01; RMI2cSpeed=100";
   };
 }

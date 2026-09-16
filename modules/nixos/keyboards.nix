@@ -13,8 +13,13 @@
   # not covered by qmk-udev-rules at all), while qmk-udev-rules covers the
   # bootloader-mode vendor IDs (Atmel DFU, Caterina, etc.) a keyboard exposes
   # only while being flashed.
+  #
+  # keychron-udev-rules is the same shape as zsa-udev-rules but for Keychron's
+  # vendor ID (3434) — needed for the Keychron Launcher web app's WebHID
+  # access to work over USB (VIA relies on the same hidraw permissions).
   services.udev.packages = [
     pkgs.zsa-udev-rules
     pkgs.qmk-udev-rules
+    pkgs.keychron-udev-rules
   ];
 }

@@ -3,46 +3,14 @@
 Everything below requires real hardware or secrets and was deliberately NOT done
 by the authoring session. Roughly in order.
 
-## 0. Before Wednesday — gather from the running CachyOS system
+## 0. ✅ Pre-install survey of the running CachyOS system — moot
 
-Do this *now*, while CachyOS boots fine, to de-risk install day. The pegasus
-config was authored blind (placeholder UUIDs, generic module lists); running
-these on the live box and pasting the output back lets the real values get
-reconciled into the config ahead of time. Nothing here changes anything — all
-read-only.
+The install happened 2026-07-11 and the CachyOS drive was physically removed;
+the gathered hardware values were folded into the config (see §1 and
+`HARDWARE-MAP.md`). The read-only survey commands lived here and are in git
+history if a similar pre-install pass is ever wanted for another box.
 
-```bash
-# 1. Drive identity — MOST IMPORTANT. Records the CachyOS drive's model+serial
-#    so that, once the new blank NVMe is installed, you can positively identify
-#    which /dev/disk/by-id/ path is the NEW drive (by elimination) before disko
-#    ever touches it. Do NOT trust nvme0n1 vs nvme1n1 with two drives present.
-lsblk -o NAME,SIZE,MODEL,SERIAL,TYPE,MOUNTPOINTS
-ls -l /dev/disk/by-id/ | grep -i nvme
-
-# 2. GPU — confirm it's the RTX 4070 and see the in-use kernel driver.
-lspci -nnk | grep -iA3 -E 'vga|3d controller'
-
-# 3. CPU — confirm AMD (feeds kvm-amd + microcode in hardware-configuration.nix).
-lscpu | grep -iE 'model name|vendor'
-
-# 4. NIC — driver + interface name + MAC (feeds networking / later tailscale).
-lspci -nnk | grep -iA3 -E 'ethernet|network controller'
-ip -o link | grep -v 'lo:'
-
-# 5. RAM — sanity-check zram sizing (config uses memoryPercent = 90).
-free -h
-
-# 6. Board + BIOS — model informs the M.2-slot / SATA lane-sharing question
-#    (matters for the Windows SATA SSD) and whether a BIOS update is wanted.
-sudo dmidecode -t bios -t baseboard | grep -iE 'vendor|version|manufacturer|product name'
-
-# 7. TPM — confirm fTPM is exposable (needed for Windows 11 later).
-ls -l /sys/class/tpm/ 2>/dev/null || echo "no TPM device — enable fTPM in BIOS"
-```
-
-Paste the output back and it'll be folded into the config before install day.
-
-## 1. Bare-metal NixOS install (single NVMe — CachyOS drive removed 2026-07-11)
+## 1. ✅ Bare-metal NixOS install — done 2026-07-11 (single NVMe, CachyOS drive removed)
 
 **Superseded from the original dual-NVMe plan**: at install time, the CachyOS
 drive was physically pulled entirely rather than dual-booted, so pegasus is
@@ -67,7 +35,7 @@ blank" step.
    `nixos-generate-config --root /mnt` and replace
    `hosts/pegasus/hardware-configuration.nix` with the result. Commit it.
 
-## 2. First switch (Phase 1 only — have a TTY reachable)
+## 2. ✅ First switch — done (all phases have long since been switched and exercised)
 
 Bring up base + GPU + Plasma first, before gaming/perf/inference, so a bad GPU
 or display-manager state doesn't lock you out:
@@ -133,10 +101,10 @@ To bump Olla's version later: change `version`, re-run
   `rtcwake` the evening before or set a BIOS RTC wake — the timer alone won't wake
   the box, and global suspend behaviour was deliberately left unchanged.
 
-## 7. Secrets
+## 7. ✅ Secrets — done
 
-See `SECRETS-TODO.md` — create `secrets/pegasus.yaml`, add pegasus's age key to
-`.sops.yaml`, then the Tailscale auth key wiring activates automatically.
+`secrets/pegasus.yaml` exists and pegasus's age key is in `.sops.yaml`;
+`SECRETS-TODO.md` tracks the couple of BorgBase follow-ups still open.
 
 ## 8. Mac (serenity) — nix-darwin activation
 
@@ -616,7 +584,200 @@ and reading the packaging, not from a real login.
    already-running daemon from the shared user manager wasn't determined —
    check with step 2 from inside that session if it matters.
 
-## 20. Kali VM for class — first use
+## 20. Thunderbird + Proton Bridge — first-run login (interactive)
+
+Added `thunderbird` and `protonmail-bridge-gui` to `hosts/pegasus/home.nix`.
+The packages install declaratively; wiring them to a live Proton mailbox is a
+one-time interactive flow this session can't drive. After the next switch:
+
+1. **Launch the Bridge and sign in.** Run `protonmail-bridge-gui` (the GUI
+   tray app; the bare `protonmail-bridge` binary is the headless variant and
+   isn't installed) and log in with the Proton account — a paid plan is required; Bridge is
+   not available on free Proton. On first launch it stores its own credentials
+   and mailbox keys in the Secret Service, i.e. the **gnome-keyring** daemon
+   from §19 — so do this from a session where §19 is confirmed working
+   (`busctl --user list | grep secrets` shows `org.freedesktop.secrets` owned
+   by `gnome-keyring-daemon`). If the keyring isn't up, Bridge falls back to
+   prompting on every start.
+
+2. **Copy the Bridge's local IMAP/SMTP settings.** In the Bridge window, open
+   the account's Mailbox details — it shows a `127.0.0.1` host, the IMAP and
+   SMTP ports, and a **Bridge-generated password** (this is NOT the Proton
+   account password; it's unique per client and only valid against the local
+   Bridge). Leave the Bridge running — it must stay up for Thunderbird to send
+   or receive, since it's the proxy.
+
+3. **Add the account in Thunderbird** using those values: server `127.0.0.1`,
+   the IMAP/SMTP ports and Bridge password from step 2, connection security
+   **STARTTLS**, auth **normal password**. Thunderbird will warn about the
+   Bridge's self-signed certificate on first connect — expected (the TLS is
+   purely loopback), accept/trust it. Or use the Bridge's "Configure
+   automatically" export if Thunderbird's autoconfig is offered.
+
+4. **Autostart — declared, just verify it.** Mail only flows while the Bridge
+   is running, so it's started with every Niri session via `spawn-at-startup`
+   in `niri-settings.nix` (`protonmail-bridge-gui --no-window`: tray only, no
+   window popping up at login). Nothing to enable by hand — on the next login
+   after the switch, confirm the Bridge tray icon is present. Leave the
+   Bridge's own "Start on login" settings toggle off: it writes an XDG
+   autostart entry, which Niri ignores anyway — but it *is* the mechanism
+   that would cover the Plasma/COSMIC sessions, if one of those ever becomes
+   a daily driver again.
+
+## 21. Two known lockups — Discord screenshare, unfocused games (workarounds)
+
+Both observed by Zoe on real hardware, 2026-09-06. Neither is a pegasus
+misconfiguration: the session already runs Electron apps native-Wayland with
+the GNOME portal (`NIXOS_OZONE_WL`/`ELECTRON_OZONE_PLATFORM_HINT` in
+`niri-settings.nix`), so the standard "fix your portals/ozone flags" advice
+is already satisfied — these are upstream bugs with documented workarounds.
+
+**Discord locks up mid-screenshare.** Closest documented match: Discord's
+`2026-03-linux-vulkan-capture` experiment breaks capture sessions under niri
+(https://github.com/niri-wm/niri/discussions/3921 — portal tweaks and
+hardware-accel toggles did *not* help there). Stock Discord exposes no way to
+opt out of an experiment; the confirmed fix was Vesktop, which does.
+Interim workaround that already works here: restart Discord right before a
+screenshare.
+
+**Some games freeze within the first minute or two if unfocused on start.**
+Matches the open bug https://github.com/Supreeeme/xwayland-satellite/issues/201 —
+X11 games under xwayland-satellite desync when unfocused and can freeze
+permanently after ~10–15s without focus; no upstream fix yet. Niri's own
+documented answer for game issues is gamescope
+(https://github.com/niri-wm/niri/wiki/Application-Issues), which brings its
+own Xwayland and takes satellite out of the loop; `gaming.nix` already
+installs it. Interim workaround: keep a freshly launched game focused for
+its first minute or two.
+
+To try, roughly cheapest-first:
+
+1. [ ] Stock Discord: toggle **off** hardware acceleration (User Settings →
+   Advanced), restart, test a longer screenshare. The classic NVIDIA/Electron
+   freeze lever — didn't help in the linked report, but it's a 30-second test.
+2. [ ] Try Vesktop without installing: `nix run nixpkgs#vesktop`, sign in,
+   then Settings → Vencord → enable the "Experiments" plugin → restart →
+   set the `2026-03-linux-vulkan-capture` experiment to "not eligible", and
+   test a screenshare. If it holds up, have the config session declare
+   `vesktop` in `home.nix` (keep or drop `discord` — either works; note
+   Discord's ToS technically frowns on modified clients, enforcement against
+   plain client mods has historically been nil, judgement call).
+3. [ ] For each affected game (Steam → Properties → Launch Options):
+   `gamescope -f -w 2560 -h 1440 -W 2560 -H 1440 --force-grab-cursor --backend sdl -- %command%`
+   (swap in the monitor's real resolution), then confirm the unfocused
+   early-freeze stops. `--backend sdl` is currently load-bearing (gamescope's
+   Wayland backend doesn't lock the cursor properly, per the niri wiki).
+   Note: Lutris's own gamescope toggle is NOT a substitute for Steam titles —
+   Lutris's Steam runner hands launching off to the Steam client, so Lutris
+   system options never wrap the game process
+   (https://github.com/lutris/lutris/issues/3085). It only applies to games
+   Lutris itself execs (Wine/native/GOG/EGS).
+4. [ ] Proton titles only, alternative to gamescope:
+   `PROTON_ENABLE_WAYLAND=1 %command%` (recent Proton) — native Wayland
+   avoids the satellite bug entirely, per the issue reporter.
+5. [ ] Check https://github.com/Supreeeme/xwayland-satellite/issues/201
+   occasionally; once fixed and the nixpkgs package carries it, steps 3–4
+   become unnecessary for the unfocused-freeze (gamescope may still be nice
+   for other reasons).
+
+## 22. Stream privacy block-outs — verify app-ids on real hardware
+
+`niri-settings.nix` now blocks these out of screencasts (`block-out-from =
+"screencast"`): 1Password, Signal, Discord, Ferdium, Thunderbird, the Proton
+Bridge window, gnome-keyring unlock prompts, and DMS's notification
+popups/center + polkit prompt (layer rules). The DMS layer namespaces and the
+Bridge's `ch.proton.bridge-gui` app-id were verified against pinned sources;
+the Electron/Mozilla app-ids could NOT be — Electron picks its own id at
+runtime, so those rules are case-insensitive suffix regexes that need one
+real-hardware check:
+
+1. [ ] With the apps open, run `niri msg windows` and confirm each of
+   1Password / Signal / Discord / Ferdium / Thunderbird reports an app-id
+   the rules match (`1password$`, `signal$`, `discord$`, `ferdium$`,
+   `thunderbird$`, all case-insensitive). Trigger a keyring unlock (e.g.
+   first Bridge start after a fresh login) and check the prompt's app-id
+   against `gcr.*prompt`. Fix any regex that misses in
+   `niri-settings.nix` and note it here.
+2. [ ] Live test: start a monitor screencast (OBS, or a Discord share) and
+   confirm each blocked window renders as black/blank in the *cast* while
+   staying visible on the physical screen — including a notification popup
+   (send yourself a Signal/Discord message mid-cast).
+3. [ ] Remember the accepted trade-off: normal screenshots still capture
+   these windows, and a third-party screenshot tool's frozen fullscreen
+   overlay could briefly leak them into an active cast — mid-stream, prefer
+   niri's built-in screenshot (`Print` binds).
+
+## 23. Qt platform theme (qt5ct/qt6ct) — verify after the next switch
+
+`qt.platformTheme = "qt5ct"` in `configuration.nix` exists to make DMS's
+"apply colours to Qt" work; the trade-off it accepts is a Qt theming change
+in the other sessions. Both halves want confirming on real hardware — see
+`DECISIONS.md` for why each is expected.
+
+1. [x] In niri, press DMS's **apply colours to Qt** button again. It should
+   no longer report `failed to apply Qt colors`, and
+   `~/.config/qt6ct/qt6ct.conf` should gain `custom_palette=true` plus a
+   `color_scheme_path` pointing at `~/.config/qt6ct/colors/matugen.conf`
+   (see §24 — before the `qt.sh` patch this pointed at `DankMatugen.colors`,
+   which is why the palette never applied).
+2. [x] Open a Qt app under niri (`qt6ct` itself will do) and confirm it
+   picks up the matugen palette rather than the default grey.
+3. [ ] Log into the **Plasma** session once and look at a Qt dialog. The
+   expectation is that Breeze's palette is displaced by qt6ct's — that is
+   the accepted cost, not a bug. If it is worse than expected, deleting the
+   `qt` block in `configuration.nix` reverts it on the next rebuild.
+
+## 24. DMS `qt.sh` patch — confirm, then file upstream
+
+`modules/nixos/desktop-niri.nix` patches two bugs in DMS's
+`scripts/qt.sh` at build time (full reasoning in `DECISIONS.md`). Both are
+confirmed on the hardware: the palette renders in Qt apps, and it survives
+a full logout/login (2026-09-08) — DMS regenerates its matugen output at
+session start and leaves `color_scheme_path` alone. Neither bug is
+reported upstream; only the filing below is left.
+
+1. [x] After the next switch, press **apply colours to Qt** and check that
+   `~/.config/qt6ct/qt6ct.conf` and `~/.config/qt5ct/qt5ct.conf` each point
+   `color_scheme_path` at their *own* `colors/matugen.conf`.
+2. [x] Open a Qt app and confirm the matugen palette actually renders. This
+   is the step that has never once passed on this host.
+3. [ ] File the upstream issue against `AvengeMedia/DankMaterialShell` —
+   draft ready at `~/dms-qt-issue-draft.md`, unsent. Covers both bugs.
+4. [ ] Once upstream fixes it, delete the `package` override in
+   `desktop-niri.nix`. It is `--replace-fail`-anchored, so a rebuild will
+   fail loudly rather than silently no-op if upstream edits those lines
+   first — that failure is the signal to remove the shim, not to repair it.
+   Issue #110 records the exact failure text and the three cases it can be.
+
+## 25. Named workspace `Mail` + login placement — verify on real hardware
+
+`niri-settings.nix` now declares a named workspace `Mail` homed to the left
+monitor, spawns Thunderbird and TickTick at login, and routes both with window
+rules (Thunderbird → `Mail` always; TickTick → right monitor, at-startup only).
+The Mozilla/Electron app-ids could not be verified from source — same
+limitation as §22 — and TickTick's placement additionally assumes the right
+monitor has exactly one workspace at login, which stops being true the day a
+named workspace is homed there.
+
+1. [ ] With both apps open, run `niri msg windows` and confirm the app-ids
+   match `(?i)thunderbird$` and `(?i)ticktick$`. Fix any regex that misses in
+   `niri-settings.nix` and note it here.
+2. [ ] Log out and back in. Thunderbird should land on `Mail` (left monitor,
+   its first workspace) *without* taking focus; TickTick on the right
+   monitor's first workspace.
+3. [ ] Mid-session, launch Thunderbird by hand: it should still go to `Mail`,
+   focused this time. Launch TickTick by hand: it should open on the current
+   workspace, not jump to the right monitor.
+4. [ ] Unplug and replug the left monitor with `Mail` empty. It should come
+   back to the left monitor rather than staying on whichever monitor adopted
+   it — that is the named-workspace behaviour the whole design leans on.
+5. [ ] Optional, cosmetic: DMS shows workspace *names* only with Settings →
+   Workspaces → "Workspace Names" on (off in the checked-in
+   `dms-settings.json`), or by giving `Mail` an icon under "Named Workspace
+   Icons" — that card only appears once niri reports a named workspace. If
+   either is turned on, capture it with `dms-settings-snapshot`.
+
+## 26. Kali VM for class — first use
 
 Added `modules/nixos/virt-manager.nix` (libvirtd + qemu_kvm + virt-manager,
 imported in `configuration.nix`) so a Kali guest can run under KVM instead of
@@ -631,7 +792,12 @@ enabled) covers that with no extra host config.
        so the `libvirtd` group membership actually takes effect for `z` —
        group changes need a fresh login session, same trap as `docker`.
 2. [ ] Confirm access without `sudo`: `virsh -c qemu:///system list --all`
-       should run cleanly (no polkit prompt/permission error).
+       should run cleanly (no polkit prompt/permission error), and
+       `virsh net-list --all` should show `default` as `active`/`autostart`
+       — a fresh libvirtd occasionally needs a one-time
+       `virsh net-start default && virsh net-autostart default` before the
+       guest has any network at all. Catching that here beats debugging it
+       from inside the Kali installer in step 4.
 3. [ ] Download the Kali ISO (installer or live) from kali.org and create the
        VM in virt-manager: File → New Virtual Machine → point at the ISO. UEFI
        vs. BIOS and the disk size are whatever the class asks for; nothing

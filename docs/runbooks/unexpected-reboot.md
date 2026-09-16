@@ -7,13 +7,15 @@ as you have a confident cause.
 
 ## Host-specific caveats first
 
-- **LUKS-encrypted hosts (currently: memory-alpha)** come back up stuck at
+- **LUKS-encrypted hosts (memory-alpha, pegasus, galactica — the importers of
+  `modules/nixos/luks-remote-unlock.nix`)** come back up stuck at
   the initrd stage, not the running system. Unlock remotely first:
   `ssh root@<host> -p 2222`, then `systemd-tty-ask-password-agent --query`
   (or use the KVM if initrd networking is down). Nothing below is reachable
   until that's done.
 - **Journald is persistent fleet-wide** (`modules/nixos/common.nix`), capped
-  at 500M / 2 weeks retention (whichever hits first) — so the crashed boot's
+  at 500M / 2 weeks retention (whichever hits first; galactica extends this to
+  32G / 180 days onto its dedicated logs disk) — so the crashed boot's
   logs should normally survive into `journalctl -b -1`. A hard power-loss can
   still lose the last few seconds of unflushed entries (journald batches
   fsyncs; see `SyncIntervalSec`), so step A is still worth confirming first.
@@ -50,8 +52,9 @@ as you have a confident cause.
   current boot's dmesg won't show the crash itself, but repeated
   thermal/MCE entries on the new boot can indicate a recurring hardware
   issue.
-- Check whether the host has UPS monitoring (see `modules/nixos/nut.nix`
-  for which hosts are covered). If not, power-loss is a live hypothesis —
+- Check whether the host has UPS monitoring (memory-alpha is a NUT client via
+  `modules/nixos/nut-client.nix`; the server side is pending on galactica —
+  its `MANUAL-STEPS.md` §6). If not, power-loss is a live hypothesis —
   check any circuit-level or smart-plug power log if one exists.
 - `sudo smartctl -a /dev/<root-disk>` — reallocated/pending sectors or
   other SMART trip flags.

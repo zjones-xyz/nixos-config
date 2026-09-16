@@ -61,20 +61,19 @@
     uv
     python312
 
+    # ── Containers: Colima + docker CLI (no Docker Desktop) ────────────────
+    # docker-client bundles the compose and buildx v2 plugins. No launchd
+    # agent on purpose — run `colima start` by hand; it switches the docker
+    # context itself, so no DOCKER_HOST. Why Colima: DECISIONS.md §1.
+    colima
+    docker-client
+
     # 1Password CLI — used by scripts/luks-unlock-remote.sh to pull LUKS
     # passphrases via the desktop app's biometric integration instead of
     # copy-pasting from 1Password. Requires the 1Password.app "Integrate with
     # 1Password CLI" toggle enabled in Settings → Developer.
     _1password-cli
 
-    # expect — drives the LUKS-unlock ssh session for
-    # scripts/luks-unlock-remote.sh. Needed instead of a plain ssh -tt +
-    # heredoc because that races systemd-tty-ask-password-agent's echo-off:
-    # if the piped input lands on the remote pty before the agent disables
-    # echo, it gets echoed straight back into our terminal in cleartext
-    # (this happened once — see memory). expect waits for the actual prompt
-    # text to appear before sending, so the agent has already disabled echo
-    # by the time anything is sent.
     expect
   ];
 
@@ -92,37 +91,24 @@
   # macOS rebuild aliases (darwin-rebuild, not nixos-rebuild). home.shellAliases
   # applies to zsh and merges with the shared `ll` from common.nix.
   #
-  # unlock-memory-alpha is a thin per-host binding onto the generic
-  # scripts/luks-unlock-remote.sh — add one alias like this per host rather
-  # than copy-pasting the script itself.
-  #
-  # unlock-pegasus (2026-07-11): pegasus.internal needs an AdGuard DNS
-  # rewrite pointing at pegasus's LAN IP before this resolves by name — not
-  # something this repo declares (matches how memory-alpha.internal/
-  # hopper.internal/hamilton.internal are all provisioned out-of-band too).
-  # Until that rewrite exists, swap the hostname below for pegasus's raw LAN
-  # IP. The op:// reference is safe to leave even if that 1Password item
-  # doesn't exist yet — luks-unlock-remote.sh falls back to an interactive
-  # passphrase prompt when the lookup fails.
-  # The ipmi-tower-* pair binds onto scripts/ipmi-remote.sh the same way, and
-  # inherits the same fallback contract — no 1Password item, no problem, it
-  # drops to a local config file and then to an interactive prompt.
-  #
-  # towerbmc.internal resolves through an AdGuard DNS rewrite that this repo
-  # does not declare — provisioned out-of-band 2026-08-09, exactly like
-  # pegasus.internal above. If it ever stops resolving, the BMC's raw address
-  # is 192.168.8.191 (`PLATFORM.md` §2), and swapping it means editing both
-  # files (here and hosts/pegasus/home.nix).
-  #
-  # ⚠ These are deliberately run from *here*, not from Tower. §2: "Run these
-  # from a machine that is not Tower" — the whole point of a BMC is reaching a
-  # box that is wedged. pegasus carries the same two aliases so neither machine
-  # being down blocks recovering the other.
+  # The unlock-*/ipmi-tower-* aliases are thin per-host bindings onto the
+  # generic scripts (one alias per host, never a copied script), and a missing
+  # op:// item just falls back to an interactive prompt. ⚠ Deliberately
+  # duplicated with hosts/pegasus/home.nix so neither admin box being down
+  # blocks recovering the others — hosts/galactica/PLATFORM.md §2 has the
+  # rationale, plus the raw BMC address if towerbmc.internal (an out-of-band
+  # AdGuard rewrite, like all the .internal names here) ever stops resolving.
   home.shellAliases = {
     drs = "sudo darwin-rebuild switch --flake ~/Code/nixos-config#serenity";
     npull = "~/Code/nixos-config/scripts/npull.sh";
+    # A script, not "npull && drs" — an alias would put the PR number on drs.
+    npulldrs = "~/Code/nixos-config/scripts/npull-rebuild.sh darwin-rebuild serenity";
     unlock-memory-alpha = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh memory-alpha.internal "op://System Keys/memory-alpha luks/password"'';
     unlock-pegasus = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh pegasus.internal "op://System Keys/pegasus luks/password"'';
+    # "tower", not "galactica" — matching every other alias for the physical
+    # box (see hosts/pegasus/home.nix).
+    unlock-tower = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh tower.internal "op://System Keys/tower luks/password"'';
+    ipmi-tower = ''~/Code/nixos-config/scripts/ipmi-remote.sh run towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-open-tty = ''~/Code/nixos-config/scripts/ipmi-remote.sh console towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-set-bios-next-boot = ''~/Code/nixos-config/scripts/ipmi-remote.sh bios-next-boot towerbmc.internal "op://System Keys/tower ipmi/password"'';
   };

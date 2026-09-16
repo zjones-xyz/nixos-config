@@ -3,13 +3,8 @@
 {
   # ── SMART tooling, fleet-wide ───────────────────────────────────────────────
   # Imported from common.nix rather than per-host, so `smartctl` exists on every
-  # NixOS box by construction and a new host cannot quietly miss it.
-  #
-  # This is the gap that motivated it: `docs/DISK-DRAWER.md` has carried "test any
-  # disk before it is relied on as a spare, and periodically thereafter" as a
-  # standing rule since it was written, and `hosts/galactica/PLATFORM.md` §12
-  # specifies a UDMA_CRC_Error_Count baseline procedure — while no host in the
-  # fleet actually shipped the binary those instructions call for.
+  # NixOS box by construction and a new host cannot quietly miss it
+  # (docs/DISK-DRAWER.md and PLATFORM.md §12 both assume it's there).
 
   options.homelab.smart.monitor = lib.mkOption {
     type = lib.types.bool;
@@ -36,30 +31,18 @@
         enable = true;
         autodetect = true;
 
-        # `-a` is the full attribute set; `-o on`/`-S on` enable the drive's own
-        # offline collection and attribute autosave. Deliberately no `-s`
-        # self-test schedule yet — see the note below, since a self-test that
-        # fails into a journal nobody reads is not worth the I/O.
+        # Full attribute set + the drive's own offline collection/autosave.
+        # Deliberately no `-s` self-test schedule until alerts go somewhere
+        # a person actually reads (see below).
         defaults.monitored = "-a -o on -S on";
 
-        # ⚠ Wall messages are useless on a headless server and merely noisy on a
-        # desktop. Off until there is somewhere real for an alert to go.
+        # Wall messages: useless headless, noisy on a desktop.
         notifications.wall.enable = false;
       };
     })
   ];
 
-  # ⟨Follow-up: route smartd alerts to ntfy.⟩ The fleet already has the pattern —
-  # `modules/nixos/nut.nix` POSTs UPS events to the ntfy instance hopper runs, and
-  # `services.smartd.notifications.mail.mailer` accepts an arbitrary script that
-  # receives the message on stdin, which is the hook to reuse.
-  #
-  # Deliberately not wired here: nut.nix posts to 127.0.0.1:2586 because it *runs
-  # on* hopper, and the cross-host URL other machines would need has not been
-  # verified from this session. Shipping a guessed endpoint would mean alerts that
-  # fail silently, which is worse than alerts that visibly do not exist yet.
-  #
-  # Until then this module makes SMART **readable and recorded** — attributes in
-  # the journal, `smartctl` in every shell — which is the half that unblocks the
-  # burn-in and baseline procedures already written down.
+  # ⟨Follow-up: route smartd alerts to ntfy via notifications.mail.mailer
+  # (same pattern as nut.nix). Not wired yet — the cross-host ntfy URL is
+  # unverified, and a guessed endpoint fails silently.⟩
 }

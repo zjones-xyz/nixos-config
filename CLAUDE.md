@@ -1,8 +1,7 @@
 # Fleet conventions
 
 Conventions for this flake, inferred from the existing hosts so future sessions
-stay consistent. (Team-shared instructions live in `.claude/CLAUDE.md`; this file
-documents the repo's structure and patterns.)
+stay consistent. This file documents the repo's structure and patterns.
 
 ## Layout
 
@@ -12,13 +11,20 @@ documents the repo's structure and patterns.)
 - **`hosts/<host>/`** — `configuration.nix` (host wiring), `hardware-configuration.nix`,
   `home.nix` (per-host Home Manager). Pi hosts also have `DEPLOY.md`/`bootstrap.sh`.
   A host directory may exist as **documentation only**, before any config is written
-  — `hosts/galactica/` is the live example, and its `README.md` says why. Don't
-  "fix" a missing `configuration.nix` without reading that host's `DECISIONS.md`.
+  — `hosts/galactica/` spent months in that state (its `DECISIONS.md` §3 records
+  why). Don't "fix" a missing `configuration.nix` without reading that host's
+  `DECISIONS.md`.
 - **`modules/nixos/<concern>.nix`** — one concern per module (e.g. `traefik.nix`,
   `dockge.nix`, `nvidia.nix`, `gaming.nix`). Hosts import the modules they need.
 - **`modules/home/<name>.nix`** — Home Manager modules shared across hosts/platforms
   (e.g. `common.nix`, consumed by both a NixOS host and a darwin host).
 - **`secrets/<host>.yaml`** — sops-encrypted, per host. Policy in `.sops.yaml`.
+- **`checks/<name>/`** — a `checks.<system>.<name>` flake output and whatever it
+  runs (linter config, validator script). For app config the fleet hand-maintains
+  as data rather than Nix — e.g. `checks/homepage-config` over
+  `hosts/galactica/homepage/*.yaml`. ⚠ `nix flake check --no-build` only
+  *evaluates* these; anything that has to actually run needs its own
+  `nix build .#checks.…` step in `.github/workflows/nix-check.yml`.
 - **`docs/<topic>.md`** — fleet-wide documentation that belongs to no single host
   (e.g. `DISK-LABELLING.md`, the physical disk naming and cable-labelling
   convention; `DISK-DRAWER.md`, unassigned spare disks; `BACKUP.md`, which host
@@ -30,6 +36,14 @@ documents the repo's structure and patterns.)
 - Module signature `{ config, pkgs, lib, ... }:`. 2-space indent.
 - Lead non-obvious blocks with a `# ── Section ──` banner and a comment explaining
   *why*, not just what. Match the density of the surrounding files.
+- **Comment budget.** A banner gets ~5 lines. If the reasoning needs more, it
+  belongs in the host's `DECISIONS.md` or `MANUAL-STEPS.md`, and the comment is
+  one line pointing there. Beware the ratchet: "surrounding files" means the
+  repo's established density, not the last file the same author wrote.
+- **No incident narrative in `.nix` files.** Dates, journal excerpts, error
+  strings and "observed on the hardware" go in the run book and the commit
+  message. Comment the surprise — the thing a reader would otherwise undo — not
+  the story of finding it.
 - Each host sets `system.stateVersion`; don't bump it casually.
 
 ## Secrets (sops-nix)
@@ -58,6 +72,13 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
   items get a checkbox.
 - `.nix`/config changes → feature branch + PR, title prefixed with the host scope
   in brackets, e.g. `[memory-alpha] …`, `[pegasus] …`, `[all] …`.
+- **Branch names carry no agent prefix and no generated words.** `nfs-cutover`,
+  not `claude/nfs-cutover` or `claude/nice-wozniak-vp619a` — name the branch for
+  the work, not for who did it. A session spawning another names the branch up
+  front (`create_session`'s `outcome_branch`); the generated shape is only what
+  you get when nobody passes one. A session already holding such a branch renames
+  it before opening the PR, via GitHub's branches page so an open PR follows —
+  pushing the new name and deleting the old one closes that PR instead.
 - Validate with `nix flake check` / `nix eval`. On the Mac (aarch64-darwin) the
   Linux closures can be *evaluated* but not *built* (no Linux builder); building
   and every `switch` happen on the target host.

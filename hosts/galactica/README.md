@@ -1,29 +1,30 @@
 # galactica — Tower's NixOS identity
 
-**Supermicro X9SCM-F, Xeon E3-1230 v2, 32 GB.** Currently running Unraid 7.3.2
-on bare metal, as it has for years. The plan is to replace that with bare-metal
-NixOS running SnapRAID + mergerfs.
+**Supermicro X9SCM-F, Xeon E3-1230 v2, 32 GB.** Ran Unraid 7.3.2 on bare
+metal for years; now bare-metal NixOS. Root is LUKS + btrfs on the NVMe
+(fleet-standard); the media array is `tank` — ZFS RAIDZ1 across the four
+12 TB spinners plus a 3-way-mirror SSD special vdev, LUKS underneath —
+**built live and cold-boot-verified 2026-09-01**, with the Unraid data copied
+back from the `sidepool` staging pool on 2026-09-02. See `MANUAL-STEPS.md`
+for what's still outstanding (NUT/UPS, Beszel agent, NFS re-export cutover,
+the nixflix media stack and its import from `tank/media_staging`).
 
-⚠ **There is no `configuration.nix` in this directory, and that is deliberate.**
-This host is documented before it is configured, because almost every line of its
-eventual config is downstream of a storage layout that has not been decided yet.
-See `DECISIONS.md` decision 3. Consequently there is no
-`nixosConfigurations.galactica` in the flake and no `secrets/galactica.yaml`
-staging in `.sops.yaml` — both land together with the config.
-
-## The five documents
+## The documents
 
 | File | Answers | Read it when |
 |---|---|---|
-| **`DESIGN.md`** | *What is being built and why.* The case for leaving Unraid, the SnapRAID/mergerfs stack, failure modes, storage layout, migration plan. | Deciding anything. This is the plan of record. |
+| **`DESIGN.md`** | *Why Unraid was left.* The platform verdicts (bare metal, no VFIO) still stand; its storage half is superseded — see "Doc status" below. | Questioning the migration itself. |
+| **`ARCHIVE-DESIGN-snapraid.md`** | The retired SnapRAID/mergerfs storage design, extracted from `DESIGN.md` with numbering preserved. | Following an old §-reference, or mining the analysis. |
 | **`PLATFORM.md`** | *What the machine does.* BIOS quirks, BMC/IPMI access, controller firmware, bus speeds, and how to tell which limit you are hitting. | Standing in front of the machine, or before believing a benchmark. |
 | **`HARDWARE-MAP.md`** | *What is plugged into what.* Disks, cages, bays, controllers, ports, label strings. | Pulling a drive, or printing labels. |
-| **`SHARES.md`** | *What data is actually on it.* Unraid's 34 shares, where each physically lives, and the classification the layout waits on. | Deciding tiers, or planning the migration. |
+| **`SHARES.md`** | *What data was on Unraid.* The 34 shares and the tier classification — now implemented as `homelab:tier` ZFS properties on `tank`. | Tracing where a share's data went, or checking a tier. |
 | **`DECISIONS.md`** | *Why it is this way.* Decision → alternatives → rationale, what the previous design got right, and **`## Still open`**. | Before changing something that looks arbitrary. |
+| **`MANUAL-STEPS.md`** | The bring-up record and what's still pending (NUT, router persistence, media import). | Doing hands-on work on the box. |
+| **`BACKUP-BORG.md`** | How borgmatic selects ZFS datasets, and the live BorgBase wiring. | Touching backups. |
 
 Fleet-wide: `docs/DISK-LABELLING.md` (naming and labelling convention),
 `docs/DISK-DRAWER.md` (unassigned disks), `docs/BACKUP.md` (who owes what an
-offsite copy, and Tower's lack of one).
+offsite copy — Tower's is live via borgmatic, `BACKUP-BORG.md`).
 
 ## Naming
 
@@ -36,18 +37,16 @@ leave it; that design was retired 2026-08-07 and lives in git history.
 Stale `known_hosts` entries will present as a host-key-mismatch warning that
 reads like a MITM attack. `DECISIONS.md` §1.
 
-`tower.internal` continues to resolve to this machine — via an AdGuard rewrite on
-hopper rather than via the hostname, so the fleet name and the service name stay
-decoupled. `DECISIONS.md` §2.
+`tower.internal` continues to resolve to this machine — via an AdGuard rewrite
+(now served by galactica's own AdGuard, `configuration.nix`) rather than via the
+hostname, so the fleet name and the service name stay decoupled. `DECISIONS.md` §2.
 
-## Blocking item
+## Doc status
 
-**The storage layout, which has not caught up to the data.** `SHARES.md` §5 now
-puts a tier on all 34 shares — twenty-two owner-confirmed, twelve still
-proposals. That was the blocking item and it is closed.
-
-What blocks now is `DESIGN.md` §5: it was written around a **two-way** split and
-faces **eight** tiers, it provides no versioning (which the Critical tier
-requires), and Protected turned out to span both the array and the SSD pools —
-so it is a policy rather than a place, and needs implementing in two mechanisms.
-`DECISIONS.md` `## Still open` has the detail.
+The storage sections of `DESIGN.md`/`DECISIONS.md` describe the retired
+SnapRAID + mergerfs plan and were **reconciled 2026-09-02 (PR #87)**: each
+carries a superseded-banner pointing at what was actually built (the ZFS
+`tank` array above), with the original prose kept as provenance. The
+platform-level verdicts (why bare metal, why not VFIO) still stand. Read the
+banners before trusting any storage detail in those two files;
+`MANUAL-STEPS.md` §9 is the build record.

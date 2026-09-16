@@ -1,5 +1,11 @@
 # Deploying hamilton (Raspberry Pi 3 — backup DNS)
 
+> **Status (2026-09-08):** this flow has never been completed — no image from
+> the current config ever finished a first boot, and hamilton is powered off.
+> The plan is to rebuild it as an ephemeral resolver replica of galactica;
+> whether this document's flow survives that rebuild is deliberately
+> undecided. See [`DECISIONS.md`](DECISIONS.md) and hopper's log §5.
+
 hamilton is an `aarch64-linux` host built from nixos-hardware's `raspberry-pi-3`
 profile plus nixpkgs' `sd-image-aarch64` module — **not** raspberry-pi-nix,
 which doesn't support the Pi 3. It runs AdGuard Home + Unbound (backup DNS

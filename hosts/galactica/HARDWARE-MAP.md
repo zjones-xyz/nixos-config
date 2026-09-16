@@ -40,6 +40,123 @@ temperatures 30–39 °C.
 **Array total: 24 TB, 17.1 TB used, 6.88 TB free.** That is the number the
 migration plan turns on — see `DESIGN.md` §6, where it closes an assumption.
 
+### 2026-09-01 — current physical/logical state, read live under NixOS
+
+Read directly on the booted NixOS system (`lsblk`, `/dev/disk/by-id`) after the
+SATA/SAS cables were reconnected for the array build. **This is the source of
+truth for the ZFS pool config**, superseding the Unraid-era roles above (kept
+for provenance).
+
+> **Updated 2026-09-01 — the array is built and cold-boot-verified.** The table
+> below originally recorded *intended* roles read on the ISO before pool
+> creation; it now records the roles as built. Pool `tank` = RAIDZ1 over the
+> four 12 TB spinners + a **3-way mirror special vdev** over three SSDs, every
+> member **LUKS-under-ZFS** (`MANUAL-STEPS.md` §9, `DECISIONS.md` §7). Two
+> things changed from the plan during the build, both reflected below:
+>
+> - **The MX100 (`s-3100`) hard-failed on its first write** and was dropped, so
+>   the special vdev is a **3-way mirror** (WD Blue + both BX500s), not the
+>   planned 2×2. A forward path to 2×2 (`zpool detach` + `add`) exists if a
+>   fourth healthy SSD arrives.
+> - **`/boot` went to the WD Blue's ESP, not the MX100's.** This board's AMI
+>   BIOS UEFI-boots only the onboard C204, so the WD Blue was physically
+>   **recabled from the LSI HBA to onboard port `ata1`** and now carries `/boot`
+>   (`hardware-configuration.nix`'s `/boot` header, `MANUAL-STEPS.md` §9).
+>   `midden` no longer hosts `/boot`.
+>
+> `sidepool` is now **reconnected on the LSI HBA** (it was kept physically out
+> during destructive pool creation) and is currently **mounted read-only** for
+> the copy-back of its staged contents onto `tank`; see its section below. The
+> Kingston `s-5509` boot-pool disk stays absent, not reconnected.
+
+`sdX` names are noted only as they enumerated on the build boot; they are *not*
+stable across reboots. The pool is built against the `by-id` paths, which are
+serial-derived and stable.
+
+| ID | Model | Serial | `by-id` (stable) | Build-boot `sdX` | Role (built) |
+|---|---|---|---|---|---|
+| `h-HJDH` | HGST HUH721212ALE601 12 TB | `8DKUHJDH` | `ata-HUH721212ALE601_8DKUHJDH` | `sdc` | `tank` RAIDZ1 member |
+| `h-NS3Y` | HGST HUH721212ALE601 12 TB | `8DJPNS3Y` | `ata-HUH721212ALE601_8DJPNS3Y` | `sde` | `tank` RAIDZ1 member |
+| `h-X4WE` | HGST HUH721212ALE601 12 TB | `8CJZX4WE` | `ata-HUH721212ALE601_8CJZX4WE` | `sdg` | `tank` RAIDZ1 member |
+| `h-T97E` | HGST HUH721212ALE601 12 TB | `8CG7T97E` | `ata-HUH721212ALE601_8CG7T97E` | `sdi` | `tank` RAIDZ1 member |
+| `s-768C` | Crucial BX500 480 GB | `2422E8B6768C` | `ata-CT480BX500SSD1_2422E8B6768C` | `sdb` | `tank` special-vdev mirror member (on LSI) |
+| `s-8162` | Crucial BX500 480 GB | `2506E9A58162` | `ata-CT480BX500SSD1_2506E9A58162` | `sdf` | `tank` special-vdev mirror member (on LSI) |
+| `s-3255` | WD Blue SA510 500 GB | `244964803255` | `ata-WD_Blue_SA510_2.5_500GB_244964803255` | `sda` | `tank` special-vdev mirror member **+ `/boot` ESP** (recabled to onboard `ata1`) |
+| `s-3100` | Crucial MX100 512 GB | `15090EE23100` | `ata-Crucial_CT512MX100SSD1_15090EE23100` | `sdd` | ⚠ **failed on first write — dropped from the special vdev** |
+| `s-9545` | SATA SSD (generic) 224 GB | `19013024009545` | `ata-SATA_SSD_19013024009545` | `sdh` | **midden** — `/var/log/journal` + nix build scratch (no longer `/boot`) |
+| — | SPCC M.2 PCIe SSD 932 GB | `AA2300905N401KG00206` | `nvme-SPCC_M.2_PCIe_SSD_AA2300905N401KG00206` | `nvme0n1` | LUKS root (`cryptroot`) + swap + vestigial ESP |
+
+Notes on the built pool:
+- **`tank` ≈ 31.6 TiB usable.** `ashift=12` (forced — these are 512e drives with
+  4 K physical sectors), `compression` lz4 (zstd on some datasets), `atime=off`,
+  `xattr=sa`, `acltype=posixacl`. Encryption is **LUKS underneath ZFS**, not
+  ZFS-native — one sops `luks/arrayKeyFile` in slot 0 of all seven members plus a
+  fleet recovery passphrase in slot 1, opened in stage-2 crypttab. See
+  `DECISIONS.md` §7 for why LUKS-under-ZFS rather than native crypto.
+- **The two BX500s carry distinct serials**, so a future 2×2 layout (one BX500 per
+  mirror leg, each paired with a non-BX500) stays cleanly expressible by `by-id`.
+- **The special-vdev SSDs are split across controllers now.** The two BX500s are
+  on the **LSI HBA** (`02:00.0` — the SAS2008, *not* an ASMedia part; the ASM1064
+  moves to `04:00.0` when the LSI is present, §4). The WD Blue was recabled off
+  the LSI to onboard `ata1` so the firmware can UEFI-boot its ESP.
+- `s-3100` (MX100) carried leftover Unraid-era partitions and was earmarked to host
+  both `/boot` and a special-vdev partition; **it failed on its first write**, so
+  it hosts neither. It is out of the pool entirely, pending a decision on retiring
+  or retesting it.
+- The four 12 TB spinners' original array data was copied to `sidepool` before the
+  destructive RAIDZ1 create; that copy is what is now being read back (read-only)
+  onto `tank`.
+
+### `sidepool` — a fifth pool, missing from the 2026-08-07 Main-tab reading above
+
+**Not read from Unraid's Main tab like the rest of §1** — discovered
+2026-08-31 from a live NixOS boot (`hosts/galactica/live-iso.nix`), by
+`lsblk`-ing the whole machine and finding four `crypto_LUKS` disks that
+matched none of the serials above. Called `sidepool` by the owner; functions
+as Unraid's staging area for the migration.
+
+> **Update 2026-09-01 — reconnected on the LSI HBA for the copy-back.** Kept
+> physically out during `tank`'s destructive create, `sidepool`'s four disks are
+> now cabled back onto the LSI and **mounted read-only** while their staged
+> contents are copied onto `tank`'s datasets. Read-only is deliberate: it is
+> still the only copy of the migrated data until the copy-back completes and is
+> verified, so nothing writes to it until then.
+
+| Serial | Size | Model | LUKS |
+|---|---|---|---|
+| `76HE4XDAS` | 2.7 TB | TOSHIBA DT01ACA300 | yes |
+| `WD-WXD2D534CY72` | 3.6 TB | WDC WD40EFAX-68JH4N1 | yes |
+| `WD-WXM2D72D3V35` | 3.6 TB | WDC WD40EFPX-68C6CN0 | yes |
+| `WD-WXD2D534CJE9` | 3.6 TB | WDC WD40EFAX-68JH4N1 | yes |
+
+**One btrfs filesystem spanning all four** (`blkid` shows a shared `UUID` plus
+a per-device `UUID_SUB` — btrfs's own multi-device signature), ~13.5 TB raw,
+10.56 TiB used. Confirmed 2026-08-31: opens with the same passphrase as the
+main array, and mounts **read-only** cleanly and completely — `btrfs
+filesystem show` lists all four devices present, none missing.
+
+Two top-level directories once mounted:
+
+- **`pools/`** — `cache`, `fastservices`, `services` (names matching the three
+  real pools above), plus `unraid_config` (root-only) and
+  `unraid_flash.img` — **30,752,636,928 bytes, exactly the documented size of
+  the Unraid boot flash** (§1 above — the SanDisk Ultra, 28.6 GB), with an
+  mtime from the day it was checked. A current, full image backup of the boot
+  media.
+- **`move_aside/`** — directories matching real share names from `SHARES.md`
+  (`arr_media`, `documents`, `immich_photos`, `jellyfin`, `music`, `books`,
+  `ha_backup`, etc.), plus dated `ab_2026MMDD_*` folders — almost certainly
+  weekly appdata-backup snapshots.
+
+⚠ **Relevant to `DESIGN.md`'s Phase 0 backup concern about the Unraid flash
+and config being unrecoverable** (§6.2 step 1) — at least that half of the
+insurance already exists here and looked current as of this reading. Worth
+confirming it's still being refreshed before leaning on it, but this changes
+"we need to back this up" to "confirm this backup stays good."
+
+The WD40EFAX model matches `PLATFORM.md` §7b's drawer-spare disks exactly,
+consistent with `sidepool` being built from drawer disks as its name implies.
+
 ⚠ **`sdX` letters are not stable** across reboots or recabling. They are recorded
 because they were captured in the same reading as everything else and make the
 sysfs port lookup in §3 cheaper; **map by serial, never by `sdX`.**
