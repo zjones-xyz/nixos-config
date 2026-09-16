@@ -140,11 +140,6 @@
         siteMonitor: https://arcane.monitor.zjones.dev
         icon: sh-arcane
         description: Container management
-    - Dockge:
-        href: https://dockge.memory-alpha.zjones.dev
-        siteMonitor: https://dockge.memory-alpha.zjones.dev
-        icon: dockge.png
-        description: Compose stacks
 
 - Apps:
     # href is the Tailscale (tsdproxy) address, not *.zjones.dev —
