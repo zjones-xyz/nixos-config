@@ -9,8 +9,13 @@ that looks arbitrary).
 as of 2026-09-15 — the *client* half (§1–§4), the *acquisition* half and its
 egress (§5), the storage layout (§6), exposure/names/auth (§7). What remains is
 execution detail, not choices: secrets, the Homepage entries and the borgmatic
-hooks; see "Still open" at the end. **Nothing is implemented yet:** no
-`reading.nix`, no secrets, no Traefik routers, no datasets.
+hooks; see "Still open" at the end.
+
+**What is live once the base PR merges**, and it is deliberately little: the four
+AdGuard rewrites, and the (empty) `read.*` domain group with its `readUpstreams`
+entry point. ⚠ No service, no secret, no dataset — so the names resolve and then
+404 against Traefik's default certificate until the first service registers, at
+which point the wildcard is issued (see the certificate subsection in §7).
 
 ⚠ **Nine units for one subsystem** — Grimmory, MariaDB, Audiobookshelf,
 BookBridge, Chaptarr, Shelfmark and Suwayomi, plus the confined proxy and the
