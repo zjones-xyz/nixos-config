@@ -105,8 +105,9 @@ let
       # ⚠ Every -dev router in a group asks for its group's ONE wildcard, and
       # that is the dedup: Traefik skips a domain only once a covering cert is
       # already stored, so per-host `domains` here lose a cold-start race and
-      # issue ~9 individual certs — against production, a fifth of the weekly
-      # allowance.
+      # issue one certificate per service instead — against production, where the
+      # allowance is 50 per registered domain per week and every group here
+      # shares `zjones.dev`.
       "${name}-dev" = {
         rule = "Host(`${host}.${group.publicDomain}`)";
         entrypoints = [ "websecure" ];
