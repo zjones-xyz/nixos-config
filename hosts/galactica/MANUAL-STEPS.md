@@ -1534,6 +1534,12 @@ survive a power cycle.
    # Confirm inert: no mapper, no mountpoint, no holder
    lsblk -o NAME,SERIAL,FSTYPE,MOUNTPOINTS
    ```
+   ⚠ Watch `hdparm -C` and `Start_Stop_Count` over the first day or two: with
+   `-o on` in smartd's monitored string, some drives run the firmware's own
+   offline-collection routine and spin themselves up, which no smartd flag
+   prevents. That is the one failure mode `homelab.smart.standbyAware` cannot
+   cover.
+
    Then, per disk — `-y` (STANDBY), never `-Y` (SLEEP, which needs a bus reset
    to come back):
    ```sh

@@ -38,6 +38,19 @@
       Deliberately *without* smartd's `,q` suffix: the "is in STANDBY mode"
       line each skipped poll logs is the only cheap confirmation that the
       spin-down is actually holding.
+
+      ⚠ Also without a `,N` count, which is a real gap rather than an
+      oversight: a disk that stays parked is never SMART-checked, for as long
+      as it stays parked. That is the right trade for disks awaiting physical
+      removal, and a deliberate blind spot if a live pool ever parks
+      long-term — `standby,N` forces a check every N skipped polls if it stops
+      being acceptable.
+
+      ⚠ This flag does not cover `-o on`, which stays in the monitored string
+      above. On some drives the firmware's armed offline-collection routine
+      spins the disk up on its own, which would defeat the spin-down from the
+      drive side where smartd is no longer the cause. Unverified on this
+      fleet; the skipped-poll log line is what would show it.
     '';
   };
 

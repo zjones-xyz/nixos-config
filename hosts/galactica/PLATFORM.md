@@ -1963,6 +1963,12 @@ hour and then quietly stops:
    which issues a full attribute read to every autodetected disk — spinning a
    standby drive straight back up. This is why `homelab.smart.standbyAware`
    exists and why `configuration.nix` sets it; the module explains the flag.
+   > ⚠ **The flag does not cover `-o on`**, which stays in the monitored
+   > string. On some drives the firmware's armed offline-collection routine
+   > spins the disk up by itself, which would defeat the spin-down from the
+   > drive side, with smartd no longer the cause. Unverified here — watch the
+   > skipped-poll log line and `Start_Stop_Count` on the first parked disk,
+   > which is the cheapest test available and needs no extra tooling.
 2. **The Scrutiny collector, daily at 01:00.** It runs privileged with every
    block device visible and sweeps them all, with no standby awareness and no
    per-device exclusion. One guaranteed spin-up per disk per day. The wear is
