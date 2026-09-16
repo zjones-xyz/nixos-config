@@ -8,6 +8,8 @@
 #            derived from the module's own `connectionAddress`.
 #   QB_USER  WebUI username.
 #   GATEWAY  Proton's WireGuard gateway, which answers NAT-PMP.
+#   WG_IFACE The tunnel interface inside the namespace, whose INPUT chain the
+#            leased port has to be opened on.
 #   $CREDENTIALS_DIRECTORY/qbPassword  the WebUI password, via LoadCredential.
 #
 # `set -euo pipefail` comes from writeShellApplication.
@@ -15,6 +17,34 @@
 QB_PASS="$(cat "$CREDENTIALS_DIRECTORY/qbPassword")"
 
 published=""
+
+# Our own chain, jumped to from INPUT, rather than rules appended straight
+# onto INPUT: the port changes on reconnect, and flushing one chain cannot
+# strand an ACCEPT for a port Proton has since handed to somebody else.
+CHAIN=natpmp
+
+# vpn-confinement leaves the namespace at `-P INPUT DROP` and opens nothing on
+# the tunnel interface — its openVPNPorts hook is the only one that would, and
+# it takes a static port this provider never gives. A lease alone therefore
+# gets a peer as far as wg0 and no further: trackers report the client as
+# unconnectable while downloads still work, because those ride the
+# ESTABLISHED,RELATED rule. Idempotent and called every pass, so a namespace
+# rebuilt under a still-running loop heals on the next lease.
+open_port() {
+  local port=$1
+
+  iptables -w -n -L "$CHAIN" >/dev/null 2>&1 || iptables -w -N "$CHAIN"
+  iptables -w -C INPUT -i "$WG_IFACE" -j "$CHAIN" >/dev/null 2>&1 \
+    || iptables -w -A INPUT -i "$WG_IFACE" -j "$CHAIN"
+
+  # UDP as well as TCP: µTP and DHT share the port, and Proton maps both.
+  if ! iptables -w -C "$CHAIN" -p tcp --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+    iptables -w -F "$CHAIN"
+    iptables -w -A "$CHAIN" -p tcp --dport "$port" -j ACCEPT
+    iptables -w -A "$CHAIN" -p udp --dport "$port" -j ACCEPT
+    echo "opened inbound port $port (tcp+udp) on $WG_IFACE"
+  fi
+}
 
 # Backoff for the failure paths below. A Proton outage does not stop this loop
 # — natpmpc simply fails against a black-holed gateway forever — so a fixed 10s
@@ -60,6 +90,10 @@ while :; do
   # natpmpc answered with a usable port, so the tunnel is carrying traffic
   # again — drop straight back to the fast retry.
   backoff=$backoff_min
+
+  # Before qBittorrent is told to listen there: a rule that lags the port by a
+  # publish round is a closed port either way.
+  open_port "$port"
 
   # Only talk to qBittorrent when the port actually changed — this loop runs
   # every 45s and the port is usually stable for days.
