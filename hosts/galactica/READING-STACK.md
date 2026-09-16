@@ -322,6 +322,10 @@ Consequences, in order of how much they matter:
    --env-file` at start) and orders after it. **Touches no live group, needs no
    nixflix patch, renumbers nothing, and self-corrects if the gid ever moves.**
 2. **`lib.mkOverride 40` — but on the WHOLE submodule value, not on `.gid`.**
+   ⟨In-repo precedent for the *class* of problem: `configuration.nix` now pins
+   `users.users.z.uid = 1000` for exactly this reason — an unpinned `uid` is null
+   at evaluation time, and everything interpolating it "was silently rendering an
+   empty string". Same failure, same fix shape.⟩
    ⚠ The nested form silently does nothing: the `mkForce`es apply to the
    `users.groups.media` *value*, and `filterOverrides` discards every
    normal-priority definition at that level **before** the submodule is
@@ -843,7 +847,7 @@ item 6 records spending **ten** of, when `arr`'s un-deduped first switch issued
 per-subdomain certificates before the wildcard arrived.
 
 **So the rollout is staged deliberately: land one service, check the journal for
-exactly one issuance, then add the rest.** `MANUAL-STEPS.md` §15 item 1 carries
+exactly one issuance, then add the rest.** `MANUAL-STEPS.md` §17 item 1 carries
 the command and what to look for.
 
 ### ⚠ Router names are flat across groups

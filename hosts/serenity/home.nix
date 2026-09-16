@@ -61,6 +61,13 @@
     uv
     python312
 
+    # ── Containers: Colima + docker CLI (no Docker Desktop) ────────────────
+    # docker-client bundles the compose and buildx v2 plugins. No launchd
+    # agent on purpose — run `colima start` by hand; it switches the docker
+    # context itself, so no DOCKER_HOST. Why Colima: DECISIONS.md §1.
+    colima
+    docker-client
+
     # 1Password CLI — used by scripts/luks-unlock-remote.sh to pull LUKS
     # passphrases via the desktop app's biometric integration instead of
     # copy-pasting from 1Password. Requires the 1Password.app "Integrate with
