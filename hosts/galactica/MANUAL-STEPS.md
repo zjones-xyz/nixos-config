@@ -1491,3 +1491,23 @@ middleware is the natural fix if that's ever wanted; not built.
    `homebox.png`, `spoolman.png` — confirm they render; walkxcode/
    dashboard-icons naming doesn't always match the project's own name
    exactly.
+
+## 17. Syncthing peers (pegasus, serenity) — owner steps (device pairing)
+
+galactica's hub instance is fully live (§15) — GUI password already set,
+routes confirmed. `hosts/pegasus/configuration.nix` (native
+`services.syncthing`, running as `z`) and `hosts/serenity/home.nix`
+(home-manager's module under launchd) add the other two legs, both with
+loopback-only GUIs and no auth needed. All three ship with empty
+device/folder config — none of it can be declared before each instance has
+generated its own device ID, so pairing is a one-time manual pass through
+the GUIs.
+
+1. [ ] **Exchange device IDs.** On each of the three instances (galactica,
+   pegasus, serenity), Actions → Show ID, then Add Device on the other two,
+   pasting each other's ID. `overrideDevices = false` on pegasus/serenity
+   means pairing done this way survives a `nrs`/`drs` rebuild rather than
+   being deleted on the next switch.
+2. [ ] **Add the folders to share, on each side of each pair.** Same
+   `overrideFolders = false` reasoning — created and shared through the GUI,
+   they persist across rebuilds without ever being declared in Nix.

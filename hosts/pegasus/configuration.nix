@@ -114,6 +114,26 @@
     1900
   ];
 
+  # ── Syncthing ───────────────────────────────────────────────────────────────
+  # Peer of galactica's instance (hosts/galactica/syncthing.nix), reachable
+  # there at syncthing.peacock-koi.ts.net (tsdproxy) or syncthing.zjones.dev
+  # (Traefik) for its GUI — the two sync directly once paired. Runs as z, not
+  # the module's default dedicated user, so it can read/write inside z's own
+  # home directory. GUI stays loopback-only: nothing here proxies it out, and
+  # device/folder pairing happens by hand in the GUI (MANUAL-STEPS.md §17 on
+  # galactica) — there's no ID to declare before each instance has generated
+  # one for itself.
+  services.syncthing = {
+    enable = true;
+    user = "z";
+    group = "users";
+    dataDir = "/home/z";
+    guiAddress = "127.0.0.1:8384";
+    openDefaultPorts = true; # 22000 tcp/udp (sync) + 21027 udp (LAN discovery)
+    overrideDevices = false; # pairing happens by hand in the GUI, not here
+    overrideFolders = false; # ditto for which folders are shared
+  };
+
   # ── Remote Desktop (xrdp) ────────────────────────────────────────────────────
   # Supersedes KRDP, which can only mirror an already-logged-in session — see
   # DECISIONS.md. xrdp/xorgxrdp spins up an independent Plasma-X11 session per
