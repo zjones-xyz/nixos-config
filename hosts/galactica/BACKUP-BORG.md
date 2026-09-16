@@ -78,8 +78,24 @@ latter inheriting to both immich children; verified `local`/`inherited`)
 zfs set org.torsion.borgmatic:backup=auto tank/documents           # 🔴 Critical
 zfs set org.torsion.borgmatic:backup=auto tank/photos/immich        # 💎 Precious
 zfs set org.torsion.borgmatic:backup=auto tank/photos/immich_archived  # 💎 Precious
-# later, per SHARES.md §5, if appdata subtrees enter scope:
-# zfs set org.torsion.borgmatic:backup=auto tank/appdata/<service>
+```
+
+### First appdata subtrees promoted — 2026-09-13
+
+The `appdata` exception this section anticipated: `tank/appdata/ferdium` and
+`tank/appdata/karakeep`, each its own dataset (not a directory inside the
+shared `tank/appdata`), tagged `homelab:tier=precious` +
+`org.torsion.borgmatic:backup=auto` — owner's call, `SHARES.md` §5 carries
+the reasoning. Every other `appdata` subtree (bazarr, nixflix, the
+paperless broker's queue state) stays on the default untagged tier.
+
+```
+zfs create tank/appdata/ferdium
+zfs create tank/appdata/karakeep
+zfs set homelab:tier=precious tank/appdata/ferdium
+zfs set homelab:tier=precious tank/appdata/karakeep
+zfs set org.torsion.borgmatic:backup=auto tank/appdata/ferdium
+zfs set org.torsion.borgmatic:backup=auto tank/appdata/karakeep
 ```
 
 (Dataset names above follow this task's `tank/photos/immich*` layout; if the

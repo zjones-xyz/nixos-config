@@ -323,11 +323,12 @@ in
 
 
   # ── ProtonVPN NAT-PMP → qBittorrent listen port ───────────────────────────
-  # nixflix's vpn.openVPNPorts models a STATIC forwarded port; Proton only
-  # hands out NAT-PMP leases (~60s, port changes on reconnect). Without this
-  # loop no peer can initiate a connection, which kills seeding. If the
-  # provider ever changes to static forwarding, delete this block and set
-  # openVPNPorts instead.
+  # nixflix's vpn.openVPNPorts does two jobs — publish a STATIC forwarded port
+  # AND open it in the namespace firewall — and Proton fits neither: its
+  # NAT-PMP leases last ~60s and the port changes on reconnect. So this loop
+  # owns both halves; leaving either undone means no peer can initiate a
+  # connection, which kills seeding. If the provider ever changes to static
+  # forwarding, delete this block and set openVPNPorts instead.
   systemd.services.protonvpn-natpmp = {
     description = "Renew ProtonVPN NAT-PMP forward and publish it to qBittorrent";
 
@@ -342,12 +343,30 @@ in
     wants = [ "qbittorrent.service" ];
     wantedBy = [ "multi-user.target" ];
 
+    # ⚠ Load-bearing: nixflix reinstalls qBittorrent.conf from the store on
+    # every start, so a restart silently reverts the listen port this loop
+    # set over the API — and the loop, which only acts when the port CHANGES,
+    # would never notice. Restarting with qBittorrent resets that memory.
+    partOf = [ "qbittorrent.service" ];
+
     serviceConfig = {
       # A supervised forever-loop, not a oneshot: the lease dies in ~60s and
       # the port changes across reconnects, so this must keep running.
       Restart = "always";
       RestartSec = 15;
-      DynamicUser = true;
+
+      # Was DynamicUser. The loop now maintains its own iptables rule inside
+      # the namespace, and iptables' /run lock is root-owned 0600 — reachable
+      # by UID 0 without CAP_DAC_OVERRIDE, not by a dynamic user holding
+      # CAP_NET_ADMIN. Root bounded to that one capability, plus the sandbox
+      # DynamicUser was implying, is the smaller of the two compromises.
+      CapabilityBoundingSet = [ "CAP_NET_ADMIN" ];
+      NoNewPrivileges = true;
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      PrivateTmp = true;
+      ReadWritePaths = [ "/run" ]; # the xtables lock
+
       LoadCredential = [
         "qbPassword:${config.sops.secrets."nixflix/qbittorrentPassword".path}"
       ];
@@ -359,6 +378,7 @@ in
         "QB_URL=http://${config.nixflix.torrentClients.qbittorrent.connectionAddress}:${toString config.nixflix.torrentClients.qbittorrent.webuiPort}"
         "QB_USER=admin"
         "GATEWAY=${gateway}"
+        "WG_IFACE=wg0"
       ];
 
       # writeShellApplication: shellcheck runs over the .sh at build time.
@@ -369,12 +389,15 @@ in
             libnatpmp
             curl
             coreutils
+            iptables
           ];
           text = builtins.readFile ./protonvpn-natpmp.sh;
         }
       );
     };
   };
+
+  environment.systemPackages = [ pkgs.libnatpmp ];
 
   # ── ProtonVPN tunnel health check ─────────────────────────────────────────
   # wg.service is a RemainAfterExit oneshot, so an outage AFTER boot is
