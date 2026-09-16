@@ -114,6 +114,24 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   argument into the palette (`'definition': definition`). Binding the seven
   makes them palette-searchable; `next_layout` needs no such help, since its
   `delta` argument defaults and the bare entry works.
+  *The key audit* (against kitty 0.48.2, this flake's pin, reading
+  `kitty/options/definition.py` at tag `v0.48.2`, where `kitty_mod` defaults to
+  `ctrl+shift`). Free, shadowing nothing: `ctrl+shift+d` (hsplit),
+  `ctrl+shift+backslash` (vsplit), the `ctrl+shift+m>…` jump prefix, and
+  `ctrl+shift+space` — the `map kitty_mod+space` line in `definition.py` is a
+  docs *example of unmapping*, not a default. Deliberately shadowing a stock
+  bind, each leaving a fallback: the four arrows take `previous_tab`/`next_tab`
+  (which keep `ctrl+shift+tab` and `ctrl+tab`) and `scroll_line_up`/`down`
+  (which keep `ctrl+shift+k`/`j`); `ctrl+shift+space` takes the palette's own
+  `ctrl+shift+f3`; `ctrl+shift+l` takes `next_layout`, still reachable from the
+  palette per the paragraph above. Rejected for cause: `ctrl+shift+minus`, the
+  intuitive hsplit key, is stock `decrease_font_size` whose only other Linux
+  default is `ctrl+shift+kp_subtract` — numpad-only, and lopsided against
+  `ctrl+shift+equal`; `ctrl+shift+p` is not a binding but a chord prefix with
+  nine leaves (the hints/choose-files family), and the palette cannot give them
+  back. Re-derived from definition lines only, the unused keys in the stock
+  `ctrl+shift` space are `space`, `d`, `i`, `m`, `x`, `y` — `a` and `p` are
+  chord prefixes, not bindings.
 
 - **Storage / OS layout → drive-per-OS, not shared partitions.** *alt:* shrink
   CachyOS's existing LUKS+btrfs NVMe and carve partitions for NixOS (and later
