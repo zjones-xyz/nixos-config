@@ -530,10 +530,6 @@ in
       # niri-flake's config.lib.niri.actions cache either (they take
       # optional properties, e.g. show-pointer) — same documented
       # action.<name>=value form as above.
-      #
-      # This host's keyboard (RDR Alice) has no dedicated PrtSc key — it
-      # sends Print Screen via Fn+K, a firmware-level mapping this config
-      # doesn't control. The non-obvious half of triggering these binds.
       "Print".action.screenshot = { };
       "Ctrl+Print".action.screenshot-screen = { };
       "Alt+Print".action.screenshot-window = { };
