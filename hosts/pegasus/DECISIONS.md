@@ -196,6 +196,42 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
     and re-verified end-to-end from this session (nested
     `--override-input` paths for `flake-parts`/`nixpkgs-lib`, since they're
     transitive to `claude-desktop-debian` rather than direct root inputs).
+- **Opera, Zen, Floorp, added 2026-09-12** (requested batch, alongside the
+  existing firefox/vivaldi/google-chrome). None of the three could just be
+  added to `home.packages` like the 2026-07-11 batch above — each is missing
+  from the pinned nixpkgs in a different way, checked directly rather than
+  assumed:
+  - **Floorp** — nixpkgs' own `floorp` derivation now throws, pointing at
+    `floorp-bin` ("building from upstream sources has become unfeasible
+    starting with version 12.x"). `floorp-bin` is free (MPL-2.0/MIT, no
+    `allowUnfree` needed) and already in the pinned nixpkgs — just swapped
+    the package name, no new input.
+  - **Opera** — nixpkgs dropped `opera` outright ("removed due to lack of
+    maintenance"); the attribute still exists only as a throw. *alt
+    considered:* hand-writing a derivation from Opera's `.deb` in `pkgs/`
+    (the askimo.nix pattern) — rejected in favor of
+    `YisuiDenghua/opera-flake`, which already **is** that derivation (same
+    shape as nixpkgs' former `opera.nix`: unpack the official `.deb`,
+    `autoPatchelfHook`), carried forward by one of `opera`'s own former
+    nixpkgs maintainers rather than reinvented here. Added as
+    `inputs.opera-flake` with `inputs.nixpkgs.follows = "nixpkgs"`; unfree,
+    needs the global `allowUnfree` pegasus already sets.
+  - **Zen** — no nixpkgs package at all, not even a removed stub. Added as
+    `inputs.zen-browser` (`0xc000022070/zen-browser-flake`, the
+    community-maintained flake nixpkgs discussions point to for Zen on
+    NixOS), `inputs.nixpkgs.follows = "nixpkgs"`. Used its `packages.default`
+    (the `beta` channel — twilight/twilight-official also exist in the flake
+    but weren't asked for).
+  - Both new flakes' packages are passed into `hosts/pegasus/home.nix` via
+    `home-manager.extraSpecialArgs` in `flake.nix` as `operaBrowser`/
+    `zenBrowser` — same "no HM module, just a package" shape as
+    `claudeDesktop`/`askimoDesktop` above, since neither flake ships one.
+  - **`git+https`, not `github:`, for both new inputs** — same reasoning as
+    `claude-desktop-debian` above. Unlike that input, `nix flake lock` and
+    `nix flake check` (via `.claude/hooks/flake-check-sandboxed.sh`) both
+    resolved cleanly from this authoring session with no manual follow-up
+    needed — this session's GitHub scoping didn't 403 the fetch the way an
+    earlier session's did for `claude-desktop-debian`/`flake-parts`.
 - **COSMIC, added 2026-07-11 as a secondary session, not primary DE.**
   `services.desktopManager.cosmic` has been a first-class NixOS module since
   25.05 (well before this flake's 26.05 pin) — no third-party flake needed.

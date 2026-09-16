@@ -1,4 +1,9 @@
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # galactica — Tower, bare-metal NixOS (Supermicro X9SCM-F, ex-Unraid).
@@ -23,14 +28,32 @@
     ../../modules/nixos/dns.nix
     ../../modules/nixos/adguardhome-sync.nix
     ../../modules/nixos/traefik-galactica.nix
+    ../../modules/nixos/newt.nix
+    ../../modules/nixos/tsdproxy.nix
     ./borgmatic.nix
+    ./homepages.nix
     ./nixflix.nix
     ./unpackerr.nix
     ./bazarr.nix
+    ./ferdium.nix
+    ./karakeep.nix
+    ./paperless.nix
+    ./syncthing.nix
+    ./partdb.nix
+    ./homebox.nix
+    ./spoolman.nix
   ];
 
   networking.hostName = "galactica";
   networking.networkmanager.enable = true;
+
+  # Pinned to the uid `z` already has here (confirmed live, `id z`) — a no-op
+  # for the running system, but it's what lets `config.users.users.z.uid`
+  # evaluate at all: `isNormalUser` with no explicit uid leaves it `null` at
+  # eval time (real allocation happens at activation), so anything in
+  # ferdium.nix/karakeep.nix/paperless.nix/syncthing.nix that interpolates it
+  # was silently rendering an empty string before this.
+  users.users.z.uid = 1000;
 
   # BIOS SOL covers POST and the bootloader only — the kernel needs its own
   # console= or SOL goes dark when it takes over (live-iso.nix, PLATFORM.md §2).
@@ -41,7 +64,10 @@
   # build time, before secrets decrypt on the target host (MANUAL-STEPS.md
   # §12). A bcrypt hash is the credential-safe form to commit directly.
   services.adguardhome.settings.users = [
-    { name = "admin"; password = "$2y$10$8TU89p4pf3Up.YCaKacwJe1kAkP2sQMu8xsXaL0TjYNVxD8hs4ybm"; }
+    {
+      name = "admin";
+      password = "$2y$10$8TU89p4pf3Up.YCaKacwJe1kAkP2sQMu8xsXaL0TjYNVxD8hs4ybm";
+    }
   ];
 
   # Query log retention — 60 days on this box specifically (not a fleet
@@ -89,59 +115,200 @@
   # also `tower`/`arr` (legacy identities it absorbed, DECISIONS.md §2).
   #
   # `.xyz` names are externally-routable, terminated by Pangolin (not Traefik),
-  # so no local router or cert is expected for them; jellyfin/guesthome get
-  # split-horizon rewrites so LAN clients skip the tunnel, homeassistant
-  # deliberately stays Tailscale/LAN-only with no `.xyz` name at all.
+  # so no local router or cert is expected for them; jellyfin/guest get
+  # split-horizon rewrites so LAN clients skip the tunnel, while homeassistant
+  # and the `home` admin dashboard stay Tailscale/LAN-only with no `.xyz` name.
   # ⚠ `enabled = true` is mapped over every entry, not written per-line —
   # AdGuard has a per-rewrite enable toggle whose omitted bool renders as Go's
   # zero-value (false), silently disabling every rewrite.
   services.adguardhome.settings.filtering.rewrites = map (r: r // { enabled = true; }) [
     # router (GL.iNet)
-    { domain = "router.internal"; answer = "192.168.8.1"; }
+    {
+      domain = "router.internal";
+      answer = "192.168.8.1";
+    }
 
     # hopper
-    { domain = "hopper.internal"; answer = "192.168.8.10"; }
+    {
+      domain = "hopper.internal";
+      answer = "192.168.8.10";
+    }
 
     # pegasus
-    { domain = "pegasus.internal"; answer = "192.168.8.72"; }
+    {
+      domain = "pegasus.internal";
+      answer = "192.168.8.72";
+    }
 
     # memory-alpha-2
-    { domain = "memory-alpha-2.internal"; answer = "192.168.8.98"; }
-    { domain = "*.memory-alpha-2.internal"; answer = "192.168.8.98"; }
+    {
+      domain = "memory-alpha-2.internal";
+      answer = "192.168.8.98";
+    }
+    {
+      domain = "*.memory-alpha-2.internal";
+      answer = "192.168.8.98";
+    }
 
     # memory-alpha (the legacy name "nixie" is retired, no longer in use)
-    { domain = "memory-alpha.internal"; answer = "192.168.8.99"; }
-    { domain = "*.memory-alpha.internal"; answer = "192.168.8.99"; }
-    { domain = "*.memory-alpha.zjones.dev"; answer = "192.168.8.99"; }
-    { domain = "*.monitor.zjones.dev"; answer = "192.168.8.99"; }
+    {
+      domain = "memory-alpha.internal";
+      answer = "192.168.8.99";
+    }
+    {
+      domain = "*.memory-alpha.internal";
+      answer = "192.168.8.99";
+    }
+    {
+      domain = "*.memory-alpha.zjones.dev";
+      answer = "192.168.8.99";
+    }
+    {
+      domain = "*.monitor.zjones.dev";
+      answer = "192.168.8.99";
+    }
     # jellyfin.zjones.dev: flat name, not *.memory-alpha.zjones.dev — Traefik
     # (modules/nixos/traefik.nix, on memory-alpha) already routes it with its
     # own single-name LE cert; this rewrite was the only missing piece.
-    { domain = "jellyfin.zjones.dev"; answer = "192.168.8.99"; }
+    {
+      domain = "jellyfin.zjones.dev";
+      answer = "192.168.8.99";
+    }
     # jellyfin.zjones.xyz: split-horizon shortcut for the Pangolin-tunneled
     # public name — Newt runs on memory-alpha (jellyfin.nix), so this is a
     # LAN clients-only bypass, not a second route.
-    { domain = "jellyfin.zjones.xyz"; answer = "192.168.8.99"; }
+    {
+      domain = "jellyfin.zjones.xyz";
+      answer = "192.168.8.99";
+    }
 
     # homeassistant
-    { domain = "homeassistant.internal"; answer = "192.168.8.142"; }
+    {
+      domain = "homeassistant.internal";
+      answer = "192.168.8.142";
+    }
 
     # towerbmc (Tower's physical BMC/IPMI — separate NIC from galactica itself)
-    { domain = "towerbmc.internal"; answer = "192.168.8.191"; }
+    {
+      domain = "towerbmc.internal";
+      answer = "192.168.8.191";
+    }
 
     # galactica (also answers to the legacy names "tower" and "arr")
-    { domain = "galactica.internal"; answer = "192.168.8.190"; }
-    { domain = "*.galactica.internal"; answer = "192.168.8.190"; }
-    { domain = "*.galactica.zjones.dev"; answer = "192.168.8.190"; }
-    { domain = "tower.internal"; answer = "192.168.8.190"; }
-    { domain = "*.tower.internal"; answer = "192.168.8.190"; }
-    { domain = "tower.zjones.dev"; answer = "192.168.8.190"; }
-    { domain = "*.tower.zjones.dev"; answer = "192.168.8.190"; }
-    { domain = "arr.internal"; answer = "192.168.8.190"; }
-    { domain = "*.arr.internal"; answer = "192.168.8.190"; }
-    { domain = "arr.zjones.dev"; answer = "192.168.8.190"; }
-    { domain = "*.arr.zjones.dev"; answer = "192.168.8.190"; }
-    { domain = "guesthome.zjones.xyz"; answer = "192.168.8.190"; }
+    {
+      domain = "galactica.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "*.galactica.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "*.galactica.zjones.dev";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "tower.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "*.tower.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "tower.zjones.dev";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "*.tower.zjones.dev";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "arr.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "*.arr.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "arr.zjones.dev";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "*.arr.zjones.dev";
+      answer = "192.168.8.190";
+    }
+    # The two dashboards (hosts/galactica/homepages.nix) — flat names, own
+    # Traefik router pair each, not under arr.* or galactica.*.
+    {
+      domain = "home.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "home.zjones.dev";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "guest.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "guest.zjones.dev";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "guest.zjones.xyz";
+      answer = "192.168.8.190";
+    }
+
+    # Ferdium/Karakeep/Paperless-ngx/Syncthing — same flat-name shape as the
+    # dashboards above, own Traefik router pair each (ferdium.nix,
+    # karakeep.nix, paperless.nix, syncthing.nix).
+    {
+      domain = "ferdium.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "ferdium.zjones.dev";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "karakeep.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "karakeep.zjones.dev";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "paperless.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "paperless.zjones.dev";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "syncthing.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "syncthing.zjones.dev";
+      answer = "192.168.8.190";
+    }
+
+    # PartDB/HomeBox/Spoolman (partdb.nix, homebox.nix, spoolman.nix) — a
+    # real subdomain group, not flat names like everything else above, so
+    # wildcards here rather than one rewrite per service.
+    {
+      domain = "*.maker.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "*.maker.zjones.dev";
+      answer = "192.168.8.190";
+    }
   ];
 
   # ── AdGuardHome-Sync — galactica (origin) → router (first replica) ─────────
@@ -209,16 +376,18 @@
   boot.zfs.extraPools = [ "tank" ];
   systemd.services."zfs-import-tank" = {
     # Names must match the crypttab above; `-` escapes to \x2d in unit names.
-    after = [ "cryptsetup.target" ] ++ map
-      (n: "systemd-cryptsetup@${lib.replaceString "-" "\\x2d" n}.service") [
-        "array-HJDH"
-        "array-NS3Y"
-        "array-X4WE"
-        "array-T97E"
-        "special-3255"
-        "special-768C"
-        "special-8162"
-      ];
+    after = [
+      "cryptsetup.target"
+    ]
+    ++ map (n: "systemd-cryptsetup@${lib.replaceString "-" "\\x2d" n}.service") [
+      "array-HJDH"
+      "array-NS3Y"
+      "array-X4WE"
+      "array-T97E"
+      "special-3255"
+      "special-768C"
+      "special-8162"
+    ];
   };
 
   # Pressure release valve, not a memory tier (swap partition: disko.nix).
@@ -232,7 +401,9 @@
   # is the one place TRIM actually passes the dm-crypt layer.
   environment.etc."crypttab" = {
     text = ''
-      cryptlogs UUID=b44e545c-b4b3-4037-a263-d5a522933b37 ${config.sops.secrets."luks/middenKeyFile".path} luks,discard,nofail
+      cryptlogs UUID=b44e545c-b4b3-4037-a263-d5a522933b37 ${
+        config.sops.secrets."luks/middenKeyFile".path
+      } luks,discard,nofail
 
       # ── ZFS array `tank` — LUKS-under-ZFS members (MANUAL-STEPS.md §9) ────────
       # Opened in stage-2 (not initrd — data disks, not root, DECISIONS.md §7),
@@ -243,13 +414,27 @@
       # cryptsetup.target below) can proceed with whatever opened. `discard`
       # only on the three SSD special-vdev members; the four spinners get none
       # (TRIM is meaningless on an HDD, and they were opened without it).
-      array-HJDH   UUID=0e3ffb41-6b97-4a7d-9581-27c6987ef21c ${config.sops.secrets."luks/arrayKeyFile".path} luks,nofail
-      array-NS3Y   UUID=d55d13e2-91b1-4bba-96da-2f25facee673 ${config.sops.secrets."luks/arrayKeyFile".path} luks,nofail
-      array-X4WE   UUID=78811230-8648-4b32-afcc-c93fbb99e927 ${config.sops.secrets."luks/arrayKeyFile".path} luks,nofail
-      array-T97E   UUID=dbf28412-07e7-4b61-8afa-33c38bd6d1f6 ${config.sops.secrets."luks/arrayKeyFile".path} luks,nofail
-      special-3255 UUID=016d6496-2bc1-456d-bdcc-21ca45436d5e ${config.sops.secrets."luks/arrayKeyFile".path} luks,discard,nofail
-      special-768C UUID=f0a8f677-290b-4607-9422-d3cbd43b7666 ${config.sops.secrets."luks/arrayKeyFile".path} luks,discard,nofail
-      special-8162 UUID=2fccd949-3fad-4a91-a218-c55aab11c553 ${config.sops.secrets."luks/arrayKeyFile".path} luks,discard,nofail
+      array-HJDH   UUID=0e3ffb41-6b97-4a7d-9581-27c6987ef21c ${
+        config.sops.secrets."luks/arrayKeyFile".path
+      } luks,nofail
+      array-NS3Y   UUID=d55d13e2-91b1-4bba-96da-2f25facee673 ${
+        config.sops.secrets."luks/arrayKeyFile".path
+      } luks,nofail
+      array-X4WE   UUID=78811230-8648-4b32-afcc-c93fbb99e927 ${
+        config.sops.secrets."luks/arrayKeyFile".path
+      } luks,nofail
+      array-T97E   UUID=dbf28412-07e7-4b61-8afa-33c38bd6d1f6 ${
+        config.sops.secrets."luks/arrayKeyFile".path
+      } luks,nofail
+      special-3255 UUID=016d6496-2bc1-456d-bdcc-21ca45436d5e ${
+        config.sops.secrets."luks/arrayKeyFile".path
+      } luks,discard,nofail
+      special-768C UUID=f0a8f677-290b-4607-9422-d3cbd43b7666 ${
+        config.sops.secrets."luks/arrayKeyFile".path
+      } luks,discard,nofail
+      special-8162 UUID=2fccd949-3fad-4a91-a218-c55aab11c553 ${
+        config.sops.secrets."luks/arrayKeyFile".path
+      } luks,discard,nofail
     '';
   };
 
@@ -299,6 +484,37 @@
   # stays the local alerter.
   services.scrutinyCollector.enable = true;
 
+  # ── Remote access for the dashboards (homepages.nix) ───────────────────────
+  # Tailscale carries the admin homepage (and SSH) over the tailnet. authKeyFile
+  # so a rebuilt host rejoins headless, same shape as hopper/pegasus/hamilton.
+  # ⚠ The key must be in secrets/galactica.yaml *before* the first switch: a
+  # sops key that isn't there fails activation, not eval (MANUAL-STEPS §13.1).
+  services.tailscale = {
+    enable = true;
+    extraUpFlags = [ "--ssh" ];
+    authKeyFile = config.sops.secrets."tailscale/authKey".path;
+  };
+
+  networking.firewall.trustedInterfaces = [ "tailscale0" ];
+  networking.firewall.allowedUDPPorts = [ config.services.tailscale.port ];
+
+  # The admin dashboard gets its OWN tailnet name (home.<tailnet>.ts.net) via
+  # tsdproxy, so galactica's own MagicDNS entry stays just the host's — SSH
+  # and nothing else. Reuses the auth key above; a reusable key registers
+  # many nodes. homepages.nix carries the labels that name it.
+  homelab.tsdproxy.enable = true;
+
+  # The guest homepage's door: Newt tunnels guest.zjones.xyz in from the
+  # Pangolin VPS. ⚠ Commented until the Pangolin Site for galactica exists —
+  # the id below is issued at creation (same reasoning as the NUT block: a
+  # made-up id fails at service start, not eval, and would be easy to miss).
+  # §13 has the steps, including the `newt/clientSecret` sops entry this
+  # enables.
+  # homelab.newt = {
+  #   enable = true;
+  #   id = "CONFIRM_ME_FROM_PANGOLIN"; # Pangolin → Sites → create "galactica"
+  # };
+
   # ── NUT — pending: galactica is to be the UPS server ───────────────────────
   # Deliberately NOT modules/nixos/nut.nix (that file is hopper's own server
   # config, not a template). The ready-to-paste config, the naming constraints
@@ -321,6 +537,9 @@
       # runs as root, no User= override.
       "adguardhome-sync/originPassword" = { };
       "adguardhome-sync/routerPassword" = { };
+      # Reusable, non-ephemeral: galactica is a server that must rejoin on
+      # its own after a rebuild, not a one-shot device.
+      "tailscale/authKey" = { };
       # Raw keyfile for all seven array members (slot 0; every disk also
       # carries the fleet recovery passphrase in slot 1). `format = "binary"`
       # is the byte-exact round-trip for raw key material.

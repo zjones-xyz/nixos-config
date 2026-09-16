@@ -652,6 +652,20 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    The second and third lines together are the kill-switch check: torrent
    traffic leaves via Proton while NFS/SSH/monitoring stay on the LAN.
 
+   **Inbound is its own check** — the port has to be *leased*, *listened on*
+   and *accepted*, and the first two can both be right while the third is
+   not. That reads as "downloads fine, tracker says unconnectable", because
+   outbound-initiated peers ride the namespace's `ESTABLISHED,RELATED` rule
+   and never touch the inbound path:
+   ```bash
+   sudo ip netns exec wg natpmpc -a 1 0 tcp 60 -g 10.2.0.1   # ← leased: "Mapped public port NNNNN"
+   sudo ip netns exec wg iptables -L natpmp -v -n            # ← accepted: the same NNNNN, tcp AND udp
+   ```
+   The `natpmp` chain is the sidecar's, rebuilt on every port change;
+   `vpnNamespaces.wg.openVPNPorts` is empty on purpose and must stay that
+   way — it takes a static port, and Proton has none. qBittorrent's own view
+   is Settings → Connection, and it must show the same number.
+
    ⚠ `ip netns exec` needs root — without `sudo` it fails with `setting the
    network namespace "wg" failed: Operation not permitted`, which reads like
    a broken namespace and isn't. The other three lines are fine unprivileged.
@@ -1013,7 +1027,101 @@ SABnzbd is deliberately **outside** the VPN — usenet is already TLS to a paid
 provider, so the tunnel would only cap throughput; `nixflix.nix` says so at
 the option.
 
-## 13. AdGuard/Unbound DNS — declarative config, migrating off the router
+## 13. The homepages — tailnet + Pangolin (owner steps)
+
+`hosts/galactica/homepages.nix` declares both dashboards (Tower's old
+`homelab-stacks tower/homepage` and `tower/guesthome`, dead since the
+bare-metal cutover) as pinned Homepage containers on loopback ports —
+admin on `127.0.0.1:3010`, guest on `127.0.0.1:3011`. What each dashboard
+*shows* is plain YAML in `hosts/galactica/homepage/{common,admin,guest}/`,
+bind-mounted read-only; edit there and `nrs`, no Nix involved. CI lints
+those files and checks them against each other (`checks/homepage-config`),
+so a bad edit fails the PR rather than the dashboard. The switch itself
+reuses the existing `nixflix/*` sops entries for the widget keys. What the
+nix config cannot do is mint credentials and create Pangolin objects — that
+is this section.
+
+Both instances are already routed by the host's own Traefik —
+`home.internal` / `home.zjones.dev` for admin, `guest.internal` /
+`guest.zjones.dev` for guest — with matching AdGuard rewrites
+(§14) pointing all four at galactica's LAN IP, so LAN access to both
+works as soon as the switch lands. Steps below are for the tailnet
+(admin) and public (guest) halves.
+
+1. [x] **Tailnet auth key in sops — done.** A reusable, non-ephemeral key
+   (admin console → Settings → Keys) is in `secrets/galactica.yaml` as
+   `tailscale/authKey`, encrypted to all three recipients the `.sops.yaml`
+   rule names, galactica's own host key included. ⚠ This had to land *before*
+   the switch: `configuration.nix` references that key, and a sops entry whose
+   key is absent from the file fails **activation**, not eval.
+
+2. [x] **Switch — tailnet access confirmed.** Both halves happen on `nrs`
+   with no interactive step: `authKeyFile` joins galactica itself (`--ssh`),
+   and `homelab.tsdproxy` registers a *separate* node named `home` for the
+   admin dashboard, so `https://home.peacock-koi.ts.net` serves it while
+   galactica's own MagicDNS entry stays just the host's. Verified live.
+
+   Why a second node rather than `tailscale serve`: MagicDNS maps names to
+   devices and the `ts.net` zone has no alias, so serve can only ever answer
+   on the node's own name. `modules/nixos/tsdproxy.nix` has the details.
+
+   Two things this cost on the way in, both now fixed in-tree, recorded so
+   the next host does not repeat them:
+
+   - tsdproxy runs with host networking, so its dashboard shares the host's
+     port space. Upstream's default 8080 is SABnzbd's on any nixflix host —
+     the same collision `modules/nixos/adguardhome-sync.nix` documents. It
+     now defaults to 8091 via `homelab.tsdproxy.port`.
+   - `tsdproxy.port.1` takes the **published** host port, not the container's
+     internal one: `443/https:3010/http` against a container publishing
+     `127.0.0.1:3010:3000`. The stacks this replaced published `3000:3000`,
+     so they could not distinguish the two.
+
+3. [x] **Key expiry disabled — on `galactica` *and* on `home`.** Both done in
+   the admin console (Machines → … → Disable key expiry). Servers, not
+   laptops, and genuinely console-only: expiry is a control-plane property of
+   the machine, not something a node can set about itself. ⚠ Two devices, not
+   one — every name tsdproxy registers is its own Tailscale device with its
+   own expiry, so anything added to `homelab.tsdproxy` later needs the same
+   treatment or it silently drops off the tailnet in ~6 months.
+
+Steps 1-3 above are done: the admin dashboard is on the LAN and the tailnet,
+and the guest one is on the LAN. What remains — 4-8 below, the public
+`guest.zjones.xyz` door — is tracked as **issue #124**, which carries the same
+checklist plus the two traps worth knowing before starting: the sops entry in
+step 5 must exist *before* the switch that references it (a missing key fails
+activation, not eval), and `guest.zjones.xyz` has a LAN rewrite but no Traefik
+router, so step 6 should be tested from on-network as well as off.
+
+4. [ ] **Create the Pangolin Site.** Pangolin admin → Sites → create
+   `galactica` (Newt connector). Copy the issued **id** and **secret**.
+
+5. [ ] **Wire Newt up.** `sops secrets/galactica.yaml` → add the secret as
+   `newt/clientSecret`; put the id in the `homelab.newt` block in
+   `configuration.nix` and uncomment it; `nrs`. `systemctl status newt`
+   should show the tunnel registered.
+
+6. [ ] **Re-point the guest Resource.** Pangolin admin → Resources →
+   `guesthome.zjones.xyz` → rename to `guest.zjones.xyz` and move it onto
+   the `galactica` site with target `http://localhost:3011`
+   (host-resolvable — Newt runs on the host, so container names do NOT
+   resolve; `localhost:<published port>` does, same as memory-alpha's
+   Jellyfin resource). Keep whatever auth/SSO the old Tower resource had.
+   Verify from off-LAN (phone on cellular).
+
+7. [ ] **Verify the guest links actually work from outside.** The guest
+   dashboard currently lists only Jellyfin (`jellyfin.zjones.dev`) — confirm
+   that name resolves and routes publicly (it is also a Pangolin resource);
+   if the public name differs, fix the href in
+   `homepage/guest/services.yaml`. The other
+   Tower-era guest links (Audiobookshelf, Grimmory, Shelfmark, 13ft) return
+   as those services are re-homed.
+
+8. [ ] **Retire the Tower stacks.** In homelab-stacks, delete (or mark
+   migrated) `tower/homepage`, `tower/guesthome` and `tower/pangolin-newt`,
+   and delete the old `tower` Site in Pangolin once nothing references it.
+
+## 14. AdGuard/Unbound DNS — declarative config, migrating off the router
 
 `configuration.nix` now imports `modules/nixos/dns.nix` and declares the
 rewrites that previously lived only in the router's (GL.iNet, AdGuard bundled
@@ -1036,16 +1144,17 @@ rather than each instance being hand-edited.
    Newt tunnel — not Traefik, so the earlier "no Traefik router" framing here
    was checking the wrong layer. Resolved: `arr.zjones.xyz` is dropped
    entirely (the *arr stack doesn't need off-network access). `jellyfin` and
-   `guesthome` keep the split-horizon treatment — meant to work both on- and
+   the guest homepage (`guest.zjones.xyz` — renamed from `guesthome`, §13)
+   keep the split-horizon treatment — meant to work both on- and
    off-network without Tailscale, so the AdGuard rewrite is a LAN-side
    shortcut alongside Pangolin's tunnel, not a replacement for it.
-   `homeassistant` deliberately gets no `.xyz` name at all — stays
-   Tailscale/LAN-only. Still worth confirming in Pangolin's own admin config
-   (not this repo) that `jellyfin.zjones.xyz` and `guesthome.zjones.xyz`
-   actually have resources configured, pointing at the right targets
-   (memory-alpha for jellyfin, galactica for guesthome) — Newt itself only
-   runs on memory-alpha in this repo (`newt.nix`), which is fine since Newt's
-   targets aren't restricted to localhost.
+   `homeassistant` and the admin homepage (`home.*`, §13) deliberately get
+   no `.xyz` name at all — stay Tailscale/LAN-only. Still worth confirming
+   in Pangolin's own admin config (not this repo) that `jellyfin.zjones.xyz`
+   and `guest.zjones.xyz` actually have resources configured, pointing at
+   the right targets (memory-alpha for jellyfin, galactica for guest) — Newt
+   itself only runs on memory-alpha in this repo today (`newt.nix`), which
+   is fine since Newt's targets aren't restricted to localhost.
 3. [x] **Deploy and verify — done 2026-09-06.** Deployed, then two real bugs
    found live and fixed (see git history): every rewrite loaded
    `enabled: false` (an undocumented per-rewrite toggle, Go bool zero-value
@@ -1127,7 +1236,7 @@ rather than each instance being hand-edited.
    integration depends on `--glinet`).
 7. [x] **Fleet-wide inter-host DNS outage, root-caused and fixed —
    2026-09-08.** SSH to `memory-alpha.internal` started failing the
-   morning after §13 item 4 was confirmed working. Long diagnostic chain,
+   morning after §14 item 4 was confirmed working. Long diagnostic chain,
    in order, each one ruled out before finding the real cause: dnsmasq's
    forward-to-AdGuard config (`server=127.0.0.1#3053` — fine), AdGuard's
    own DNS cache (cleared it, still broken), the `--glinet` flag
@@ -1165,3 +1274,220 @@ rather than each instance being hand-edited.
    entirely and derive rewrites from leases, or whether reservations should
    just get declared in Nix alongside `clients.persistent` so a name only
    has to be typed once.
+
+## 15. Ferdium, Karakeep, Paperless-ngx, Syncthing — owner steps before first switch
+
+`hosts/galactica/{ferdium,karakeep,paperless,syncthing}.nix` declare all
+four as containers, routed by this host's Traefik (`*.internal`/`*.zjones.dev`,
+matching rewrites in §14/`configuration.nix`) and given their own tsdproxy
+tailnet node each (§13 has the "why a separate node per name" reasoning).
+
+**The inventory pass (2026-09-13) found the real Unraid appdata backup at
+`/tank/sort/unraid_appdata/<service>`, NOT `tank/backups/sidepool-pools`** —
+that path was the raw drive image; `unraid_appdata` is the already-extracted,
+organized copy. Sizes: `karakeep` 67M, `ferdium-server` 275M, `paperless` 9.0K
+(leftover container config only — see item 5), `syncthing` 126K
+(owner-confirmed junk, matches the earlier decision to leave it dropped).
+
+1. [x] **Secrets generated and `sops`-ed in.** `karakeep/nextAuthSecret`,
+   `karakeep/meiliMasterKey`, `paperless/secretKey`, and
+   `paperless/adminPassword` are in `secrets/galactica.yaml` (random,
+   `openssl rand`). ⚠ This had to land *before* the switch, same reasoning as
+   every other sops-backed secret on this host: a referenced key missing from
+   the file fails **activation**, not eval. Ferdium and Syncthing need no
+   secrets of their own.
+2. [x] **First switch — done and verified, 2026-09-13.** All seven
+   containers came up healthy; all eight routes (`*.internal` +
+   `*.zjones.dev` × four services) returned correct codes; all four LE
+   certs issued cleanly. Hit one real, unrelated incident along the way —
+   a stray, Nix-untracked `tailscale serve` config on galactica's own
+   tailnet identity blocked Traefik's port 443 rebind — fixed live and
+   the stray config since cleared.
+3. [x] **Confirm logins, then lock signups down — all done 2026-09-13.**
+   Restored data (item 4) meant the original Unraid-era accounts came back
+   with it — the plan changed from "create a new account" to "confirm the
+   old one still logs in," per the reasoning worked out live before the
+   restore. (Paperless-ngx's own admin-login confirmation is tracked
+   separately under item 5 — its data was never touched by a restore, so
+   it was never in scope here.)
+   - [x] **Ferdium — confirmed working, 2026-09-13.**
+     `IS_REGISTRATION_ENABLED` flipped to `"false"` in `ferdium.nix`.
+   - [x] **Karakeep — confirmed working, 2026-09-13.**
+     `DISABLE_SIGNUPS=true` set in `karakeep.nix`'s `karakeep-web`
+     environment.
+   - [x] **Syncthing GUI password set, 2026-09-13.** Was unauthenticated by
+     default; now has one, since its GUI is reachable over the tailnet.
+4. [x] **Ferdium + Karakeep restore — done 2026-09-13.** Both got their own
+   ZFS datasets (not directories in the shared `tank/appdata`), tagged
+   `homelab:tier=precious` + `org.torsion.borgmatic:backup=auto`
+   (`BACKUP-BORG.md`'s "First appdata subtrees promoted" section). The
+   ~10 minutes of fresh throwaway state each had generated since the first
+   switch (empty sqlite DBs, Ferdium's JWT keys) was discarded — nothing
+   in it was worth keeping — then the real Unraid backups were copied in
+   from `/tank/sort/unraid_appdata/{ferdium-server,karakeep}` and both
+   containers restarted.
+
+   Two wrinkles hit during the restore, recorded so they aren't a surprise
+   next time:
+   - Karakeep's backup folder turned out to have **two** copies of
+     `db.db`/`queue.db` — the real ones at the top level (1.68M, matches
+     Karakeep's documented `DATA_DIR/db.db` layout) and a second, smaller
+     (585K) pair nested one level down in the backup's own stray `data/`
+     subdirectory — almost certainly orphaned cruft from an earlier
+     Karakeep version's storage layout, not the live data. The top-level
+     pair is what `karakeep.nix`'s mount actually reads; the nested copy
+     landed alongside it harmlessly (Karakeep never looks there) and was
+     deleted for hygiene.
+   - Ferdium's backup `data/` subfolder also had its own leftover
+     `.tailscale_state` (an Unraid-side sidecar, unrelated to this host's
+     tsdproxy) — copied in by the broad `cp -a`, then deleted; harmless,
+     just clutter.
+
+   Verified live: Ferdium repackaged 441 real recipes from the restored
+   bundle on startup; Karakeep started clean against the restored DB and
+   Meilisearch index. Both containers healthy, both routes responding.
+5. [ ] **Paperless-ngx — not a restore, already repointed.** The Unraid
+   `appdata` share's paperless folder was only leftover container config
+   (9.0K); the real, live instance was already sitting at
+   `/tank/documents/paperless/{data,media,export}` (real `db.sqlite3`, real
+   archived documents) — likely mounted there directly on the old setup
+   rather than through the appdata share. `paperless.nix` now points its
+   bind mounts there instead of a fresh `tank/appdata/paperless` tree, so
+   there is nothing to copy for those three. **Before the first switch:**
+   - [x] **Pre-switch backup — done.** A fresh `borgmatic` offsite run plus
+     `zfs snapshot tank/documents@pre-paperless-nixos`, both against the
+     live data, before the container comes up.
+   - [ ] **Admin login — credentials retrieved from 1Password, login not
+     yet confirmed.** `PAPERLESS_ADMIN_USER=z` / the generated password in
+     `secrets/galactica.yaml` only ever *creates* a user; it will not touch
+     or reset the existing one, so it's a fallback only in case the
+     restored DB turns out to have no superuser.
+   - [x] **Chowned the existing tree to match `USERMAP_UID`/`GID` — done
+     2026-09-13.** Not previously set — the paperless-ngx image defaults to
+     a baked-in `1000:1000`, but `paperless.nix` now sets both to user
+     `z`'s uid/gid so the container can also write into the new
+     NFS-exported inbox (below).
+     `chown -R z:users /tank/documents/paperless/{data,media,export}`
+     before first switch, or the webserver may not be able to read/write
+     its own existing files.
+
+   **Scan inbox — new, resolved 2026-09-13:** owner's call, scans land in
+   `/inbox/paperless` on the NVMe root (`fileSystems."/"`, NOT `tank`) —
+   fast, and no redundancy/offsite needed since dropped files are consumed
+   into `tank/documents` (which IS backed up) within moments.
+   `paperless.nix` creates the directory, mounts it as the container's
+   `/usr/src/paperless/consume`, and NFS-exports it (`192.168.8.0/24`,
+   `async` — durability is deliberately traded for speed here, see the
+   file's header). SMB is planned but not built yet; add it when it
+   actually matters, in whatever module ends up owning Samba fleet-wide
+   (none does yet).
+6. [x] **Key expiry disabled on the four new tsdproxy nodes — done
+   2026-09-13.** Same trap §13 already hit: every `homelab.tsdproxy`-
+   registered name is its own Tailscale device with its own expiry.
+   `ferdium`, `karakeep`, `paperless`, and `syncthing` all set in the
+   admin console alongside `home`.
+7. [x] **Dashboard icons — confirmed rendering, 2026-09-13.**
+   `homepage/admin/services.yaml`'s new `Apps` group's four icons
+   (`ferdium.png`, `karakeep.png`, `paperless-ngx.png`, `syncthing.png`,
+   pulled from walkxcode/dashboard-icons at runtime) all render correctly.
+8. [x] **Three real bugs found by review, fixed and verified — done
+   2026-09-14.**
+   - **Syncthing was running as root.** `config.users.users.z.uid`
+     evaluates to `null` (normal users get their uid at activation, not
+     eval), so `PUID`/`USERMAP_UID`/every tmpfiles rule referencing it
+     were silently rendering an empty string. Paperless came out fine by
+     coincidence (its entrypoint falls back to a baked-in uid 1000, which
+     happens to equal `z`'s real one); Syncthing has no such fallback and
+     ran fully as root under `--network=host` — confirmed via `docker top`.
+     Fixed by pinning `users.users.z.uid = 1000` in `configuration.nix`
+     (matches the uid `z` already had — a no-op for the running system,
+     but now gives Nix eval a real value). One follow-up the fix itself
+     caused: `/tank/appdata/syncthing`'s config/certs/db had all been
+     created while it ran as root, so once it correctly started dropping
+     to uid 1000 it couldn't read its own files and crash-looped —
+     `chown -R z:users /tank/appdata/syncthing` once, live, resolved it.
+   - **Paperless login 403'd on two of its three hostnames.** Only
+     `PAPERLESS_URL` was set, so Django's `CSRF_TRUSTED_ORIGINS` held only
+     `paperless.zjones.dev` — confirmed live with a raw login POST:
+     `paperless.internal` (and by the same mechanism, the dashboard's own
+     `paperless.peacock-koi.ts.net` link) hit a hard `403 CSRF
+     verification failed`; `paperless.zjones.dev` passed clean. Fixed with
+     `PAPERLESS_CSRF_TRUSTED_ORIGINS` (all three names) and
+     `PAPERLESS_PROXY_SSL_HEADER` (Django couldn't otherwise tell the
+     Traefik-terminated request was HTTPS).
+   - **None of the four services declared a dependency on `tank` being
+     mounted**, unlike the established `nixflix.nix`/`bazarr.nix` pattern.
+     Every crypttab entry for `tank` is deliberately `nofail`, so a
+     degraded boot with the array unimported is a real, supported state on
+     this host — in it, these containers would start anyway and
+     Paperless would run its migrations into a fresh empty database over
+     the live document archive. Added `RequiresMountsFor` to every
+     container unit that touches a `/tank` path, matching the existing
+     pattern.
+
+   Also cleaned up stale comments in `ferdium.nix`/`karakeep.nix` that
+   still described the appdata as fresh/deferred after the restore landed,
+   and trimmed `paperless.nix`'s header, which had drifted well past this
+   repo's comment-budget convention.
+
+## 16. Part-DB, HomeBox, Spoolman — owner steps before first switch
+
+`hosts/galactica/{partdb,homebox,spoolman}.nix` declare all three as
+containers, same shape as §15's four: Traefik router pair, tsdproxy tailnet
+node, appdata restored from the Unraid backup. New this time: a real
+subdomain grouping, `*.maker.{internal,zjones.dev}` — confirmed live that
+tsdproxy rejects dotted node names (`partdb.maker` fails RFC 1123
+validation), so the tailnet name stays flat (`partdb.peacock-koi.ts.net`)
+while Traefik/DNS get the grouping. `configuration.nix` wildcard-rewrites
+`*.maker.{internal,zjones.dev}` rather than one entry per service, and all
+three `-dev` routers request the same `maker.zjones.dev` wildcard cert
+(dedup, same mechanism as `arr.zjones.dev`) instead of three single-name
+certs.
+
+⚠ **Deliberately NOT promoted off the default appdata tier this time** —
+unlike ferdium/karakeep, these three stay as plain directories in the
+shared `tank/appdata` dataset (parity only, no offsite). Part-DB already
+had this decided in `SHARES.md`'s tier table (🛡 Protected); HomeBox and
+Spoolman just default the same way since nothing this time asked for the
+opposite. Revisit per-service if that changes.
+
+⚠ **Spoolman has no authentication at all**, by upstream design — owner's
+call to leave it behind tsdproxy/Traefik only for now. A Traefik BasicAuth
+middleware is the natural fix if that's ever wanted; not built.
+
+1. [x] **Secrets generated and `sops`-ed in.** `partdb/appSecret` (random,
+   `openssl rand -hex 32`) and `homebox/apiKeyPepper` (random, `openssl
+   rand -base64 48`) are in `secrets/galactica.yaml`. The pepper wasn't
+   originally planned — HomeBox panics on startup without
+   `HBOX_AUTH_API_KEY_PEPPER` set to ≥32 bytes, confirmed live, undocumented
+   in any compose example checked beforehand. Spoolman needs no secret.
+2. [x] **First switch — done and verified, 2026-09-15/16.** All three
+   containers came up; `*.maker.internal`/`*.maker.zjones.dev` all
+   returned correct codes once the HomeBox pepper fix landed; the shared
+   `maker.zjones.dev` wildcard cert issued cleanly (one cert covering all
+   three, confirmed in the Traefik log — the dedup worked as designed).
+3. [x] **Appdata restored — done 2026-09-15/16.** Stopped all three,
+   copied in from `/tank/sort/unraid_appdata/{partdb,homebox,spoolman}`
+   (Part-DB: only `db/app.db` existed in the backup, no uploads/media were
+   ever populated; HomeBox: the whole backup folder was already shaped
+   like the container's `/data`, its `.tailscale_state` dropped; Spoolman:
+   same, then `chown -R z:users` since the image runs as a fixed uid 1000
+   — deliberately, matching `z` now, not a coincidence this time), restarted.
+   Part-DB went from a hard 500 (`no such table: users` — expected on an
+   empty fresh DB) to a clean 302 once restored.
+   - [ ] **Confirm Part-DB/HomeBox logins** with whatever credentials you
+     used on the old Unraid setup — not yet done, only the restore itself
+     was verified (the routes respond, not that a specific login works).
+     Spoolman has no login to confirm.
+4. [x] **Verified container UIDs, per the §15 lesson — done.** `docker top
+   <name> aux` for each: Part-DB runs as `www-data` (uid 33, the image's
+   own default, matches the backup's ownership via `cp -a`), HomeBox runs
+   as root (its own documented default — no privilege-drop mechanism
+   exists for it, unlike Syncthing), Spoolman runs as `z` (uid 1000,
+   deliberate). No mismatch found this time.
+5. [ ] **Key expiry disabled on the three new tsdproxy nodes** —
+   `partdb`, `homebox`, `spoolman` — same trap as every prior batch.
+6. [ ] **Dashboard icons.** New `Maker` group references `part-db.png`,
+   `homebox.png`, `spoolman.png` — confirm they render; walkxcode/
+   dashboard-icons naming doesn't always match the project's own name
+   exactly.

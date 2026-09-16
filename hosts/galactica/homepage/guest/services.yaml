@@ -1,0 +1,23 @@
+---
+# Guest dashboard — friends-and-family links, publicly reachable through
+# Pangolin at guest.zjones.xyz.
+#
+# ⚠ Guest links must be names that resolve and route from the public internet
+# (Pangolin resources), since guest.zjones.xyz is the door off-network — NOT
+# the .arr.zjones.dev names the admin dashboard uses. MANUAL-STEPS.md §13
+# step 6 verifies each before it goes live.
+#
+# Tower's guesthome also listed Audiobookshelf, Grimmory, Shelfmark and 13ft —
+# restore from homelab-stacks tower/guesthome as each is re-homed.
+#
+# ⚠ This instance is publicly reachable, so it deliberately carries only the
+# three widget API keys its calendar needs (homepages.nix). Adding a widget
+# here that needs a fourth key fails checks/homepage-config rather than
+# silently rendering an unauthenticated widget.
+
+- Media:
+    - Jellyfin:
+        href: https://jellyfin.zjones.dev
+        siteMonitor: https://jellyfin.zjones.dev
+        icon: jellyfin.png
+        description: Movies & TV

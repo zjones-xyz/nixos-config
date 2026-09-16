@@ -61,6 +61,13 @@
     uv
     python312
 
+    # ── Containers: Colima + docker CLI (no Docker Desktop) ────────────────
+    # docker-client bundles the compose and buildx v2 plugins. No launchd
+    # agent on purpose — run `colima start` by hand; it switches the docker
+    # context itself, so no DOCKER_HOST. Why Colima: DECISIONS.md §1.
+    colima
+    docker-client
+
     # 1Password CLI — used by scripts/luks-unlock-remote.sh to pull LUKS
     # passphrases via the desktop app's biometric integration instead of
     # copy-pasting from 1Password. Requires the 1Password.app "Integrate with
@@ -94,6 +101,8 @@
   home.shellAliases = {
     drs = "sudo darwin-rebuild switch --flake ~/Code/nixos-config#serenity";
     npull = "~/Code/nixos-config/scripts/npull.sh";
+    # A script, not "npull && drs" — an alias would put the PR number on drs.
+    npulldrs = "~/Code/nixos-config/scripts/npull-rebuild.sh darwin-rebuild serenity";
     unlock-memory-alpha = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh memory-alpha.internal "op://System Keys/memory-alpha luks/password"'';
     unlock-pegasus = ''~/Code/nixos-config/scripts/luks-unlock-remote.sh pegasus.internal "op://System Keys/pegasus luks/password"'';
     # "tower", not "galactica" — matching every other alias for the physical
