@@ -120,7 +120,7 @@
   # (Traefik) for its GUI — the two sync directly once paired. Runs as z, not
   # the module's default dedicated user, so it can read/write inside z's own
   # home directory. GUI stays loopback-only: nothing here proxies it out, and
-  # device/folder pairing happens by hand in the GUI (MANUAL-STEPS.md §15 on
+  # device/folder pairing happens by hand in the GUI (MANUAL-STEPS.md §17 on
   # galactica) — there's no ID to declare before each instance has generated
   # one for itself.
   services.syncthing = {
