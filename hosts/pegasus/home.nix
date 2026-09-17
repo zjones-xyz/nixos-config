@@ -23,8 +23,10 @@
   # admin box being down blocks recovering the others — hosts/galactica/
   # PLATFORM.md §2 has the rationale and the raw BMC address fallback.
   home.shellAliases = {
-    nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#pegasus";
-    nrt = "sudo nixos-rebuild test --flake ~/nixos-config#pegasus";
+    # Scripts, not bare `sudo nixos-rebuild …` aliases — the alias built
+    # whatever was checked out without ever naming the branch.
+    nrs = "~/nixos-config/scripts/nrebuild.sh nixos-rebuild switch pegasus";
+    nrt = "~/nixos-config/scripts/nrebuild.sh nixos-rebuild test pegasus";
     npull = "~/nixos-config/scripts/npull.sh";
     # A script, not "npull && nrs" — an alias would put the PR number on nrs.
     npullnrs = "~/nixos-config/scripts/npull-rebuild.sh nixos-rebuild pegasus";
