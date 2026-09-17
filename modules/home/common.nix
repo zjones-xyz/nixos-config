@@ -102,7 +102,7 @@
     # in those themes. dynamic_background_opacity arms kitty's stock
     # ctrl+shift+a>m/l/1/d chords; it is ignored on config reload, so turning
     # it on needs a fresh kitty rather than ctrl+shift+f5.
-    background_opacity = "0.92";
+    background_opacity = "0.82";
     dynamic_background_opacity = true;
   };
 
