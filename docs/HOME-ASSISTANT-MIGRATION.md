@@ -700,6 +700,53 @@ Jellyfin — also not on the `proxy` network — through Traefik's **file
 provider**, pointed at `http://host.docker.internal:8096`. Home Assistant takes
 the same treatment at `:8123`.
 
+### ⚠ 9.0 An error in this file's own implementation — owner's call
+
+`modules/nixos/traefik.nix` (as built here) routes HA on `.internal` **only**,
+and justifies it as *"the fleet's standing posture is that Home Assistant stays
+LAN/Tailscale-only with no public name."* **That justification does not say what
+it was read to say.** `hosts/galactica/configuration.nix` says homeassistant
+gets no **`.xyz`** name — `.xyz` is the *Pangolin-tunnelled* tier. `.zjones.dev`
+is a different, LAN-only tier: AdGuard rewrites `*.memory-alpha.zjones.dev` to
+192.168.8.99, and `traefik.nix` itself notes the dashboard router requests a
+`*.memory-alpha.zjones.dev` wildcard "which all other `.zjones.dev` routers
+reuse." Every other LAN service on this host has both names.
+
+**It has a concrete cost.** `.internal` is served by Traefik's self-signed
+default, and nothing in this flake installs a CA for it (`security.pki` /
+`certificateFiles`: no hits anywhere). A browser therefore never trusts it —
+tolerable for a dashboard in a normal tab, much worse for the **app-mode
+launcher** the owner wants (§9.3), which is a window with no address bar
+showing a blocking interstitial.
+
+**The fix, if wanted:** a second file-provider router on
+`ha.memory-alpha.zjones.dev` with `certResolver: letsencrypt`. It requests no
+new certificate — it dedups against the existing wildcard — and adds no public
+path, since there is no Pangolin resource for the name.
+
+⟨**Not done.** Adding a hostname to the reverse proxy is an exposure decision,
+and this file records the current posture as deliberate. Flagged rather than
+flipped; one block of YAML either way.⟩
+
+### ⚠ 9.3 The pegasus desktop launcher (was PR #63)
+
+PR #63 added `xdg.desktopEntries.home-assistant` to `hosts/pegasus/home.nix` —
+`google-chrome --app=…`, since HA has no native Linux client. It was **closed
+in favour of this PR**, so this is where that work lives now or it is lost.
+
+- Its old target, `homeassistant.local:8123`, was already stale against the
+  AdGuard rewrite and goes stale again at cutover.
+- The new target depends on §9.0: `ha.memory-alpha.zjones.dev` if the second
+  router is added (trusted cert, app mode works), `ha.memory-alpha.internal` if
+  not (cert interstitial in a chromeless window).
+- ⚠ And on §5.2 — if the host question moves this to galactica, the address
+  changes again. The owner's own framing was *"once the address is final."*
+
+So: **after the cutover**, not now, and as its own `[pegasus]` change rather
+than widening this `[memory-alpha]` PR. §12 step 26.
+
+---
+
 ⚠ **Copy the shape, not the cert resolver.** Jellyfin's file-provider router is
 `Host(`jellyfin.zjones.dev`)` with `certResolver: letsencrypt` — a *public*
 name. HA wants the `.internal` + `tls: {}` self-signed shape the dashboard and
@@ -908,57 +955,64 @@ of this section claimed**, and the step order is what spends it.
 9. [ ] **Any webhook/Nabu Casa integrations?** (§9.1.) They break silently at
    cutover and nothing surfaces them.
 10. [ ] Recorder DB size, and set `purge_keep_days`/`exclude:` (§8.1).
+11. [ ] **Decide §9.0**: does HA get the `ha.memory-alpha.zjones.dev` router
+    too? It is the fleet's normal pair for a LAN service and the only way the
+    §9.3 launcher gets a trusted cert; it was left out of this PR on a
+    misreading of the `.xyz` posture. Owner's call — flagged, not flipped.
 
 ### B. Build (no hardware needed)
 
-11. [x] `modules/nixos/home-assistant.nix` — HA Container, compose in Nix,
+12. [x] `modules/nixos/home-assistant.nix` — HA Container, compose in Nix,
     host networking, exact image pin. **Done.**
-12. [x] Traefik file-provider route for `ha.memory-alpha.internal` (§9), and
+13. [x] Traefik file-provider route for `ha.memory-alpha.internal` (§9), and
     HA's `backups/`/`tts/` borgmatic exclusions. **Done.**
-13. [ ] **Migrate Tailscale to `services.tailscale`** on memory-alpha (§5) —
+14. [ ] **Migrate Tailscale to `services.tailscale`** on memory-alpha (§5) —
     a cutover from the running container, **not** an import of the
     hopper-flavoured module, and a **prerequisite of the cutover** because the
     phone depends on it (§9.1).
-14. [ ] Put the availability check **off** memory-alpha (§10) — galactica or an
+15. [ ] Put the availability check **off** memory-alpha (§10) — galactica or an
     external heartbeat. A watcher on the watched host cannot see the one event
     that matters.
-15. [ ] Add **Zigbee group bindings / ESPHome on-device automations** for the
+16. [ ] Add **Zigbee group bindings / ESPHome on-device automations** for the
     lights that must work with the hub dead (§3.1). Independent of everything
     else here, and worth doing regardless.
 
 ### C. Migrate the data
 
-16. [ ] **Take a full backup on the Pi** — ⚠ with encryption disabled, or
+17. [ ] **Take a full backup on the Pi** — ⚠ with encryption disabled, or
     retrieve the emergency-kit key first (§8).
-17. [ ] **Stop Home Assistant on the Pi** before copying (§8) — `BACKUP.md`
+18. [ ] **Stop Home Assistant on the Pi** before copying (§8) — `BACKUP.md`
     §4d; `/config` holds two live SQLite databases.
-18. [ ] **Copy `/config`** to `/home/z/home-assistant/config`, preserving
+19. [ ] **Copy `/config`** to `/home/z/home-assistant/config`, preserving
     `.storage/` (§8).
-19. [ ] Hand-edits to the migrated config: `use_x_forwarded_for` /
+20. [ ] Hand-edits to the migrated config: `use_x_forwarded_for` /
     `trusted_proxies` (§9), and `external_url` / `internal_url` (§9.1).
-20. [ ] **Extract the plaintext `secrets.yaml` into sops** (§10) — ⚠ *before*
+21. [ ] **Extract the plaintext `secrets.yaml` into sops** (§10) — ⚠ *before*
     the first borgmatic run after step 18, or it is already in an archive.
-21. [ ] Uncomment the recorder DB in `borgmatic.nix` and **verify the dump
+22. [ ] Uncomment the recorder DB in `borgmatic.nix` and **verify the dump
     actually succeeds** (§10).
 
 ### D. Cut over
 
-22. [ ] Verify against the **still-running Pi** (§11): integrations loaded,
+23. [ ] Verify against the **still-running Pi** (§11): integrations loaded,
     automations listed, history present, discovery populated, mobile app
     reconnecting, and **no repair warnings beyond the expected Supervisor ones**
     (§8).
-23. [ ] Move the `homeassistant.internal` rewrite to `192.168.8.99` (§9).
-24. [ ] Add HA to the admin homepage (§10).
-25. [ ] Keep the Pi intact through **at least one full cold boot** of the new
+24. [ ] Move the `homeassistant.internal` rewrite to `192.168.8.99` (§9).
+25. [ ] Add HA to the admin homepage (§10).
+26. [ ] **Re-add the pegasus desktop launcher** (§9.3) as its own `[pegasus]`
+    change, pointed at whichever address §9.0 settles on. PR #63 was closed in
+    favour of this one, so if this step is dropped the launcher is simply gone.
+27. [ ] Keep the Pi intact through **at least one full cold boot** of the new
     host (§3.1), then decommission (§11).
 
 ### E. Only after the cutover has settled
 
-26. [ ] **Network-attach the Zigbee coordinator** (§6.1). ⚠ **This is the point
+28. [ ] **Network-attach the Zigbee coordinator** (§6.1). ⚠ **This is the point
     of no return** — after it, the Pi is no longer a rollback for Zigbee (§11).
-27. [ ] **Stand up the Bluetooth proxies** — needs `services.esphome`, and
+29. [ ] **Stand up the Bluetooth proxies** — needs `services.esphome`, and
     ⚠ per §6.2 that module gives you the dashboard, not git-tracked firmware
     config.
-28. [ ] Write `hosts/memory-alpha/DECISIONS.md` (it does not exist) recording
+30. [ ] Write `hosts/memory-alpha/DECISIONS.md` (it does not exist) recording
     the §3.1 trade and the §5 host argument, set the **monthly HA tag-bump
     policy and owner** (§4.3), and retire this file to historical.
