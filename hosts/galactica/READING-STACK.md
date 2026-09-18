@@ -725,8 +725,9 @@ happens with no user action and is worth knowing when reading logs.
 ### Manga — Suwayomi
 
 `services.suwayomi-server` is in the pin (with a nixpkgs manual page), which makes
-manga **the only cleanly-solved piece of this stack**: a native module, no
-container, no pinning debt. It downloads CBZ into the tree Grimmory already reads.
+manga the piece with the least wiring in this stack: a native module and no
+container. ⚠ "No pinning debt" was the original claim here and it did not
+survive contact with the hardware — see the extension-repository finding below. It downloads CBZ into the tree Grimmory already reads.
 Comics/manga being new appetite (§1), there is nothing to migrate and no legacy
 layout to honour.
 
@@ -742,6 +743,30 @@ community successor to Tachiyomi's own index, which no longer exists.
 
 ⟨The same overwrite applies to every other server setting the WebUI can change,
 not only the repo list. Anything that must persist belongs in `settings`.⟩
+
+⚠⚠ **And the pin cannot use it.** Verified on the hardware 2026-09-17: with the
+repo declared, Browse listed exactly two "extensions" — `Outdated App` and
+`Update to Mihon 0.20.1+`. Those are the whole of what Keiyoushi now serves at
+`index.min.json` (765 bytes, two entries); nothing was filtered client-side. The
+real index moved:
+
+| step | who fetches it | what it holds |
+|---|---|---|
+| `<base>/index.min.json` | 2.1.1867, directly | the two stubs, nothing else |
+| `<base>/repo.json` | 2.3.2243, after stripping the suffix | `index_v2` + signing key |
+| `<base>/index.pb` | from `index_v2` at runtime | the 1395 real extensions |
+
+Confirmed by extracting both jars: 2.1.1867 has no `extensionList`,
+`extensionLib` or `contentWarning` anywhere in it and reads only the legacy
+schema, while 2.3.2243 carries all three plus the `repo.json` indirection. So
+**manga acquisition does not work on the channel's version at all**, and the
+package is pinned ahead of it (§18 item 17) — the one piece of this stack that
+was "cleanly solved by a native module" turns out to carry version debt after
+all, just of a different kind than a container tag.
+
+⟨The configured URL stays the `index.min.json` one even so: the server derives
+the base from it by removing that suffix. Pointing it at `repo.json` or
+`index.pb` directly would break the derivation.⟩
 
 ⟨**Kapowarr** for Western comics was considered and deferred — not in nixpkgs, so
 a third acquisition container and another pinned tag, for appetite that has not

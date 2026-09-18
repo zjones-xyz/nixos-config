@@ -340,6 +340,19 @@ in
     dataDir = "${appdata}/suwayomi";
     group = mediaGroup;
 
+    # ⚠ Ahead of the channel deliberately, and not for the version number:
+    # nixpkgs' 2.1.1867 can only read the legacy `index.min.json`, which
+    # Keiyoushi now serves as two "update your app" stubs — so it reaches zero
+    # extensions and manga acquisition does not work at all. 2.3 resolves
+    # repo.json → index_v2 → index.pb instead. MANUAL-STEPS.md §18 item 17.
+    package = pkgs.suwayomi-server.overrideAttrs (_: rec {
+      version = "2.3.2243";
+      src = pkgs.fetchurl {
+        url = "https://github.com/Suwayomi/Suwayomi-Server/releases/download/v${version}/Suwayomi-Server-v${version}.jar";
+        hash = "sha256-ghFBsy4XDUoC08vf7Vd+2PB70iOD/19BMuu1rkDpjdU=";
+      };
+    });
+
     settings.server = {
       # Loopback: reached through Traefik, like everything else here.
       ip = "127.0.0.1";
@@ -352,6 +365,10 @@ in
       # every start, so anything the UI writes there is reverted at the next
       # restart. Keiyoushi is the community successor to Tachiyomi's own index,
       # which no longer exists; without a repo Suwayomi can browse nothing.
+      # ⚠ Still the `index.min.json` URL although that file is now a stub, and
+      # that is correct: the server strips the `/index.min.json` suffix and
+      # fetches `<base>/repo.json`, which points it at the real index. Changing
+      # this to the path it ultimately reads would break the derivation.
       extensionRepos = [
         "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"
       ];

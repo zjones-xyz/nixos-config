@@ -1733,12 +1733,19 @@ Written alongside `READING-STACK.md`; deployed in the order below.
     builtin-auth admin, and Grimmory's, Audiobookshelf's and BookBridge's first
     users. ⚠ Do **not** set `Chaptarr__Auth__Method` to force Forms first — env
     wins on every start and would lock you out of creating the account.
-13. [ ] **Verify Suwayomi's extension repo loaded.** The repo itself is now
+13. [x] **Verify Suwayomi's extension repo loaded.** The repo itself is now
     declared in Nix (Keiyoushi), so there is nothing to add by hand — ⚠ and it
     had to be declared: the module re-renders `server.conf` from the Nix
     settings on **every start**, so a repo added in the WebUI is reverted at the
     next restart, silently. The same is true of any other server setting changed
     there. After the switch, Browse should list sources.
+
+    ✅ **Loaded 2026-09-17 — and found two stubs, which is the real finding.**
+    Browse showed `Outdated App` and `Update to Mihon 0.20.1+` and nothing else.
+    Not a filter: that is all `index.min.json` contains now. It sent item 17
+    from a preference to a blocker, and the package is pinned ahead of the
+    channel as a result. ⚠ Re-check this after the switch that carries 2.3.2243
+    — Browse listing real sources is what closes this item for good.
 
 14. [ ] ⚠ **Test the Prowlarr → Chaptarr sync early** — §5b calls it the single
     biggest risk here, with two open upstream bugs on the path. When registering
@@ -1755,13 +1762,20 @@ Written alongside `READING-STACK.md`; deployed in the order below.
     SQLite `Config` table, and env only reaches `config.xml`-level settings.
     Leave it at its default (`true`, harmless across datasets: one `link()` that
     fails `EXDEV` per import) or change it in the UI.
-17. [ ] **Decide on Suwayomi 2.3.2243.** Its UI reports the update; the pin
-    carries 2.1.1867. Left alone deliberately 2026-09-17 — the derivation is a
-    plain `fetchurl` of a release jar, so an `overrideAttrs` bump is about ten
-    lines (`sha256-ghFBsy4XDUoC08vf7Vd+2PB70iOD/19BMuu1rkDpjdU=`, confirmed
-    fetchable), but it pins us off-channel so a later nixpkgs bump stops
-    applying, and it skips the `nixosTests` nixpkgs runs against the version it
-    ships. ⚠ **Item 13 is the deciding evidence:** if extensions load on
-    2.1.1867 the gap is cosmetic; if they do not, the bump is the fix rather
-    than an upgrade. ⟨The UI's update button cannot work either way — the jar is
-    a read-only store path.⟩
+17. [x] **Suwayomi 2.3.2243 — decided by item 13, and taken.** The question was
+    whether the update the UI advertises was cosmetic. It is not: on 2.1.1867
+    Keiyoushi yields **zero** usable extensions, so manga acquisition does not
+    work at all. The bump is the fix, not an upgrade, and it is now in
+    `reading-acquisition.nix` as an `overrideAttrs` on the channel's package.
+
+    ⚠ **What this costs, since it is real debt:** the package is pinned ahead of
+    nixpkgs, so a later channel bump stops applying until the override is
+    removed, and it skips the `nixosTests` nixpkgs runs against the version it
+    ships. Revisit when nixpkgs catches up — `nix eval` the channel's
+    `suwayomi-server.version` and drop the override once it is ≥ 2.3.2243.
+
+    Pre-flight done before pushing: every `server.conf` key this host sets
+    (`extensionRepos`, `downloadAsCbz`, `downloadsPath`, `basicAuthEnabled`,
+    `initialOpenInBrowserEnabled`) exists identically in both jars, so the
+    settings carry over; the overridden package builds and its wrapper resolves
+    to the 2.3.2243 jar.
