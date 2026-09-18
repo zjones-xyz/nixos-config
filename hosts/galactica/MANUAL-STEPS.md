@@ -1624,11 +1624,43 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    rotating either afterwards is an `ALTER USER` inside the database, not a
    switch. And no template carries `restartUnits` (matching `homepages.nix` and
    `nixflix.nix`), so rotating any of these needs a manual container restart.
-6. [ ] **Expect Grimmory to fail once on first boot**, and do not chase it.
+6. [x] **Expect Grimmory to fail once on first boot**, and do not chase it.
    `oci-containers` has no equivalent of compose's `depends_on: service_healthy`,
    so its first start races MariaDB initialising its datadir. The restart *is*
    the wait loop (`RestartSec = 15`, paced so the start limit cannot make a slow
    first boot fatal).
+
+   ⚠ **That wait loop did not cover the case it was written for, and the code
+   changed 2026-09-17.** `dependsOn` renders `Requires=` as well as `After=`,
+   and Requires *propagates stops* — so a flapping MariaDB cycled Grimmory at
+   systemd's own ~2s pace, ignoring `RestartSec` entirely and burning its start
+   limit in 13 seconds. Grimmory's journal showed only `status=143` (SIGTERM)
+   and `Dependency failed`, which reads like Grimmory's problem and is not.
+   MariaDB is now ordered with `after` alone, so its restarts no longer touch
+   Grimmory and the 15-second loop does the waiting it was meant to.
+
+   ⚠ **If MariaDB itself will not start, read its journal before touching
+   anything.** Seen once, after a container stop during a switch left its
+   transaction-coordinator log corrupt:
+
+   ```
+   [ERROR] Bad magic header in tc log
+   [ERROR] Crash recovery failed. … delete tc log and …
+   [ERROR] Can't init tc log
+   ```
+
+   InnoDB recovered cleanly on its own (`End of log at LSN=…`, rollback
+   segments active), so only `tc.log` was damaged and deleting it is MariaDB's
+   documented remedy — it is recreated on start, and with no prepared
+   transactions there is nothing to lose. Stop both units, `rm` it,
+   `systemctl reset-failed` both, start MariaDB, wait for `ready for
+   connections`, then start Grimmory. ⚠ Do **not** wipe the datadir for this:
+   `mariadb_upgrade_info` and `mysql/` predating the failure prove the
+   initialisation and the secrets were fine.
+
+   ⟨Unrelated but visible in that datadir: it is owned by `btrbk`. That is the
+   container's `mysql` (uid 999) landing on whichever host user holds 999 —
+   these containers share the host's uid namespace. Harmless to MariaDB.⟩
 7. [x] ⚠ **Verify BookBridge can actually reach Audiobookshelf** — it may not,
    and it is the whole point of running it. `READING-STACK.md` §4.6 has the two
    levers. Grimmory it reaches as `http://grimmory:6060` on the `proxy` network;

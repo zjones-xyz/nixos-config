@@ -124,7 +124,7 @@ in
         "${booksDir}:/books"
         "${bookdropDir}:/bookdrop"
       ];
-      dependsOn = [ "grimmory-mariadb" ];
+      # ⚠ No `dependsOn` — the ordering is declared below as `after` alone.
       extraOptions = [ "--network=proxy" ];
     };
 
@@ -214,7 +214,14 @@ in
     # directories on the root filesystem.
     {
       # Ordered after the gid resolver as well: its env file carries GROUP_ID.
-      docker-grimmory.after = [ "reading-media-gid.service" ];
+      # ⚠ MariaDB is ordered here rather than via `dependsOn`, which would also
+      # render `Requires=` — and Requires propagates stops, so a flapping
+      # MariaDB cycles Grimmory at systemd's pace, ignoring RestartSec below and
+      # burning its start limit in seconds. MANUAL-STEPS.md §18 item 6.
+      docker-grimmory.after = [
+        "reading-media-gid.service"
+        "docker-grimmory-mariadb.service"
+      ];
       docker-grimmory.requires = [ "reading-media-gid.service" ];
       docker-grimmory.unitConfig.RequiresMountsFor = [
         (stateDir "grimmory")
@@ -231,9 +238,10 @@ in
 
     {
       # ⚠ compose's `depends_on: service_healthy` has no oci-containers
-      # equivalent — dependsOn only orders unit starts — so Grimmory's first
-      # start races MariaDB initialising its datadir and exits. The restart IS
-      # the wait loop, paced so the 5-starts-in-10s limit cannot make it fatal.
+      # equivalent, so Grimmory's first start races MariaDB initialising its
+      # datadir and exits. The restart IS the wait loop, paced so the
+      # 5-starts-in-10s limit cannot make it fatal. ⚠ It only covers Grimmory's
+      # own exit — see the `after` above for why MariaDB is not a `Requires=`.
       docker-grimmory.serviceConfig.RestartSec = 15;
 
       audiobookshelf = {
