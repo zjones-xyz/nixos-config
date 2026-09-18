@@ -1684,10 +1684,13 @@ Written alongside `READING-STACK.md`; deployed in the order below.
     itself. Force the family at the far end instead: an A-only endpoint
     (`https://api.ipify.org`) out of the container, and `curl -6` inside the
     namespace.
-11. [ ] **Add Chaptarr's download clients by hand**, at
+11. [x] **Add Chaptarr's download clients by hand**, at
     `http://192.168.8.190:8080` (SABnzbd) and `http://192.168.15.1:8282`
     (qBittorrent). ⚠ **Not `localhost`** — inside the container that is the
     container. These two addresses are the likeliest thing to get wrong.
+
+    ✅ **Added 2026-09-17.** Which also means Chaptarr's own login exists, so
+    that much of item 12 is done too.
 12. [ ] **First-run accounts**, none of which can come from Nix: Chaptarr's login
     (its `AuthOptions` has no username/password env path at all), Shelfmark's
     builtin-auth admin, and Grimmory's, Audiobookshelf's and BookBridge's first
