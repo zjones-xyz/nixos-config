@@ -1658,6 +1658,11 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    `mariadb_upgrade_info` and `mysql/` predating the failure prove the
    initialisation and the secrets were fine.
 
+   ✅ **Recovered 2026-09-17** exactly that way — `tc.log` deleted, MariaDB up,
+   Grimmory serving. ⚠ Still unexplained: what killed the container hard enough
+   to corrupt that log. A switch stopping it is the likely cause, and if it
+   recurs the fix is MariaDB's stop timeout, not deleting the file again.
+
    ⟨Unrelated but visible in that datadir: it is owned by `btrbk`. That is the
    container's `mysql` (uid 999) landing on whichever host user holds 999 —
    these containers share the host's uid namespace. Harmless to MariaDB.⟩
