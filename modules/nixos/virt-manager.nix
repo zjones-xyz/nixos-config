@@ -12,8 +12,9 @@
 
   # Lets an unprivileged user pass a host USB device (e.g. a USB Wi-Fi adapter
   # for wireless labs) through to a running guest via virt-manager's Redirect
-  # USB Device menu, without needing sudo per-device.
-  virtualisation.spiceUSBRedirection.enable = true;
+  # USB Device menu, without needing sudo per-device. Off for now — not needed
+  # yet, flip on when a wireless lab actually needs USB passthrough.
+  virtualisation.spiceUSBRedirection.enable = false;
 
   programs.virt-manager.enable = true;
 
