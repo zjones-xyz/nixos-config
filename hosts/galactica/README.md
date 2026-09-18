@@ -21,6 +21,7 @@ the nixflix media stack and its import from `tank/media_staging`).
 | **`DECISIONS.md`** | *Why it is this way.* Decision → alternatives → rationale, what the previous design got right, and **`## Still open`**. | Before changing something that looks arbitrary. |
 | **`MANUAL-STEPS.md`** | The bring-up record and what's still pending (NUT, router persistence, media import). | Doing hands-on work on the box. |
 | **`BACKUP-BORG.md`** | How borgmatic selects ZFS datasets, and the live BorgBase wiring. | Touching backups. |
+| **`READING-STACK.md`** | *The books half.* Which reading/listening services serve what, which acquire, and why. ⚠ Spec in progress — nothing implemented yet. | Touching books, comics or audiobooks. |
 
 Fleet-wide: `docs/DISK-LABELLING.md` (naming and labelling convention),
 `docs/DISK-DRAWER.md` (unassigned disks), `docs/BACKUP.md` (who owes what an
