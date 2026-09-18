@@ -45,6 +45,14 @@ let
   # Written by reading-media-gid.service below; read by both containers.
   gidEnvFile = "/run/reading/media-gid.env";
 
+  # Applied to Suwayomi's dataDir and the parents of the module's own tmpfiles
+  # rule — see that rule for why the parents have to be spelled out.
+  suwayomiDir = {
+    user = config.services.suwayomi-server.user;
+    group = mediaGroup;
+    mode = "0750";
+  };
+
   # ── Ports ─────────────────────────────────────────────────────────────────
   # ⚠ Chaptarr is 8789, not Readarr's 8787 (§5b). Suwayomi takes its own
   # upstream default because the nixpkgs module's 8080 is SABnzbd's. The rest
@@ -161,11 +169,15 @@ in
       group = mediaGroup;
       mode = "0775";
     };
-    "${appdata}/suwayomi".d = {
-      user = config.services.suwayomi-server.user;
-      group = mediaGroup;
-      mode = "0750";
-    };
+    # ⚠ The two intermediate directories are not decoration. The module's own
+    # rule is for `<dataDir>/.local/share/Tachidesk`; tmpfiles creates missing
+    # parents as root, then refuses to descend from a user-owned directory into
+    # a root-owned one ("unsafe path transition"), so Tachidesk is never made
+    # and the unit dies in envsubst. Owning the chain keeps every step the same
+    # uid. Only bites because dataDir is off /var/lib.
+    "${appdata}/suwayomi".d = suwayomiDir;
+    "${appdata}/suwayomi/.local".d = suwayomiDir;
+    "${appdata}/suwayomi/.local/share".d = suwayomiDir;
     "${libraryRoot}/ebooks".d = {
       inherit (nixflix.globals.libraryOwner) user group;
       # ⚠ setgid, and tmpfiles is why it must be said: it chmods to exactly
