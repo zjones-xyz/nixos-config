@@ -8,13 +8,7 @@
 # Shelfmark's egress. READING-STACK.md §5 is the spec; §5a and §5d hold the
 # constraints this file's shape comes from. The library half (Grimmory,
 # Audiobookshelf, BookBridge) is reading-library.nix.
-#
-# ⚠⚠ INCOMPLETE, deliberately: no service here sets PGID, because the `media`
-# group has no gid to read — nixflix's own qbittorrent and navidrome modules
-# mkForce it to an empty set, wiping the gid it otherwise sets. Until that is
-# settled (READING-STACK.md §4.7) these services write as their image's default
-# group and cannot write into the shared `root:media` trees. Do not deploy and
-# expect imports to work.
+
 
 let
   nixflix = config.nixflix;
@@ -47,6 +41,9 @@ let
   # Shelfmark's TMP_DIR. On the array beside the bookdrop — see the tmpfiles
   # entry for why not appdata.
   stagingDir = "${library}/staging";
+
+  # Written by reading-media-gid.service below; read by both containers.
+  gidEnvFile = "/run/reading/media-gid.env";
 
   # ── Ports ─────────────────────────────────────────────────────────────────
   # ⚠ Chaptarr is 8789, not Readarr's 8787 (§5b). Suwayomi takes its own
@@ -81,6 +78,39 @@ let
   downloadsDir = nixflix.downloadsDir;
 in
 {
+  # ── The `media` gid, resolved at unit-start time ───────────────────────────
+  # ⚠ `config.users.groups.media.gid` is NULL at evaluation — two nixflix
+  # modules mkForce the group to an empty set, wiping the gid it otherwise sets
+  # (READING-STACK.md §4.7). The number does exist once the system is up, so
+  # read it then and hand it over through an env file: `docker run --env-file`
+  # reads that at start. Touches no live group, needs no nixflix patch, and
+  # follows if the number ever moves.
+  systemd.services.reading-media-gid = {
+    description = "Resolve the ${mediaGroup} gid for the reading stack's containers";
+    wantedBy = [ "multi-user.target" ];
+
+    serviceConfig = {
+      Type = "oneshot";
+      # The env file has to outlive the unit's exit, and RuntimeDirectory is
+      # cleaned on stop without both of these.
+      RemainAfterExit = true;
+      RuntimeDirectory = "reading";
+      RuntimeDirectoryPreserve = true;
+    };
+
+    script = ''
+      gid=$(${pkgs.getent}/bin/getent group ${mediaGroup} | ${pkgs.coreutils}/bin/cut -d: -f3)
+      # ⚠ Fail loudly rather than write an empty PGID: the entrypoints read that
+      # as "use my default group", which is exactly the silent miswrite §4.7
+      # exists to prevent.
+      if [ -z "$gid" ]; then
+        echo "group ${mediaGroup} exists with no gid — refusing to write an empty PGID" >&2
+        exit 1
+      fi
+      ${pkgs.coreutils}/bin/printf 'PGID=%s\n' "$gid" > /run/reading/media-gid.env
+    '';
+  };
+
   # ── Container identities ──────────────────────────────────────────────────
   # These accounts run nothing; they exist so `PUID`/`PGID` name a real owner
   # and the uid is reserved. Fixed ids above nixpkgs' static range (ids.nix
@@ -178,10 +208,8 @@ in
 
     environment = {
       PUID = toString config.users.users.chaptarr.uid;
-      # ⚠ PGID is ABSENT, and not by choice — see the banner at the top of this
-      # file. `config.users.groups.media.gid` is null, so it would render empty.
-      # Until the gid question is settled this container writes as its image's
-      # default group; READING-STACK.md §4.7 has the decision and the options.
+      # PGID arrives from the env file below, not from here — the gid does not
+      # exist at evaluation time (§4.7).
       UMASK = "002";
       TZ = config.time.timeZone;
 
@@ -198,7 +226,10 @@ in
       Chaptarr__Log__Level = "info";
     };
 
-    environmentFiles = [ config.sops.templates."chaptarr.env".path ];
+    environmentFiles = [
+      config.sops.templates."chaptarr.env".path
+      gidEnvFile
+    ];
     ports = [ "127.0.0.1:${toString chaptarrPort}:${toString chaptarrPort}" ];
 
     volumes = [
@@ -216,7 +247,7 @@ in
 
     environment = {
       PUID = toString config.users.users.shelfmark.uid;
-      # ⚠ PGID absent for the same reason as Chaptarr's — §4.7.
+      # PGID arrives from the env file below, same as Chaptarr's — §4.7.
       UMASK = "002";
       TZ = config.time.timeZone;
 
@@ -267,7 +298,10 @@ in
       SABNZBD_URL = "http://${hostAddress}:${toString sabnzbdPort}";
     };
 
-    environmentFiles = [ config.sops.templates."shelfmark.env".path ];
+    environmentFiles = [
+      config.sops.templates."shelfmark.env".path
+      gidEnvFile
+    ];
     ports = [ "127.0.0.1:${toString shelfmarkPort}:${toString shelfmarkPort}" ];
 
     volumes = [
@@ -434,8 +468,8 @@ in
   # directories on the root filesystem.
   systemd.services = {
     docker-chaptarr = {
-      after = nixflix.serviceDependencies;
-      requires = nixflix.serviceDependencies;
+      after = nixflix.serviceDependencies ++ [ "reading-media-gid.service" ];
+      requires = nixflix.serviceDependencies ++ [ "reading-media-gid.service" ];
       unitConfig.RequiresMountsFor = [
         "${appdata}/chaptarr"
         library
@@ -443,8 +477,8 @@ in
       ];
     };
     docker-shelfmark = {
-      after = nixflix.serviceDependencies;
-      requires = nixflix.serviceDependencies;
+      after = nixflix.serviceDependencies ++ [ "reading-media-gid.service" ];
+      requires = nixflix.serviceDependencies ++ [ "reading-media-gid.service" ];
       unitConfig.RequiresMountsFor = [
         "${appdata}/shelfmark"
         stagingDir

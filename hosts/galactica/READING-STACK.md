@@ -17,9 +17,9 @@ entry point. ⚠ No service, no secret, no dataset — so the names resolve and 
 404 against Traefik's default certificate until the first service registers, at
 which point the wildcard is issued (see the certificate subsection in §7).
 
-⚠ **Nine units for one subsystem** — Grimmory, MariaDB, Audiobookshelf,
-BookBridge, Chaptarr, Shelfmark and Suwayomi, plus the confined proxy and the
-second FlareSolverr that §5d adds — on top of reusing Prowlarr, the shared
+⚠ **Ten units for one subsystem** — Grimmory, MariaDB, Audiobookshelf,
+BookBridge, Chaptarr, Shelfmark and Suwayomi, plus the confined proxy, the second
+FlareSolverr that §5d adds, and the gid oneshot §4.7 needs — on top of reusing Prowlarr, the shared
 FlareSolverr, qBittorrent and SABnzbd from the *arr stack. That is the deliberate
 price of covering four content types with two overlapping libraries and keeping
 the acquisition egress in the tunnel; §3 and §5 name the pieces to drop first if
@@ -356,7 +356,12 @@ Consequences, in order of how much they matter:
 the two uids rwx on the shared trees via `systemd.tmpfiles` `a+` lines — no gid
 needed anywhere, at the cost of ACLs on the array.⟩
 
-Until one is chosen, the acquisition half is **not deployable**.
+**Chosen: route 1, implemented.** `reading-media-gid.service` is a oneshot that
+reads `getent group media` and writes `PGID=<n>` into `/run/reading/media-gid.env`;
+both acquisition containers take that as an `environmentFiles` entry and order
+after it. ⚠ It **fails loudly** if the group has no gid rather than writing an
+empty `PGID`, which is the silent miswrite this whole section exists to prevent.
+Nothing live is touched and no nixflix patch is carried.
 
 ## 5. Acquisition
 
