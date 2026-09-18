@@ -1741,10 +1741,10 @@ Written alongside `READING-STACK.md`; deployed in the order below.
     indistinguishable from an empty shelf. Hand-entered Newznab/Torznab indexers
     in Chaptarr are the fallback if the sync will not come up.
 15. [ ] **Confirm the dashboard icons render**, as §15 item 7 did for the
-    last batch. Only Audiobookshelf and Suwayomi use real icon-set names; the
-    other four reading services are too new to be in the sets and use `mdi-`
-    glyphs, which cannot 404 but do look different. Swap them if upstream icons
-    ever land.
+    last batch. All six come from selfh.st and every name was confirmed `200`
+    on the CDN first, so a miss here means the `sh-` resolution rather than a
+    wrong name — ⚠ note BookBridge's and Chaptarr's `.svg` do **not** exist, so
+    those two must keep their explicit `.png`.
 16. [ ] **`CopyUsingHardlinks` is not declarable** — it lives in Chaptarr's
     SQLite `Config` table, and env only reaches `config.xml`-level settings.
     Leave it at its default (`true`, harmless across datasets: one `link()` that

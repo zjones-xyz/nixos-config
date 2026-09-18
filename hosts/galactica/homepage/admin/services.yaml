@@ -91,9 +91,10 @@
 # The reading stack (hosts/galactica/READING-STACK.md), split the same way the
 # media groups are: what you read from, then what acquires it.
 #
-# ⚠ Icons: only Audiobookshelf and Suwayomi have upstream dashboard icons. The
-# other four are too new to be in the icon sets, so they use `mdi-` glyphs,
-# which cannot 404 — swap them for real icons if they ever land.
+# Icons: all six from selfh.st (`sh-`), which carries even the newest of these,
+# and each name was confirmed 200 on cdn.jsdelivr.net before being written here.
+# ⚠ The extension is explicit because it is not uniform — BookBridge and
+# Chaptarr are PNG-only (their `.svg` 404s) while the rest have both.
 #
 # No widgets yet, deliberately: each would need a new {{HOMEPAGE_VAR_*}} in
 # homepages.nix and an API key generated from a UI that has no account yet.
@@ -101,34 +102,34 @@
     - Grimmory:
         href: https://grimmory.read.zjones.dev
         siteMonitor: https://grimmory.read.zjones.dev
-        icon: mdi-bookshelf
+        icon: sh-grimmory.svg
         description: Ebooks & comics
     - Audiobookshelf:
         href: https://audiobookshelf.read.zjones.dev
         siteMonitor: https://audiobookshelf.read.zjones.dev
-        icon: audiobookshelf.png
+        icon: sh-audiobookshelf.svg
         description: Audiobooks & podcasts
     - BookBridge:
         href: https://bookbridge.read.zjones.dev
         siteMonitor: https://bookbridge.read.zjones.dev
-        icon: mdi-sync
+        icon: sh-bookbridge.png
         description: Progress sync
 
 - Reading Management:
     - Chaptarr:
         href: https://chaptarr.read.zjones.dev
         siteMonitor: https://chaptarr.read.zjones.dev
-        icon: mdi-book-clock
+        icon: sh-chaptarr.png
         description: Book monitoring
     - Shelfmark:
         href: https://shelfmark.read.zjones.dev
         siteMonitor: https://shelfmark.read.zjones.dev
-        icon: mdi-book-search
+        icon: sh-shelfmark.svg
         description: Book search & download
     - Suwayomi:
         href: https://suwayomi.read.zjones.dev
         siteMonitor: https://suwayomi.read.zjones.dev
-        icon: suwayomi.png
+        icon: sh-suwayomi.svg
         description: Manga
 
 - Downloads:
