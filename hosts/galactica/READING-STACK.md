@@ -274,7 +274,7 @@ works on 5757, and Traefik narrows routes better anyway. Pin
 `ghcr.io/cporcellijr/bookbridge:7.6.0` (GHCR only; the `-cuda` variant is ~800 MB
 larger and only for NVIDIA Whisper, which this host has no GPU for).
 
-### 4.6 ⚠⚠ Open: BookBridge may not be able to reach Audiobookshelf at all
+### 4.6 BookBridge reaching Audiobookshelf — resolved, it can
 
 Found while implementing, and it goes to whether BookBridge can do its job.
 Its sync targets are configured in its own UI, and **from inside a container
@@ -300,6 +300,25 @@ choice is not obvious:
 
 ⚠ Do **not** reach for `audiobookshelf.read.internal` — that hands BookBridge
 Traefik's self-signed certificate, which §7 already warns about for apps.
+
+**✅ Verified on the host 2026-09-17: it reaches it, and neither lever is
+needed.** `https://audiobookshelf.read.zjones.dev/ping` answers `200` from
+inside the container, over the real wildcard certificate.
+
+The premise above was wrong in one detail, and that detail is the whole
+outcome: galactica's `/etc/resolv.conf` is **Tailscale's**, not a loopback
+nameserver. The container's resolver reports
+`ExtServers: [host(100.100.100.100)]`, so Docker had a forwardable upstream and
+never hit the loopback refusal — MagicDNS resolves the name to `192.168.8.190`
+and Traefik does the rest.
+
+⚠ Which means the path depends on something declared nowhere in this stack:
+the tailnet's DNS knowing the `read.zjones.dev` rewrite. Note also that a
+public resolver could not return a private address, so the fact that this works
+is itself evidence about item 2 of the run book's §18. If BookBridge ever
+loses Audiobookshelf, suspect resolution before suspecting either service —
+and lever 1 above is then a one-line hedge that removes DNS from the path
+entirely.
 
 ### 4.7 ⚠⚠ BLOCKING: two nixflix modules wipe the `media` group
 

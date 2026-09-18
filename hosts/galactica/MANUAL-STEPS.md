@@ -1543,7 +1543,12 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    `Obtaining bundled SAN certificate` for `read.zjones.dev, *.read.zjones.dev`,
    two DNS-01 challenges, no per-subdomain requests. One certificate spent, and
    `acme.json` carries the wildcard.
-2. [ ] **Point the tailnet at AdGuard**, or none of the `.zjones.dev` names
+2. [ ] **Point the tailnet at AdGuard** — ⚠ possibly already done; check
+   before changing anything. A container on galactica resolved
+   `audiobookshelf.read.zjones.dev` to `192.168.8.190` through MagicDNS on
+   2026-09-17, and no public resolver can return a private address, so the
+   tailnet already reaches something that knows the rewrite. Otherwise: or
+   none of the `.zjones.dev` names
    resolve off-LAN and the Tailscale half of `READING-STACK.md` §7 does nothing.
    Tailscale admin console → DNS → nameservers. Not expressible in Nix, which
    is why it is here.
@@ -1624,10 +1629,15 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    so its first start races MariaDB initialising its datadir. The restart *is*
    the wait loop (`RestartSec = 15`, paced so the start limit cannot make a slow
    first boot fatal).
-7. [ ] ⚠ **Verify BookBridge can actually reach Audiobookshelf** — it may not,
+7. [x] ⚠ **Verify BookBridge can actually reach Audiobookshelf** — it may not,
    and it is the whole point of running it. `READING-STACK.md` §4.6 has the two
    levers. Grimmory it reaches as `http://grimmory:6060` on the `proxy` network;
    Audiobookshelf is native on loopback, and a container cannot dial that.
+
+   ✅ **It can — verified 2026-09-17, and neither lever was needed.** `/ping`
+   answers `200` from inside the container. §4.6 now records why: this host's
+   `resolv.conf` is Tailscale's rather than a loopback nameserver, so Docker's
+   resolver had a legitimate upstream to forward to.
 8. [x] **Own `/tank/podcasts` — AFTER the switch, not before.** `zfs create`
    leaves it `root:root 0755` and Audiobookshelf cannot write there. ⚠ But the
    `audiobookshelf` user does not exist until the switch that declares the
