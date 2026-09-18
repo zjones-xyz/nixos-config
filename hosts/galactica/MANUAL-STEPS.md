@@ -1733,7 +1733,13 @@ Written alongside `READING-STACK.md`; deployed in the order below.
     builtin-auth admin, and Grimmory's, Audiobookshelf's and BookBridge's first
     users. ⚠ Do **not** set `Chaptarr__Auth__Method` to force Forms first — env
     wins on every start and would lock you out of creating the account.
-13. [ ] **Suwayomi needs an extension repository** added before anything works.
+13. [ ] **Verify Suwayomi's extension repo loaded.** The repo itself is now
+    declared in Nix (Keiyoushi), so there is nothing to add by hand — ⚠ and it
+    had to be declared: the module re-renders `server.conf` from the Nix
+    settings on **every start**, so a repo added in the WebUI is reverted at the
+    next restart, silently. The same is true of any other server setting changed
+    there. After the switch, Browse should list sources.
+
 14. [ ] ⚠ **Test the Prowlarr → Chaptarr sync early** — §5b calls it the single
     biggest risk here, with two open upstream bugs on the path. When registering
     the application, **widen the synced categories to include `3000` and `3030`**
@@ -1749,3 +1755,13 @@ Written alongside `READING-STACK.md`; deployed in the order below.
     SQLite `Config` table, and env only reaches `config.xml`-level settings.
     Leave it at its default (`true`, harmless across datasets: one `link()` that
     fails `EXDEV` per import) or change it in the UI.
+17. [ ] **Decide on Suwayomi 2.3.2243.** Its UI reports the update; the pin
+    carries 2.1.1867. Left alone deliberately 2026-09-17 — the derivation is a
+    plain `fetchurl` of a release jar, so an `overrideAttrs` bump is about ten
+    lines (`sha256-ghFBsy4XDUoC08vf7Vd+2PB70iOD/19BMuu1rkDpjdU=`, confirmed
+    fetchable), but it pins us off-channel so a later nixpkgs bump stops
+    applying, and it skips the `nixosTests` nixpkgs runs against the version it
+    ships. ⚠ **Item 13 is the deciding evidence:** if extensions load on
+    2.1.1867 the gap is cosmetic; if they do not, the bump is the fix rather
+    than an upgrade. ⟨The UI's update button cannot work either way — the jar is
+    a read-only store path.⟩

@@ -730,6 +730,19 @@ container, no pinning debt. It downloads CBZ into the tree Grimmory already read
 Comics/manga being new appetite (§1), there is nothing to migrate and no legacy
 layout to honour.
 
+⚠ **It needs an extension repository, and that must be declared rather than
+added in the UI.** Suwayomi ships with none, so without one it can browse
+nothing at all. The trap is that the module regenerates `server.conf` from the
+Nix `settings` on **every start** (`envsubst -i <generated> -o
+…/Tachidesk/server.conf`), and Suwayomi keeps its server settings — extension
+repos included — in that very file. So anything changed through the WebUI is
+reverted at the next restart or switch, silently and without an error. The repo
+is therefore `settings.server.extensionRepos`, pointing at **Keiyoushi**, the
+community successor to Tachiyomi's own index, which no longer exists.
+
+⟨The same overwrite applies to every other server setting the WebUI can change,
+not only the repo list. Anything that must persist belongs in `settings`.⟩
+
 ⟨**Kapowarr** for Western comics was considered and deferred — not in nixpkgs, so
 a third acquisition container and another pinned tag, for appetite that has not
 been demonstrated yet. Add it if Suwayomi's coverage proves to be the gap.⟩

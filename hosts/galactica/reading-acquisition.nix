@@ -346,6 +346,15 @@ in
       port = suwayomiPort;
       downloadAsCbz = true;
       downloadsPath = "${libraryRoot}/manga";
+
+      # ⚠ Declared here rather than added in the WebUI, and that is not a
+      # preference: the module re-renders server.conf from these settings on
+      # every start, so anything the UI writes there is reverted at the next
+      # restart. Keiyoushi is the community successor to Tachiyomi's own index,
+      # which no longer exists; without a repo Suwayomi can browse nothing.
+      extensionRepos = [
+        "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"
+      ];
     };
   };
 
