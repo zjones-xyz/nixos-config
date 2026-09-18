@@ -468,6 +468,13 @@
   # the dedicated logs disk; journald routes them with everything else.
   virtualisation.docker.daemon.settings.log-driver = "journald";
 
+  # ⚠ Pinning Docker's *default* bridge subnet, not changing it — read live off
+  # `docker0` before writing it here. `reading-acquisition.nix` hardcodes this
+  # literal twice (tinyproxy's allow-list and the namespace's return route), and
+  # a default that silently moved would break both; this makes it true by
+  # construction rather than by luck.
+  virtualisation.docker.daemon.settings.bip = "172.17.0.1/16";
+
   # The fleet's 500M cap would waste the 48G logs partition. `mkAfter`, not
   # `mkForce`: journald.conf is last-key-wins, so this extends the fleet
   # default rather than replacing it — dropping this line falls back sanely.

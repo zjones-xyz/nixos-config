@@ -1547,7 +1547,7 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    resolve off-LAN and the Tailscale half of `READING-STACK.md` §7 does nothing.
    Tailscale admin console → DNS → nameservers. Not expressible in Nix, which
    is why it is here.
-3. [ ] **Create the datasets, before anything starts — including before the
+3. [x] **Create the datasets, before anything starts — including before the
    first `nixos-rebuild switch`.** ⚠ Two things will occupy the mountpoint if the
    dataset is not there first: Docker materialises a missing bind-mount source as
    an empty root-owned directory, **and `systemd-tmpfiles` creates
@@ -1568,7 +1568,11 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    it at switch, owned by a user that does not exist yet.
    `bookdrop` is a **sibling** of `library`, not inside it, so a half-imported
    drop is never scanned as library content.
-4. [ ] **Own the library tree, and check the two numbers first.** Group ownership
+
+   ✅ **Verified 2026-09-17**, after the switch: `tank/books` is `protected` and
+   `tank/podcasts` `re-acquirable`, and `library` carries its three
+   subdirectories with `staging` beside it as `shelfmark:media 0775`.
+4. [x] **Own the library tree, and check the two numbers first.** Group ownership
    of what Grimmory writes comes from the **setgid bit**, not from a `GROUP_ID` —
    there is no numeric `media` gid to hand it (`READING-STACK.md` §4.7).
    ```bash
@@ -1591,9 +1595,13 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    sudo chown 1000:media /tank/books/library /tank/books/bookdrop
    sudo chmod 2775 /tank/books/library /tank/books/bookdrop
    ```
+   ✅ **Verified 2026-09-17:** both are `1000:991` and `drwxrwsr-x` — the setgid
+   bit is really set, which is the half that carries group ownership.
+
    ⚠ Still outstanding, and it affects the *existing* media stack rather than
    this one: `users.users.z.extraGroups = [ "media" ];` so you can write the
-   media trees as yourself. One line, worth doing on its own.
+   media trees as yourself. One line, worth doing on its own — and the reason
+   `/tank/appdata/suwayomi` reads as `Permission denied` to you today.
 5. [x] **Create the five sops secrets** in `secrets/galactica.yaml`. ⚠ All must
    exist *before* the switch or sops-nix fails it — the nixflix precedent.
    - `reading/grimmoryDbPassword` — one value, rendered into both Grimmory's
@@ -1620,7 +1628,7 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    and it is the whole point of running it. `READING-STACK.md` §4.6 has the two
    levers. Grimmory it reaches as `http://grimmory:6060` on the `proxy` network;
    Audiobookshelf is native on loopback, and a container cannot dial that.
-8. [ ] **Own `/tank/podcasts` — AFTER the switch, not before.** `zfs create`
+8. [x] **Own `/tank/podcasts` — AFTER the switch, not before.** `zfs create`
    leaves it `root:root 0755` and Audiobookshelf cannot write there. ⚠ But the
    `audiobookshelf` user does not exist until the switch that declares the
    service has run, so `chown audiobookshelf:media` before it fails with
@@ -1629,13 +1637,20 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    sudo chown -R audiobookshelf:media /tank/podcasts
    sudo chmod 2775 /tank/podcasts
    ```
-   Then create its libraries in the UI — the module has no option for them.
-9. [ ] ⚠ **Pin the Docker bridge subnet.** `reading-acquisition.nix` hardcodes
+   ✅ **Owned 2026-09-17:** `audiobookshelf:media`, `drwxrwsr-x`. Creating the
+   libraries in the UI is still to do — the module has no option for them.
+9. [x] ⚠ **Pin the Docker bridge subnet.** `reading-acquisition.nix` hardcodes
    `172.17.0.0/16` — Docker's default — and two things depend on it being true
    (tinyproxy's allow-list and the namespace's return route). Read the live value
    (`ip -4 addr show docker0`), then pin it with
    `virtualisation.docker.daemon.settings.bip` so the literal is true by
    construction rather than by luck.
+
+   ✅ **Read live 2026-09-17: `172.17.0.1/16`** — the hardcoded literal was
+   already true, so the pin in `configuration.nix` changes nothing at runtime.
+   ⚠ It does rewrite `daemon.json`, so the switch that lands it **restarts
+   dockerd and bounces every container on the host**, the media stack included.
+   Land it when a blip is acceptable, not mid-import.
 10. [ ] ⚠ **The acceptance test for the whole egress design** (§5a/§5c/§5d):
     ```bash
     docker exec shelfmark curl -s https://ifconfig.me   # must be the Proton exit
