@@ -87,6 +87,8 @@ in
   # follows if the number ever moves.
   systemd.services.reading-media-gid = {
     description = "Resolve the ${mediaGroup} gid for the reading stack's containers";
+    # reading-library.nix's Grimmory consumes the same file — it has to write
+    # into the bookdrop, which Shelfmark chowns to shelfmark:media on start.
     wantedBy = [ "multi-user.target" ];
 
     serviceConfig = {
@@ -107,7 +109,10 @@ in
         echo "group ${mediaGroup} exists with no gid — refusing to write an empty PGID" >&2
         exit 1
       fi
-      ${pkgs.coreutils}/bin/printf 'PGID=%s\n' "$gid" > /run/reading/media-gid.env
+      # Both spellings: Chaptarr and Shelfmark read PGID, Grimmory reads
+      # GROUP_ID, and an unused extra in an env file is inert.
+      ${pkgs.coreutils}/bin/printf 'PGID=%s\nGROUP_ID=%s\n' "$gid" "$gid" \
+        > /run/reading/media-gid.env
     '';
   };
 

@@ -10,9 +10,9 @@
 
 let
   # The library's group — shared with the *arr trees so what one stack writes
-  # the other can read. ⚠ Name only: `users.groups.media.gid` evaluates to
-  # null here (the number is allocated at activation), so no container can be
-  # handed a numeric GROUP_ID; see grimmoryUid below.
+  # the other can read. ⚠ Name only: `users.groups.media.gid` evaluates to null
+  # here, so the number arrives at unit-start time instead, from the resolver in
+  # reading-acquisition.nix (READING-STACK.md §4.7).
   mediaGroup = config.nixflix.globals.libraryOwner.group;
 
   # ── Paths ─────────────────────────────────────────────────────────────────
@@ -50,9 +50,9 @@ let
   dbUser = "grimmory";
 
   # The uid the Grimmory image's own account carries (also `z` here); both
-  # USER_ID and the owner of its state directory need it. ⚠ The group of what
-  # it writes comes from the setgid bit on the library tree, not from GROUP_ID,
-  # which cannot be derived — see mediaGroup.
+  # USER_ID and the owner of its state directory need it. The group comes from
+  # GROUP_ID in the resolver's env file, plus the setgid bit on the library
+  # tree — see mediaGroup.
   grimmoryUid = 1000;
 in
 {
@@ -99,9 +99,8 @@ in
         TZ = config.time.timeZone;
         DATABASE_URL = "jdbc:mariadb://grimmory-mariadb:${toString mariadbPort}/${dbName}";
         DATABASE_USERNAME = dbUser;
-        # GROUP_ID deliberately absent, see the binding above; the library tree
-        # is owned by this uid and setgid to `media`, which is what decides the
-        # group of everything Grimmory creates in it.
+        # GROUP_ID is not here: it comes from the resolver's env file below,
+        # because the gid does not exist at evaluation time.
         USER_ID = toString grimmoryUid;
         SWAGGER_ENABLED = "false";
         # ⚠ DISK_TYPE stays unset (= local). It selects NFS/SMB-safe file
@@ -110,7 +109,15 @@ in
         # OIDC is left merely unconfigured rather than FORCE_DISABLE_OIDC'd:
         # §7 defers a provider, and a forced disable is a second thing to undo.
       };
-      environmentFiles = [ config.sops.templates."grimmory.env".path ];
+      # ⚠ The second file carries GROUP_ID, resolved at unit-start time because
+      # the `media` gid does not exist at evaluation (READING-STACK.md §4.7).
+      # Grimmory needs it to write the bookdrop: Shelfmark's entrypoint chowns
+      # that directory to `shelfmark:media` on every start, so uid ownership
+      # alone would leave Grimmory able to read but not ingest out of it.
+      environmentFiles = [
+        config.sops.templates."grimmory.env".path
+        "/run/reading/media-gid.env"
+      ];
       ports = [ "127.0.0.1:${toString grimmoryPort}:${toString grimmoryPort}" ];
       volumes = [
         "${stateDir "grimmory"}:/app/data"
@@ -206,6 +213,9 @@ in
     # against empty bind-mount sources, which Docker materialises as root-owned
     # directories on the root filesystem.
     {
+      # Ordered after the gid resolver as well: its env file carries GROUP_ID.
+      docker-grimmory.after = [ "reading-media-gid.service" ];
+      docker-grimmory.requires = [ "reading-media-gid.service" ];
       docker-grimmory.unitConfig.RequiresMountsFor = [
         (stateDir "grimmory")
         booksDir

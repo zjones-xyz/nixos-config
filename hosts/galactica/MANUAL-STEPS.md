@@ -1548,15 +1548,19 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    an empty root-owned directory, **and `systemd-tmpfiles` creates
    `/tank/books/library/{ebooks,audiobooks,manga}` on every run** — those three
    are declared in `reading-acquisition.nix`, so a switch is enough to do it.
+   ⚠ `tank/books` **already exists** — created 2026-09-02 during the array
+   build, empty, with `homelab:tier=protected` already set `local`. So its two
+   commands are no-ops; only the podcasts dataset and the subdirectories are new.
+   All of this needs `sudo`.
    ```bash
-   zfs create tank/books
-   zfs set homelab:tier=protected tank/books
-   mkdir -p /tank/books/library /tank/books/bookdrop
+   sudo mkdir -p /tank/books/library /tank/books/bookdrop
    # Podcasts are Re-acquirable, and tier is a dataset property — so NOT under
    # tank/books, which would back up re-downloadable audio as Protected forever.
-   zfs create tank/podcasts
-   zfs set homelab:tier=re-acquirable tank/podcasts
+   sudo zfs create tank/podcasts
+   sudo zfs set homelab:tier=re-acquirable tank/podcasts
    ```
+   `/tank/books/staging` is deliberately absent here: `systemd-tmpfiles` creates
+   it at switch, owned by a user that does not exist yet.
    `bookdrop` is a **sibling** of `library`, not inside it, so a half-imported
    drop is never scanned as library content.
 4. [ ] **Own the library tree, and check the two numbers first.** Group ownership
@@ -1574,11 +1578,17 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    stack too. Until that is resolved the acquisition services cannot write to the
    shared trees. Start by capturing the live state, which every option below
    depends on:
+   ✅ **Read on the live host 2026-09-17:** `media:x:991:unpackerr` — gid **991**
+   (not nixflix's 169, which is why the resolver reads `getent` at unit-start
+   instead of trusting the constant), and `z` is **not a member**
+   (`uid=1000(z) gid=100(users)`). The uid is 1000 as assumed.
    ```bash
-   getent group media                     # the number actually in use
-   id z                                   # is z in media at runtime?
-   find /tank/nixflix_media -maxdepth 2 -printf '%g\n' | sort -u
+   sudo chown 1000:media /tank/books/library /tank/books/bookdrop
+   sudo chmod 2775 /tank/books/library /tank/books/bookdrop
    ```
+   ⚠ Still outstanding, and it affects the *existing* media stack rather than
+   this one: `users.users.z.extraGroups = [ "media" ];` so you can write the
+   media trees as yourself. One line, worth doing on its own.
 5. [ ] **Create the five sops secrets** in `secrets/galactica.yaml`. ⚠ All must
    exist *before* the switch or sops-nix fails it — the nixflix precedent.
    - `reading/grimmoryDbPassword` — one value, rendered into both Grimmory's
@@ -1604,9 +1614,16 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    and it is the whole point of running it. `READING-STACK.md` §4.6 has the two
    levers. Grimmory it reaches as `http://grimmory:6060` on the `proxy` network;
    Audiobookshelf is native on loopback, and a container cannot dial that.
-8. [ ] **Own `/tank/podcasts`.** `zfs create` leaves it `root:root 0755` and
-   Audiobookshelf runs as `audiobookshelf:media`, so it cannot write there.
-   Also create its libraries in the UI — the module has no option for them.
+8. [ ] **Own `/tank/podcasts` — AFTER the switch, not before.** `zfs create`
+   leaves it `root:root 0755` and Audiobookshelf cannot write there. ⚠ But the
+   `audiobookshelf` user does not exist until the switch that declares the
+   service has run, so `chown audiobookshelf:media` before it fails with
+   `invalid user`. Switch first, then:
+   ```bash
+   sudo chown -R audiobookshelf:media /tank/podcasts
+   sudo chmod 2775 /tank/podcasts
+   ```
+   Then create its libraries in the UI — the module has no option for them.
 9. [ ] ⚠ **Pin the Docker bridge subnet.** `reading-acquisition.nix` hardcodes
    `172.17.0.0/16` — Docker's default — and two things depend on it being true
    (tinyproxy's allow-list and the namespace's return route). Read the live value

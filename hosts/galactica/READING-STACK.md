@@ -185,7 +185,7 @@ Two consequences:
    silently forcing `read_special` tree-wide. ⚠ It is not the only database here —
    BookBridge's SQLite needs its own treatment, §4.5.
 
-### 4.4 The BookLore database is probably recoverable — verify early
+### 4.4 ~~The BookLore database is probably recoverable — verify early~~ — moot: starting empty
 
 `MANUAL-STEPS.md` records that on 2026-09-03 sidepool's `pools/` — 117 GB of
 Unraid `cache`/`fastservices`/`services` appdata — was rsynced to
@@ -193,7 +193,15 @@ Unraid `cache`/`fastservices`/`services` appdata — was rsynced to
 BookLore's MariaDB volume is in there, Grimmory's migration path turns shelves,
 metadata and read-progress into an import instead of a rebuild.
 
-**Do this before designing the import**, because the answer changes it:
+⭐ **Owner's decision, 2026-09-17: start empty.** The Unraid `books` data was
+copied into the array but sits in a dataset that has not been migrated yet, and
+`tank/books` is empty (verified on the host). Grimmory comes up on a fresh
+library; moving the old collection in is a **separate, later job**. So the
+BookLore database question below is **not blocking** — it only matters if and
+when that import happens, and the files matter more than the shelves either way.
+
+⟨Kept rather than deleted because the recovery path is the part worth not
+rediscovering:⟩
 
 1. [ ] Look for BookLore's appdata (and its MariaDB volume) under
        `/tank/backups/sidepool-pools`, and record what was found here.
