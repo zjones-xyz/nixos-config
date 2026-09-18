@@ -104,7 +104,9 @@
   # rationale, plus the raw BMC address if towerbmc.internal (an out-of-band
   # AdGuard rewrite, like all the .internal names here) ever stops resolving.
   home.shellAliases = {
-    drs = "sudo darwin-rebuild switch --flake ~/Code/nixos-config#serenity";
+    # A script, not a bare `sudo darwin-rebuild …` alias — the alias built
+    # whatever was checked out without ever naming the branch.
+    drs = "~/Code/nixos-config/scripts/nrebuild.sh darwin-rebuild switch serenity";
     npull = "~/Code/nixos-config/scripts/npull.sh";
     # A script, not "npull && drs" — an alias would put the PR number on drs.
     npulldrs = "~/Code/nixos-config/scripts/npull-rebuild.sh darwin-rebuild serenity";

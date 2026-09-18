@@ -49,8 +49,11 @@ if [ "$RC" -ne 0 ]; then
   exit "$RC"
 fi
 
-# Only reachable once npull.sh has succeeded, so it has already established
-# this is a git checkout and said so if it wasn't.
-REPO="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
-
-exec sudo "$REBUILD" switch --flake "$REPO#$FLAKE_ATTR"
+# Through nrebuild.sh rather than a second copy of the rebuild command, so the
+# one-step and two-step paths cannot drift. NREBUILD_NO_PRE_BANNER because
+# npull.sh printed the branch banner a moment ago and nrebuild.sh would
+# otherwise print an identical one immediately after it.
+# No "$@" here: those arguments belong to the pull and npull.sh has already
+# consumed them, exactly as the usage note above says.
+exec env NREBUILD_NO_PRE_BANNER=1 \
+  "$SCRIPT_DIR/nrebuild.sh" "$REBUILD" switch "$FLAKE_ATTR"
