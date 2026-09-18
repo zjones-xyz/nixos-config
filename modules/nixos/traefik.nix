@@ -33,6 +33,29 @@ let
               - url: "http://host.docker.internal:8096"
   '';
 
+  # Home Assistant runs on host networking (modules/nixos/home-assistant.nix —
+  # its discovery needs L2 broadcast), so it has no Docker labels to read. Same
+  # file-provider treatment as Jellyfin above, for the same reason.
+  # ⚠ `.internal` only, no .zjones.dev router: the fleet's standing posture is
+  # that Home Assistant stays LAN/Tailscale-only with no public name
+  # (hosts/galactica/configuration.nix, MANUAL-STEPS §14).
+  homeAssistantConfig = pkgs.writeText "home-assistant.yml" ''
+    http:
+      routers:
+        home-assistant:
+          rule: "Host(`ha.memory-alpha.internal`)"
+          entrypoints:
+            - websecure
+          tls: {}
+          service: home-assistant-svc
+
+      services:
+        home-assistant-svc:
+          loadBalancer:
+            servers:
+              - url: "http://host.docker.internal:8123"
+  '';
+
   composeFile = pkgs.writeText "traefik-compose.yml" ''
     networks:
       proxy:
@@ -104,6 +127,7 @@ let
           # longer mounts the Docker socket directly.
           - "/home/z/traefik/letsencrypt:/letsencrypt"
           - "${jellyfinConfig}:/traefik-config/jellyfin.yml:ro"
+          - "${homeAssistantConfig}:/traefik-config/home-assistant.yml:ro"
           - "/home/z/traefik/auth/htpasswd:/auth/users:ro"
         networks:
           - proxy
