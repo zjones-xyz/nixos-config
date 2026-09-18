@@ -1504,7 +1504,7 @@ collision has already merged silently into this file twice, per #113's own notes
 
 Written alongside `READING-STACK.md`; deployed in the order below.
 
-1. [ ] ⚠ **Watch the first certificate issuance — all six services register in
+1. [x] ⚠ **Watch the first certificate issuance — all six services register in
    one switch.** ⟨An earlier draft of this item said to land one service first.
    That is not achievable as the change is shaped: both halves are imported
    together and every service registers in `homelab.readUpstreams` at once. The
@@ -1538,6 +1538,11 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    the wildcard is stored regardless, so it is self-correcting rather than
    fatal — but it eats shared budget, so check before doing anything else that
    issues. Nothing to undo either way.
+
+   ✅ **Watched on the live host 2026-09-17: it did not race.** Exactly one
+   `Obtaining bundled SAN certificate` for `read.zjones.dev, *.read.zjones.dev`,
+   two DNS-01 challenges, no per-subdomain requests. One certificate spent, and
+   `acme.json` carries the wildcard.
 2. [ ] **Point the tailnet at AdGuard**, or none of the `.zjones.dev` names
    resolve off-LAN and the Tailscale half of `READING-STACK.md` §7 does nothing.
    Tailscale admin console → DNS → nameservers. Not expressible in Nix, which
@@ -1589,7 +1594,7 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    ⚠ Still outstanding, and it affects the *existing* media stack rather than
    this one: `users.users.z.extraGroups = [ "media" ];` so you can write the
    media trees as yourself. One line, worth doing on its own.
-5. [ ] **Create the five sops secrets** in `secrets/galactica.yaml`. ⚠ All must
+5. [x] **Create the five sops secrets** in `secrets/galactica.yaml`. ⚠ All must
    exist *before* the switch or sops-nix fails it — the nixflix precedent.
    - `reading/grimmoryDbPassword` — one value, rendered into both Grimmory's
      `DATABASE_PASSWORD` and MariaDB's `MARIADB_PASSWORD`.
@@ -1599,7 +1604,8 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    - `reading/bookbridgeWebSecretKey` — so sessions survive a restore.
    - `reading/chaptarrApiKey` — ⚠ also the value to paste into Chaptarr's UI. If
      Chaptarr generates its own instead, Prowlarr's application entry mismatches.
-   ⚠ `secrets/galactica.yaml` has no `reading:` block at all yet.
+   ✅ **Done 2026-09-17**, all five — the switch reaching activation at all is
+   the proof, since sops-nix fails it otherwise.
 
    ⚠ MariaDB reads its two values **only while initialising an empty datadir**;
    rotating either afterwards is an `ALTER USER` inside the database, not a
