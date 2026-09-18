@@ -1740,13 +1740,17 @@ Written alongside `READING-STACK.md`; deployed in the order below.
     next restart, silently. The same is true of any other server setting changed
     there. After the switch, Browse should list sources.
 
-    ⚠ **Second finding, 2026-09-17: the settings page said "Extension stores"
-    and was empty.** That is 2.3's naming, rendered by a WebUI that had
-    **updated itself** — Suwayomi downloads its interface into the data dir and
-    re-checks every 23 hours by default, so it drifts from the server jar Nix
-    installs. The config now sets `webUIChannel = "BUNDLED"` with the check
-    disabled, so the UI matches the pin. ⚠ Do not add a store by hand from a
-    mismatched UI: it writes to a server that has no such concept.
+    ⚠ **Second finding, once 2.3.2243 was running: the Extension stores page
+    was empty even though the URL was declared.** 2.3 renamed the setting to
+    `extensionStores`, and the server **rewrites `server.conf` itself** into its
+    reference format at runtime — dropping the deprecated `extensionRepos`
+    rather than migrating its value, so the URL simply vanished. Renamed in the
+    config, with an assertion so it cannot silently regress.
+
+    ⟨`webUIChannel = "BUNDLED"` was set at the same time but was **not** the
+    cause — UI and server were both 2.3. It closes a separate hole: the default
+    downloads the interface into the data dir and re-checks every 23 hours, so
+    the UI drifts from the pinned jar on its own.⟩
 
     ✅ **Loaded 2026-09-17 — and found two stubs, which is the real finding.**
     Browse showed `Outdated App` and `Update to Mihon 0.20.1+` and nothing else.

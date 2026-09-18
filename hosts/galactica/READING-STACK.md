@@ -768,24 +768,28 @@ all, just of a different kind than a container tag.
 the base from it by removing that suffix. Pointing it at `repo.json` or
 `index.pb` directly would break the derivation.⟩
 
-⚠⚠ **The WebUI is not covered by the package pin, and that bit us.** Suwayomi's
-default is `webUIChannel = "stable"` with `webUIUpdateCheckInterval = 23`: it
-**downloads its own interface into the data dir and re-checks every 23 hours**,
-so the UI drifts away from the server on its own schedule regardless of which
-jar Nix installs. Observed as an "Extension stores" settings page — 2.3's
-naming — rendered by a self-updated UI while the server was still the channel's
-2.1.1867, which has no such concept, so the list was empty and adding one by
-hand would have gone nowhere.
+⚠⚠ **2.3 renamed the setting, and the rename is silent in both directions.**
+`extensionRepos` became `extensionStores`. Observed on the hardware once
+2.3.2243 was running: the Extension stores page was **empty** despite the URL
+being declared, because it was declared under the old name. Worse, the server
+**rewrites `server.conf` itself** at runtime into its own documented format —
+the file on disk carries the upstream reference comments, which this repo's
+HOCON generator never emits — and that rewrite **drops the deprecated key
+rather than migrating its value**. So the URL did not move to the new name; it
+disappeared.
 
-Set to `BUNDLED` with the check disabled: the WebUI inside the jar, matching the
-server exactly. ⟨Both jars carry `WebUI.zip`, so this costs nothing.⟩ Without
-it, pinning the package is only half a pin, and any future Suwayomi debugging
-starts from an unknown interface version.
+An unknown key is ignored rather than rejected, so the failure has no error
+anywhere: an assertion ties the key to the package version instead, or dropping
+the override once nixpkgs catches up would return manga to zero extensions just
+as quietly.
 
-⟨2.3 also renamed `extensionRepos` to `extensionStores` and deprecated the old
-key. An unknown key is silently ignored rather than rejected, so an assertion
-guards the version, or dropping the override later would leave manga with zero
-extensions and no error.⟩
+⟨Also set while here, as a hazard rather than a diagnosis: `webUIChannel` is
+pinned to `BUNDLED` with the update check disabled. Suwayomi's default
+(`"stable"`, re-checked every 23 hours) **downloads its own interface into the
+data dir**, so the UI drifts from whatever jar Nix installs and the two can
+disagree about which fields exist. It was *not* the cause here — UI and server
+were both 2.3 — but it makes the package pin only half a pin, and both jars
+carry `WebUI.zip`, so closing it costs nothing.⟩
 
 ⟨**Kapowarr** for Western comics was considered and deferred — not in nixpkgs, so
 a third acquisition container and another pinned tag, for appetite that has not
