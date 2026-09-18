@@ -1651,7 +1651,7 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    ⚠ It does rewrite `daemon.json`, so the switch that lands it **restarts
    dockerd and bounces every container on the host**, the media stack included.
    Land it when a blip is acceptable, not mid-import.
-10. [ ] ⚠ **The acceptance test for the whole egress design** (§5a/§5c/§5d):
+10. [x] ⚠ **The acceptance test for the whole egress design** (§5a/§5c/§5d):
     ```bash
     docker exec shelfmark curl -s https://ifconfig.me   # must be the Proton exit
     ip netns exec wg curl -s https://ifconfig.me        # the same address
@@ -1661,6 +1661,19 @@ Written alongside `READING-STACK.md`; deployed in the order below.
     mode is fail-closed (with `HTTP_PROXY` set and the proxy unreachable
     `requests` raises rather than going direct), so a *broken* proxy shows as
     errors, not as a silent leak.
+
+    ✅ **Passed 2026-09-17.** Namespace and container share one Proton exit —
+    `212.104.215.98` (v4) and `2a02:6ea0:510c:6110::22` (v6) — against a house
+    IP of `24.16.37.249`.
+
+    ⚠ **Comparing the two needs care, and `-4` will not do it.** The container
+    answered over IPv6 while the namespace curl picked IPv4, so the first
+    comparison was across address families and proved nothing on its own. With
+    `HTTPS_PROXY` set, `curl -4` constrains the hop *to tinyproxy*, not
+    tinyproxy's onward connection — the proxy still resolves and chooses for
+    itself. Force the family at the far end instead: an A-only endpoint
+    (`https://api.ipify.org`) out of the container, and `curl -6` inside the
+    namespace.
 11. [ ] **Add Chaptarr's download clients by hand**, at
     `http://192.168.8.190:8080` (SABnzbd) and `http://192.168.15.1:8282`
     (qBittorrent). ⚠ **Not `localhost`** — inside the container that is the
