@@ -201,6 +201,21 @@ in
     };
   };
 
+  # ⚠ `extensionStores` is 2.3+. On an older Suwayomi the key is `extensionRepos`
+  # and an unknown key is simply ignored — so dropping the package override
+  # without renaming it back would leave manga acquisition with zero extensions
+  # and no error anywhere. MANUAL-STEPS.md §18 item 17.
+  assertions = [
+    {
+      assertion = lib.versionAtLeast config.services.suwayomi-server.package.version "2.3";
+      message = ''
+        suwayomi-server is ${config.services.suwayomi-server.package.version}, but
+        reading-acquisition.nix sets settings.server.extensionStores, which only
+        exists from 2.3. Rename it to extensionRepos or restore the override.
+      '';
+    }
+  ];
+
   # ── Reaching the host from the Docker bridge ──────────────────────────────
   # Prowlarr and SABnzbd bind 0.0.0.0 behind the firewall, so a container gets
   # them only with an interface-scoped opening — the same shape §5a prescribes
@@ -365,13 +380,25 @@ in
       # every start, so anything the UI writes there is reverted at the next
       # restart. Keiyoushi is the community successor to Tachiyomi's own index,
       # which no longer exists; without a repo Suwayomi can browse nothing.
+      # ⚠ `extensionStores`, not `extensionRepos` — 2.3 renamed it and deprecated
+      # the old key ("Replaced with addExtensionStore…"). The assertion below
+      # guards the silent failure that swaps them back.
+      #
       # ⚠ Still the `index.min.json` URL although that file is now a stub, and
       # that is correct: the server strips the `/index.min.json` suffix and
       # fetches `<base>/repo.json`, which points it at the real index. Changing
       # this to the path it ultimately reads would break the derivation.
-      extensionRepos = [
+      extensionStores = [
         "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"
       ];
+
+      # ⚠ The WebUI is NOT part of the jar's version by default: Suwayomi
+      # downloads it into the data dir and re-checks every 23 hours, so the UI
+      # drifts away from the server on its own and the two then disagree about
+      # which GraphQL fields exist. BUNDLED is the copy inside this exact jar,
+      # which is the only setting that makes the pin above mean anything.
+      webUIChannel = "BUNDLED";
+      webUIUpdateCheckInterval = 0.0;
     };
   };
 

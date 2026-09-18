@@ -768,6 +768,25 @@ all, just of a different kind than a container tag.
 the base from it by removing that suffix. Pointing it at `repo.json` or
 `index.pb` directly would break the derivation.⟩
 
+⚠⚠ **The WebUI is not covered by the package pin, and that bit us.** Suwayomi's
+default is `webUIChannel = "stable"` with `webUIUpdateCheckInterval = 23`: it
+**downloads its own interface into the data dir and re-checks every 23 hours**,
+so the UI drifts away from the server on its own schedule regardless of which
+jar Nix installs. Observed as an "Extension stores" settings page — 2.3's
+naming — rendered by a self-updated UI while the server was still the channel's
+2.1.1867, which has no such concept, so the list was empty and adding one by
+hand would have gone nowhere.
+
+Set to `BUNDLED` with the check disabled: the WebUI inside the jar, matching the
+server exactly. ⟨Both jars carry `WebUI.zip`, so this costs nothing.⟩ Without
+it, pinning the package is only half a pin, and any future Suwayomi debugging
+starts from an unknown interface version.
+
+⟨2.3 also renamed `extensionRepos` to `extensionStores` and deprecated the old
+key. An unknown key is silently ignored rather than rejected, so an assertion
+guards the version, or dropping the override later would leave manga with zero
+extensions and no error.⟩
+
 ⟨**Kapowarr** for Western comics was considered and deferred — not in nixpkgs, so
 a third acquisition container and another pinned tag, for appetite that has not
 been demonstrated yet. Add it if Suwayomi's coverage proves to be the gap.⟩

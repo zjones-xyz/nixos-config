@@ -1740,6 +1740,14 @@ Written alongside `READING-STACK.md`; deployed in the order below.
     next restart, silently. The same is true of any other server setting changed
     there. After the switch, Browse should list sources.
 
+    ⚠ **Second finding, 2026-09-17: the settings page said "Extension stores"
+    and was empty.** That is 2.3's naming, rendered by a WebUI that had
+    **updated itself** — Suwayomi downloads its interface into the data dir and
+    re-checks every 23 hours by default, so it drifts from the server jar Nix
+    installs. The config now sets `webUIChannel = "BUNDLED"` with the check
+    disabled, so the UI matches the pin. ⚠ Do not add a store by hand from a
+    mismatched UI: it writes to a server that has no such concept.
+
     ✅ **Loaded 2026-09-17 — and found two stubs, which is the real finding.**
     Browse showed `Outdated App` and `Update to Mihon 0.20.1+` and nothing else.
     Not a filter: that is all `index.min.json` contains now. It sent item 17
@@ -1773,6 +1781,11 @@ Written alongside `READING-STACK.md`; deployed in the order below.
     removed, and it skips the `nixosTests` nixpkgs runs against the version it
     ships. Revisit when nixpkgs catches up — `nix eval` the channel's
     `suwayomi-server.version` and drop the override once it is ≥ 2.3.2243.
+
+    ⚠ 2.3 also renamed `extensionRepos` → `extensionStores`. An unknown key is
+    ignored rather than rejected, so an assertion in `reading-acquisition.nix`
+    ties the key to the package version — otherwise dropping this override once
+    nixpkgs catches up would silently return manga to zero extensions.
 
     Pre-flight done before pushing: every `server.conf` key this host sets
     (`extensionRepos`, `downloadAsCbz`, `downloadsPath`, `basicAuthEnabled`,
