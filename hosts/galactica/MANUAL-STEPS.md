@@ -1756,8 +1756,12 @@ Written alongside `READING-STACK.md`; deployed in the order below.
     Browse showed `Outdated App` and `Update to Mihon 0.20.1+` and nothing else.
     Not a filter: that is all `index.min.json` contains now. It sent item 17
     from a preference to a blocker, and the package is pinned ahead of the
-    channel as a result. ⚠ Re-check this after the switch that carries 2.3.2243
-    — Browse listing real sources is what closes this item for good.
+    channel as a result.
+
+    ✅ **Closed 2026-09-18: Browse lists real sources.** It took all three
+    changes together — the 2.3.2243 pin, the `extensionStores` rename, and the
+    URL itself. Any one of them missing gives an empty list and no error, which
+    is why this took three passes to corner.
 
 14. [ ] ⚠ **Test the Prowlarr → Chaptarr sync early** — §5b calls it the single
     biggest risk here, with two open upstream bugs on the path. When registering
