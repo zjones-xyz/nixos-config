@@ -15,6 +15,12 @@ layout:
   Media Management:
     style: row
     columns: 4
+  Reading:
+    style: row
+    columns: 3
+  Reading Management:
+    style: row
+    columns: 3
   Downloads:
     style: row
     columns: 2

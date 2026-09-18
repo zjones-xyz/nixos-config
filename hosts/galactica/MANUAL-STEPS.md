@@ -1700,7 +1700,12 @@ Written alongside `READING-STACK.md`; deployed in the order below.
     or audiobook search issues zero queries and reports "no results",
     indistinguishable from an empty shelf. Hand-entered Newznab/Torznab indexers
     in Chaptarr are the fallback if the sync will not come up.
-15. [ ] **`CopyUsingHardlinks` is not declarable** — it lives in Chaptarr's
+15. [ ] **Confirm the dashboard icons render**, as §15 item 7 did for the
+    last batch. Only Audiobookshelf and Suwayomi use real icon-set names; the
+    other four reading services are too new to be in the sets and use `mdi-`
+    glyphs, which cannot 404 but do look different. Swap them if upstream icons
+    ever land.
+16. [ ] **`CopyUsingHardlinks` is not declarable** — it lives in Chaptarr's
     SQLite `Config` table, and env only reaches `config.xml`-level settings.
     Leave it at its default (`true`, harmless across datasets: one `link()` that
     fails `EXDEV` per import) or change it in the UI.

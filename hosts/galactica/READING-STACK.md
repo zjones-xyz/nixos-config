@@ -883,9 +883,17 @@ certificates per **registered domain** per week, and `read.zjones.dev` and
 item 6 records spending **ten** of, when `arr`'s un-deduped first switch issued
 per-subdomain certificates before the wildcard arrived.
 
-**So the rollout is staged deliberately: land one service, check the journal for
-exactly one issuance, then add the rest.** `MANUAL-STEPS.md` §18 item 1 carries
-the command and what to look for.
+⚠ **An earlier draft of this section said the rollout is staged — "land one
+service, check the journal, then add the rest." It is not, and never could have
+been as the change is shaped**: both halves are imported together and all six
+services register in `homelab.readUpstreams` at once. The real safeguard is
+watching `journalctl -u traefik` while the single switch lands, which is what
+`MANUAL-STEPS.md` §18 item 1 says.
+
+✅ **Outcome on the hardware 2026-09-17: the dedup held.** One
+`Obtaining bundled SAN certificate` for `read.zjones.dev, *.read.zjones.dev`,
+two DNS-01 challenges, no per-subdomain requests — **one** certificate spent
+against the shared budget, not six.
 
 ### ⚠ Router names are flat across groups
 
@@ -926,6 +934,18 @@ per-service exposure, no tunnel and no tsdproxy node**.
 
 - ⚠ **Manual step, not Nix:** the tailnet must use AdGuard as its DNS (Tailscale
   admin console → nameservers) or the rewrites never resolve off-LAN.
+- ⚠⚠ **DNS is necessary but not sufficient, and this section over-promised.**
+  The rewrite answers `192.168.8.190`, a LAN address — resolving it is not the
+  same as having a route to it. **No node in this fleet advertises
+  `192.168.8.0/24` as a subnet route**: `modules/nixos/tailscale.nix` gives
+  hopper `--advertise-exit-node` and nothing carries `--advertise-routes`. So a
+  phone off the LAN must select **hopper as its exit node**, or hopper must gain
+  `--advertise-routes=192.168.8.0/24` (plus approval in the admin console), for
+  any of these names to actually connect. Galactica's own admin dashboard
+  records the same constraint from the other side — its Apps group uses tsdproxy
+  names precisely because "a `zjones.dev` link would be dead exactly when this
+  dashboard is being used remotely". ⟨Neither lever is in this spec's scope:
+  both are hopper's config. Verify off-LAN access before relying on it.⟩
 - ⚠ **Use the `.zjones.dev` names on phones and tablets.** `*.read.internal`
   routers carry `tls = { }` — Traefik's self-signed default — which presents as a
   certificate warning on a mobile browser and outright failure in some apps. The

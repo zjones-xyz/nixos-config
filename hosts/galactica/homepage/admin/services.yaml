@@ -10,11 +10,11 @@
 # shows a colored up/down dot next to the service name. checks/homepage-config
 # fails the build if an entry has `href` without a matching `siteMonitor`.
 #
-# Live services only. The Tower services not yet re-homed (Jellyseerr,
-# Audiobookshelf, Grimmory, Shelfmark, Immich, ARM, 13ft, Bambuddy) come back
-# one group entry at a time as each migrates — homelab-stacks
-# tower/homepage/config/services.yaml is the reference for what each entry
-# looked like.
+# Live services only. The Tower services not yet re-homed (Jellyseerr, Immich,
+# ARM, 13ft, Bambuddy) come back one group entry at a time as each migrates —
+# homelab-stacks tower/homepage/config/services.yaml is the reference for what
+# each entry looked like. Audiobookshelf, Grimmory and Shelfmark came back with
+# the reading stack (READING-STACK.md) and are in the two Reading groups below.
 #
 # Any `{{HOMEPAGE_VAR_*}}` used here must be defined in this instance's sops
 # env template (homepages.nix) — also enforced by checks/homepage-config.
@@ -87,6 +87,49 @@
           type: prowlarr
           url: https://prowlarr.arr.zjones.dev
           key: "{{HOMEPAGE_VAR_PROWLARR_API_KEY}}"
+
+# The reading stack (hosts/galactica/READING-STACK.md), split the same way the
+# media groups are: what you read from, then what acquires it.
+#
+# ⚠ Icons: only Audiobookshelf and Suwayomi have upstream dashboard icons. The
+# other four are too new to be in the icon sets, so they use `mdi-` glyphs,
+# which cannot 404 — swap them for real icons if they ever land.
+#
+# No widgets yet, deliberately: each would need a new {{HOMEPAGE_VAR_*}} in
+# homepages.nix and an API key generated from a UI that has no account yet.
+- Reading:
+    - Grimmory:
+        href: https://grimmory.read.zjones.dev
+        siteMonitor: https://grimmory.read.zjones.dev
+        icon: mdi-bookshelf
+        description: Ebooks & comics
+    - Audiobookshelf:
+        href: https://audiobookshelf.read.zjones.dev
+        siteMonitor: https://audiobookshelf.read.zjones.dev
+        icon: audiobookshelf.png
+        description: Audiobooks & podcasts
+    - BookBridge:
+        href: https://bookbridge.read.zjones.dev
+        siteMonitor: https://bookbridge.read.zjones.dev
+        icon: mdi-sync
+        description: Progress sync
+
+- Reading Management:
+    - Chaptarr:
+        href: https://chaptarr.read.zjones.dev
+        siteMonitor: https://chaptarr.read.zjones.dev
+        icon: mdi-book-clock
+        description: Book monitoring
+    - Shelfmark:
+        href: https://shelfmark.read.zjones.dev
+        siteMonitor: https://shelfmark.read.zjones.dev
+        icon: mdi-book-search
+        description: Book search & download
+    - Suwayomi:
+        href: https://suwayomi.read.zjones.dev
+        siteMonitor: https://suwayomi.read.zjones.dev
+        icon: suwayomi.png
+        description: Manga
 
 - Downloads:
     - qBittorrent:
