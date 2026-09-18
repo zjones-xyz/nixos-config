@@ -34,6 +34,11 @@
     # Exact invocations and the argument-parsing gotchas are in
     # hosts/galactica/PLATFORM.md §2.
     freeipmi
+    # nix-darwin has no programs.mosh module (that's NixOS-only, see
+    # hosts/pegasus/configuration.nix) — just the package here. macOS's own
+    # Application Firewall, not nix-darwin, would need a manual allow if it's
+    # ever turned on; it ships off by default and this fleet doesn't enable it.
+    mosh
     neovim
     nmap
     sl  # for lolz — steam locomotive when you fat-finger `ls`

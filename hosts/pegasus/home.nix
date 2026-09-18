@@ -176,6 +176,11 @@
     # programs.kitty below now (not here) — see that block for why.
     ghostty
 
+    # Terminal multiplexer — mosh (hosts/pegasus/configuration.nix) survives
+    # roaming/sleep but not a dropped SSH-adjacent connection outright; zellij
+    # keeps panes/sessions alive across either.
+    zellij
+
     # Doxie Q2 (DX320) scan management — the scanner itself needs no driver
     # (mounts as plain USB mass storage; Wi-Fi direct-to-cloud setup is the
     # one piece still gated behind the proprietary Mac/Windows app). naps2

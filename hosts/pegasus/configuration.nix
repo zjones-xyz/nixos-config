@@ -114,6 +114,12 @@
     1900
   ];
 
+  # ── mosh ────────────────────────────────────────────────────────────────────
+  # openFirewall defaults to true (opens UDP 60000-61000) — left at that default
+  # rather than scoped to tailscale0 only, so a mosh session survives being
+  # started from the LAN directly, not just over the tailnet.
+  programs.mosh.enable = true;
+
   # ── Remote Desktop (xrdp) ────────────────────────────────────────────────────
   # Supersedes KRDP, which can only mirror an already-logged-in session — see
   # DECISIONS.md. xrdp/xorgxrdp spins up an independent Plasma-X11 session per
