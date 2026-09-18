@@ -287,6 +287,38 @@
     enable = true;
     settings.shell = "${pkgs.zsh}/bin/zsh";
     environment.SHELL = "${pkgs.zsh}/bin/zsh";
+
+    # ── tmux-style directional splits ─────────────────────────────────────────
+    # `splits` leads enabled_layouts: it is the startup layout, and
+    # --location=hsplit/vsplit are ignored by every other layout. `*` keeps the
+    # rest reachable by name. --cwd=current makes a pane inherit the cwd, not
+    # $HOME. The arrows and ctrl+shift+l shadow stock binds, each of which
+    # keeps a fallback — DECISIONS.md has the key audit.
+    settings.enabled_layouts = "splits,*";
+    keybindings = {
+      "ctrl+shift+d" = "launch --location=hsplit --cwd=current";
+      "ctrl+shift+backslash" = "launch --location=vsplit --cwd=current";
+      "ctrl+shift+left" = "neighboring_window left";
+      "ctrl+shift+right" = "neighboring_window right";
+      "ctrl+shift+up" = "neighboring_window up";
+      "ctrl+shift+down" = "neighboring_window down";
+
+      # Rebound from kitty's own ctrl+shift+f3 — keeps the palette off the
+      # F-key row and matches the Alt+Space launcher bind above.
+      "ctrl+shift+space" = "command_palette";
+
+      # Layout switching. ctrl+shift+l replaces stock next_layout with a
+      # two-state zoom flip; the jumps are bound rather than left to the
+      # palette because only a mapped binding carries its argument there.
+      "ctrl+shift+l" = "toggle_layout stack";
+      "ctrl+shift+m>s" = "goto_layout splits";
+      "ctrl+shift+m>t" = "goto_layout tall";
+      "ctrl+shift+m>f" = "goto_layout fat";
+      "ctrl+shift+m>g" = "goto_layout grid";
+      "ctrl+shift+m>v" = "goto_layout vertical";
+      "ctrl+shift+m>h" = "goto_layout horizontal";
+      "ctrl+shift+m>k" = "goto_layout stack";
+    };
   };
 
   # ── Screenshot annotation (swappy) ──────────────────────────────────────────
