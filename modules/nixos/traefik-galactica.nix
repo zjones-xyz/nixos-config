@@ -20,18 +20,22 @@ let
     then "/var/lib/traefik/acme-staging.json"
     else "/var/lib/traefik/acme.json";
 
-  internalDomain = "arr.internal";
-  publicDomain = "arr.zjones.dev";
-
-  # The one certificate every *.arr.zjones.dev router requests. Declared once
-  # and shared so no router can drift into asking for a different SAN set,
-  # which would defeat the deduplication described at mkRouters below.
-  domains = [
-    {
-      main = publicDomain;
-      sans = [ "*.${publicDomain}" ];
-    }
-  ];
+  # ── Domain groups ───────────────────────────────────────────────────────────
+  # Galactica runs ONE Traefik, so a second subsystem is a second group of names
+  # here, never a second module: `arr.*` is the media stack, `read.*` the reading
+  # stack (READING-STACK.md §7). Each group declares the one certificate its own
+  # routers share, so no router can drift into a SAN set that defeats the dedup.
+  mkDomainGroup = base: upstreams: {
+    inherit upstreams;
+    internalDomain = "${base}.internal";
+    publicDomain = "${base}.zjones.dev";
+    domains = [
+      {
+        main = "${base}.zjones.dev";
+        sans = [ "*.${base}.zjones.dev" ];
+      }
+    ];
+  };
 
   nixflix = config.nixflix;
 
@@ -42,7 +46,7 @@ let
   svcUrl = svc: port: "http://${svc.connectionAddress}:${toString port}";
   arrUrl = name: svcUrl nixflix.${name} nixflix.${name}.config.hostConfig.port;
 
-  upstreams =
+  arrUpstreams =
     lib.genAttrs [
       "prowlarr"
       "sonarr"
@@ -64,52 +68,75 @@ let
   # ⚠ FlareSolverr is deliberately absent: an unauthenticated endpoint that
   # fetches arbitrary URLs through a real browser; its only client is local.
 
+  domainGroups = {
+    arr = mkDomainGroup "arr" arrUpstreams;
+    # Empty until the reading services register themselves; an empty group
+    # publishes no router, so it also requests no certificate.
+    read = mkDomainGroup "read" config.homelab.readUpstreams;
+  };
+
+  # Router and service names are the upstream's own name in every group, so the
+  # namespace is flat across groups: one name claimed twice would silently drop
+  # a route, hence the duplicate assertion below.
+  upstreamNames = lib.concatMap (g: lib.attrNames g.upstreams) (lib.attrValues domainGroups);
+  duplicateNames = lib.unique (
+    lib.filter (n: lib.count (m: m == n) upstreamNames > 1) upstreamNames
+  );
+
   # One pair per service: `.internal` on the self-signed cert, `.zjones.dev`
-  # on the LE wildcard. The dashboard reuses it, so the invariant below is
-  # written once.
+  # on its group's LE wildcard. The dashboard reuses it, so the invariant below
+  # is written once.
   mkRouterPair =
+    group:
     {
       name,
       host,
       service,
     }:
     {
-      # *.arr.internal — no ACME, so these work on a LAN with no outbound path
-      # and no DNS provider.
+      # *.<group>.internal — no ACME, so these work on a LAN with no outbound
+      # path and no DNS provider.
       ${name} = {
-        rule = "Host(`${host}.${internalDomain}`)";
+        rule = "Host(`${host}.${group.internalDomain}`)";
         entrypoints = [ "websecure" ];
         tls = { };
         inherit service;
       };
-      # ⚠ Every -dev router asks for the SAME wildcard, and that is the
-      # dedup: Traefik skips a domain only once a covering cert is already
-      # stored, so per-host `domains` here lose a cold-start race and issue
-      # ~9 individual certs — against production, a fifth of the weekly
-      # allowance.
+      # ⚠ Every -dev router in a group asks for its group's ONE wildcard, and
+      # that is the dedup: Traefik skips a domain only once a covering cert is
+      # already stored, so per-host `domains` here lose a cold-start race and
+      # issue one certificate per service instead — against production, where the
+      # allowance is 50 per registered domain per week and every group here
+      # shares `zjones.dev`.
       "${name}-dev" = {
-        rule = "Host(`${host}.${publicDomain}`)";
+        rule = "Host(`${host}.${group.publicDomain}`)";
         entrypoints = [ "websecure" ];
         tls = {
           certResolver = "letsencrypt";
-          inherit domains;
+          inherit (group) domains;
         };
         inherit service;
       };
     };
 
   mkRouters = lib.concatMapAttrs (
-    name: _:
-    mkRouterPair {
-      inherit name;
-      host = name;
-      service = "${name}-svc";
-    }
-  ) upstreams;
+    _: group:
+    lib.concatMapAttrs (
+      name: _:
+      mkRouterPair group {
+        inherit name;
+        host = name;
+        service = "${name}-svc";
+      }
+    ) group.upstreams
+  ) domainGroups;
 
-  mkServices = lib.concatMapAttrs (name: url: {
-    "${name}-svc".loadBalancer.servers = [ { inherit url; } ];
-  }) upstreams;
+  mkServices = lib.concatMapAttrs (
+    _: group:
+    lib.concatMapAttrs (name: url: {
+      "${name}-svc".loadBalancer.servers = [ { inherit url; } ];
+    }) group.upstreams
+  ) domainGroups;
 in
 {
   options.homelab.arrExtraUpstreams = lib.mkOption {
@@ -123,13 +150,32 @@ in
     '';
   };
 
+  options.homelab.readUpstreams = lib.mkOption {
+    type = lib.types.attrsOf lib.types.str;
+    default = { };
+    example = lib.literalExpression ''{ grimmory = "http://127.0.0.1:6060"; }'';
+    description = ''
+      Subdomain → upstream-URL pairs to publish under `read.internal` and
+      `read.zjones.dev`, the reading stack's own domain group. Nothing like
+      nixflix generates these, so every reading service registers itself here.
+      Each gets the same router pair as an `arr.*` service, on this group's own
+      wildcard certificate.
+    '';
+  };
+
   config = {
     # The dashboard pair claims the router names `dashboard`/`dashboard-dev`
     # and the host `traefik`; an upstream taking either would silently lose.
+    # Reserved in every group: router names are group-independent, and a
+    # `traefik.*` service would be a trap under any domain.
     assertions = [
       {
-        assertion = !(upstreams ? dashboard) && !(upstreams ? traefik);
+        assertion = !(lib.elem "dashboard" upstreamNames) && !(lib.elem "traefik" upstreamNames);
         message = "traefik-galactica: the upstream names `dashboard` and `traefik` are reserved for the dashboard router pair.";
+      }
+      {
+        assertion = duplicateNames == [ ];
+        message = "traefik-galactica: upstream name(s) claimed by more than one domain group, which would drop a route: ${lib.concatStringsSep ", " duplicateNames}.";
       }
     ];
 
@@ -194,7 +240,7 @@ in
       dynamicConfigOptions.http = {
         routers =
           mkRouters
-          // mkRouterPair {
+          // mkRouterPair domainGroups.arr {
             name = "dashboard";
             host = "traefik";
             service = "api@internal";

@@ -184,6 +184,16 @@ in
         draw-border-with-background = false;
       }
 
+      # Same niri behaviour as above, opposite symptom. kitty runs with
+      # background_opacity < 1 (modules/home/common.nix), so the filled ring
+      # shows through it: a focused kitty reads as opaque and an unfocused
+      # one as transparent — the inverse of the point. niri's FAQ carries
+      # this as "why are transparent windows tinted".
+      {
+        matches = [ { app-id = "^kitty$"; } ];
+        draw-border-with-background = false;
+      }
+
       # Kept from the original config: open Firefox's picture-in-picture
       # player as floating. Firefox is actually installed on this host
       # (unlike the original's other window-rule, for WezTerm, which isn't

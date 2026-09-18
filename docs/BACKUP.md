@@ -34,7 +34,7 @@ document was written, which is the gap §2 has since closed.
 
 | Host | Local redundancy | Offsite | Declarative? |
 |---|---|---|---|
-| **serenity** (Mac) | — | **Three paths:** iDrive subscription; Time Machine to a drive kept at the makerspace; Time Machine to a drive kept at family. | No — all outside Nix |
+| **serenity** (Mac) | — | **Vorta → BorgBase** (`serenity-home` repo) — decided 2026-08-15, **pending setup**; see `hosts/serenity/BACKUP.md`. Existing iDrive subscription + two rotated Time Machine drives untouched meanwhile. | Cask only (`modules/darwin/homebrew.nix`) — schedule/repo/passphrase are Vorta-GUI-managed, not Nix |
 | **galactica / Tower** | ZFS RAIDZ1 `tank` + btrfs snapshots on the root | **borgmatic → BorgBase**, live 2026-09-03 (`hosts/galactica/borgmatic.nix`, `BACKUP-BORG.md`) | Yes |
 | **pegasus** | btrbk local snapshots (`modules/nixos/btrfs-snapshots.nix`) | **borgmatic → BorgBase** (`hosts/pegasus/borgmatic.nix`, home dirs) | Yes |
 | **memory-alpha** | btrfs snapshots | **borgmatic → BorgBase**, live 2026-09-04 (`hosts/memory-alpha/borgmatic.nix`) | Yes |
