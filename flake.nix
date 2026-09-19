@@ -124,6 +124,13 @@
     # picks up two extra version bumps (02.04.00.70, 02.05.00.67).
     nixpkgs-bambu-studio.url = "git+https://github.com/NixOS/nixpkgs.git?rev=13b979d75662827615c1de6dd22f87e6296ba71d&shallow=1";
 
+    # Same idea again, for ferdium (7.1.2 -> 7.2.3). Here the separate pin is
+    # forced rather than merely preferred: 26.05 dropped the EOL 7.1 kernel
+    # *before* the ferdium bump landed, and pegasus pins 7.1 because the
+    # NVIDIA driver still won't build against 7.2 — so no revision of the
+    # shared nixpkgs has both. See hosts/pegasus/DECISIONS.md.
+    nixpkgs-ferdium.url = "git+https://github.com/NixOS/nixpkgs.git?rev=d34d77df0bd187ec660064937ca01f91fe75f6df&shallow=1";
+
     # Non-flake theme sources for pegasus's Dragonized session, pinned here so
     # every source pin lives in flake.lock — consumed by
     # modules/nixos/desktop-dragonized.nix via specialArgs.
@@ -137,7 +144,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, niri-flake, nixflix, nixpkgs-orca-slicer, nixpkgs-bambu-studio, dr460nized-src, window-title-applet-src, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, niri-flake, nixflix, nixpkgs-orca-slicer, nixpkgs-bambu-studio, nixpkgs-ferdium, dr460nized-src, window-title-applet-src, ... }:
   let
     # The HOMEPAGE_VAR_* names one Homepage instance actually receives, read
     # back out of the rendered sops template rather than restated here — so
@@ -244,6 +251,7 @@
                 };
               });
               orcaSlicerNewer = nixpkgs-orca-slicer.legacyPackages.x86_64-linux.orca-slicer;
+              ferdiumNewer = nixpkgs-ferdium.legacyPackages.x86_64-linux.ferdium;
               # bambu-studio is unfree (agpl3Plus + unfree, marked as of the
               # pinned commit) — legacyPackages defaults to allowUnfree =
               # false, unlike the main `nixpkgs` above (set globally via
