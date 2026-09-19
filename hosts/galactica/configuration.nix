@@ -502,6 +502,11 @@
   # stays the local alerter.
   services.scrutinyCollector.enable = true;
 
+  # 01:00 rather than the default midnight — the sweep wakes every disk, so it
+  # belongs in the same night-time window as borgmatic's 01:30 rather than in
+  # its own. Local time, not UTC: the module sets the container's TZ.
+  services.scrutinyCollector.cronSchedule = "0 1 * * *";
+
   # ── Remote access for the dashboards (homepages.nix) ───────────────────────
   # Tailscale carries the admin homepage (and SSH) over the tailnet. authKeyFile
   # so a rebuilt host rejoins headless, same shape as hopper/pegasus/hamilton.
@@ -570,6 +575,10 @@
 
   # smartd across the twelve-plus real disks; smart.nix ships the package.
   homelab.smart.monitor = true;
+
+  # Don't spin a parked disk up just to read its attributes — the 30-minute
+  # poll is otherwise what defeats every spin-down here. PLATFORM.md §13e.
+  homelab.smart.standbyAware = true;
 
   # Flipped after staging issuance was proven (which is what the flag is
   # for). Separate cert storage per CA, so this is freely reversible.
