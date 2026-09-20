@@ -17,6 +17,7 @@
     ../../modules/nixos/keyring.nix
     ../../modules/nixos/gaming.nix
     ../../modules/nixos/performance.nix
+    ../../modules/nixos/virt-manager.nix
     ../../modules/nixos/btrfs-snapshots.nix
     ../../modules/nixos/ollama.nix
     ../../modules/nixos/yubikey.nix
