@@ -1,4 +1,4 @@
-{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, orcaSlicerNewer, bambuStudioNewer, ... }:
+{ config, pkgs, lib, claudeDesktop, chatgptLinuxPreview, askimoDesktop, zenBrowser, operaBrowser, orcaSlicerNewer, bambuStudioNewer, ... }:
 
 {
   imports = [
@@ -249,6 +249,10 @@
     # flake.nix — the FHS-wrapped variant, needed for MCP servers to work
     # (they shell out to npx/uvx/etc. expecting a standard FHS layout).
     claudeDesktop
+    # OpenAI's official Linux ChatGPT public preview, unpacked from the
+    # upstream .deb in pkgs/chatgpt-linux-preview.nix and exposed via
+    # home-manager.extraSpecialArgs in flake.nix.
+    chatgptLinuxPreview
     # Askimo — multi-LLM desktop chat client (ChatGPT/Claude/Gemini/Ollama),
     # not in nixpkgs. askimoDesktop comes from pkgs/askimo.nix via
     # home-manager.extraSpecialArgs in flake.nix — see that file's comment
