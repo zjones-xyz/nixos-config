@@ -59,7 +59,11 @@
     # nixpkgs' upstream `floorp` was replaced with this prebuilt variant —
     # building it from source became unfeasible starting with its 12.x line.
     floorp-bin
+    # OpenAI terminal client (`chatgpt` command) for Linux.
+    chatgpt-cli
     claude-code
+    codex
+    github-copilot-cli
     antigravity
     # Google's terminal coding agent, the CLI counterpart to claude-code
     # above — nixpkgs' own npm-sourced build (gemini-cli-bin, the prebuilt
@@ -67,14 +71,6 @@
     # build-from-source-when-available reason claude-code isn't the -bin
     # variant either).
     gemini-cli
-    # ChatGPT desktop: nixpkgs' `chatgpt` package unpacks a .dmg and is
-    # darwin-only (see hosts/serenity, via modules/darwin/homebrew.nix) —
-    # OpenAI ships no official Linux client. The only Linux option is a
-    # third-party repackaging of the extracted macOS Electron app, which
-    # re-hosts a proprietary binary outside OpenAI's own build pipeline —
-    # not worth the trust trade for a client that's also just a browser tab
-    # away. Same call as Brain.fm below: web app via firefox/chrome.
-
     discord
     ferdium
     signal-desktop
