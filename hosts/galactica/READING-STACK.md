@@ -520,6 +520,17 @@ fix through 0.9.964.0:
   and hard validation errors throw regardless — so `forceSave` suppresses only
   *warnings* and the indexer never lands.
 
+✅ **Proven on the host 2026-09-21, torrent and usenet both.** Neither bug below
+blocks the sync in practice, and the hand-entered fallback was not needed. ⟨The
+one debugging cycle it cost is instructive: usenet indexers appeared not to sync
+while torrents did, which reads as protocol-specific. It was not — Chaptarr had
+no root folders yet, and cannot act on a synced indexer with nowhere to put the
+result. Finish an app's own setup before diagnosing its integrations.⟩
+
+The original assessment is kept below, because it is what shaped the design —
+Chaptarr's database is disposable precisely because this was expected to be
+fragile.
+
 ⚠ **Treat Prowlarr → Chaptarr sync as unproven on this fleet until tested on the
 host.** It is the single biggest risk in this document. **The escape hatch, and it
 is a real one:** Chaptarr accepts **hand-entered Newznab/Torznab indexers** pointed

@@ -1764,12 +1764,23 @@ Written alongside `READING-STACK.md`; deployed in the order below.
     URL itself. Any one of them missing gives an empty list and no error, which
     is why this took three passes to corner.
 
-14. [ ] ⚠ **Test the Prowlarr → Chaptarr sync early** — §5b calls it the single
+14. [x] ⚠ **Test the Prowlarr → Chaptarr sync early** — §5b calls it the single
     biggest risk here, with two open upstream bugs on the path. When registering
     the application, **widen the synced categories to include `3000` and `3030`**
     or audiobook search issues zero queries and reports "no results",
     indistinguishable from an empty shelf. Hand-entered Newznab/Torznab indexers
     in Chaptarr are the fallback if the sync will not come up.
+
+    ✅ **It works — torrent and usenet both, 2026-09-21.** The single biggest
+    risk in the spec, retired: neither Chaptarr bug on the sync path (#84, #131)
+    blocks it in practice, and the fallback was not needed.
+
+    ⚠ **Worth knowing for the next app, because it cost a debugging cycle:**
+    usenet indexers appeared not to sync while torrents did, which looked like a
+    protocol-specific defect. It was not. Chaptarr was simply not finished being
+    set up — its own quickstart checklist and, in particular, **root folders**
+    were still missing, and it cannot act on a synced indexer with nowhere to
+    put the result. Finish the app's own setup before diagnosing its integrations.
 15. [x] **Confirm the dashboard icons render**, as §15 item 7 did for the
     last batch. All six come from selfh.st and every name was confirmed `200`
     on the CDN first, so a miss here means the `sh-` resolution rather than a
