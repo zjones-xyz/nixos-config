@@ -25,6 +25,22 @@ let
           tls:
             certResolver: letsencrypt
           service: jellyfin-svc
+        # jellyfin.zjones.xyz is the Pangolin-tunneled public name — normally
+        # terminated at Pangolin's edge and forwarded straight to
+        # localhost:8096 by Newt, bypassing Traefik entirely. galactica's
+        # AdGuard rewrite (hosts/galactica/configuration.nix) sends LAN
+        # clients to memory-alpha directly for this name instead, so Traefik
+        # needs its own router or that split-horizon bypass 404s (confirmed
+        # live, 2026-09-20). zjones.xyz is a separate Cloudflare zone from
+        # zjones.dev — the CF_DNS_API_TOKEN below isn't confirmed to cover
+        # it — so this stays self-signed rather than risking the shared
+        # letsencrypt DNS-01 order for the working .dev router.
+        jellyfin-xyz:
+          rule: "Host(`jellyfin.zjones.xyz`)"
+          entrypoints:
+            - websecure
+          tls: {}
+          service: jellyfin-svc
 
       services:
         jellyfin-svc:
