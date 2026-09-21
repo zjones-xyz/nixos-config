@@ -1729,11 +1729,18 @@ Written alongside `READING-STACK.md`; deployed in the order below.
 
     ✅ **Added 2026-09-17.** Which also means Chaptarr's own login exists, so
     that much of item 12 is done too.
-12. [ ] **First-run accounts**, none of which can come from Nix: Chaptarr's login
+12. [x] **First-run accounts**, none of which can come from Nix: Chaptarr's login
     (its `AuthOptions` has no username/password env path at all), Shelfmark's
     builtin-auth admin, and Grimmory's, Audiobookshelf's and BookBridge's first
     users. ⚠ Do **not** set `Chaptarr__Auth__Method` to force Forms first — env
     wins on every start and would lock you out of creating the account.
+
+    ✅ **Created 2026-09-21**, alongside Audiobookshelf's two libraries —
+    audiobooks (Book type) on the tree Grimmory also indexes, and podcasts
+    (Podcast type) on its own dataset. ⚠ BookBridge's own login is the one that
+    matters most despite being the smallest service: it holds credentials for
+    both libraries (§4.5), so a weak password there compromises everything else
+    in this stack.
 13. [x] **Verify Suwayomi's extension repo loaded.** The repo itself is now
     declared in Nix (Keiyoushi), so there is nothing to add by hand — ⚠ and it
     had to be declared: the module re-renders `server.conf` from the Nix
