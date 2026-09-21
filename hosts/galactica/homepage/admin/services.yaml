@@ -138,6 +138,10 @@
         siteMonitor: https://qbittorrent.arr.zjones.dev
         icon: qbittorrent.png
         description: Torrents
+        widget:
+          type: qbittorrent
+          url: https://qbittorrent.arr.zjones.dev
+          key: "{{HOMEPAGE_VAR_QBITTORRENT_API_KEY}}"
     - SABnzbd:
         href: https://usenet.arr.zjones.dev
         siteMonitor: https://usenet.arr.zjones.dev
