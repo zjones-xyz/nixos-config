@@ -481,5 +481,9 @@ in
     # ⚠ Must stay the plaintext of the PBKDF2 hash in serverConfig, or every
     # *arr grab fails to authenticate.
     "nixflix/qbittorrentPassword" = { };
+
+    # WebUI API key, for homepages.nix's widget only — nothing in this file
+    # authenticates with it.
+    "nixflix/qbittorrentApiKey" = { };
   };
 }
