@@ -37,7 +37,13 @@ VAR_RE = re.compile(r"\{\{(HOMEPAGE_VAR_[A-Z0-9_]+)\}\}")
 
 # Names reachable only from the LAN/tailnet. A guest-facing link to one of
 # these is a dead link for the audience that dashboard exists for.
-INTERNAL_SUFFIXES = (".internal", ".arr.zjones.dev", ".monitor.zjones.dev")
+INTERNAL_SUFFIXES = (
+    ".internal",
+    ".arr.zjones.dev",
+    ".monitor.zjones.dev",
+    ".read.zjones.dev",
+    ".maker.zjones.dev",
+)
 
 CONFIG_FILES = ("settings.yaml", "services.yaml", "bookmarks.yaml", "widgets.yaml")
 
