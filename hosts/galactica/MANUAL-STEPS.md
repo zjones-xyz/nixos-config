@@ -1828,16 +1828,30 @@ Written alongside `READING-STACK.md`; deployed in the order below.
 
 `hosts/galactica/memos.nix` declares it as a container, same shape as §15's
 four: Traefik router pair, tsdproxy tailnet node. New appdata (no Unraid
-backup to restore — this is a fresh install, not a migration), so
-`/tank/appdata/memos` starts empty. No secret needed: upstream has no
-signing-key env var.
+backup to restore — this is a fresh install, not a migration). No secret
+needed: upstream has no signing-key env var.
 
-1. [ ] **First switch.** Confirm the container starts, `memos.internal` and
+Unlike §16's PartDB/HomeBox/Spoolman batch, `tank/appdata/memos` is promoted
+straight to its own ZFS dataset rather than staying a directory in the
+shared `tank/appdata` — same exception as ferdium/karakeep
+(`SHARES.md`, `BACKUP-BORG.md`), on the grounds that notes are a real loss.
+Must happen **before** the first switch, since `zfs create` on a path that
+already exists as a plain directory needs the directory empty/absent first.
+
+1. [ ] **Create and tag the dataset** — `zfs create tank/appdata/memos`,
+   then `zfs set homelab:tier=precious tank/appdata/memos` and
+   `zfs set org.torsion.borgmatic:backup=auto tank/appdata/memos`
+   (`BACKUP-BORG.md`'s Memos section has the exact commands).
+2. [ ] **First switch.** Confirm the container starts, `memos.internal` and
    `memos.zjones.dev` both return the setup wizard, and the LE cert issues
    cleanly.
-2. [ ] **Create the first (admin) account** through the setup wizard —
+3. [ ] **Create the first (admin) account** through the setup wizard —
    Memos' own first-run flow, not a Nix-declared credential.
-3. [ ] **Key expiry disabled on the new `memos` tsdproxy node** — same trap
+4. [ ] **Key expiry disabled on the new `memos` tsdproxy node** — same trap
    as every prior batch.
-4. [ ] **Dashboard icon.** `Apps` group now references `memos.png` —
+5. [ ] **Dashboard icon.** `Apps` group now references `memos.png` —
    confirm it renders (dashboard-icons carries it as of this writing).
+6. [ ] **Confirm the dataset is picked up by borgmatic** — after the next
+   nightly run, check the BorgBase archive contents (or `borgmatic list`)
+   for `tank/appdata/memos`; the property-driven autoscan (`BACKUP-BORG.md`)
+   needs no config change, but worth verifying once rather than assuming.

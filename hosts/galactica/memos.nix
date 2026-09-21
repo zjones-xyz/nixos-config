@@ -10,6 +10,12 @@
 # ferdium.nix: loopback-only publish, fronted by Traefik, with its own
 # tsdproxy tailnet node. SQLite-backed, single container, no secret needed
 # (no signing-key env var upstream).
+#
+# dataDir is its own ZFS dataset (not a directory in the shared tank/appdata),
+# promoted off the default tier for offsite backup — same exception as
+# ferdium/karakeep, SHARES.md's "Precious and Irreplaceable" row,
+# `org.torsion.borgmatic:backup=auto` (BACKUP-BORG.md). Must be created and
+# tagged before first switch — MANUAL-STEPS.md §19.
 
 let
   image = "neosmemo/memos:0.31.0";
