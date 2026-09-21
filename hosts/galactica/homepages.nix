@@ -41,6 +41,7 @@ in
     HOMEPAGE_VAR_RADARR_API_KEY=${config.sops.placeholder."nixflix/radarrApiKey"}
     HOMEPAGE_VAR_LIDARR_API_KEY=${config.sops.placeholder."nixflix/lidarrApiKey"}
     HOMEPAGE_VAR_PROWLARR_API_KEY=${config.sops.placeholder."nixflix/prowlarrApiKey"}
+    HOMEPAGE_VAR_QBITTORRENT_API_KEY=${config.sops.placeholder."nixflix/qbittorrentApiKey"}
     HOMEPAGE_VAR_SABNZBD_API_KEY=${config.sops.placeholder."nixflix/sabnzbdApiKey"}
   '';
 
