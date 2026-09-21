@@ -328,6 +328,23 @@
         "url": "https://github.com/NixOS/nixpkgs.git"
       }
     },
+    "nixpkgs-ferdium": {
+      "locked": {
+        "lastModified": 1789077578,
+        "narHash": "sha256-Ng2kCSCQqRPV4SVYr7oeCx2rvoWyTaMRbZzHHRo0u8M=",
+        "ref": "refs/heads/master",
+        "rev": "d34d77df0bd187ec660064937ca01f91fe75f6df",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/NixOS/nixpkgs.git"
+      },
+      "original": {
+        "rev": "d34d77df0bd187ec660064937ca01f91fe75f6df",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/NixOS/nixpkgs.git"
+      }
+    },
     "nixpkgs-lib": {
       "locked": {
         "lastModified": 1785031560,
@@ -415,6 +432,7 @@
         "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs",
         "nixpkgs-bambu-studio": "nixpkgs-bambu-studio",
+        "nixpkgs-ferdium": "nixpkgs-ferdium",
         "nixpkgs-orca-slicer": "nixpkgs-orca-slicer",
         "opera-flake": "opera-flake",
         "plasma-manager": "plasma-manager",

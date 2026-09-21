@@ -1355,3 +1355,30 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   a window opening on a non-focused output anyway, but which output is
   focused at startup isn't pinned on this host (no `focus-at-startup`), so
   without it the choice of which app steals the cursor at login is luck.
+- **ferdium 7.2.3 comes from its own pinned nixpkgs, not the shared one
+  (2026-09-18).** `nixpkgs-ferdium` in `flake.nix` pins the exact commit that
+  bumped ferdium 7.2.2 -> 7.2.3, consumed as `ferdiumNewer` via
+  `home-manager.extraSpecialArgs` — the same shape as `nixpkgs-orca-slicer`
+  and `nixpkgs-bambu-studio`.
+  *Why a pin was forced, not merely preferred:* unlike those two, where a
+  shared-nixpkgs bump was simply disproportionate, here it is impossible.
+  26.05 removed the EOL 7.1 kernel *before* the ferdium bump landed on the
+  branch, and this host pins 7.1 (see the kernel entry above), so no single
+  revision of the shared nixpkgs carries both. Verified rather than assumed:
+  at the ferdium-7.2.3 commit `linuxPackages_7_1` already evaluates to
+  "linux 7.1 was removed because it has reached its end of life upstream".
+  *The 7.2 blocker is still live, re-checked at this nixpkgs:* building
+  `linuxPackages_7_2.nvidia_x11_production.open` still fails on the same
+  implicit-`strncpy` error in `nvidia/os-interface.c`, with the driver at the
+  same 595.71.05 and no new patches upstream — i.e. nothing has changed since
+  the kernel pin was taken, and the `drm_atomic_state` break behind it is
+  untouched.
+  *Exit:* when NVIDIA/nixpkgs ship a real 7.2 fix, the kernel unpins, the
+  shared nixpkgs bumps normally, and this input and its `ferdiumNewer`
+  plumbing all come back out in one commit.
+  *Alt rejected:* repinning the host to `linuxPackages` (6.18.52 LTS), where
+  the NVIDIA open module is already prebuilt in cache.nixos.org, which would
+  have let the shared nixpkgs move. Rejected as a kernel downgrade on the
+  daily driver in service of one chat app.
+  Validated by eval only (`nix flake check`, ferdium resolves to 7.2.3, kernel
+  still 7.1.9); not yet confirmed by a real `nixos-rebuild switch`.

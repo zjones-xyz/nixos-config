@@ -1,4 +1,4 @@
-{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, orcaSlicerNewer, bambuStudioNewer, ... }:
+{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, orcaSlicerNewer, bambuStudioNewer, ferdiumNewer, ... }:
 
 {
   imports = [
@@ -76,7 +76,10 @@
     # away. Same call as Brain.fm below: web app via firefox/chrome.
 
     discord
-    ferdium
+    # 7.2.3, from the separate nixpkgs-ferdium input rather than the shared
+    # pin — reaching it there would mean giving up this host's 7.1 kernel
+    # pin (see flake.nix).
+    ferdiumNewer
     signal-desktop
     slack
     openscad
