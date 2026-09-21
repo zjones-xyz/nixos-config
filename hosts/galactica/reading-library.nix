@@ -158,10 +158,10 @@ in
       # ⚠ /data must stay on local storage: on NFS/CIFS/fuse BookBridge
       # silently drops out of WAL into DELETE journal mode. The library is
       # read-only — it matches books, it does not manage them. ⚠ Which
-      # libraries it syncs is set in its own UI, and whether it can reach
-      # Audiobookshelf at all is OPEN — a container cannot dial a loopback
-      # publish, and its Traefik name may not resolve from one either.
-      # READING-STACK.md §4.6 has the two levers; do not assume this works.
+      # libraries it syncs is set in its own UI. It does reach Audiobookshelf
+      # (verified on the host; §4.6), but only because this host's resolv.conf
+      # is Tailscale's rather than a loopback nameserver — a dependency nothing
+      # here declares. Suspect resolution first if it ever stops.
       volumes = [
         "${stateDir "bookbridge"}:/data"
         "${booksDir}:/books:ro"

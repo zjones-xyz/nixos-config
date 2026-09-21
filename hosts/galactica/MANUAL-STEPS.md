@@ -1547,11 +1547,12 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    before changing anything. A container on galactica resolved
    `audiobookshelf.read.zjones.dev` to `192.168.8.190` through MagicDNS on
    2026-09-17, and no public resolver can return a private address, so the
-   tailnet already reaches something that knows the rewrite. Otherwise: or
-   none of the `.zjones.dev` names
-   resolve off-LAN and the Tailscale half of `READING-STACK.md` §7 does nothing.
-   Tailscale admin console → DNS → nameservers. Not expressible in Nix, which
-   is why it is here.
+   tailnet already reaches something that knows the rewrite.
+
+   If it turns out not to be set: Tailscale admin console → DNS → nameservers.
+   Without it none of the `.zjones.dev` names resolve off-LAN and the Tailscale
+   half of `READING-STACK.md` §7 does nothing. Not expressible in Nix, which is
+   why it is here.
 3. [x] **Create the datasets, before anything starts — including before the
    first `nixos-rebuild switch`.** ⚠ Two things will occupy the mountpoint if the
    dataset is not there first: Docker materialises a missing bind-mount source as

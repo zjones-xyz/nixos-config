@@ -71,11 +71,11 @@ let
   hostAddress = "192.168.8.190";
   nsAddress = config.vpnNamespaces.${netns}.namespaceAddress;
 
-  # ⚠ NOT pinned anywhere today — this is Docker's default for `docker0`, which
-  # is the bridge these containers land on. It is written here because the
-  # namespace needs a route back to it (`accessibleFrom` below) and tinyproxy
-  # needs it as an allow-list; verify it on the host and pin it in the Docker
-  # daemon settings rather than trusting the default to hold.
+  # Docker's default for `docker0`, the bridge these containers land on, and
+  # `configuration.nix` pins it with `daemon.settings.bip` so this literal is
+  # true by construction rather than by luck. ⚠ The two depend on each other:
+  # the namespace needs a route back to it (`accessibleFrom` below) and
+  # tinyproxy needs it as an allow-list, so change neither alone.
   dockerBridgeSubnet = "172.17.0.0/16";
 
   prowlarrPort = nixflix.prowlarr.config.hostConfig.port;
@@ -347,9 +347,10 @@ in
   };
 
   # ── Suwayomi — manga ──────────────────────────────────────────────────────
-  # The one cleanly-solved piece: a native module in the pin, no container, no
-  # pinning debt. CBZ lands in the library tree Grimmory reads; state stays in
-  # appdata, which is why `downloadsPath` is set away from the dataDir default.
+  # The least wiring in this stack: a native module, no container. ⚠ It does
+  # carry pinning debt after all — see the package override below. CBZ lands in
+  # the library tree Grimmory reads; state stays in appdata, which is why
+  # `downloadsPath` is set away from the dataDir default.
   services.suwayomi-server = {
     enable = true;
     dataDir = "${appdata}/suwayomi";
