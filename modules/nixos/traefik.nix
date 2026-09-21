@@ -32,14 +32,16 @@ let
         # clients to memory-alpha directly for this name instead, so Traefik
         # needs its own router or that split-horizon bypass 404s (confirmed
         # live, 2026-09-20). zjones.xyz is a separate Cloudflare zone from
-        # zjones.dev — the CF_DNS_API_TOKEN below isn't confirmed to cover
-        # it — so this stays self-signed rather than risking the shared
-        # letsencrypt DNS-01 order for the working .dev router.
+        # zjones.dev, so this needs CF_DNS_API_TOKEN widened to cover it too
+        # (owner doing this out of band) before deploying — no SANs are
+        # shared with the `jellyfin` router above, so its own DNS-01 order is
+        # independent and can't break the working .dev cert.
         jellyfin-xyz:
           rule: "Host(`jellyfin.zjones.xyz`)"
           entrypoints:
             - websecure
-          tls: {}
+          tls:
+            certResolver: letsencrypt
           service: jellyfin-svc
 
       services:
