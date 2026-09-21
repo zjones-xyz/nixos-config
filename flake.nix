@@ -222,8 +222,14 @@
               claudeDesktop = claude-desktop-debian.packages.x86_64-linux.claude-desktop-fhs;
               # OpenAI's official Linux public-preview ChatGPT .deb, unpacked
               # via a local derivation (pkgs/chatgpt-linux-preview.nix) and
-              # launched through steam-run's FHS runtime on NixOS.
-              chatgptLinuxPreview = nixpkgs.legacyPackages.x86_64-linux.callPackage ./pkgs/chatgpt-linux-preview.nix { };
+              # launched through steam-run's FHS runtime on NixOS. Like
+              # bambuStudioNewer below, this must come from an imported nixpkgs
+              # with allowUnfree enabled rather than plain legacyPackages.
+              chatgptLinuxPreview =
+                (import nixpkgs {
+                  system = "x86_64-linux";
+                  config.allowUnfree = true;
+                }).callPackage ./pkgs/chatgpt-linux-preview.nix { };
               # Askimo (multi-LLM desktop chat client) — not in nixpkgs at
               # all, unlike claudeDesktop/orcaSlicerNewer/bambuStudioNewer
               # above (which are all upstream packages nixpkgs just hasn't
