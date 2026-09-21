@@ -225,6 +225,11 @@
         siteMonitor: https://syncthing.zjones.dev
         icon: syncthing.png
         description: File sync
+    - Memos:
+        href: https://memos.peacock-koi.ts.net
+        siteMonitor: https://memos.zjones.dev
+        icon: memos.png
+        description: Notes
 
 - Maker:
     # Same href/siteMonitor split as Apps above — see that group's comment.

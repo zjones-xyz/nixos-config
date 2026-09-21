@@ -1821,3 +1821,23 @@ Written alongside `READING-STACK.md`; deployed in the order below.
     `initialOpenInBrowserEnabled`) exists identically in both jars, so the
     settings carry over; the overridden package builds and its wrapper resolves
     to the 2.3.2243 jar.
+
+---
+
+## 19. Memos — owner steps before first switch
+
+`hosts/galactica/memos.nix` declares it as a container, same shape as §15's
+four: Traefik router pair, tsdproxy tailnet node. New appdata (no Unraid
+backup to restore — this is a fresh install, not a migration), so
+`/tank/appdata/memos` starts empty. No secret needed: upstream has no
+signing-key env var.
+
+1. [ ] **First switch.** Confirm the container starts, `memos.internal` and
+   `memos.zjones.dev` both return the setup wizard, and the LE cert issues
+   cleanly.
+2. [ ] **Create the first (admin) account** through the setup wizard —
+   Memos' own first-run flow, not a Nix-declared credential.
+3. [ ] **Key expiry disabled on the new `memos` tsdproxy node** — same trap
+   as every prior batch.
+4. [ ] **Dashboard icon.** `Apps` group now references `memos.png` —
+   confirm it renders (dashboard-icons carries it as of this writing).
