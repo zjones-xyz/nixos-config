@@ -42,6 +42,7 @@
     ./partdb.nix
     ./homebox.nix
     ./spoolman.nix
+    ./memos.nix
     # The reading stack, split so the client and acquisition halves stay
     # separately readable — READING-STACK.md is the spec for both.
     ./reading-library.nix
@@ -284,9 +285,9 @@
       answer = "192.168.8.190";
     }
 
-    # Ferdium/Karakeep/Paperless-ngx/Syncthing — same flat-name shape as the
-    # dashboards above, own Traefik router pair each (ferdium.nix,
-    # karakeep.nix, paperless.nix, syncthing.nix).
+    # Ferdium/Karakeep/Paperless-ngx/Syncthing/Memos — same flat-name shape as
+    # the dashboards above, own Traefik router pair each (ferdium.nix,
+    # karakeep.nix, paperless.nix, syncthing.nix, memos.nix).
     {
       domain = "ferdium.internal";
       answer = "192.168.8.190";
@@ -317,6 +318,14 @@
     }
     {
       domain = "syncthing.zjones.dev";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "memos.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "memos.zjones.dev";
       answer = "192.168.8.190";
     }
 

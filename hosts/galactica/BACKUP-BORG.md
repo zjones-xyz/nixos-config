@@ -98,6 +98,19 @@ zfs set org.torsion.borgmatic:backup=auto tank/appdata/ferdium
 zfs set org.torsion.borgmatic:backup=auto tank/appdata/karakeep
 ```
 
+### Memos promoted the same way — 2026-09-21
+
+Same reasoning as ferdium/karakeep above — personal notes are a real loss —
+so `tank/appdata/memos` (`hosts/galactica/memos.nix`) gets the same
+treatment, done **before the first switch** since this is a fresh service
+with no appdata restore to sequence around:
+
+```
+zfs create tank/appdata/memos
+zfs set homelab:tier=precious tank/appdata/memos
+zfs set org.torsion.borgmatic:backup=auto tank/appdata/memos
+```
+
 (Dataset names above follow this task's `tank/photos/immich*` layout; if the
 array is built with the flat `immich_photos` / `immich_photos_archived` names the
 docs also use, tag those instead. The property does not care what the dataset is
