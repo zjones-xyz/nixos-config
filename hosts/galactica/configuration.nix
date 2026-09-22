@@ -42,6 +42,11 @@
     ./partdb.nix
     ./homebox.nix
     ./spoolman.nix
+    ./memos.nix
+    # The reading stack, split so the client and acquisition halves stay
+    # separately readable — READING-STACK.md is the spec for both.
+    ./reading-library.nix
+    ./reading-acquisition.nix
   ];
 
   networking.hostName = "galactica";
@@ -280,9 +285,9 @@
       answer = "192.168.8.190";
     }
 
-    # Ferdium/Karakeep/Paperless-ngx/Syncthing — same flat-name shape as the
-    # dashboards above, own Traefik router pair each (ferdium.nix,
-    # karakeep.nix, paperless.nix, syncthing.nix).
+    # Ferdium/Karakeep/Paperless-ngx/Syncthing/Memos — same flat-name shape as
+    # the dashboards above, own Traefik router pair each (ferdium.nix,
+    # karakeep.nix, paperless.nix, syncthing.nix, memos.nix).
     {
       domain = "ferdium.internal";
       answer = "192.168.8.190";
@@ -313,6 +318,14 @@
     }
     {
       domain = "syncthing.zjones.dev";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "memos.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "memos.zjones.dev";
       answer = "192.168.8.190";
     }
 
@@ -463,6 +476,13 @@
   # Container logs otherwise stay in /var/lib/docker on the NVMe, bypassing
   # the dedicated logs disk; journald routes them with everything else.
   virtualisation.docker.daemon.settings.log-driver = "journald";
+
+  # ⚠ Pinning Docker's *default* bridge subnet, not changing it — read live off
+  # `docker0` before writing it here. `reading-acquisition.nix` hardcodes this
+  # literal twice (tinyproxy's allow-list and the namespace's return route), and
+  # a default that silently moved would break both; this makes it true by
+  # construction rather than by luck.
+  virtualisation.docker.daemon.settings.bip = "172.17.0.1/16";
 
   # The fleet's 500M cap would waste the 48G logs partition. `mkAfter`, not
   # `mkForce`: journald.conf is last-key-wins, so this extends the fleet

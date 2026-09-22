@@ -10,6 +10,14 @@
 # Tower's guesthome also listed Audiobookshelf, Grimmory, Shelfmark and 13ft —
 # restore from homelab-stacks tower/guesthome as each is re-homed.
 #
+# ⚠ The first three are re-homed as of the reading stack and are still
+# deliberately absent here. READING-STACK.md §7 phases Pangolin exposure
+# **after** an OIDC provider lands, precisely so these are not published with
+# nothing but per-app logins — and BookBridge holds credentials for both
+# libraries. Restoring them is a decision that belongs to that follow-up spec,
+# not a routine re-add. checks/homepage-config enforces the mechanical half:
+# `.read.zjones.dev` is an internal suffix, so a guest link to one fails.
+#
 # ⚠ This instance is publicly reachable, so it deliberately carries only the
 # three widget API keys its calendar needs (homepages.nix). Adding a widget
 # here that needs a fourth key fails checks/homepage-config rather than

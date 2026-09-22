@@ -17,9 +17,9 @@ entry point. ⚠ No service, no secret, no dataset — so the names resolve and 
 404 against Traefik's default certificate until the first service registers, at
 which point the wildcard is issued (see the certificate subsection in §7).
 
-⚠ **Nine units for one subsystem** — Grimmory, MariaDB, Audiobookshelf,
-BookBridge, Chaptarr, Shelfmark and Suwayomi, plus the confined proxy and the
-second FlareSolverr that §5d adds — on top of reusing Prowlarr, the shared
+⚠ **Ten units for one subsystem** — Grimmory, MariaDB, Audiobookshelf,
+BookBridge, Chaptarr, Shelfmark and Suwayomi, plus the confined proxy, the second
+FlareSolverr that §5d adds, and the gid oneshot §4.7 needs — on top of reusing Prowlarr, the shared
 FlareSolverr, qBittorrent and SABnzbd from the *arr stack. That is the deliberate
 price of covering four content types with two overlapping libraries and keeping
 the acquisition egress in the tunnel; §3 and §5 name the pieces to drop first if
@@ -185,7 +185,7 @@ Two consequences:
    silently forcing `read_special` tree-wide. ⚠ It is not the only database here —
    BookBridge's SQLite needs its own treatment, §4.5.
 
-### 4.4 The BookLore database is probably recoverable — verify early
+### 4.4 ~~The BookLore database is probably recoverable — verify early~~ — moot: starting empty
 
 `MANUAL-STEPS.md` records that on 2026-09-03 sidepool's `pools/` — 117 GB of
 Unraid `cache`/`fastservices`/`services` appdata — was rsynced to
@@ -193,7 +193,15 @@ Unraid `cache`/`fastservices`/`services` appdata — was rsynced to
 BookLore's MariaDB volume is in there, Grimmory's migration path turns shelves,
 metadata and read-progress into an import instead of a rebuild.
 
-**Do this before designing the import**, because the answer changes it:
+⭐ **Owner's decision, 2026-09-17: start empty.** The Unraid `books` data was
+copied into the array but sits in a dataset that has not been migrated yet, and
+`tank/books` is empty (verified on the host). Grimmory comes up on a fresh
+library; moving the old collection in is a **separate, later job**. So the
+BookLore database question below is **not blocking** — it only matters if and
+when that import happens, and the files matter more than the shelves either way.
+
+⟨Kept rather than deleted because the recovery path is the part worth not
+rediscovering:⟩
 
 1. [ ] Look for BookLore's appdata (and its MariaDB volume) under
        `/tank/backups/sidepool-pools`, and record what was found here.
@@ -203,6 +211,14 @@ metadata and read-progress into an import instead of a rebuild.
        finishing in one pass rather than tripping over the leftovers later.
 
 ---
+
+### ⚠ Aside: `audiobookshelf.dataDir` is a name, not a path
+
+Small but it invalidates an assumption: this document says service state belongs
+under `/tank/appdata/<service>` "matching `nixflix.nix`", which reads as if the
+module supports it. It does not — `services.audiobookshelf.dataDir` is a *name*
+under `/var/lib`, used as `StateDirectory`. Moving its state onto the appdata
+mirror means overriding `ExecStart` to pass absolute `--config`/`--metadata`.
 
 ### 4.5 ⚠ BookBridge holds the keys to everything else — verified 2026-09-15
 
@@ -257,6 +273,122 @@ Alembic config hardcodes that path and never consults the variable, so a custom
 works on 5757, and Traefik narrows routes better anyway. Pin
 `ghcr.io/cporcellijr/bookbridge:7.6.0` (GHCR only; the `-cuda` variant is ~800 MB
 larger and only for NVIDIA Whisper, which this host has no GPU for).
+
+### 4.6 BookBridge reaching Audiobookshelf — resolved, it can
+
+Found while implementing, and it goes to whether BookBridge can do its job.
+Its sync targets are configured in its own UI, and **from inside a container
+`127.0.0.1` is that container's own namespace** — so the loopback publishes the
+rest of this stack uses are not reachable from it.
+
+- **Grimmory it can reach**: both are containers on the `proxy` network, so
+  Docker's embedded DNS resolves `http://grimmory:6060`.
+- ⚠ **Audiobookshelf it may not.** It is native and bound to `127.0.0.1`, so the
+  only route is its Traefik name — and **Docker refuses a loopback nameserver**
+  from the host's `resolv.conf`, falling back to public DNS, where
+  `*.read.zjones.dev` does not exist. The container therefore may never resolve
+  the name at all.
+
+**Verify on the host before trusting the sync.** If it fails, two levers, and the
+choice is not obvious:
+
+1. `--add-host` pinning `audiobookshelf.read.zjones.dev` to `192.168.8.190`.
+   Keeps the real wildcard certificate; costs a hardcoded address in Nix.
+2. Bind Audiobookshelf where the bridge can see it, plus
+   `networking.firewall.interfaces."docker0".allowedTCPPorts`. No hardcoded
+   address; widens what else on the bridge can reach it.
+
+⚠ Do **not** reach for `audiobookshelf.read.internal` — that hands BookBridge
+Traefik's self-signed certificate, which §7 already warns about for apps.
+
+**✅ Verified on the host 2026-09-17: it reaches it, and neither lever is
+needed.** `https://audiobookshelf.read.zjones.dev/ping` answers `200` from
+inside the container, over the real wildcard certificate.
+
+The premise above was wrong in one detail, and that detail is the whole
+outcome: galactica's `/etc/resolv.conf` is **Tailscale's**, not a loopback
+nameserver. The container's resolver reports
+`ExtServers: [host(100.100.100.100)]`, so Docker had a forwardable upstream and
+never hit the loopback refusal — MagicDNS resolves the name to `192.168.8.190`
+and Traefik does the rest.
+
+⚠ Which means the path depends on something declared nowhere in this stack:
+the tailnet's DNS knowing the `read.zjones.dev` rewrite. Note also that a
+public resolver could not return a private address, so the fact that this works
+is itself evidence about item 2 of the run book's §18. If BookBridge ever
+loses Audiobookshelf, suspect resolution before suspecting either service —
+and lever 1 above is then a one-line hedge that removes DNS from the path
+entirely.
+
+### 4.7 ⚠⚠ BLOCKING: two nixflix modules wipe the `media` group
+
+**Root cause found, and it is upstream's.** `config.users.groups.media` carries
+**two `mkForce { }` definitions** — from nixflix's `torrentClients/qbittorrent.nix`
+and its `navidrome` module. `mkForce` is priority 50, so it beats nixflix's *own*
+`users.groups.media = { gid = globals.gids.media; members = mediaUsers; }` at
+normal priority, and beats anything this fleet adds. Established by reading
+`options.users.groups.definitionsWithLocations` on the evaluated host, after a
+literal `gid = 1699` in our own module was silently discarded.
+
+Consequences, in order of how much they matter:
+
+1. ⚠ **`media` has no gid at evaluation time**, so nothing can hand a container a
+   numeric `PGID`/`GROUP_ID`. `toString null` renders the **empty string**, which
+   container entrypoints read as "use my default group" — silently placing what
+   they write outside `media`. Both acquisition containers therefore ship with
+   **no `PGID` at all** and cannot write into the shared `root:media` trees; the
+   file says so at the top.
+2. ⚠ **`nixflix.globals.gids.media` (169) is a constant the host does not
+   honour.** Do not trust it anywhere.
+3. ⚠ **`z` is not in the `media` group.** The evaluated members are
+   `["unpackerr"]` — contributed by `unpackerr.nix`'s `extraGroups`, not by
+   `nixflix.mediaUsers = [ "z" ]`, which the same `mkForce` discards. **This
+   affects the existing media stack, not only the reading stack.**
+
+**Four ways out — owner's decision. The fourth looks best.**
+
+1. ⭐ **Resolve the gid at *runtime*, not at evaluation.** It does not exist when
+   Nix evaluates, but it does exist when a unit starts. A `oneshot` writes
+   `PGID=$(getent group media | cut -d: -f3)` into an env file under `/run`, and
+   each container adds that file to `environmentFiles` (read by `docker run
+   --env-file` at start) and orders after it. **Touches no live group, needs no
+   nixflix patch, renumbers nothing, and self-corrects if the gid ever moves.**
+2. **`lib.mkOverride 40` — but on the WHOLE submodule value, not on `.gid`.**
+   ⟨In-repo precedent for the *class* of problem: `configuration.nix` now pins
+   `users.users.z.uid = 1000` for exactly this reason — an unpinned `uid` is null
+   at evaluation time, and everything interpolating it "was silently rendering an
+   empty string". Same failure, same fix shape.⟩
+   ⚠ The nested form silently does nothing: the `mkForce`es apply to the
+   `users.groups.media` *value*, and `filterOverrides` discards every
+   normal-priority definition at that level **before** the submodule is
+   evaluated, so a priority-40 marker nested inside one is never seen. This was
+   reproduced against the pinned `lib`. The form that works is
+   `users.groups.media = lib.mkOverride 40 { gid = <n>; };`
+   It is also safer than it sounds: `members` comes from the group submodule's
+   *own* `config` block, derived from every user's `extraGroups` — which is why
+   `["unpackerr"]` survives the `mkForce` today — so overriding the whole value
+   keeps that membership. Getting `z` in is then
+   `users.users.z.extraGroups = [ "media" ]`, not `members`. ⚠ Still read
+   `getent group media` first: if the live number differs from what you pin, plan
+   a recursive `chgrp` over `/tank/nixflix_media`.
+3. **A fourth hand-carried nixflix patch** (`DECISIONS.md` §10 tracks three)
+   removing the two `mkForce`es. Fixes the cause, restores `z`'s membership at
+   normal priority, and adds to the carried debt.
+4. ~~**A dedicated `reading` group.**~~ ⚠ **Dead, not merely imperfect.**
+   Chaptarr's cleanup path needs **unlink** rights in nixflix's downloads
+   directory, which nixflix's own tmpfiles pin at `root:media 0775` — a
+   `reading`-grouped service cannot delete there at all.
+
+⟨A fifth, uglier option if none of the above appeals: default POSIX ACLs granting
+the two uids rwx on the shared trees via `systemd.tmpfiles` `a+` lines — no gid
+needed anywhere, at the cost of ACLs on the array.⟩
+
+**Chosen: route 1, implemented.** `reading-media-gid.service` is a oneshot that
+reads `getent group media` and writes `PGID=<n>` into `/run/reading/media-gid.env`;
+both acquisition containers take that as an `environmentFiles` entry and order
+after it. ⚠ It **fails loudly** if the group has no gid rather than writing an
+empty `PGID`, which is the silent miswrite this whole section exists to prevent.
+Nothing live is touched and no nixflix patch is carried.
 
 ## 5. Acquisition
 
@@ -387,6 +519,17 @@ fix through 0.9.964.0:
   tests on create whenever the definition is enabled (which Prowlarr always sets),
   and hard validation errors throw regardless — so `forceSave` suppresses only
   *warnings* and the indexer never lands.
+
+✅ **Proven on the host 2026-09-21, torrent and usenet both.** Neither bug below
+blocks the sync in practice, and the hand-entered fallback was not needed. ⟨The
+one debugging cycle it cost is instructive: usenet indexers appeared not to sync
+while torrents did, which reads as protocol-specific. It was not — Chaptarr had
+no root folders yet, and cannot act on a synced indexer with nowhere to put the
+result. Finish an app's own setup before diagnosing its integrations.⟩
+
+The original assessment is kept below, because it is what shaped the design —
+Chaptarr's database is disposable precisely because this was expected to be
+fragile.
 
 ⚠ **Treat Prowlarr → Chaptarr sync as unproven on this fleet until tested on the
 host.** It is the single biggest risk in this document. **The escape hatch, and it
@@ -593,10 +736,71 @@ happens with no user action and is worth knowing when reading logs.
 ### Manga — Suwayomi
 
 `services.suwayomi-server` is in the pin (with a nixpkgs manual page), which makes
-manga **the only cleanly-solved piece of this stack**: a native module, no
-container, no pinning debt. It downloads CBZ into the tree Grimmory already reads.
+manga the piece with the least wiring in this stack: a native module and no
+container. ⚠ "No pinning debt" was the original claim here and it did not
+survive contact with the hardware — see the extension-repository finding below. It downloads CBZ into the tree Grimmory already reads.
 Comics/manga being new appetite (§1), there is nothing to migrate and no legacy
 layout to honour.
+
+⚠ **It needs an extension repository, and that must be declared rather than
+added in the UI.** Suwayomi ships with none, so without one it can browse
+nothing at all. The trap is that the module regenerates `server.conf` from the
+Nix `settings` on **every start** (`envsubst -i <generated> -o
+…/Tachidesk/server.conf`), and Suwayomi keeps its server settings — extension
+repos included — in that very file. So anything changed through the WebUI is
+reverted at the next restart or switch, silently and without an error. The repo
+is therefore `settings.server.extensionRepos`, pointing at **Keiyoushi**, the
+community successor to Tachiyomi's own index, which no longer exists.
+
+⟨The same overwrite applies to every other server setting the WebUI can change,
+not only the repo list. Anything that must persist belongs in `settings`.⟩
+
+⚠⚠ **And the pin cannot use it.** Verified on the hardware 2026-09-17: with the
+repo declared, Browse listed exactly two "extensions" — `Outdated App` and
+`Update to Mihon 0.20.1+`. Those are the whole of what Keiyoushi now serves at
+`index.min.json` (765 bytes, two entries); nothing was filtered client-side. The
+real index moved:
+
+| step | who fetches it | what it holds |
+|---|---|---|
+| `<base>/index.min.json` | 2.1.1867, directly | the two stubs, nothing else |
+| `<base>/repo.json` | 2.3.2243, after stripping the suffix | `index_v2` + signing key |
+| `<base>/index.pb` | from `index_v2` at runtime | the 1395 real extensions |
+
+Confirmed by extracting both jars: 2.1.1867 has no `extensionList`,
+`extensionLib` or `contentWarning` anywhere in it and reads only the legacy
+schema, while 2.3.2243 carries all three plus the `repo.json` indirection. So
+**manga acquisition does not work on the channel's version at all**, and the
+package is pinned ahead of it (§18 item 17) — the one piece of this stack that
+was "cleanly solved by a native module" turns out to carry version debt after
+all, just of a different kind than a container tag.
+
+⟨The configured URL stays the `index.min.json` one even so: the server derives
+the base from it by removing that suffix. Pointing it at `repo.json` or
+`index.pb` directly would break the derivation.⟩
+
+⚠⚠ **2.3 renamed the setting, and the rename is silent in both directions.**
+`extensionRepos` became `extensionStores`. Observed on the hardware once
+2.3.2243 was running: the Extension stores page was **empty** despite the URL
+being declared, because it was declared under the old name. Worse, the server
+**rewrites `server.conf` itself** at runtime into its own documented format —
+the file on disk carries the upstream reference comments, which this repo's
+HOCON generator never emits — and that rewrite **drops the deprecated key
+rather than migrating its value**. So the URL did not move to the new name; it
+disappeared.
+
+An unknown key is ignored rather than rejected, so the failure has no error
+anywhere: an assertion ties the key to the package version instead, or dropping
+the override once nixpkgs catches up would return manga to zero extensions just
+as quietly.
+
+⟨Also set while here, as a hazard rather than a diagnosis: `webUIChannel` is
+pinned to `BUNDLED` with the update check disabled. Suwayomi's default
+(`"stable"`, re-checked every 23 hours) **downloads its own interface into the
+data dir**, so the UI drifts from whatever jar Nix installs and the two can
+disagree about which fields exist. It was *not* the cause here — UI and server
+were both 2.3 — but it makes the package pin only half a pin, and both jars
+carry `WebUI.zip`, so closing it costs nothing.⟩
 
 ⟨**Kapowarr** for Western comics was considered and deferred — not in nixpkgs, so
 a third acquisition container and another pinned tag, for appetite that has not
@@ -679,6 +883,13 @@ dataset is not merely affordable here — it is the safer arrangement.
   both roots on `tank/books` unless there is a reason not to. (Related open
   upstream issue: `RescanAuthor` walks only a single path.)
 
+⚠ **Podcasts need a dataset of their own, and §6 did not say so.** §1 inherits
+`podcasts_audiobookshelf` at ✅ **Re-acquirable** while `books` is 🛡 Protected —
+and this section's whole argument is that tier is a *dataset* property. Podcasts
+under `/tank/books` would therefore be backed up as Protected forever, which is
+exactly the over-classification `SHARES.md` §5 warns against. A separate
+`tank/podcasts` at Re-acquirable.
+
 **So: correct tiering, copies accepted.** ⚠ Record this in `DECISIONS.md` too,
 because a reader who knows the one layout rule will see a separate dataset as the
 exact mistake that rule exists to prevent.
@@ -727,6 +938,50 @@ weekly quota). So the implementation generalises `mkRouterPair`/`mkRouters` to
 take a domain group with its own shared wildcard — declared **once** as
 `*.read.zjones.dev` — rather than adding routers by hand.
 
+### ⚠ What an empty group means for the certificate — and why the rollout is staged
+
+Verified while implementing the group: **an empty group publishes no router, so
+it requests no certificate at all.** The `*.read.zjones.dev` wildcard is issued
+the moment the *first* reading service registers in `homelab.readUpstreams`.
+
+That first issuance goes straight to **production**: `letsencryptStaging = false`
+is already set for this host, and there is no staging dry-run available for one
+group — flipping the flag would move the media stack's certs to staging storage
+too and warn on every `*.arr.zjones.dev` name meanwhile.
+
+⚠ **The allowance is shared with the media stack.** Production allows 50
+certificates per **registered domain** per week, and `read.zjones.dev` and
+`arr.zjones.dev` are both `zjones.dev` — the same budget `MANUAL-STEPS.md` §12
+item 6 records spending **ten** of, when `arr`'s un-deduped first switch issued
+per-subdomain certificates before the wildcard arrived.
+
+⚠ **An earlier draft of this section said the rollout is staged — "land one
+service, check the journal, then add the rest." It is not, and never could have
+been as the change is shaped**: both halves are imported together and all six
+services register in `homelab.readUpstreams` at once. The real safeguard is
+watching `journalctl -u traefik` while the single switch lands, which is what
+`MANUAL-STEPS.md` §18 item 1 says.
+
+✅ **Outcome on the hardware 2026-09-17: the dedup held.** One
+`Obtaining bundled SAN certificate` for `read.zjones.dev, *.read.zjones.dev`,
+two DNS-01 challenges, no per-subdomain requests — **one** certificate spent
+against the shared budget, not six.
+
+### ⚠ Router names are flat across groups
+
+A hazard this group *introduces*, and worth stating because the module now guards
+it: router and service names are **group-independent** (`<name>`, `<name>-dev`,
+`<name>-svc` — no group prefix). The attrset merge means a name claimed in two
+groups would **silently drop one of the two routes** rather than failing. §5b's
+Chaptarr-as-Readarr discussion makes a collision imaginable. An assertion now
+rejects it by name, alongside the existing `dashboard`/`traefik` reservation —
+which is reserved in *every* group, since a `traefik.*` service would be a trap
+under any domain.
+
+⟨Minor and symmetric with `arr`: the apex rewrites (`read.internal`,
+`read.zjones.dev`) resolve, but no router serves an apex in either group, so they
+answer 404 from Traefik's default certificate. Not a "reachable name".⟩
+
 ### DNS
 
 Four rewrites alongside galactica's existing block in `configuration.nix`
@@ -751,6 +1006,18 @@ per-service exposure, no tunnel and no tsdproxy node**.
 
 - ⚠ **Manual step, not Nix:** the tailnet must use AdGuard as its DNS (Tailscale
   admin console → nameservers) or the rewrites never resolve off-LAN.
+- ⚠⚠ **DNS is necessary but not sufficient, and this section over-promised.**
+  The rewrite answers `192.168.8.190`, a LAN address — resolving it is not the
+  same as having a route to it. **No node in this fleet advertises
+  `192.168.8.0/24` as a subnet route**: `modules/nixos/tailscale.nix` gives
+  hopper `--advertise-exit-node` and nothing carries `--advertise-routes`. So a
+  phone off the LAN must select **hopper as its exit node**, or hopper must gain
+  `--advertise-routes=192.168.8.0/24` (plus approval in the admin console), for
+  any of these names to actually connect. Galactica's own admin dashboard
+  records the same constraint from the other side — its Apps group uses tsdproxy
+  names precisely because "a `zjones.dev` link would be dead exactly when this
+  dashboard is being used remotely". ⟨Neither lever is in this spec's scope:
+  both are hopper's config. Verify off-LAN access before relying on it.⟩
 - ⚠ **Use the `.zjones.dev` names on phones and tablets.** `*.read.internal`
   routers carry `tls = { }` — Traefik's self-signed default — which presents as a
   certificate warning on a mobile browser and outright failure in some apps. The
@@ -852,10 +1119,15 @@ in this document.
        `vpnConfinement` to a throwaway container, then compare
        `docker exec <c> curl -s ifconfig.me` against
        `ip netns exec wg curl -s ifconfig.me`. The same IP as the host confirms it.
-5. [ ] **Can Shelfmark disable its IRC source outright**, rather than merely
-       leaving it unconfigured? §5d depends on this being a setting and not a
-       habit. If it cannot be disabled, say so here and decide whether that
-       changes the §5d bargain.
+5. [x] **Can Shelfmark disable its IRC source outright?** ✅ **Answered — yes,
+       and §5d's bargain holds.** There is no enable flag: the source reports
+       itself available only when all four of `IRC_SERVER`/`IRC_CHANNEL`/
+       `IRC_NICK`/`IRC_SEARCH_BOT` are non-empty, and searches return nothing
+       when it is not. On its own that would only be *unconfigured* — but env
+       beats the database and **an empty string counts as set**, so the settings
+       save path skips those fields and the UI cannot write over them. Setting
+       them empty is therefore a real lock: turning IRC on is an edit to
+       `reading-acquisition.nix`.
 6. [x] **What database does BookBridge need**, and does it want the same
        pre-snapshot dump treatment as Grimmory's MariaDB? ✅ **Answered
        2026-09-15** — SQLite in WAL mode, and yes: §4.5 carries the shapes that

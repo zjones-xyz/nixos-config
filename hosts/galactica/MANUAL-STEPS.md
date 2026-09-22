@@ -1491,6 +1491,9 @@ middleware is the natural fix if that's ever wanted; not built.
    `homebox.png`, `spoolman.png` — confirm they render; walkxcode/
    dashboard-icons naming doesn't always match the project's own name
    exactly.
+
+---
+
 ## 17. Power draw — the measurements this box has never taken
 
 `PLATFORM.md` §13 is the analysis: an estimated ~105–155 W at the wall, with the
@@ -1609,3 +1612,367 @@ survive a power cycle.
     path-keyed; if that defeats the cache, 01:30 becomes hours of spinning
     rather than a metadata sweep (§13e item 3). Compare the job's duration and
     read volume against the amount of data that actually changed that day.
+
+---
+
+## 18. The reading stack — owner steps
+
+⚠ **§18, not §17**, and deliberately leaving a gap: PR #113 (galactica's idle
+power draw) has carried its own §17 since 2026-09-10, with five `PLATFORM.md`
+pointers into it. Renumbering here rather than there is the cheaper of the two,
+and a gap is harmless where a duplicate section number is not — that exact
+collision has already merged silently into this file twice, per #113's own notes.
+
+Written alongside `READING-STACK.md`; deployed in the order below.
+
+1. [x] ⚠ **Watch the first certificate issuance — all six services register in
+   one switch.** ⟨An earlier draft of this item said to land one service first.
+   That is not achievable as the change is shaped: both halves are imported
+   together and every service registers in `homelab.readUpstreams` at once. The
+   check below is the real safeguard.⟩
+
+   The `read.*` group requests **no certificate at all while it is empty**, so
+   the wildcard is issued the moment that switch lands — and
+   `homelab.letsencryptStaging = false` is already set here, so it goes straight
+   to **production**. There is no per-group staging dry-run: flipping the flag
+   would move the *media* stack's certs to staging storage too and warn on every
+   `*.arr.zjones.dev` name meanwhile.
+
+   The budget is shared: production allows 50 certificates per **registered
+   domain** per week, and `read.zjones.dev` and `arr.zjones.dev` are both
+   `zjones.dev` — the allowance §12 item 6 records spending **ten** of, when
+   `arr`'s un-deduped first switch issued per-subdomain certs ahead of the
+   wildcard. Watch it happen:
+
+   ```bash
+   journalctl -u traefik -f
+   ```
+
+   What good looks like: exactly one `Obtaining bundled SAN certificate` for
+   `read.zjones.dev` + `*.read.zjones.dev`, two DNS-01 challenges (the base name
+   and the wildcard each need their own TXT), and **no per-subdomain requests**.
+   All six `-dev` routers name an identical SAN set, so the dedup should hold —
+   the residual risk is the cold-start race, where routers start ACME orders
+   before the first covering cert is stored.
+
+   ⚠ **If it does race**, you spend up to six certificates rather than one and
+   the wildcard is stored regardless, so it is self-correcting rather than
+   fatal — but it eats shared budget, so check before doing anything else that
+   issues. Nothing to undo either way.
+
+   ✅ **Watched on the live host 2026-09-17: it did not race.** Exactly one
+   `Obtaining bundled SAN certificate` for `read.zjones.dev, *.read.zjones.dev`,
+   two DNS-01 challenges, no per-subdomain requests. One certificate spent, and
+   `acme.json` carries the wildcard.
+2. [ ] **Point the tailnet at AdGuard** — ⚠ possibly already done; check
+   before changing anything. A container on galactica resolved
+   `audiobookshelf.read.zjones.dev` to `192.168.8.190` through MagicDNS on
+   2026-09-17, and no public resolver can return a private address, so the
+   tailnet already reaches something that knows the rewrite.
+
+   If it turns out not to be set: Tailscale admin console → DNS → nameservers.
+   Without it none of the `.zjones.dev` names resolve off-LAN and the Tailscale
+   half of `READING-STACK.md` §7 does nothing. Not expressible in Nix, which is
+   why it is here.
+3. [x] **Create the datasets, before anything starts — including before the
+   first `nixos-rebuild switch`.** ⚠ Two things will occupy the mountpoint if the
+   dataset is not there first: Docker materialises a missing bind-mount source as
+   an empty root-owned directory, **and `systemd-tmpfiles` creates
+   `/tank/books/library/{ebooks,audiobooks,manga}` on every run** — those three
+   are declared in `reading-acquisition.nix`, so a switch is enough to do it.
+   ⚠ `tank/books` **already exists** — created 2026-09-02 during the array
+   build, empty, with `homelab:tier=protected` already set `local`. So its two
+   commands are no-ops; only the podcasts dataset and the subdirectories are new.
+   All of this needs `sudo`.
+   ```bash
+   sudo mkdir -p /tank/books/library /tank/books/bookdrop
+   # Podcasts are Re-acquirable, and tier is a dataset property — so NOT under
+   # tank/books, which would back up re-downloadable audio as Protected forever.
+   sudo zfs create tank/podcasts
+   sudo zfs set homelab:tier=re-acquirable tank/podcasts
+   ```
+   `/tank/books/staging` is deliberately absent here: `systemd-tmpfiles` creates
+   it at switch, owned by a user that does not exist yet.
+   `bookdrop` is a **sibling** of `library`, not inside it, so a half-imported
+   drop is never scanned as library content.
+
+   ✅ **Verified 2026-09-17**, after the switch: `tank/books` is `protected` and
+   `tank/podcasts` `re-acquirable`, and `library` carries its three
+   subdirectories with `staging` beside it as `shelfmark:media 0775`.
+4. [x] **Own the library tree, and check the two numbers first.** Group ownership
+   of what Grimmory writes comes from the **setgid bit**, not from a `GROUP_ID` —
+   there is no numeric `media` gid to hand it (`READING-STACK.md` §4.7).
+   ```bash
+   getent group media        # confirm it exists; note its number
+   id -u z                   # confirm 1000 before using it below
+   chown 1000:media /tank/books/library /tank/books/bookdrop
+   chmod 2775 /tank/books/library /tank/books/bookdrop
+   ```
+   ⚠⚠ **Read `READING-STACK.md` §4.7 before this step — it is blocking.** Two
+   nixflix modules `mkForce` the `media` group to an empty set, so it has **no
+   gid** and `z` is **not a member**, both of which affect the existing media
+   stack too. Until that is resolved the acquisition services cannot write to the
+   shared trees. Start by capturing the live state, which every option below
+   depends on:
+   ✅ **Read on the live host 2026-09-17:** `media:x:991:unpackerr` — gid **991**
+   (not nixflix's 169, which is why the resolver reads `getent` at unit-start
+   instead of trusting the constant), and `z` is **not a member**
+   (`uid=1000(z) gid=100(users)`). The uid is 1000 as assumed.
+   ```bash
+   sudo chown 1000:media /tank/books/library /tank/books/bookdrop
+   sudo chmod 2775 /tank/books/library /tank/books/bookdrop
+   ```
+   ✅ **Verified 2026-09-17:** both are `1000:991` and `drwxrwsr-x` — the setgid
+   bit is really set, which is the half that carries group ownership.
+
+   ⚠ Still outstanding, and it affects the *existing* media stack rather than
+   this one: `users.users.z.extraGroups = [ "media" ];` so you can write the
+   media trees as yourself. One line, worth doing on its own — and the reason
+   `/tank/appdata/suwayomi` reads as `Permission denied` to you today.
+5. [x] **Create the five sops secrets** in `secrets/galactica.yaml`. ⚠ All must
+   exist *before* the switch or sops-nix fails it — the nixflix precedent.
+   - `reading/grimmoryDbPassword` — one value, rendered into both Grimmory's
+     `DATABASE_PASSWORD` and MariaDB's `MARIADB_PASSWORD`.
+   - `reading/grimmoryDbRootPassword` — also the account a borgmatic dump uses.
+   - `reading/bookbridgeSecretKey` — the Fernet key (§4.5: it must not be
+     generated into `/data`, beside the ciphertext it protects).
+   - `reading/bookbridgeWebSecretKey` — so sessions survive a restore.
+   - `reading/chaptarrApiKey` — ⚠ also the value to paste into Chaptarr's UI. If
+     Chaptarr generates its own instead, Prowlarr's application entry mismatches.
+   ✅ **Done 2026-09-17**, all five — the switch reaching activation at all is
+   the proof, since sops-nix fails it otherwise.
+
+   ⚠ MariaDB reads its two values **only while initialising an empty datadir**;
+   rotating either afterwards is an `ALTER USER` inside the database, not a
+   switch. And no template carries `restartUnits` (matching `homepages.nix` and
+   `nixflix.nix`), so rotating any of these needs a manual container restart.
+6. [x] **Expect Grimmory to fail once on first boot**, and do not chase it.
+   `oci-containers` has no equivalent of compose's `depends_on: service_healthy`,
+   so its first start races MariaDB initialising its datadir. The restart *is*
+   the wait loop (`RestartSec = 15`, paced so the start limit cannot make a slow
+   first boot fatal).
+
+   ⚠ **That wait loop did not cover the case it was written for, and the code
+   changed 2026-09-17.** `dependsOn` renders `Requires=` as well as `After=`,
+   and Requires *propagates stops* — so a flapping MariaDB cycled Grimmory at
+   systemd's own ~2s pace, ignoring `RestartSec` entirely and burning its start
+   limit in 13 seconds. Grimmory's journal showed only `status=143` (SIGTERM)
+   and `Dependency failed`, which reads like Grimmory's problem and is not.
+   MariaDB is now ordered with `after` alone, so its restarts no longer touch
+   Grimmory and the 15-second loop does the waiting it was meant to.
+
+   ⚠ **If MariaDB itself will not start, read its journal before touching
+   anything.** Seen once, after a container stop during a switch left its
+   transaction-coordinator log corrupt:
+
+   ```
+   [ERROR] Bad magic header in tc log
+   [ERROR] Crash recovery failed. … delete tc log and …
+   [ERROR] Can't init tc log
+   ```
+
+   InnoDB recovered cleanly on its own (`End of log at LSN=…`, rollback
+   segments active), so only `tc.log` was damaged and deleting it is MariaDB's
+   documented remedy — it is recreated on start, and with no prepared
+   transactions there is nothing to lose. Stop both units, `rm` it,
+   `systemctl reset-failed` both, start MariaDB, wait for `ready for
+   connections`, then start Grimmory. ⚠ Do **not** wipe the datadir for this:
+   `mariadb_upgrade_info` and `mysql/` predating the failure prove the
+   initialisation and the secrets were fine.
+
+   ✅ **Recovered 2026-09-17** exactly that way — `tc.log` deleted, MariaDB up,
+   Grimmory serving. ⚠ Still unexplained: what killed the container hard enough
+   to corrupt that log. A switch stopping it is the likely cause, and if it
+   recurs the fix is MariaDB's stop timeout, not deleting the file again.
+
+   ⟨Unrelated but visible in that datadir: it is owned by `btrbk`. That is the
+   container's `mysql` (uid 999) landing on whichever host user holds 999 —
+   these containers share the host's uid namespace. Harmless to MariaDB.⟩
+7. [x] ⚠ **Verify BookBridge can actually reach Audiobookshelf** — it may not,
+   and it is the whole point of running it. `READING-STACK.md` §4.6 has the two
+   levers. Grimmory it reaches as `http://grimmory:6060` on the `proxy` network;
+   Audiobookshelf is native on loopback, and a container cannot dial that.
+
+   ✅ **It can — verified 2026-09-17, and neither lever was needed.** `/ping`
+   answers `200` from inside the container. §4.6 now records why: this host's
+   `resolv.conf` is Tailscale's rather than a loopback nameserver, so Docker's
+   resolver had a legitimate upstream to forward to.
+8. [x] **Own `/tank/podcasts` — AFTER the switch, not before.** `zfs create`
+   leaves it `root:root 0755` and Audiobookshelf cannot write there. ⚠ But the
+   `audiobookshelf` user does not exist until the switch that declares the
+   service has run, so `chown audiobookshelf:media` before it fails with
+   `invalid user`. Switch first, then:
+   ```bash
+   sudo chown -R audiobookshelf:media /tank/podcasts
+   sudo chmod 2775 /tank/podcasts
+   ```
+   ✅ **Owned 2026-09-17:** `audiobookshelf:media`, `drwxrwsr-x`. Creating the
+   libraries in the UI is still to do — the module has no option for them.
+9. [x] ⚠ **Pin the Docker bridge subnet.** `reading-acquisition.nix` hardcodes
+   `172.17.0.0/16` — Docker's default — and two things depend on it being true
+   (tinyproxy's allow-list and the namespace's return route). Read the live value
+   (`ip -4 addr show docker0`), then pin it with
+   `virtualisation.docker.daemon.settings.bip` so the literal is true by
+   construction rather than by luck.
+
+   ✅ **Read live 2026-09-17: `172.17.0.1/16`** — the hardcoded literal was
+   already true, so the pin in `configuration.nix` changes nothing at runtime.
+   ⚠ It does rewrite `daemon.json`, so the switch that lands it **restarts
+   dockerd and bounces every container on the host**, the media stack included.
+   Land it when a blip is acceptable, not mid-import.
+10. [x] ⚠ **The acceptance test for the whole egress design** (§5a/§5c/§5d):
+    ```bash
+    docker exec shelfmark curl -s https://ifconfig.me   # must be the Proton exit
+    ip netns exec wg curl -s https://ifconfig.me        # the same address
+    curl -s https://ifconfig.me                         # the house IP
+    ```
+    If the first shows the house IP, the proxy is not carrying it. The failure
+    mode is fail-closed (with `HTTP_PROXY` set and the proxy unreachable
+    `requests` raises rather than going direct), so a *broken* proxy shows as
+    errors, not as a silent leak.
+
+    ✅ **Passed 2026-09-17.** Namespace and container share one Proton exit —
+    `212.104.215.98` (v4) and `2a02:6ea0:510c:6110::22` (v6) — against a house
+    IP of `24.16.37.249`.
+
+    ⚠ **Comparing the two needs care, and `-4` will not do it.** The container
+    answered over IPv6 while the namespace curl picked IPv4, so the first
+    comparison was across address families and proved nothing on its own. With
+    `HTTPS_PROXY` set, `curl -4` constrains the hop *to tinyproxy*, not
+    tinyproxy's onward connection — the proxy still resolves and chooses for
+    itself. Force the family at the far end instead: an A-only endpoint
+    (`https://api.ipify.org`) out of the container, and `curl -6` inside the
+    namespace.
+11. [x] **Add Chaptarr's download clients by hand**, at
+    `http://192.168.8.190:8080` (SABnzbd) and `http://192.168.15.1:8282`
+    (qBittorrent). ⚠ **Not `localhost`** — inside the container that is the
+    container. These two addresses are the likeliest thing to get wrong.
+
+    ✅ **Added 2026-09-17.** Which also means Chaptarr's own login exists, so
+    that much of item 12 is done too.
+12. [x] **First-run accounts**, none of which can come from Nix: Chaptarr's login
+    (its `AuthOptions` has no username/password env path at all), Shelfmark's
+    builtin-auth admin, and Grimmory's, Audiobookshelf's and BookBridge's first
+    users. ⚠ Do **not** set `Chaptarr__Auth__Method` to force Forms first — env
+    wins on every start and would lock you out of creating the account.
+
+    ✅ **Created 2026-09-21**, alongside Audiobookshelf's two libraries —
+    audiobooks (Book type) on the tree Grimmory also indexes, and podcasts
+    (Podcast type) on its own dataset. ⚠ BookBridge's own login is the one that
+    matters most despite being the smallest service: it holds credentials for
+    both libraries (§4.5), so a weak password there compromises everything else
+    in this stack.
+13. [x] **Verify Suwayomi's extension repo loaded.** The repo itself is now
+    declared in Nix (Keiyoushi), so there is nothing to add by hand — ⚠ and it
+    had to be declared: the module re-renders `server.conf` from the Nix
+    settings on **every start**, so a repo added in the WebUI is reverted at the
+    next restart, silently. The same is true of any other server setting changed
+    there. After the switch, Browse should list sources.
+
+    ⚠ **Second finding, once 2.3.2243 was running: the Extension stores page
+    was empty even though the URL was declared.** 2.3 renamed the setting to
+    `extensionStores`, and the server **rewrites `server.conf` itself** into its
+    reference format at runtime — dropping the deprecated `extensionRepos`
+    rather than migrating its value, so the URL simply vanished. Renamed in the
+    config, with an assertion so it cannot silently regress.
+
+    ⟨`webUIChannel = "BUNDLED"` was set at the same time but was **not** the
+    cause — UI and server were both 2.3. It closes a separate hole: the default
+    downloads the interface into the data dir and re-checks every 23 hours, so
+    the UI drifts from the pinned jar on its own.⟩
+
+    ✅ **Loaded 2026-09-17 — and found two stubs, which is the real finding.**
+    Browse showed `Outdated App` and `Update to Mihon 0.20.1+` and nothing else.
+    Not a filter: that is all `index.min.json` contains now. It sent item 17
+    from a preference to a blocker, and the package is pinned ahead of the
+    channel as a result.
+
+    ✅ **Closed 2026-09-18: Browse lists real sources.** It took all three
+    changes together — the 2.3.2243 pin, the `extensionStores` rename, and the
+    URL itself. Any one of them missing gives an empty list and no error, which
+    is why this took three passes to corner.
+
+14. [x] ⚠ **Test the Prowlarr → Chaptarr sync early** — §5b calls it the single
+    biggest risk here, with two open upstream bugs on the path. When registering
+    the application, **widen the synced categories to include `3000` and `3030`**
+    or audiobook search issues zero queries and reports "no results",
+    indistinguishable from an empty shelf. Hand-entered Newznab/Torznab indexers
+    in Chaptarr are the fallback if the sync will not come up.
+
+    ✅ **It works — torrent and usenet both, 2026-09-21.** The single biggest
+    risk in the spec, retired: neither Chaptarr bug on the sync path (#84, #131)
+    blocks it in practice, and the fallback was not needed.
+
+    ⚠ **Worth knowing for the next app, because it cost a debugging cycle:**
+    usenet indexers appeared not to sync while torrents did, which looked like a
+    protocol-specific defect. It was not. Chaptarr was simply not finished being
+    set up — its own quickstart checklist and, in particular, **root folders**
+    were still missing, and it cannot act on a synced indexer with nowhere to
+    put the result. Finish the app's own setup before diagnosing its integrations.
+15. [x] **Confirm the dashboard icons render**, as §15 item 7 did for the
+    last batch. All six come from selfh.st and every name was confirmed `200`
+    on the CDN first, so a miss here means the `sh-` resolution rather than a
+    wrong name — ⚠ note BookBridge's and Chaptarr's `.svg` do **not** exist, so
+    those two must keep their explicit `.png`.
+
+    ✅ **All six render, 2026-09-18.**
+16. [ ] **`CopyUsingHardlinks` is not declarable** — it lives in Chaptarr's
+    SQLite `Config` table, and env only reaches `config.xml`-level settings.
+    Leave it at its default (`true`, harmless across datasets: one `link()` that
+    fails `EXDEV` per import) or change it in the UI.
+17. [x] **Suwayomi 2.3.2243 — decided by item 13, and taken.** The question was
+    whether the update the UI advertises was cosmetic. It is not: on 2.1.1867
+    Keiyoushi yields **zero** usable extensions, so manga acquisition does not
+    work at all. The bump is the fix, not an upgrade, and it is now in
+    `reading-acquisition.nix` as an `overrideAttrs` on the channel's package.
+
+    ⚠ **What this costs, since it is real debt:** the package is pinned ahead of
+    nixpkgs, so a later channel bump stops applying until the override is
+    removed, and it skips the `nixosTests` nixpkgs runs against the version it
+    ships. Revisit when nixpkgs catches up — `nix eval` the channel's
+    `suwayomi-server.version` and drop the override once it is ≥ 2.3.2243.
+
+    ⚠ 2.3 also renamed `extensionRepos` → `extensionStores`. An unknown key is
+    ignored rather than rejected, so an assertion in `reading-acquisition.nix`
+    ties the key to the package version — otherwise dropping this override once
+    nixpkgs catches up would silently return manga to zero extensions.
+
+    Pre-flight done before pushing: every `server.conf` key this host sets
+    (`extensionRepos`, `downloadAsCbz`, `downloadsPath`, `basicAuthEnabled`,
+    `initialOpenInBrowserEnabled`) exists identically in both jars, so the
+    settings carry over; the overridden package builds and its wrapper resolves
+    to the 2.3.2243 jar.
+
+---
+
+## 19. Memos — owner steps before first switch
+
+`hosts/galactica/memos.nix` declares it as a container, same shape as §15's
+four: Traefik router pair, tsdproxy tailnet node. New appdata (no Unraid
+backup to restore — this is a fresh install, not a migration). No secret
+needed: upstream has no signing-key env var.
+
+Unlike §16's PartDB/HomeBox/Spoolman batch, `tank/appdata/memos` is promoted
+straight to its own ZFS dataset rather than staying a directory in the
+shared `tank/appdata` — same exception as ferdium/karakeep
+(`SHARES.md`, `BACKUP-BORG.md`), on the grounds that notes are a real loss.
+Must happen **before** the first switch, since `zfs create` on a path that
+already exists as a plain directory needs the directory empty/absent first.
+
+1. [ ] **Create and tag the dataset** — `zfs create tank/appdata/memos`,
+   then `zfs set homelab:tier=precious tank/appdata/memos` and
+   `zfs set org.torsion.borgmatic:backup=auto tank/appdata/memos`
+   (`BACKUP-BORG.md`'s Memos section has the exact commands).
+2. [ ] **First switch.** Confirm the container starts, `memos.internal` and
+   `memos.zjones.dev` both return the setup wizard, and the LE cert issues
+   cleanly.
+3. [ ] **Create the first (admin) account** through the setup wizard —
+   Memos' own first-run flow, not a Nix-declared credential.
+4. [ ] **Key expiry disabled on the new `memos` tsdproxy node** — same trap
+   as every prior batch.
+5. [ ] **Dashboard icon.** `Apps` group now references `memos.png` —
+   confirm it renders (dashboard-icons carries it as of this writing).
+6. [ ] **Confirm the dataset is picked up by borgmatic** — after the next
+   nightly run, check the BorgBase archive contents (or `borgmatic list`)
+   for `tank/appdata/memos`; the property-driven autoscan (`BACKUP-BORG.md`)
+   needs no config change, but worth verifying once rather than assuming.

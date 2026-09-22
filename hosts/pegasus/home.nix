@@ -1,4 +1,4 @@
-{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, orcaSlicerNewer, bambuStudioNewer, ... }:
+{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, orcaSlicerNewer, bambuStudioNewer, ferdiumNewer, ... }:
 
 {
   imports = [
@@ -76,7 +76,10 @@
     # away. Same call as Brain.fm below: web app via firefox/chrome.
 
     discord
-    ferdium
+    # 7.2.3, from the separate nixpkgs-ferdium input rather than the shared
+    # pin — reaching it there would mean giving up this host's 7.1 kernel
+    # pin (see flake.nix).
+    ferdiumNewer
     signal-desktop
     slack
     openscad
@@ -175,6 +178,11 @@
     # GPU-accelerated terminal emulators. kitty itself is declared via
     # programs.kitty below now (not here) — see that block for why.
     ghostty
+
+    # Terminal multiplexer — mosh (hosts/pegasus/configuration.nix) survives
+    # roaming/sleep but not a dropped SSH-adjacent connection outright; zellij
+    # keeps panes/sessions alive across either.
+    zellij
 
     # Doxie Q2 (DX320) scan management — the scanner itself needs no driver
     # (mounts as plain USB mass storage; Wi-Fi direct-to-cloud setup is the
