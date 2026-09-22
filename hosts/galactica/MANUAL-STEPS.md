@@ -1578,6 +1578,11 @@ survive a power cycle.
    ```
    Under ~1.5 TB and a 2 TB tier is comfortable; near or over 2 TB and the whole
    option needs a bigger device or a seeding-retention policy first.
+   ⚠ Since the reading stack landed (§18), Chaptarr and Shelfmark drive
+   nixflix's qBittorrent through the same `downloadsDir`, so book and manga
+   torrents are in this total as well. The `du` already counts them — just
+   don't read the number as media-only, or size the device against the wrong
+   growth rate.
 7. [ ] **Count concurrently seeded torrents.** This is what picks `h-SDCP` over
    a bought SSD, not the power figures — a single 5400-class spinner is
    ~75–100 IOPS and a large swarm is seek-bound. A few dozen: the spinner is
@@ -1598,6 +1603,13 @@ survive a power cycle.
      assuming the idle windows are long. If it turns out to be the binding
      constraint, moving just its `data` dir to `tank/appdata` is a smaller
      change than the whole seed tier.
+   - **The reading stack's content is on the spinners as well** — `tank/books`
+     is its own dataset (§18, `READING-STACK.md` §6). Unlike Paperless its
+     state did land on the special vdev, so what reaches the array is
+     Audiobookshelf playback, Suwayomi's manga downloads and Chaptarr's
+     imports: user-driven bursts rather than a background index, and a seed
+     tier moves none of it. Worth watching over the same window as Paperless
+     before calling the idle gaps long.
    - The **Scrutiny collector's** nightly sweep wakes every disk (§13e item 2).
      Now at 01:00 local, alongside borgmatic's 01:30 rather than in a window of
      its own — but 30 minutes apart is still two wakes if the standby timer is

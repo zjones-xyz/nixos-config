@@ -1908,7 +1908,8 @@ than tunable:
   row was written about the retired mergerfs/SnapRAID design, where per-disk
   spin-down was a real option; RAIDZ1 removed it.
 - memory-alpha's Jellyfin mounts the library over NFS and runs its own scheduled
-  scans, and the five *arrs run refresh/rescan tasks on theirs.
+  scans, and the five *arrs run refresh/rescan tasks on theirs. Chaptarr and
+  Audiobookshelf now do the same over `tank/books`.
 
 ⭐ The design already banked the version of this win that was available: **`tank/
 appdata` lives on the special vdev's SSDs** (`DECISIONS.md` §7,
@@ -1916,7 +1917,7 @@ appdata` lives on the special vdev's SSDs** (`DECISIONS.md` §7,
 workload on the box — never touch a spinner at all. That was decided for
 redundancy; the idle spinners are a side effect of it. Six of the seven apps
 added since (ferdium, karakeep, partdb, homebox, spoolman, syncthing) follow the
-same rule.
+same rule, and so do Memos and every service in the reading stack.
 
 ⚠ **Paperless-ngx is the exception, and it is a deliberate one.** Its live
 `data`/`media` sit on `/tank/documents/paperless` — restored in place from the
@@ -1925,6 +1926,14 @@ that `data` dir holds both the SQLite database and the Whoosh search index. So
 there is now a small-random workload on the **spinners**, which is exactly what
 the appdata decision had otherwise kept off them. Its consumption inbox is on
 the NVMe, deliberately; the archive and index are not.
+
+⚠ **The reading stack is a second exception, of a different kind.** Its *state*
+follows the rule, but its *content* does not: `tank/books` — library, bookdrop
+and staging — is its own dataset on the spinners, because `homelab:tier` is a
+dataset property and books had to be able to carry their own
+(`READING-STACK.md` §6). That is bulk data rather than Paperless's small-random
+index, so it does not undo the appdata decision the way Paperless does; what it
+adds is another thing that wakes a disk (§13e item 5).
 
 **ASPM, and `powerManagement.powertop.enable`.** §6c is explicit: Ivy Bridge plus
 a budget controller with newly-enabled link power management is the combination
@@ -1954,9 +1963,9 @@ the fix is still in the BIOS, not in Nix.
 router as a sync replica), the NFS server memory-alpha mounts, and the
 acquisition half of the media stack. There is no idle window to suspend into.
 
-### 13e. ⚠ Five things independently wake a sleeping disk on this host
+### 13e. ⚠ Six things independently wake a sleeping disk on this host
 
-Any spin-down has to survive all five, or it looks like it worked for half an
+Any spin-down has to survive all six, or it looks like it worked for half an
 hour and then quietly stops:
 
 1. **smartd, every 30 minutes.** `modules/nixos/smart.nix` monitors with `-a`,
@@ -2001,7 +2010,16 @@ hour and then quietly stops:
    indexing, OCR of a consumed document, a sanity check or a classifier run all
    land on the spinners. Bursty rather than continuous — an unused Paperless is
    quiet — but it is not something a seed tier moves.
-5. **The rest of the workload**, for `tank` — §13d, and §13f for the part of it
+5. **The reading stack**, whenever a book is played, imported or fetched. Its
+   *state* is on the special vdev with the rest of `tank/appdata`, which keeps
+   it out of Paperless's class — but its **content is not**: `tank/books` is its
+   own dataset on the RAIDZ1 spinners, because `homelab:tier` is a dataset
+   property and books had to carry their own (`READING-STACK.md` §6).
+   Audiobookshelf streams out of `/tank/books/library`, Suwayomi downloads manga
+   into it, and Chaptarr's imports and Shelfmark's bookdrop land in the sibling
+   directories. Bursty rather than continuous, like Paperless, and like
+   Paperless not something a seed tier moves.
+6. **The rest of the workload**, for `tank` — §13d, and §13f for the part of it
    that can be moved.
 
 ⚠ **The ATA standby timer is volatile.** `hdparm -S` does not survive a power
@@ -2032,12 +2050,25 @@ That price is smaller than it sounds: an import is one sequential write that
 spins the pool up for a couple of minutes and lets it go again. The continuous
 load is what blocks spin-down, not the occasional one.
 
+⭐ **The reading stack has since made the same trade deliberately, which is the
+closest thing to evidence this section has.** `tank/books` is its own dataset, so
+every Chaptarr and Shelfmark import across it is already a copy rather than a
+hardlink — `reading-acquisition.nix` calls that out as intended and "cheap for
+books". The hardlink objection therefore applies to nixflix alone, not to the
+box as a whole, and one half of the stack is already running on the arrangement
+§13f proposes for the other.
+
+The same merge also widens what a seed tier would cover: the reading services
+share nixflix's qBittorrent *and* its `downloadsDir`, so book and manga torrents
+seed out of `/tank/nixflix_media/downloads` alongside the media ones. Moving
+that directory moves all of it.
+
 #### What it does and does not buy
 
 | | |
 |---|---|
 | Removes | The largest and steadiest toucher of the spinners |
-| Does **not** remove | §13e's other four — smartd (fixed), the Scrutiny sweep (**not** fixed), borgmatic's nightly window, Paperless's index and database |
+| Does **not** remove | §13e's other five — smartd (fixed), the Scrutiny sweep (**not** fixed), borgmatic's nightly window, Paperless's index and database, the reading stack's content on `tank/books` |
 | Untested | Whether Jellyfin's and the \*arrs' scheduled scans stay metadata-only. All metadata is on the special vdev, so a stat-walk of an unchanged library *should* be served from SSD + ARC without waking a spinner — plausible, unverified, and decisive |
 
 So this is **necessary but not sufficient**. Two config items stand between it
