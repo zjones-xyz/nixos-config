@@ -1988,3 +1988,64 @@ already exists as a plain directory needs the directory empty/absent first.
    nightly run, check the BorgBase archive contents (or `borgmatic list`)
    for `tank/appdata/memos`; the property-driven autoscan (`BACKUP-BORG.md`)
    needs no config change, but worth verifying once rather than assuming.
+
+---
+
+## 20. Part-DB — promote to offsite backup (Precious tier)
+
+`SHARES.md` §5 had Part-DB sitting on the default `appdata` tier deliberately
+(parity only, no offsite) — the owner's call at the time, per §16. Revisited:
+same reasoning as ferdium/karakeep/memos applies (a real, non-reacquirable
+loss), so `tank/appdata/partdb` gets the same promotion.
+
+Unlike memos, this is **not** a fresh install — real, live data already sits
+in `/tank/appdata/partdb` as a plain directory inside the shared `tank/appdata`
+dataset, and the container is actively serving from it. `zfs create` refuses a
+path that already exists, so the directory has to move out of the way and back
+in, not just get created fresh. Do this **after** the tmpfiles-ownership fix
+(#150) has been switched and the container confirmed healthy again — cp -a
+below relies on the on-disk ownership already being correct (`33:33`), and
+migrating a currently-500ing service first just compounds the state to sort out.
+
+1. [x] **Stop the container** — `systemctl stop docker-partdb`.
+2. [x] **Move the existing directory aside** —
+   `mv /tank/appdata/partdb /tank/appdata/partdb.pre-dataset`.
+3. [x] **Create and tag the dataset** (mounts empty at the same path the
+   container already expects — `dataDir` in `partdb.nix` does not change):
+   ```
+   zfs create tank/appdata/partdb
+   zfs set homelab:tier=precious tank/appdata/partdb
+   zfs set org.torsion.borgmatic:backup=auto tank/appdata/partdb
+   ```
+4. [x] **Copy the data back in, preserving ownership** —
+   `cp -a /tank/appdata/partdb.pre-dataset/. /tank/appdata/partdb/`.
+5. [x] **Verify before deleting anything** — `diff -rq /tank/appdata/partdb.pre-dataset /tank/appdata/partdb`
+   should report no differences.
+6. [x] **Restart and confirm — done 2026-09-26.** `partdb.maker.zjones.dev`,
+   `partdb.maker.internal`, and the direct container port all confirmed 302;
+   dashboard dot confirmed green after a refresh.
+
+   ⚠ **One real, unrelated wrinkle hit along the way — since generalized to a
+   known tsdproxy bug, not specific to Part-DB.** The tsdproxy-managed
+   `partdb` tailnet node came up in Tailscale's `NoState` (its stored session
+   was gone) and got stuck retrying rather than auto-using its authkey
+   (`TSNET_FORCE_LOGIN=1` would force it, per tsnet's own log message). At
+   the time this looked fully explained by a stale, offline device from the
+   decommissioned Unraid host squatting on the `partdb` name/IP — deleting
+   it and restarting `tsdproxy` did fix `partdb`. But the *same afternoon*,
+   `home` (long-lived, no duplicate device, nothing Unraid-related) hit the
+   identical `NoState` after an unrelated `docker restart tsdproxy`, and
+   needed a second `docker restart tsdproxy` to recover — no admin-console
+   cleanup involved that time. That rules out "stale duplicate" as the root
+   cause; it's `modules/nixos/tsdproxy.nix`'s header comment now documents
+   this as an open upstream bug
+   (https://github.com/almeidapaulopt/tsdproxy/issues/496). **Recovery, in
+   order:** `docker restart tsdproxy` (may need a second try) → check the
+   admin console for a stale duplicate device on that name and delete it if
+   present → `docker restart tsdproxy` again.
+7. [ ] **Remove the pre-dataset copy** — `rm -rf /tank/appdata/partdb.pre-dataset`,
+   once fully comfortable it's no longer needed as a fallback.
+8. [ ] **Confirm the dataset is picked up by borgmatic** — same check as
+   memos' item 6, after the next nightly run.
+9. [x] **`SHARES.md` and `BACKUP-BORG.md` updated — done 2026-09-26**, same
+   shape as the ferdium/karakeep and memos entries.

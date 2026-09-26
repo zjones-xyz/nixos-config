@@ -282,8 +282,8 @@ contents cannot be inferred from configuration.
 | Tier | Protection | Shares |
 |---|---|---|
 | **Critical** | Everything below, **plus versioning and a tested restore** | **`documents`** |
-| **Precious and Irreplaceable** | Real-time redundancy, checksummed, **+ offsite** | **`immich_photos`**, **`immich_photos_archived`**, ⚠ `appdata/ferdium`, `appdata/karakeep`, `appdata/memos` *(exception, below)* |
-| **Protected** | Parity. No offsite. | **`music`**, **`books`**, **`bambuddy_library`**, **`partdb`**, **`webdav`**, **`public`**, **`arm`**, **`inbox`**, **`serenity_time_machine`**, ⏸ **`calibre_books`** *(parked)*, `archived_disks` ⟨?⟩ |
+| **Precious and Irreplaceable** | Real-time redundancy, checksummed, **+ offsite** | **`immich_photos`**, **`immich_photos_archived`**, ⚠ `appdata/ferdium`, `appdata/karakeep`, `appdata/memos`, `appdata/partdb` *(exception, below)* |
+| **Protected** | Parity. No offsite. | **`music`**, **`books`**, **`bambuddy_library`**, **`webdav`**, **`public`**, **`arm`**, **`inbox`**, **`serenity_time_machine`**, ⏸ **`calibre_books`** *(parked)*, `archived_disks` ⟨?⟩ |
 | **Painful to rebuild, small** | Redundancy; cheap because tiny | `appdata` *(default — see the two exceptions above)*, `arr_config`, `ha_backup` |
 | **Re-acquirable** | Snapshot parity, 24 h lag fine | **`podcasts_audiobookshelf`**, `arr_media`, `arr_managed_data`, `jellyfin`, `isos` |
 | **Regenerable** | Parity optional | **`copyparty`**, `domains` ⟨?⟩ |
@@ -291,16 +291,20 @@ contents cannot be inferred from configuration.
 | 🗑 **Drop** | n/a — deleted before migrating | **`jellyfin_cache`**, **`ai_models`**, **`SHARE`**, **`manyfold_library`**, **`syncthing`**, **`minishare`**; `appdata_old` + `books_old` suspected |
 | **⟨?⟩ Undecided** | — | *(none — every share is now assigned)* |
 
-⚠ **Three appdata subtrees promoted off the default tier** — `ferdium` and
-`karakeep` on 2026-09-13, `memos` on 2026-09-21. `tank/appdata/{ferdium,
-karakeep,memos}` (own ZFS datasets, not directories inside the shared
-`tank/appdata`) carry `homelab:tier=precious` and
-`org.torsion.borgmatic:backup=auto` rather than the generic `appdata`
+⚠ **Four appdata subtrees promoted off the default tier** — `ferdium` and
+`karakeep` on 2026-09-13, `memos` on 2026-09-21, `partdb` on 2026-09-26.
+`tank/appdata/{ferdium,karakeep,memos,partdb}` (own ZFS datasets, not
+directories inside the shared `tank/appdata`) carry `homelab:tier=precious`
+and `org.torsion.borgmatic:backup=auto` rather than the generic `appdata`
 default — owner's call, made when standing up each service
-(`hosts/galactica/{ferdium,karakeep,memos}.nix`), on the grounds that personal
-account/bookmark/notes state is a real loss even though it isn't documents or
-photos. Every other `appdata` subtree stays on the default (parity only, no
-offsite) unless promoted the same explicit way.
+(`hosts/galactica/{ferdium,karakeep,memos,partdb}.nix`), on the grounds that
+personal account/bookmark/notes/inventory state is a real loss even though it
+isn't documents or photos. Part-DB's was a revisit rather than a day-one
+decision (§16 originally left it on the default tier); the promotion itself
+needed a live-data migration since the directory was already populated and
+in use — runbook and reasoning in `MANUAL-STEPS.md` §20 and
+`BACKUP-BORG.md`. Every other `appdata` subtree stays on the default (parity
+only, no offsite) unless promoted the same explicit way.
 
 ### Critical vs. Precious — consequence against grief
 

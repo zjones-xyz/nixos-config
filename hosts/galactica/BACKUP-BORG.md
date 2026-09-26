@@ -116,6 +116,26 @@ array is built with the flat `immich_photos` / `immich_photos_archived` names th
 docs also use, tag those instead. The property does not care what the dataset is
 named — that is the point.)
 
+### Part-DB promoted — 2026-09-26
+
+Revisited from `MANUAL-STEPS.md` §16's original call to leave Part-DB on the
+default `appdata` tier — same reasoning as ferdium/karakeep/memos applies (a
+real, non-reacquirable loss), so it gets the same promotion. Unlike memos,
+this was **not** a fresh install: live data already sat in
+`/tank/appdata/partdb` as a plain directory inside the shared `tank/appdata`
+dataset with the container actively serving from it, so the directory had to
+move out of the way and back rather than `zfs create` onto an empty path —
+exact runbook in `MANUAL-STEPS.md` §20.
+
+```
+mv /tank/appdata/partdb /tank/appdata/partdb.pre-dataset
+zfs create tank/appdata/partdb
+zfs set homelab:tier=precious tank/appdata/partdb
+zfs set org.torsion.borgmatic:backup=auto tank/appdata/partdb
+cp -a /tank/appdata/partdb.pre-dataset/. /tank/appdata/partdb/
+rm -rf /tank/appdata/partdb.pre-dataset   # after verifying the copy and a healthy restart
+```
+
 The property **inherits to children**, so tagging a parent pulls in every child
 dataset. If a child should be excluded, set `=auto` on the parent and something
 other than `auto` (e.g. `-`/unset via `zfs inherit`, or any non-`auto` value) on

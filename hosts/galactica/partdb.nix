@@ -12,7 +12,7 @@
 # tailnet name stays flat while Traefik/DNS get the subdomain grouping.
 
 let
-  image = "jbtronics/part-db1:2.17.0";
+  image = "jbtronics/part-db1:2.18.0";
   dataDir = "/tank/appdata/partdb";
   port = 3023;
   publicDomain = "maker.zjones.dev";
@@ -30,11 +30,17 @@ in
     APP_SECRET=${config.sops.placeholder."partdb/appSecret"}
   '';
 
+  # Owned by www-data (uid/gid 33), not root:root — the actual request-handling
+  # process drops root to www-data (confirmed via `docker top partdb aux`), and
+  # `d` re-enforces ownership on every activation, so root:root here silently
+  # locks that process out of its own SQLite file after the next switch even
+  # though the restore (cp -a) left it correctly owned. Same class of bug as
+  # spoolman.nix's uid fix.
   systemd.tmpfiles.rules = [
-    "d ${dataDir} 0750 root root - -"
-    "d ${dataDir}/uploads 0750 root root - -"
-    "d ${dataDir}/public_media 0750 root root - -"
-    "d ${dataDir}/db 0750 root root - -"
+    "d ${dataDir} 0750 33 33 - -"
+    "d ${dataDir}/uploads 0750 33 33 - -"
+    "d ${dataDir}/public_media 0750 33 33 - -"
+    "d ${dataDir}/db 0750 33 33 - -"
   ];
 
   # tank's crypttab entries are all `nofail` (configuration.nix) — see
@@ -49,6 +55,25 @@ in
       # NOT set: DATABASE_SQLITE_ENFORCE_FOREIGN_KEYS — upstream's own
       # warning is "only enable on a fresh database", and this one is
       # restored, not fresh.
+      # Restricts the Host header Part-DB will accept (upstream's own admin
+      # warning otherwise, an HTTP Host header injection risk) to the three
+      # names this service is actually reachable under: both Traefik routers
+      # below plus the flat tsdproxy tailnet name (see this file's header for
+      # why that one isn't `partdb.maker.*` too). Unquoted — this is passed
+      # straight through oci-containers, not read from an `.env.local`.
+      TRUSTED_HOSTS = "^(partdb\\.maker\\.internal|partdb\\.maker\\.zjones\\.dev|partdb\\.peacock-koi\\.ts\\.net)$";
+      # Without this, Part-DB doesn't trust Traefik's X-Forwarded-Proto and
+      # thinks every request is plain HTTP (it only ever sees the loopback
+      # connection behind TLS termination) — its own redirects (e.g. / ->
+      # /en/) come back as http:// instead of https://. Harmless to curl,
+      # which follows the downgrade silently, but homepage's fetch client
+      # correctly refuses to follow an https->http redirect and reports it
+      # as a 500 — confirmed live 2026-09-26, container logs show every
+      # request's ip as 172.17.0.1 (the default docker bridge gateway, since
+      # Traefik reaches this container via its loopback-published port), so
+      # trusting the whole Docker private range covers it even if that
+      # gateway address ever shifts.
+      TRUSTED_PROXIES = "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16";
     };
     environmentFiles = [ config.sops.templates."partdb.env".path ];
     volumes = [
