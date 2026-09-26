@@ -20,7 +20,7 @@ let
     bambu-studio-api = { listen = 13001; backend = 23001; };
   };
 
-  idleTimeout = "15min";
+  idleTimeout = "30min";
   docker = "${config.virtualisation.docker.package}/bin/docker";
   image = name: "ghcr.io/maziggy/${name}:${tag}";
 
