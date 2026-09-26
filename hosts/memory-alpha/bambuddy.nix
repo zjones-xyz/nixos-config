@@ -42,15 +42,18 @@ in
 
   # ── Printer-facing network ────────────────────────────────────────────────
   # ipvlan, not macvlan: it shares the host's MAC, and USB Ethernet chipsets
-  # are unreliable with several. /28 is the tightest range holding .95–.98.
+  # are unreliable with several. Every address here is static, so --ip-range
+  # (.80–.87) only fences off accidental auto-assignment.
   # The host takes no address on eth-secondary. Under NetworkManager it would
   # DHCP one, and a lease on .98 would collide with Bambuddy's own address.
   networking.networkmanager.unmanaged = [ "interface-name:eth-secondary" ];
 
   systemd.services.docker-bambuddy-lan-network = {
     description = "Create the Bambuddy printer-facing ipvlan network";
-    after = [ "docker.service" ];
+    # A USB dongle: wait for it, and go down with it if it's unplugged.
+    after = [ "docker.service" "sys-subsystem-net-devices-eth\\x2dsecondary.device" ];
     requires = [ "docker.service" ];
+    bindsTo = [ "sys-subsystem-net-devices-eth\\x2dsecondary.device" ];
     before = [ "docker-bambuddy.service" ];
     requiredBy = [ "docker-bambuddy.service" ];
     serviceConfig = {
@@ -58,14 +61,18 @@ in
       RemainAfterExit = true;
       # Unmanaged means nothing else brings the link up.
       ExecStartPre = "${pkgs.iproute2}/bin/ip link set eth-secondary up";
-      ExecStart = "${pkgs.bash}/bin/bash -c '${docker} network inspect bambuddy-lan >/dev/null 2>&1 || ${docker} network create --driver=ipvlan --subnet=192.168.8.0/24 --gateway=192.168.8.1 --ip-range=192.168.8.88/28 --opt parent=eth-secondary --opt ipvlan_mode=l2 bambuddy-lan'";
+      ExecStart = "${pkgs.bash}/bin/bash -c '${docker} network inspect bambuddy-lan >/dev/null 2>&1 || ${docker} network create --driver=ipvlan --subnet=192.168.8.0/24 --gateway=192.168.8.1 --ip-range=192.168.8.80/29 --opt parent=eth-secondary --opt ipvlan_mode=l2 bambuddy-lan'";
     };
   };
 
+  # The library is only wanted: printer control must come up even while
+  # galactica is down. `rslave` lets a later NFS mount reach the container.
   systemd.services.docker-bambuddy = {
-    after = [ "docker-proxy-network.service" ];
+    after = [ "docker-proxy-network.service" "mnt-bambuddy_library.mount" ];
     requires = [ "docker-proxy-network.service" ];
-    unitConfig.RequiresMountsFor = [ dataDir libraryDir ];
+    wants = [ "mnt-bambuddy_library.mount" ];
+    wantedBy = [ "sys-subsystem-net-devices-eth\\x2dsecondary.device" ];
+    unitConfig.RequiresMountsFor = [ dataDir ];
   };
 
   virtualisation.oci-containers.containers.bambuddy = {
@@ -85,7 +92,7 @@ in
     volumes = [
       "${dataDir}/data:/app/data"
       "${dataDir}/logs:/app/logs"
-      "${libraryDir}:/external/bambuddy_library"
+      "${libraryDir}:/external/bambuddy_library:rslave"
     ];
     labels = {
       "traefik.enable" = "true";
@@ -103,7 +110,8 @@ in
       "tsdproxy.port.1" = "443/https:8001/http";
     };
     extraOptions = [
-      "--network=proxy"
+      # gw-priority: default route via the bridge, not the printer dongle.
+      "--network=name=proxy,gw-priority=1"
       "--network=name=bambuddy-lan,ip=${controlIp}"
       "--security-opt=no-new-privileges"
       "--cgroup-parent=system-maker.slice"
@@ -126,8 +134,9 @@ in
       RemainAfterExit = true;
     };
     script = ''
+      # Generous: on first start, `docker run` is still pulling the image.
       pid=0
-      for _ in $(seq 60); do
+      for _ in $(seq 600); do
         pid=$(docker inspect --format '{{.State.Pid}}' bambuddy 2>/dev/null || echo 0)
         [ "$pid" != 0 ] && break
         sleep 1
