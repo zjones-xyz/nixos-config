@@ -11,7 +11,7 @@
 # fails the build if an entry has `href` without a matching `siteMonitor`.
 #
 # Live services only. The Tower services not yet re-homed (Jellyseerr, Immich,
-# ARM, 13ft, Bambuddy) come back one group entry at a time as each migrates —
+# ARM, 13ft) come back one group entry at a time as each migrates —
 # homelab-stacks tower/homepage/config/services.yaml is the reference for what
 # each entry looked like. Audiobookshelf, Grimmory and Shelfmark came back with
 # the reading stack (READING-STACK.md) and are in the two Reading groups below.
@@ -251,3 +251,10 @@
         siteMonitor: https://spoolman.maker.zjones.dev
         icon: spoolman.png
         description: Filament spools
+    # Still on Tower, not galactica — so its LAN name is *.tower.zjones.dev,
+    # not *.maker.*. Revisit both URLs if it migrates.
+    - Bambuddy:
+        href: https://bambuddy.peacock-koi.ts.net
+        siteMonitor: https://bambuddy.tower.zjones.dev
+        icon: sh-bambuddy
+        description: 3D printer management
