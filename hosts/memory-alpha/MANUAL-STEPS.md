@@ -34,8 +34,12 @@ the iGPU itself is never contended.
    exclusion. Delete the `memory-alpha-2` reservation on .98. The host no
    longer takes a lease on `eth-secondary` (NetworkManager leaves it
    unmanaged), and Bambuddy's .98 is static.
-2. [ ] On galactica, confirm uid 1000 can write `/tank/bambuddy_library`.
-   Bambuddy writes into it over NFS as `PUID=1000`.
+2. [ ] Run `id -u z` on memory-alpha and check it prints 1000. z's uid isn't
+   pinned, and `bambuddy.nix` hardcodes `PUID=1000`. Then, on galactica,
+   confirm uid 1000 can write `/tank/bambuddy_library`.
+   Also confirm nothing on the LAN uses .80–.87. That is `bambuddy-lan`'s
+   auto-assign range, and although nothing should auto-assign, it keeps
+   accidents off live addresses.
 3. [ ] Stop the compose Obico stack (Dockge, or
    `docker compose -f ~/homelab-stacks/memory-alpha/obico/compose.yaml down`).
    The Nix container reuses the name `obico-ml-api`, and Docker refuses a
@@ -54,9 +58,13 @@ the iGPU itself is never contended.
    curl -s  https://obico.3dp.zjones.dev/hc/
    ```
    From another LAN host, `ping` .95–.98 — all four should answer.
-6. [ ] Restart resilience: `systemctl restart docker-bambuddy`, then re-run the
-   `docker exec … ip addr` check. A new container is a new network namespace,
-   and `bambuddy-vp-ips` must have re-attached the three VP addresses.
+6. [ ] Restart resilience. Run the `docker exec … ip addr` check again after
+   each of these:
+   - `systemctl restart docker-bambuddy` (a planned restart).
+   - `docker kill bambuddy` (a crash, so systemd's automatic restart does the
+     work).
+   A new container is a new network namespace, and `bambuddy-vp-ips` must
+   have re-attached the three VP addresses both times.
 7. [ ] Bambuddy UI (these are database settings, not env vars):
    - Settings → Network → External URL: `https://bambuddy.3dp.zjones.dev`
    - Settings → Failure Detection → Obico ML API URL: `http://obico-ml-api:3333`
