@@ -62,6 +62,18 @@ in
       # why that one isn't `partdb.maker.*` too). Unquoted — this is passed
       # straight through oci-containers, not read from an `.env.local`.
       TRUSTED_HOSTS = "^(partdb\\.maker\\.internal|partdb\\.maker\\.zjones\\.dev|partdb\\.peacock-koi\\.ts\\.net)$";
+      # Without this, Part-DB doesn't trust Traefik's X-Forwarded-Proto and
+      # thinks every request is plain HTTP (it only ever sees the loopback
+      # connection behind TLS termination) — its own redirects (e.g. / ->
+      # /en/) come back as http:// instead of https://. Harmless to curl,
+      # which follows the downgrade silently, but homepage's fetch client
+      # correctly refuses to follow an https->http redirect and reports it
+      # as a 500 — confirmed live 2026-09-26, container logs show every
+      # request's ip as 172.17.0.1 (the default docker bridge gateway, since
+      # Traefik reaches this container via its loopback-published port), so
+      # trusting the whole Docker private range covers it even if that
+      # gateway address ever shifts.
+      TRUSTED_PROXIES = "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16";
     };
     environmentFiles = [ config.sops.templates."partdb.env".path ];
     volumes = [
