@@ -34,7 +34,7 @@ let
     };
     ports = [ "127.0.0.1:${toString s.backend}:3000" ];
     volumes = [ "/home/z/${name}:/app/data" ];
-    # Same slice and 200% quota as Bambuddy and Obico; DECISIONS.md §2.
+    # Same slice and CPU quota as Bambuddy and Obico; DECISIONS.md §2.
     extraOptions = [ "--cgroup-parent=system-maker.slice" ];
   };
 
