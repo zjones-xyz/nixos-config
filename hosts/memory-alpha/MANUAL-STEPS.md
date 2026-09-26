@@ -90,7 +90,7 @@ the iGPU itself is never contended.
 
 **They run only on demand** (DECISIONS.md §3). A systemd socket listens on
 host ports 13003 (OrcaSlicer) and 13001 (BambuStudio). The first connection
-starts the container, waits for `/health`, and proxies to it. After 15 minutes
+starts the container, waits for `/health`, and proxies to it. After 30 minutes
 without a connection the proxy exits and the container stops. Bambuddy calls
 `http://host.docker.internal:1300x`. The firewall admits those ports only from
 `br-proxy` and loopback. There is no Traefik route: stopped containers carry no
@@ -128,7 +128,7 @@ compose paths.
    itself waits out any cold start. A support bundle taken while idle always
    reports the sidecars unreachable (its probe gives up after 2 s).
    Note the times here, and if they are close to 10 s, say so in DECISIONS.md §3.
-4. [ ] About 15 minutes later: `docker ps` shows no sidecars again, and
+4. [ ] About 30 minutes later: `docker ps` shows no sidecars again, and
    `systemctl status slicer-orca-slicer-api docker-orca-slicer-api` shows
    both inactive, not failed.
 5. [ ] Bambuddy UI, Settings → Slicer: turn on Use Slicer API, pick the

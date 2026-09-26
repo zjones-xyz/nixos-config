@@ -92,7 +92,7 @@ rather than raising the shared one.
 ## 3. The slicer sidecars load on demand and unload when idle
 
 **systemd socket activation in front of each container** (`slicers.nix`). A
-connection starts it, and `systemd-socket-proxyd --exit-idle-time=15min`
+connection starts it, and `systemd-socket-proxyd --exit-idle-time=30min`
 stops it again. *Alt:* always-on containers, as in the compose stack.
 
 The owner asked for this. The images are heavy (OrcaSlicer and BambuStudio
