@@ -72,16 +72,23 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
   items get a checkbox.
 - `.nix`/config changes → feature branch + PR, title prefixed with the host scope
   in brackets, e.g. `[memory-alpha] …`, `[pegasus] …`, `[all] …`.
-- **Entry-only suffixes.** `/dashboard` and `/dns` after the host mark a PR that
-  also edits *entries* on galactica: a service or bookmark in
-  `hosts/galactica/homepage/`, an AdGuard rewrite. galactica needs a rebuild to
-  pick them up, but it is not the node at risk. The host named first is.
+- **Entry-only suffixes.** `/dashboard`, `/dns` and `/dhcp` after the host mark
+  a PR that also changes *entries* elsewhere. The host named first is the node
+  at risk.
+  - `/dashboard`: a service or bookmark in `hosts/galactica/homepage/`. A
+    widget's `HOMEPAGE_VAR_*` line in `homepages.nix`, and its sops secret,
+    count too.
+  - `/dns`: an AdGuard rewrite on galactica.
+  - `/dhcp`: a DHCP reservation or pool exclusion. These live on the router
+    for now, so the PR body says what to set.
   - `[memory-alpha/dashboard/dns] …`: the real change is on memory-alpha.
   - `[galactica/dashboard] …`: only dashboard entries change.
-  - Changing the plumbing is not an entry: `homepages.nix`, the homepage
-    modules, `checks/homepage-config`, AdGuard's own settings. It takes the
-    plain host scope, `[galactica] …`.
-  - Suffixes go in the order `dashboard`, then `dns`.
+  - Changing the plumbing is not an entry: the rest of `homepages.nix`, the
+    homepage modules, `checks/homepage-config`, AdGuard's own settings. It
+    takes the plain host scope, `[galactica] …`.
+  - Suffixes go in the order `dashboard`, `dns`, `dhcp`.
+  - When the switch order matters, the PR body says it, e.g. "switch
+    memory-alpha, then galactica".
 - **Branch names carry no agent prefix and no generated words.** `nfs-cutover`,
   not `claude/nfs-cutover` or `claude/nice-wozniak-vp619a` — name the branch for
   the work, not for who did it. A session spawning another names the branch up
