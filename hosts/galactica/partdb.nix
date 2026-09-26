@@ -55,6 +55,13 @@ in
       # NOT set: DATABASE_SQLITE_ENFORCE_FOREIGN_KEYS — upstream's own
       # warning is "only enable on a fresh database", and this one is
       # restored, not fresh.
+      # Restricts the Host header Part-DB will accept (upstream's own admin
+      # warning otherwise, an HTTP Host header injection risk) to the three
+      # names this service is actually reachable under: both Traefik routers
+      # below plus the flat tsdproxy tailnet name (see this file's header for
+      # why that one isn't `partdb.maker.*` too). Unquoted — this is passed
+      # straight through oci-containers, not read from an `.env.local`.
+      TRUSTED_HOSTS = "^(partdb\\.maker\\.internal|partdb\\.maker\\.zjones\\.dev|partdb\\.peacock-koi\\.ts\\.net)$";
     };
     environmentFiles = [ config.sops.templates."partdb.env".path ];
     volumes = [
