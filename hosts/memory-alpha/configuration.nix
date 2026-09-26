@@ -156,13 +156,14 @@ in
 
   # ── Jellyfin first ────────────────────────────────────────────────────────
   # Bambuddy and Obico (--cgroup-parent) run here. Under CPU/IO contention
-  # jellyfin.service (weight 100) out-ranks this slice ~5:1, and the quota
-  # holds two cores back from the shared 15–28 W package budget even when
-  # idle cores exist (HARDWARE-MAP.md §4).
+  # jellyfin.service (weight 100) out-ranks this slice ~5:1. The quota caps it
+  # at 1.5 of the 8 threads even when the rest are idle, to spare the shared
+  # 15–28 W package budget (HARDWARE-MAP.md §4). Deliberately stingy: raise it
+  # when slicing or detection proves too slow.
   systemd.slices.system-maker.sliceConfig = {
     CPUWeight = 20;
     IOWeight = 20;
-    CPUQuota = "200%";
+    CPUQuota = "150%";
   };
 
   # ── home-manager ──────────────────────────────────────────────────────────
