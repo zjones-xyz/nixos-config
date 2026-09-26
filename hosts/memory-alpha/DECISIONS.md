@@ -54,3 +54,65 @@ The CPU-only image is already self-contained, and `obico.nix` pins it by
 digest.
 
 **Revisit only if** upstream starts versioning `ml_api`, or someone packages it.
+
+### Slicer sidecars
+
+The same verdict holds for `slicers.nix`. nixpkgs has the `orca-slicer` and
+`bambu-studio` desktop apps, but not maziggy's HTTP wrappers around their CLIs.
+Those are one Node app, built from an unmerged fork branch of AFKFelix's
+`orca-slicer-api`, bundled with each slicer's upstream AppImage. Upstream pins
+the pair to each Bambuddy release (`bambuddy-<version>` tags). Packaging it
+ourselves would mean a Node build plus keeping two slicer versions in step with
+Bambuddy's profile handling. The images already do that.
+
+**Revisit when** the wrapper's patches land upstream and it gets packaged.
+
+---
+
+## 2. The slicer sidecars share the maker slice's 200% quota
+
+**Unchanged `CPUQuota = "200%"` for `system-maker.slice`**, now shared by
+Bambuddy, Obico and both slicers. *Alt:* raise the quota, or give the slicers a
+slice of their own.
+
+The slicers run only on demand (§3), so the quota is shared only while one is
+loaded. The quota exists for Jellyfin (HARDWARE-MAP.md §4): it caps the maker
+containers at two CPUs, so they can't eat the 15–28 W package budget that Quick
+Sync transcodes share. Slicing doesn't change that. It is CPU-heavy but bursty
+and started by hand, and a slicing job capped at two CPUs just takes longer
+while someone waits for it. The one cost is inside the slice: slicing during a
+print can slow Obico's failure checks until the job finishes.
+
+**Revisit if** slicing gets slow enough to be annoying, or Obico misses
+failures while a slice runs. Then give the slicers their own lower-quota slice
+rather than raising the shared one.
+
+---
+
+## 3. The slicer sidecars load on demand and unload when idle
+
+**systemd socket activation in front of each container** (`slicers.nix`). A
+connection starts it, and `systemd-socket-proxyd --exit-idle-time=15min`
+stops it again. *Alt:* always-on containers, as in the compose stack.
+
+The owner asked for this. The images are heavy (OrcaSlicer and BambuStudio
+behind Node), slicing is occasional, and a cold-start delay is an acceptable
+price for nothing resident between slices. Bambuddy only calls the sidecars
+when a user acts (slice dialog, preset lookup, support bundle). It never polls
+them (checked in 1.2.5.6), so idle really is idle. A slice keeps its proxy
+alive through its progress polling.
+
+What it costs:
+- **A cold start before the first call.** The slice dialog's first calls
+  time out at 10 s; the slice itself waits. A support bundle's 2 s probe
+  always reports idle sidecars as unreachable. MANUAL-STEPS.md §2 measures the
+  real cold start.
+- **No Traefik route.** Traefik routes come from container labels, and a
+  stopped container has none. A file-provider route to the socket would need
+  `modules/nixos/traefik.nix` to take extra files, a fleet-wide change for a
+  health endpoint nobody browses.
+- **Bambuddy reaches them through the host**, at `host.docker.internal:1300x`
+  over the trusted `br-proxy` bridge, not by container name.
+
+**Revisit if** cold starts routinely exceed Bambuddy's 10 s. Raise the idle
+timeout first; go back to always-on only if that doesn't help.
