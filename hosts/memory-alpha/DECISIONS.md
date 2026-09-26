@@ -54,3 +54,34 @@ The CPU-only image is already self-contained, and `obico.nix` pins it by
 digest.
 
 **Revisit only if** upstream starts versioning `ml_api`, or someone packages it.
+
+### Slicer sidecars
+
+The same verdict holds for `slicers.nix`. nixpkgs has the `orca-slicer` and
+`bambu-studio` desktop apps, but not maziggy's HTTP wrappers around their CLIs.
+Those are one Node app, built from an unmerged fork branch of AFKFelix's
+`orca-slicer-api`, bundled with each slicer's upstream AppImage. Upstream pins
+the pair to each Bambuddy release (`bambuddy-<version>` tags). Packaging it
+ourselves would mean a Node build plus keeping two slicer versions in step with
+Bambuddy's profile handling. The images already do that.
+
+**Revisit when** the wrapper's patches land upstream and it gets packaged.
+
+---
+
+## 2. The slicer sidecars share the maker slice's 200% quota
+
+**Unchanged `CPUQuota = "200%"` for `system-maker.slice`**, now shared by
+Bambuddy, Obico and both slicers. *Alt:* raise the quota, or give the slicers a
+slice of their own.
+
+The quota exists for Jellyfin (HARDWARE-MAP.md §4): it caps the maker
+containers at two CPUs, so they can't eat the 15–28 W package budget that Quick
+Sync transcodes share. Slicing doesn't change that. It is CPU-heavy but bursty
+and started by hand, and a slicing job capped at two CPUs just takes longer
+while someone waits for it. The one cost is inside the slice: slicing during a
+print can slow Obico's failure checks until the job finishes.
+
+**Revisit if** slicing gets slow enough to be annoying, or Obico misses
+failures while a slice runs. Then give the slicers their own lower-quota slice
+rather than raising the shared one.

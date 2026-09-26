@@ -8,7 +8,7 @@ history stays prose.
 `bambuddy.nix` and `obico.nix` (PR #155) port two homelab-stacks compose stacks into Nix:
 Bambuddy from the never-merged `feat/bambuddy-migrate-to-memory-alpha` branch,
 Obico's ML API from `memory-alpha/obico` on `main`. The slicer sidecars
-(`memory-alpha/orca-slicer-api`) stay in compose for now.
+(`memory-alpha/orca-slicer-api`) follow in §2.
 
 **Why memory-alpha, not galactica** (where the rest of the Maker group lives):
 the printer network needs a spare NIC to parent an ipvlan on (`eth-secondary`,
@@ -78,3 +78,37 @@ the iGPU itself is never contended.
    different one. Bambuddy has shipped a bug that cross-wired VPs before.
 9. [ ] homelab-stacks: delete `memory-alpha/obico/` and the dead
     `tower/bambuddy/`, and close `feat/bambuddy-migrate-to-memory-alpha`.
+
+## 2. Slicer sidecars — owner steps before first switch
+
+`slicers.nix` (the PR stacked on #155) ports homelab-stacks
+`memory-alpha/orca-slicer-api` into Nix: `orca-slicer-api` and
+`bambu-studio-api`, HTTP wrappers around each slicer's CLI that Bambuddy's
+"Slice" action calls. Needs §1 done first: Bambuddy reaches them over the
+`proxy` network by container name, the way it reaches Obico.
+
+Images are pinned to `bambuddy-<version>`, upstream's tag for the sidecar that
+shipped with that Bambuddy release; bump both files together. Data stays in
+`/home/z/orca-slicer-api` and `/home/z/bambu-studio-api`, the compose paths.
+The `-dev` routes move from `*.memory-alpha.zjones.dev` to
+`orca-slicer.3dp.zjones.dev` and `bambu-slicer.3dp.zjones.dev`.
+
+1. [ ] Stop the compose stack (Dockge, or
+   `docker compose -f ~/homelab-stacks/memory-alpha/orca-slicer-api/compose.yaml down`).
+   The Nix containers reuse both names, and Docker refuses a duplicate.
+2. [ ] `nixos-rebuild switch` on memory-alpha. Bambuddy restarts too: it
+   gains `SLICER_API_URL` / `BAMBU_STUDIO_API_URL`.
+3. [ ] Verify:
+   ```sh
+   systemd-cgls -u system-maker.slice                  # four containers now
+   docker inspect -f '{{.State.Health.Status}}' orca-slicer-api bambu-studio-api
+   #   → healthy, twice (the images' own curl /health check)
+   curl -s https://orca-slicer.3dp.zjones.dev/health
+   curl -s https://bambu-slicer.3dp.zjones.dev/health
+   ```
+4. [ ] Bambuddy UI, Settings → Slicer: turn on Use Slicer API, pick the
+   preferred slicer, and set its Sidecar URL to `http://orca-slicer-api:3000`
+   or `http://bambu-studio-api:3000`. (A blank field falls back to the same
+   URLs via the env vars above; a saved one overrides them.) Then slice a
+   small model once with each slicer.
+5. [ ] homelab-stacks: delete `memory-alpha/orca-slicer-api/`.
