@@ -45,18 +45,19 @@ let
   # container goes with it (StopWhenUnneeded). DECISIONS.md §3.
   proxy = name: s: {
     description = "On-demand proxy to the ${name} slicer sidecar";
-    bindsTo = [ "docker-${name}.service" ];
+    wants = [ "docker-${name}.service" ];
     after = [ "docker-${name}.service" ];
-    path = [ pkgs.curl ];
-    # A cold start is `docker run` plus Node's boot, normally seconds. The
-    # generous bound only matters if the image still has to be pulled.
+    path = [ pkgs.curl config.systemd.package ];
+    # Never fails: a failed start leaves the triggering connection queued, and
+    # the socket would re-trigger on it forever. Handing over to proxyd drains
+    # it instead, and the idle timeout then unloads everything as usual.
     preStart = ''
-      for _ in $(seq 600); do
-        curl -sf -o /dev/null http://127.0.0.1:${toString s.backend}/health && exit 0
+      while [ "$SECONDS" -lt 300 ]; do
+        curl -sf --max-time 2 -o /dev/null http://127.0.0.1:${toString s.backend}/health && exit 0
+        systemctl is-failed -q docker-${name}.service && break
         sleep 0.5
       done
-      echo "${name} never became healthy" >&2
-      exit 1
+      echo "${name} is not healthy; proxying anyway" >&2
     '';
     serviceConfig = {
       ExecStart = "${config.systemd.package}/lib/systemd/systemd-socket-proxyd --exit-idle-time=${idleTimeout} 127.0.0.1:${toString s.backend}";
@@ -88,6 +89,8 @@ in
   systemd.services = lib.mapAttrs' (name: s: lib.nameValuePair "slicer-${name}" (proxy name s)) sidecars
     // lib.mapAttrs' (name: _: lib.nameValuePair "docker-${name}" {
       unitConfig.StopWhenUnneeded = true;
+      # `docker stop` on a Node PID 1: SIGTERM or SIGKILL, not a failure.
+      serviceConfig.SuccessExitStatus = "137 143";
     }) sidecars
     // {
       # Pull at boot and on switch, so a cold start never waits on a ~400 MB
