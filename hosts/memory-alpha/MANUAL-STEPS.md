@@ -84,32 +84,46 @@ the iGPU itself is never contended.
 `slicers.nix` (the PR stacked on #155) ports homelab-stacks
 `memory-alpha/orca-slicer-api` into Nix: `orca-slicer-api` and
 `bambu-studio-api`, HTTP wrappers around each slicer's CLI that Bambuddy's
-"Slice" action calls. Needs §1 done first: Bambuddy reaches them over the
-`proxy` network by container name, the way it reaches Obico.
+"Slice" action calls. Needs §1 done first.
+
+**They run only on demand** (DECISIONS.md §3). A systemd socket listens on
+host ports 13003 (OrcaSlicer) and 13001 (BambuStudio). The first connection
+starts the container, waits for `/health`, and proxies to it. After 15 minutes
+without a connection the proxy exits and the container stops. Bambuddy calls
+`http://host.docker.internal:1300x`. The firewall admits those ports only from
+`br-proxy` and loopback. There is no Traefik route: stopped containers carry no
+labels, so a route would 404 whenever the sidecars were idle.
 
 Images are pinned to `bambuddy-<version>`, upstream's tag for the sidecar that
 shipped with that Bambuddy release. `slicers.nix` takes the version from
-Bambuddy's image, so a Bambuddy bump moves them too. Data stays in
-`/home/z/orca-slicer-api` and `/home/z/bambu-studio-api`, the compose paths.
-The `-dev` routes move from `*.memory-alpha.zjones.dev` to
-`orca-slicer.3dp.zjones.dev` and `bambu-slicer.3dp.zjones.dev`.
+Bambuddy's image, so a Bambuddy bump moves them too. `slicer-images.service`
+pulls them at boot and on switch, so a cold start never waits on a download.
+Data stays in `/home/z/orca-slicer-api` and `/home/z/bambu-studio-api`, the
+compose paths.
 
 1. [ ] Stop the compose stack (Dockge, or
    `docker compose -f ~/homelab-stacks/memory-alpha/orca-slicer-api/compose.yaml down`).
    The Nix containers reuse both names, and Docker refuses a duplicate.
 2. [ ] `nixos-rebuild switch` on memory-alpha. Bambuddy restarts too: it
-   gains `SLICER_API_URL` / `BAMBU_STUDIO_API_URL`.
-3. [ ] Verify:
+   gains `SLICER_API_URL`, `BAMBU_STUDIO_API_URL` and a
+   `host.docker.internal` entry.
+3. [ ] Verify idle, then a cold start:
    ```sh
-   systemd-cgls -u system-maker.slice                  # four containers now
-   docker inspect -f '{{.State.Health.Status}}' orca-slicer-api bambu-studio-api
-   #   → healthy, twice (the images' own curl /health check)
-   curl -s https://orca-slicer.3dp.zjones.dev/health
-   curl -s https://bambu-slicer.3dp.zjones.dev/health
+   systemctl status slicer-images                       # both images present
+   systemctl list-sockets 'slicer-*'                    # 13001 and 13003 listening
+   docker ps --filter name=-api                         # only obico-ml-api
+   time curl -s localhost:13003/health                  # cold: note the time
+   time curl -s localhost:13001/health
+   systemd-cgls -u system-maker.slice                   # now four containers
+   docker exec bambuddy getent hosts host.docker.internal
    ```
-4. [ ] Bambuddy UI, Settings → Slicer: turn on Use Slicer API, pick the
-   preferred slicer, and set its Sidecar URL to `http://orca-slicer-api:3000`
-   or `http://bambu-studio-api:3000`. (A blank field falls back to the same
-   URLs via the env vars above; a saved one overrides them.) Then slice a
-   small model once with each slicer.
-5. [ ] homelab-stacks: delete `memory-alpha/orca-slicer-api/`.
+   Bambuddy gives its first sidecar calls 10 s. If a cold start takes longer,
+   the first slice attempt after an idle spell fails once and the retry works.
+   Note the times here, and if they are close to 10 s, say so in DECISIONS.md §3.
+4. [ ] About 15 minutes later: `docker ps` shows no sidecars again, and
+   `systemctl status slicer-orca-slicer-api` is inactive, not failed.
+5. [ ] Bambuddy UI, Settings → Slicer: turn on Use Slicer API, pick the
+   preferred slicer, and leave its Sidecar URL blank so it uses the env
+   defaults (or enter `http://host.docker.internal:13003` / `:13001`). Then
+   slice a small model once with each slicer, one of them from cold.
+6. [ ] homelab-stacks: delete `memory-alpha/orca-slicer-api/`.
