@@ -5,7 +5,7 @@ history stays prose.
 
 ## 1. Bambuddy + Obico — owner steps before first switch
 
-`bambuddy.nix` and `obico.nix` port two homelab-stacks compose stacks into Nix:
+`bambuddy.nix` and `obico.nix` (PR #155) port two homelab-stacks compose stacks into Nix:
 Bambuddy from the never-merged `feat/bambuddy-migrate-to-memory-alpha` branch,
 Obico's ML API from `memory-alpha/obico` on `main`. The slicer sidecars
 (`memory-alpha/orca-slicer-api`) stay in compose for now.

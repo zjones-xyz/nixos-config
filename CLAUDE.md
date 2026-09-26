@@ -72,6 +72,16 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
   items get a checkbox.
 - `.nix`/config changes → feature branch + PR, title prefixed with the host scope
   in brackets, e.g. `[memory-alpha] …`, `[pegasus] …`, `[all] …`.
+- **Entry-only suffixes.** `/dashboard` and `/dns` after the host mark a PR that
+  also edits *entries* on galactica: a service or bookmark in
+  `hosts/galactica/homepage/`, an AdGuard rewrite. galactica needs a rebuild to
+  pick them up, but it is not the node at risk. The host named first is.
+  - `[memory-alpha/dashboard/dns] …`: the real change is on memory-alpha.
+  - `[galactica/dashboard] …`: only dashboard entries change.
+  - Changing the plumbing is not an entry: `homepages.nix`, the homepage
+    modules, `checks/homepage-config`, AdGuard's own settings. It takes the
+    plain host scope, `[galactica] …`.
+  - Suffixes go in the order `dashboard`, then `dns`.
 - **Branch names carry no agent prefix and no generated words.** `nfs-cutover`,
   not `claude/nfs-cutover` or `claude/nice-wozniak-vp619a` — name the branch for
   the work, not for who did it. A session spawning another names the branch up
