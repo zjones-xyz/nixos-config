@@ -25,9 +25,11 @@ anyway. (The old compose stacks' `openssl rand -hex 32` was also the wrong
 format: Bambuddy wants a Fernet key and ignores a hex string.)
 
 **Jellyfin keeps priority.** Both containers run in `system-maker.slice`
-(`configuration.nix`): CPU and IO weight 20 against Jellyfin's default 100, plus
-a two-core CPU quota so a busy Obico can't eat the package power budget
-(HARDWARE-MAP.md §4) that Quick Sync transcodes share. Obico is CPU-only, so
+(`configuration.nix`): CPU and IO weight 20 against Jellyfin's default 100. On
+top of that, a 150% CPU quota caps the slice at 1.5 of the host's 8 threads,
+so a busy Obico can't eat the package power budget (HARDWARE-MAP.md §4) that
+Quick Sync transcodes share. The quota is deliberately stingy: raise it if
+slicing or detection is too slow. Obico is CPU-only, so
 the iGPU itself is never contended.
 
 1. [ ] Router DHCP. The auto-assign pool is .100–.169, so .95–.98 need no
