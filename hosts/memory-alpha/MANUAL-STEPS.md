@@ -97,13 +97,16 @@ labels, so a route would 404 whenever the sidecars were idle.
 Images are pinned to `bambuddy-<version>`, upstream's tag for the sidecar that
 shipped with that Bambuddy release. `slicers.nix` takes the version from
 Bambuddy's image, so a Bambuddy bump moves them too. `slicer-images.service`
-pulls them at boot and on switch, so a cold start never waits on a download.
+pulls them at boot and on any switch that changes the tag (that switch waits
+for the pull), so a cold start never waits on a download.
 Data stays in `/home/z/orca-slicer-api` and `/home/z/bambu-studio-api`, the
 compose paths.
 
 1. [ ] Stop the compose stack (Dockge, or
    `docker compose -f ~/homelab-stacks/memory-alpha/orca-slicer-api/compose.yaml down`).
-   The Nix containers reuse both names, and Docker refuses a duplicate.
+   The Nix containers reuse both names, and their pre-start runs
+   `docker rm -f <name>`: the first cold start would silently delete a
+   compose container still running under that name.
 2. [ ] `nixos-rebuild switch` on memory-alpha. Bambuddy restarts too: it
    gains `SLICER_API_URL`, `BAMBU_STUDIO_API_URL` and a
    `host.docker.internal` entry.
@@ -117,11 +120,15 @@ compose paths.
    systemd-cgls -u system-maker.slice                   # now four containers
    docker exec bambuddy getent hosts host.docker.internal
    ```
-   Bambuddy gives its first sidecar calls 10 s. If a cold start takes longer,
-   the first slice attempt after an idle spell fails once and the retry works.
+   Bambuddy's first calls from the slice dialog (`/health`, bundled
+   profiles) time out at 10 s. If a cold start takes longer, the first
+   attempt after an idle spell fails once and the retry works. The slice
+   itself waits out any cold start. A support bundle taken while idle always
+   reports the sidecars unreachable (its probe gives up after 2 s).
    Note the times here, and if they are close to 10 s, say so in DECISIONS.md §3.
 4. [ ] About 15 minutes later: `docker ps` shows no sidecars again, and
-   `systemctl status slicer-orca-slicer-api` is inactive, not failed.
+   `systemctl status slicer-orca-slicer-api docker-orca-slicer-api` shows
+   both inactive, not failed.
 5. [ ] Bambuddy UI, Settings → Slicer: turn on Use Slicer API, pick the
    preferred slicer, and leave its Sidecar URL blank so it uses the env
    defaults (or enter `http://host.docker.internal:13003` / `:13001`). Then
