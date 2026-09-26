@@ -88,7 +88,8 @@ the iGPU itself is never contended.
 `proxy` network by container name, the way it reaches Obico.
 
 Images are pinned to `bambuddy-<version>`, upstream's tag for the sidecar that
-shipped with that Bambuddy release; bump both files together. Data stays in
+shipped with that Bambuddy release. `slicers.nix` takes the version from
+Bambuddy's image, so a Bambuddy bump moves them too. Data stays in
 `/home/z/orca-slicer-api` and `/home/z/bambu-studio-api`, the compose paths.
 The `-dev` routes move from `*.memory-alpha.zjones.dev` to
 `orca-slicer.3dp.zjones.dev` and `bambu-slicer.3dp.zjones.dev`.
