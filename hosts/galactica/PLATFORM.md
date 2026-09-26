@@ -1995,11 +1995,14 @@ hour and then quietly stops:
    > or a timer longer than the gap) folds the two into one wake — worth doing
    > when the spin-down is actually armed, not before.
 3. **borgmatic, nightly at 01:30.** Its scope is property-driven
-   (`org.torsion.borgmatic:backup=auto` — `BACKUP-BORG.md`), which today means
-   `tank/documents` and `tank/photos/immich*`: bulk data on the RAIDZ1
-   spinners, since only metadata and `tank/appdata` sit on the special vdev.
-   Bounded, and unavoidable — but it is a nightly wake, so no spin-down plan
-   gets a full 24-hour idle window.
+   (`org.torsion.borgmatic:backup=auto` — `BACKUP-BORG.md`). On the spinners
+   that is `tank/documents` and `tank/photos/immich*`. The scope has since grown
+   to `tank/appdata/{ferdium,karakeep,memos,partdb}` as well, but those are
+   promoted datasets on the special vdev's mirror: they add archive time without
+   adding a spin-up. ⭐ And `tank/books` is Protected rather than Precious
+   (`SHARES.md` §5), so the reading stack's bulk content stays out of this
+   entirely. Bounded, and unavoidable — but it is a nightly wake, so no
+   spin-down plan gets a full 24-hour idle window.
    > ⟨Worth measuring rather than assuming: borgmatic's ZFS hook mounts each
    > snapshot at a fresh path per run, and borg's files cache is path-keyed. If
    > that defeats the cache, the nightly run re-reads the whole Critical +
