@@ -6,6 +6,13 @@
 # `tailscale serve` only ever serves on the node's own name, so a distinct
 # name needs a distinct node. tsdproxy creates one per container carrying
 # `tsdproxy.enable=true`. Not in nixpkgs, hence a pinned container.
+#
+# ⚠ Known upstream bug (v2 line, still open): `docker restart tsdproxy` can
+# knock a previously-healthy node into `NoState`, needing another
+# `docker restart tsdproxy` (sometimes twice) to re-register — confirmed live
+# 2026-09-26 on both `partdb` and `home`. Not this repo's bug and not caused
+# by `dataDir` — that's a real bind mount, not wiped by a restart. Upstream:
+# https://github.com/almeidapaulopt/tsdproxy/issues/496.
 
 let
   cfg = config.homelab.tsdproxy;

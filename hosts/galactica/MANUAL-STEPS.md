@@ -1892,16 +1892,24 @@ migrating a currently-500ing service first just compounds the state to sort out.
    `partdb.maker.internal`, and the direct container port all confirmed 302;
    dashboard dot confirmed green after a refresh.
 
-   ⚠ **One real, unrelated wrinkle hit along the way:** the tsdproxy-managed
+   ⚠ **One real, unrelated wrinkle hit along the way — since generalized to a
+   known tsdproxy bug, not specific to Part-DB.** The tsdproxy-managed
    `partdb` tailnet node came up in Tailscale's `NoState` (its stored session
    was gone) and got stuck retrying rather than auto-using its authkey
-   (`TSNET_FORCE_LOGIN=1` would force it, per tsnet's own log message) —
-   turned out a stale, offline device from the decommissioned Unraid host
-   was still squatting on the `partdb` name/IP in the tailnet. Deleting that
-   old device in the admin console and restarting the `tsdproxy` container
-   let the new node register cleanly. Worth checking `homebox`/`spoolman`
-   for the same leftover if either ever shows the same symptom (tailnet
-   route hangs/times out while the LAN/`*.zjones.dev` routes work fine).
+   (`TSNET_FORCE_LOGIN=1` would force it, per tsnet's own log message). At
+   the time this looked fully explained by a stale, offline device from the
+   decommissioned Unraid host squatting on the `partdb` name/IP — deleting
+   it and restarting `tsdproxy` did fix `partdb`. But the *same afternoon*,
+   `home` (long-lived, no duplicate device, nothing Unraid-related) hit the
+   identical `NoState` after an unrelated `docker restart tsdproxy`, and
+   needed a second `docker restart tsdproxy` to recover — no admin-console
+   cleanup involved that time. That rules out "stale duplicate" as the root
+   cause; it's `modules/nixos/tsdproxy.nix`'s header comment now documents
+   this as an open upstream bug
+   (https://github.com/almeidapaulopt/tsdproxy/issues/496). **Recovery, in
+   order:** `docker restart tsdproxy` (may need a second try) → check the
+   admin console for a stale duplicate device on that name and delete it if
+   present → `docker restart tsdproxy` again.
 7. [ ] **Remove the pre-dataset copy** — `rm -rf /tank/appdata/partdb.pre-dataset`,
    once fully comfortable it's no longer needed as a fallback.
 8. [ ] **Confirm the dataset is picked up by borgmatic** — same check as
