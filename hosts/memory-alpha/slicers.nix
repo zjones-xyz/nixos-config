@@ -8,9 +8,9 @@
 # No --health-cmd: both images bake in the compose stack's curl /health check.
 
 let
-  # Upstream tags each sidecar build with the Bambuddy release it shipped
-  # with. Bump together with bambuddy.nix's image.
-  tag = "bambuddy-1.2.5.6";
+  # Upstream tags each sidecar build `bambuddy-<version>`, after the Bambuddy
+  # release it shipped with, so bumping bambuddy.nix's image bumps these too.
+  tag = "bambuddy-" + lib.last (lib.splitString ":" config.virtualisation.oci-containers.containers.bambuddy.image);
 
   sidecar = { name, host }: {
     image = "ghcr.io/maziggy/${name}:${tag}";
