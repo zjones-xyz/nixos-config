@@ -40,8 +40,8 @@ the iGPU itself is never contended.
    `docker compose -f ~/homelab-stacks/memory-alpha/obico/compose.yaml down`).
    The Nix container reuses the name `obico-ml-api`, and Docker refuses a
    duplicate.
-4. [ ] `nixos-rebuild switch` on memory-alpha, then on galactica (dashboard
-   entry only; the DNS names already exist).
+4. [ ] `nixos-rebuild switch` on memory-alpha, then on galactica (the
+   dashboard entry and the `*.3dp.zjones.dev` AdGuard rewrite).
 5. [ ] Verify the plumbing:
    ```sh
    docker info --format '{{.CgroupDriver}}'            # → systemd (--cgroup-parent needs it)
@@ -50,15 +50,15 @@ the iGPU itself is never contended.
    #   → {"ipvlan_mode":"l2","parent":"eth-secondary"}
    systemctl status bambuddy-vp-ips                    # "VP addresses attached to …"
    docker exec bambuddy ip -4 -o addr | grep -E '192\.168\.8\.9[5-8]'   # four lines
-   curl -sI https://bambuddy.memory-alpha.zjones.dev | head -1
-   curl -s  https://obico.memory-alpha.zjones.dev/hc/
+   curl -sI https://bambuddy.3dp.zjones.dev | head -1
+   curl -s  https://obico.3dp.zjones.dev/hc/
    ```
    From another LAN host, `ping` .95–.98 — all four should answer.
 6. [ ] Restart resilience: `systemctl restart docker-bambuddy`, then re-run the
    `docker exec … ip addr` check. A new container is a new network namespace,
    and `bambuddy-vp-ips` must have re-attached the three VP addresses.
 7. [ ] Bambuddy UI (these are database settings, not env vars):
-   - Settings → Network → External URL: `https://bambuddy.memory-alpha.zjones.dev`
+   - Settings → Network → External URL: `https://bambuddy.3dp.zjones.dev`
    - Settings → Failure Detection → Obico ML API URL: `http://obico-ml-api:3333`
      (same `proxy` network, so no Traefik hop is needed)
    - Add the physical printer, then Settings → Virtual Printer → VP-athena /
