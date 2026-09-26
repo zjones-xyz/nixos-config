@@ -46,6 +46,10 @@ in
   # ── Printer-facing network ────────────────────────────────────────────────
   # ipvlan, not macvlan: it shares the host's MAC, and USB Ethernet chipsets
   # are unreliable with several. /28 is the tightest range holding .95–.98.
+  # The host takes no address on eth-secondary. Under NetworkManager it would
+  # DHCP one, and a lease on .98 would collide with Bambuddy's own address.
+  networking.networkmanager.unmanaged = [ "interface-name:eth-secondary" ];
+
   systemd.services.docker-bambuddy-lan-network = {
     description = "Create the Bambuddy printer-facing ipvlan network";
     after = [ "docker.service" ];
@@ -55,6 +59,8 @@ in
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      # Unmanaged means nothing else brings the link up.
+      ExecStartPre = "${pkgs.iproute2}/bin/ip link set eth-secondary up";
       ExecStart = "${pkgs.bash}/bin/bash -c '${docker} network inspect bambuddy-lan >/dev/null 2>&1 || ${docker} network create --driver=ipvlan --subnet=192.168.8.0/24 --gateway=192.168.8.1 --ip-range=192.168.8.88/28 --opt parent=eth-secondary --opt ipvlan_mode=l2 bambuddy-lan'";
     };
   };
