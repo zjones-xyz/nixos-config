@@ -12,51 +12,99 @@ let
   # release it shipped with, so bumping bambuddy.nix's image bumps these too.
   tag = "bambuddy-" + lib.last (lib.splitString ":" config.virtualisation.oci-containers.containers.bambuddy.image);
 
-  sidecar = { name, host }: {
-    image = "ghcr.io/maziggy/${name}:${tag}";
+  # listen: the activation socket Bambuddy calls. backend: the container,
+  # published on loopback only. The +10000 keeps clear of Bambuddy's upstream
+  # defaults (3001/3003), which Uptime Kuma also uses elsewhere in the fleet.
+  sidecars = {
+    orca-slicer-api = { listen = 13003; backend = 23003; };
+    bambu-studio-api = { listen = 13001; backend = 23001; };
+  };
+
+  idleTimeout = "15min";
+  docker = "${config.virtualisation.docker.package}/bin/docker";
+  image = name: "ghcr.io/maziggy/${name}:${tag}";
+
+  container = name: s: {
+    image = image name;
+    # Started by the activation socket below, not at boot.
+    autoStart = false;
     environment = {
       NODE_ENV = "production";
       PORT = "3000";
     };
+    ports = [ "127.0.0.1:${toString s.backend}:3000" ];
     volumes = [ "/home/z/${name}:/app/data" ];
-    labels = {
-      "traefik.enable" = "true";
-      "traefik.http.routers.${host}-internal.rule" = "Host(`${host}.memory-alpha.internal`)";
-      "traefik.http.routers.${host}-internal.entrypoints" = "websecure";
-      "traefik.http.routers.${host}-internal.tls" = "true";
-      "traefik.http.routers.${host}-internal.service" = name;
-      "traefik.http.routers.${host}-dev.rule" = "Host(`${host}.3dp.zjones.dev`)";
-      "traefik.http.routers.${host}-dev.entrypoints" = "websecure";
-      "traefik.http.routers.${host}-dev.tls.certresolver" = "letsencrypt";
-      "traefik.http.routers.${host}-dev.service" = name;
-      "traefik.http.services.${name}.loadbalancer.server.port" = "3000";
-    };
     # Same slice and 200% quota as Bambuddy and Obico; DECISIONS.md §2.
-    extraOptions = [
-      "--network=proxy"
-      "--cgroup-parent=system-maker.slice"
-    ];
+    extraOptions = [ "--cgroup-parent=system-maker.slice" ];
   };
 
-  sidecars = {
-    orca-slicer-api = "orca-slicer";
-    bambu-studio-api = "bambu-slicer";
+  # ── Load on demand, unload on idle ────────────────────────────────────────
+  # A connection to `listen` starts slicer-<name>, which pulls in the
+  # container, waits for /health, then hands over to systemd-socket-proxyd.
+  # The proxy exits after idleTimeout without connections, and the
+  # container goes with it (StopWhenUnneeded). DECISIONS.md §3.
+  proxy = name: s: {
+    description = "On-demand proxy to the ${name} slicer sidecar";
+    bindsTo = [ "docker-${name}.service" ];
+    after = [ "docker-${name}.service" ];
+    path = [ pkgs.curl ];
+    # A cold start is `docker run` plus Node's boot, normally seconds. The
+    # generous bound only matters if the image still has to be pulled.
+    preStart = ''
+      for _ in $(seq 600); do
+        curl -sf -o /dev/null http://127.0.0.1:${toString s.backend}/health && exit 0
+        sleep 0.5
+      done
+      echo "${name} never became healthy" >&2
+      exit 1
+    '';
+    serviceConfig = {
+      ExecStart = "${config.systemd.package}/lib/systemd/systemd-socket-proxyd --exit-idle-time=${idleTimeout} 127.0.0.1:${toString s.backend}";
+      TimeoutStartSec = "6min";
+    };
   };
 in
 {
-  virtualisation.oci-containers.containers =
-    lib.mapAttrs (name: host: sidecar { inherit name host; }) sidecars // {
-      # Bambuddy's defaults when Settings → Slicer's URL is left blank. Over
-      # `proxy` by container name, like Obico: no Traefik hop.
-      bambuddy.environment = {
-        SLICER_API_URL = "http://orca-slicer-api:3000";
-        BAMBU_STUDIO_API_URL = "http://bambu-studio-api:3000";
+  virtualisation.oci-containers.containers = lib.mapAttrs container sidecars // {
+    # Bambuddy's defaults when Settings → Slicer's URL is left blank. It
+    # reaches the host over `proxy`, whose bridge the host firewall trusts.
+    bambuddy = {
+      environment = {
+        SLICER_API_URL = "http://host.docker.internal:${toString sidecars.orca-slicer-api.listen}";
+        BAMBU_STUDIO_API_URL = "http://host.docker.internal:${toString sidecars.bambu-studio-api.listen}";
+      };
+      extraOptions = [ "--add-host=host.docker.internal:host-gateway" ];
+    };
+  };
+
+  # Every address, but not in allowedTCPPorts: the firewall admits only its
+  # trusted interfaces, br-proxy (traefik.nix) and loopback.
+  systemd.sockets = lib.mapAttrs' (name: s: lib.nameValuePair "slicer-${name}" {
+    description = "On-demand socket for the ${name} slicer sidecar";
+    wantedBy = [ "sockets.target" ];
+    listenStreams = [ (toString s.listen) ];
+  }) sidecars;
+
+  systemd.services = lib.mapAttrs' (name: s: lib.nameValuePair "slicer-${name}" (proxy name s)) sidecars
+    // lib.mapAttrs' (name: _: lib.nameValuePair "docker-${name}" {
+      unitConfig.StopWhenUnneeded = true;
+    }) sidecars
+    // {
+      # Pull at boot and on switch, so a cold start never waits on a ~400 MB
+      # download. The images stay on disk while the containers are stopped.
+      slicer-images = {
+        description = "Pre-pull the slicer sidecar images";
+        after = [ "docker.service" "network-online.target" ];
+        requires = [ "docker.service" ];
+        wants = [ "network-online.target" ];
+        wantedBy = [ "multi-user.target" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        script = lib.concatMapStringsSep "\n" (name:
+          "${docker} image inspect ${image name} >/dev/null 2>&1 || ${docker} pull ${image name}"
+        ) (lib.attrNames sidecars);
       };
     };
-
-  # `proxy` is created by traefik.nix's oneshot, not by these containers.
-  systemd.services = lib.mapAttrs' (name: _: lib.nameValuePair "docker-${name}" {
-    after = [ "docker-proxy-network.service" ];
-    requires = [ "docker-proxy-network.service" ];
-  }) sidecars;
 }
