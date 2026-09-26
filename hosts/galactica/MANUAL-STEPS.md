@@ -1874,27 +1874,37 @@ in, not just get created fresh. Do this **after** the tmpfiles-ownership fix
 below relies on the on-disk ownership already being correct (`33:33`), and
 migrating a currently-500ing service first just compounds the state to sort out.
 
-1. [ ] **Stop the container** — `systemctl stop docker-partdb`.
-2. [ ] **Move the existing directory aside** —
+1. [x] **Stop the container** — `systemctl stop docker-partdb`.
+2. [x] **Move the existing directory aside** —
    `mv /tank/appdata/partdb /tank/appdata/partdb.pre-dataset`.
-3. [ ] **Create and tag the dataset** (mounts empty at the same path the
+3. [x] **Create and tag the dataset** (mounts empty at the same path the
    container already expects — `dataDir` in `partdb.nix` does not change):
    ```
    zfs create tank/appdata/partdb
    zfs set homelab:tier=precious tank/appdata/partdb
    zfs set org.torsion.borgmatic:backup=auto tank/appdata/partdb
    ```
-4. [ ] **Copy the data back in, preserving ownership** —
+4. [x] **Copy the data back in, preserving ownership** —
    `cp -a /tank/appdata/partdb.pre-dataset/. /tank/appdata/partdb/`.
-5. [ ] **Verify before deleting anything** — `diff -rq /tank/appdata/partdb.pre-dataset /tank/appdata/partdb`
+5. [x] **Verify before deleting anything** — `diff -rq /tank/appdata/partdb.pre-dataset /tank/appdata/partdb`
    should report no differences.
-6. [ ] **Restart and confirm** — `systemctl start docker-partdb`, then check
-   `partdb.maker.zjones.dev` returns 200/302 (not 500) and the dashboard dot
-   is green.
+6. [x] **Restart and confirm — done 2026-09-26.** `partdb.maker.zjones.dev`,
+   `partdb.maker.internal`, and the direct container port all confirmed 302;
+   dashboard dot confirmed green after a refresh.
+
+   ⚠ **One real, unrelated wrinkle hit along the way:** the tsdproxy-managed
+   `partdb` tailnet node came up in Tailscale's `NoState` (its stored session
+   was gone) and got stuck retrying rather than auto-using its authkey
+   (`TSNET_FORCE_LOGIN=1` would force it, per tsnet's own log message) —
+   turned out a stale, offline device from the decommissioned Unraid host
+   was still squatting on the `partdb` name/IP in the tailnet. Deleting that
+   old device in the admin console and restarting the `tsdproxy` container
+   let the new node register cleanly. Worth checking `homebox`/`spoolman`
+   for the same leftover if either ever shows the same symptom (tailnet
+   route hangs/times out while the LAN/`*.zjones.dev` routes work fine).
 7. [ ] **Remove the pre-dataset copy** — `rm -rf /tank/appdata/partdb.pre-dataset`,
-   only once step 6 is confirmed.
+   once fully comfortable it's no longer needed as a fallback.
 8. [ ] **Confirm the dataset is picked up by borgmatic** — same check as
    memos' item 6, after the next nightly run.
-9. [ ] **Update `SHARES.md` and `BACKUP-BORG.md`** to record the promotion
-   as done (date, and the commands actually run), same as the ferdium/karakeep
-   and memos entries — once the above is verified, not before.
+9. [x] **`SHARES.md` and `BACKUP-BORG.md` updated — done 2026-09-26**, same
+   shape as the ferdium/karakeep and memos entries.
