@@ -25,9 +25,11 @@ anyway. (The old compose stacks' `openssl rand -hex 32` was also the wrong
 format: Bambuddy wants a Fernet key and ignores a hex string.)
 
 **Jellyfin keeps priority.** Both containers run in `system-maker.slice`
-(`configuration.nix`): CPU and IO weight 20 against Jellyfin's default 100, plus
-a two-core CPU quota so a busy Obico can't eat the package power budget
-(HARDWARE-MAP.md §4) that Quick Sync transcodes share. Obico is CPU-only, so
+(`configuration.nix`): CPU and IO weight 20 against Jellyfin's default 100. On
+top of that, a 150% CPU quota caps the slice at 1.5 of the host's 8 threads,
+so a busy Obico can't eat the package power budget (HARDWARE-MAP.md §4) that
+Quick Sync transcodes share. The quota is deliberately stingy: raise it if
+slicing or detection is too slow. Obico is CPU-only, so
 the iGPU itself is never contended.
 
 1. [ ] Router DHCP. The auto-assign pool is .100–.169, so .95–.98 need no
@@ -88,7 +90,7 @@ the iGPU itself is never contended.
 
 **They run only on demand** (DECISIONS.md §3). A systemd socket listens on
 host ports 13003 (OrcaSlicer) and 13001 (BambuStudio). The first connection
-starts the container, waits for `/health`, and proxies to it. After 15 minutes
+starts the container, waits for `/health`, and proxies to it. After 30 minutes
 without a connection the proxy exits and the container stops. Bambuddy calls
 `http://host.docker.internal:1300x`. The firewall admits those ports only from
 `br-proxy` and loopback. There is no Traefik route: stopped containers carry no
@@ -126,7 +128,7 @@ compose paths.
    itself waits out any cold start. A support bundle taken while idle always
    reports the sidecars unreachable (its probe gives up after 2 s).
    Note the times here, and if they are close to 10 s, say so in DECISIONS.md §3.
-4. [ ] About 15 minutes later: `docker ps` shows no sidecars again, and
+4. [ ] About 30 minutes later: `docker ps` shows no sidecars again, and
    `systemctl status slicer-orca-slicer-api docker-orca-slicer-api` shows
    both inactive, not failed.
 5. [ ] Bambuddy UI, Settings → Slicer: turn on Use Slicer API, pick the
