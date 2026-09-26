@@ -103,8 +103,10 @@ them (checked in 1.2.5.6), so idle really is idle. A slice keeps its proxy
 alive through its progress polling.
 
 What it costs:
-- **A cold start before the first call.** Bambuddy's first calls time out at
-  10 s. MANUAL-STEPS.md §2 measures the real cold start.
+- **A cold start before the first call.** The slice dialog's first calls
+  time out at 10 s; the slice itself waits. A support bundle's 2 s probe
+  always reports idle sidecars as unreachable. MANUAL-STEPS.md §2 measures the
+  real cold start.
 - **No Traefik route.** Traefik routes come from container labels, and a
   stopped container has none. A file-provider route to the socket would need
   `modules/nixos/traefik.nix` to take extra files, a fleet-wide change for a
