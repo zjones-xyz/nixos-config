@@ -23,7 +23,10 @@ a two-core CPU quota so a busy Obico can't eat the package power budget
 (HARDWARE-MAP.md §4) that Quick Sync transcodes share. Obico is CPU-only, so
 the iGPU itself is never contended.
 
-1. [ ] Confirm 192.168.8.95–.98 are excluded from the router's DHCP pool.
+1. [ ] Router DHCP. The auto-assign pool is .100–.169, so .95–.98 need no
+   exclusion. Delete the `memory-alpha-2` reservation on .98. The host no
+   longer takes a lease on `eth-secondary` (NetworkManager leaves it
+   unmanaged), and Bambuddy's .98 is static.
 2. [ ] Add the MFA key to sops:
    `sops secrets/memory-alpha.yaml`, then add
    `bambuddy: { mfaEncryptionKey: <openssl rand -hex 32> }`.
