@@ -251,10 +251,10 @@
         siteMonitor: https://spoolman.maker.zjones.dev
         icon: spoolman.png
         description: Filament spools
-    # On memory-alpha, not galactica — so its LAN name is
-    # *.memory-alpha.zjones.dev, not *.maker.*.
+    # On memory-alpha, not galactica — so its LAN name is *.3dp.zjones.dev,
+    # not *.maker.*.
     - Bambuddy:
         href: https://bambuddy.peacock-koi.ts.net
-        siteMonitor: https://bambuddy.memory-alpha.zjones.dev
+        siteMonitor: https://bambuddy.3dp.zjones.dev
         icon: sh-bambuddy
         description: 3D printer management

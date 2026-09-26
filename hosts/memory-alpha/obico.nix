@@ -29,7 +29,7 @@
       "traefik.http.routers.obico-ml-api-internal.entrypoints" = "websecure";
       "traefik.http.routers.obico-ml-api-internal.tls" = "true";
       "traefik.http.routers.obico-ml-api-internal.service" = "obico-ml-api";
-      "traefik.http.routers.obico-ml-api-dev.rule" = "Host(`obico.memory-alpha.zjones.dev`)";
+      "traefik.http.routers.obico-ml-api-dev.rule" = "Host(`obico.3dp.zjones.dev`)";
       "traefik.http.routers.obico-ml-api-dev.entrypoints" = "websecure";
       "traefik.http.routers.obico-ml-api-dev.tls.certresolver" = "letsencrypt";
       "traefik.http.routers.obico-ml-api-dev.service" = "obico-ml-api";

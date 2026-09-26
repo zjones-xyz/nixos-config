@@ -93,7 +93,7 @@ in
       "traefik.http.routers.bambuddy-internal.entrypoints" = "websecure";
       "traefik.http.routers.bambuddy-internal.tls" = "true";
       "traefik.http.routers.bambuddy-internal.service" = "bambuddy";
-      "traefik.http.routers.bambuddy-dev.rule" = "Host(`bambuddy.memory-alpha.zjones.dev`)";
+      "traefik.http.routers.bambuddy-dev.rule" = "Host(`bambuddy.3dp.zjones.dev`)";
       "traefik.http.routers.bambuddy-dev.entrypoints" = "websecure";
       "traefik.http.routers.bambuddy-dev.tls.certresolver" = "letsencrypt";
       "traefik.http.routers.bambuddy-dev.service" = "bambuddy";
