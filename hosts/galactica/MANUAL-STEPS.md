@@ -1855,3 +1855,46 @@ already exists as a plain directory needs the directory empty/absent first.
    nightly run, check the BorgBase archive contents (or `borgmatic list`)
    for `tank/appdata/memos`; the property-driven autoscan (`BACKUP-BORG.md`)
    needs no config change, but worth verifying once rather than assuming.
+
+---
+
+## 20. Part-DB — promote to offsite backup (Precious tier)
+
+`SHARES.md` §5 had Part-DB sitting on the default `appdata` tier deliberately
+(parity only, no offsite) — the owner's call at the time, per §16. Revisited:
+same reasoning as ferdium/karakeep/memos applies (a real, non-reacquirable
+loss), so `tank/appdata/partdb` gets the same promotion.
+
+Unlike memos, this is **not** a fresh install — real, live data already sits
+in `/tank/appdata/partdb` as a plain directory inside the shared `tank/appdata`
+dataset, and the container is actively serving from it. `zfs create` refuses a
+path that already exists, so the directory has to move out of the way and back
+in, not just get created fresh. Do this **after** the tmpfiles-ownership fix
+(#150) has been switched and the container confirmed healthy again — cp -a
+below relies on the on-disk ownership already being correct (`33:33`), and
+migrating a currently-500ing service first just compounds the state to sort out.
+
+1. [ ] **Stop the container** — `systemctl stop docker-partdb`.
+2. [ ] **Move the existing directory aside** —
+   `mv /tank/appdata/partdb /tank/appdata/partdb.pre-dataset`.
+3. [ ] **Create and tag the dataset** (mounts empty at the same path the
+   container already expects — `dataDir` in `partdb.nix` does not change):
+   ```
+   zfs create tank/appdata/partdb
+   zfs set homelab:tier=precious tank/appdata/partdb
+   zfs set org.torsion.borgmatic:backup=auto tank/appdata/partdb
+   ```
+4. [ ] **Copy the data back in, preserving ownership** —
+   `cp -a /tank/appdata/partdb.pre-dataset/. /tank/appdata/partdb/`.
+5. [ ] **Verify before deleting anything** — `diff -rq /tank/appdata/partdb.pre-dataset /tank/appdata/partdb`
+   should report no differences.
+6. [ ] **Restart and confirm** — `systemctl start docker-partdb`, then check
+   `partdb.maker.zjones.dev` returns 200/302 (not 500) and the dashboard dot
+   is green.
+7. [ ] **Remove the pre-dataset copy** — `rm -rf /tank/appdata/partdb.pre-dataset`,
+   only once step 6 is confirmed.
+8. [ ] **Confirm the dataset is picked up by borgmatic** — same check as
+   memos' item 6, after the next nightly run.
+9. [ ] **Update `SHARES.md` and `BACKUP-BORG.md`** to record the promotion
+   as done (date, and the commands actually run), same as the ferdium/karakeep
+   and memos entries — once the above is verified, not before.
