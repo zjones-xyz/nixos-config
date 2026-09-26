@@ -17,6 +17,13 @@ inference that wants this board's AVX-512/iGPU rather than galactica's 2012
 Xeon. Bambuddy was confirmed not running anywhere before the port, so it starts
 from an empty database.
 
+**No `MFA_ENCRYPTION_KEY`.** Bambuddy uses it to encrypt TOTP and OIDC
+secrets at rest. Left unset, Bambuddy generates `data/.mfa_encryption_key`
+(mode 0600) on first start, and its own backup ZIPs carry that file. Pinning it
+in sops would only keep it out of borg's copy, and Bambuddy's ZIPs bundle it
+anyway. (The old compose stacks' `openssl rand -hex 32` was also the wrong
+format: Bambuddy wants a Fernet key and ignores a hex string.)
+
 **Jellyfin keeps priority.** Both containers run in `system-maker.slice`
 (`configuration.nix`): CPU and IO weight 20 against Jellyfin's default 100, plus
 a two-core CPU quota so a busy Obico can't eat the package power budget
@@ -27,19 +34,15 @@ the iGPU itself is never contended.
    exclusion. Delete the `memory-alpha-2` reservation on .98. The host no
    longer takes a lease on `eth-secondary` (NetworkManager leaves it
    unmanaged), and Bambuddy's .98 is static.
-2. [ ] Add the MFA key to sops:
-   `sops secrets/memory-alpha.yaml`, then add
-   `bambuddy: { mfaEncryptionKey: <openssl rand -hex 32> }`.
-   The switch fails until this key exists.
-3. [ ] On galactica, confirm uid 1000 can write `/tank/bambuddy_library`.
+2. [ ] On galactica, confirm uid 1000 can write `/tank/bambuddy_library`.
    Bambuddy writes into it over NFS as `PUID=1000`.
-4. [ ] Stop the compose Obico stack (Dockge, or
+3. [ ] Stop the compose Obico stack (Dockge, or
    `docker compose -f ~/homelab-stacks/memory-alpha/obico/compose.yaml down`).
    The Nix container reuses the name `obico-ml-api`, and Docker refuses a
    duplicate.
-5. [ ] `nixos-rebuild switch` on memory-alpha, then on galactica (dashboard
+4. [ ] `nixos-rebuild switch` on memory-alpha, then on galactica (dashboard
    entry only; the DNS names already exist).
-6. [ ] Verify the plumbing:
+5. [ ] Verify the plumbing:
    ```sh
    docker info --format '{{.CgroupDriver}}'            # → systemd (--cgroup-parent needs it)
    systemd-cgls -u system-maker.slice                  # both containers listed
@@ -51,10 +54,10 @@ the iGPU itself is never contended.
    curl -s  https://obico.memory-alpha.zjones.dev/hc/
    ```
    From another LAN host, `ping` .95–.98 — all four should answer.
-7. [ ] Restart resilience: `systemctl restart docker-bambuddy`, then re-run the
+6. [ ] Restart resilience: `systemctl restart docker-bambuddy`, then re-run the
    `docker exec … ip addr` check. A new container is a new network namespace,
    and `bambuddy-vp-ips` must have re-attached the three VP addresses.
-8. [ ] Bambuddy UI (these are database settings, not env vars):
+7. [ ] Bambuddy UI (these are database settings, not env vars):
    - Settings → Network → External URL: `https://bambuddy.memory-alpha.zjones.dev`
    - Settings → Failure Detection → Obico ML API URL: `http://obico-ml-api:3333`
      (same `proxy` network, so no Traefik hop is needed)
@@ -62,8 +65,8 @@ the iGPU itself is never contended.
      VP-conway / VP-queue, bound to .95 / .96 / .97.
    - Home Assistant (optional): Settings → Network → Home Assistant,
      `http://homeassistant.internal:8123` with a long-lived token.
-9. [ ] From a desktop slicer, send a small test file to each of .95, .96 and
+8. [ ] From a desktop slicer, send a small test file to each of .95, .96 and
    .97 in turn. Confirm each one lands in the matching VP's queue, not a
    different one. Bambuddy has shipped a bug that cross-wired VPs before.
-10. [ ] homelab-stacks: delete `memory-alpha/obico/` and the dead
+9. [ ] homelab-stacks: delete `memory-alpha/obico/` and the dead
     `tower/bambuddy/`, and close `feat/bambuddy-migrate-to-memory-alpha`.
