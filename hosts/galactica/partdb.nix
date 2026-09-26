@@ -30,11 +30,17 @@ in
     APP_SECRET=${config.sops.placeholder."partdb/appSecret"}
   '';
 
+  # Owned by www-data (uid/gid 33), not root:root — the actual request-handling
+  # process drops root to www-data (confirmed via `docker top partdb aux`), and
+  # `d` re-enforces ownership on every activation, so root:root here silently
+  # locks that process out of its own SQLite file after the next switch even
+  # though the restore (cp -a) left it correctly owned. Same class of bug as
+  # spoolman.nix's uid fix.
   systemd.tmpfiles.rules = [
-    "d ${dataDir} 0750 root root - -"
-    "d ${dataDir}/uploads 0750 root root - -"
-    "d ${dataDir}/public_media 0750 root root - -"
-    "d ${dataDir}/db 0750 root root - -"
+    "d ${dataDir} 0750 33 33 - -"
+    "d ${dataDir}/uploads 0750 33 33 - -"
+    "d ${dataDir}/public_media 0750 33 33 - -"
+    "d ${dataDir}/db 0750 33 33 - -"
   ];
 
   # tank's crypttab entries are all `nofail` (configuration.nix) — see
