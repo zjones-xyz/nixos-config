@@ -23,11 +23,6 @@ let
   docker = "${config.virtualisation.docker.package}/bin/docker";
 in
 {
-  sops.secrets."bambuddy/mfaEncryptionKey" = { };
-  sops.templates."bambuddy.env".content = ''
-    MFA_ENCRYPTION_KEY=${config.sops.placeholder."bambuddy/mfaEncryptionKey"}
-  '';
-
   # galactica's share, exported LAN-wide as fsid 103. Same options as the
   # media mounts in configuration.nix.
   fileSystems.${libraryDir} = {
@@ -36,7 +31,9 @@ in
     options = [ "nfsvers=4" "soft" "timeo=30" "noauto" "nofail" "x-systemd.automount" "noatime" ];
   };
 
-  # Under /home/z so borgmatic.nix's `/home/z` source already covers it.
+  # Under /home/z so borgmatic.nix's `/home/z` source already covers it. That
+  # includes data/.mfa_encryption_key, which Bambuddy generates on first start
+  # (no MFA_ENCRYPTION_KEY, deliberately; see MANUAL-STEPS.md §1).
   systemd.tmpfiles.rules = [
     "d ${dataDir}      0750 z users - -"
     "d ${dataDir}/data 0750 z users - -"
@@ -73,7 +70,6 @@ in
 
   virtualisation.oci-containers.containers.bambuddy = {
     inherit image;
-    environmentFiles = [ config.sops.templates."bambuddy.env".path ];
     environment = {
       TZ = config.time.timeZone;
       # z:users — NixOS puts normal users in `users` (100), not a per-user group.
