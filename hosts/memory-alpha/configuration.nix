@@ -43,6 +43,8 @@ in
     ../../modules/nixos/nut-client.nix
     ../../modules/nixos/luks-remote-unlock.nix
     ./borgmatic.nix
+    ./bambuddy.nix
+    ./obico.nix
   ];
 
   networking.hostName = "memory-alpha";
@@ -146,6 +148,22 @@ in
 
   # `/mnt/arr_managed_data` (fsid 102) is GONE, not re-pointed: it served the
   # *arr stack, which now runs on galactica. Dataset kept, not exported.
+
+  # ── Nix-declared containers ─────────────────────────────────────────────
+  # Docker, not the podman default: Traefik and tsdproxy discover services
+  # from Docker's socket, so a podman container would be invisible to both.
+  virtualisation.oci-containers.backend = "docker";
+
+  # ── Jellyfin first ────────────────────────────────────────────────────────
+  # Bambuddy and Obico (--cgroup-parent) run here. Under CPU/IO contention
+  # jellyfin.service (weight 100) out-ranks this slice ~5:1, and the quota
+  # holds two cores back from the shared 15–28 W package budget even when
+  # idle cores exist (HARDWARE-MAP.md §4).
+  systemd.slices.system-maker.sliceConfig = {
+    CPUWeight = 20;
+    IOWeight = 20;
+    CPUQuota = "200%";
+  };
 
   # ── home-manager ──────────────────────────────────────────────────────────
   home-manager = {
