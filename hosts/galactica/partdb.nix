@@ -12,7 +12,7 @@
 # tailnet name stays flat while Traefik/DNS get the subdomain grouping.
 
 let
-  image = "jbtronics/part-db1:2.17.0";
+  image = "jbtronics/part-db1:2.18.0";
   dataDir = "/tank/appdata/partdb";
   port = 3023;
   publicDomain = "maker.zjones.dev";
