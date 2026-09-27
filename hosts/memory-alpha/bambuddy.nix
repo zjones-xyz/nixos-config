@@ -135,16 +135,19 @@ in
     };
     script = ''
       # Generous: on first start, `docker run` is still pulling the image.
-      pid=0
+      # Wait for a real PID *and* the ipvlan address; mid-create, inspect can
+      # return an empty or zero PID.
+      pid= iface=
       for _ in $(seq 600); do
-        pid=$(docker inspect --format '{{.State.Pid}}' bambuddy 2>/dev/null || echo 0)
-        [ "$pid" != 0 ] && break
+        pid=$(docker inspect --type container --format '{{.State.Pid}}' bambuddy 2>/dev/null || true)
+        case "$pid" in
+          "" | 0 | *[!0-9]*) ;;
+          *) iface=$(nsenter -t "$pid" -n ip -4 -o addr show to ${controlIp}/32 | awk '{print $2}')
+             if [ -n "$iface" ]; then break; fi ;;
+        esac
         sleep 1
       done
-      [ "$pid" != 0 ] || { echo "bambuddy container never started" >&2; exit 1; }
-
-      iface=$(nsenter -t "$pid" -n ip -4 -o addr show to ${controlIp}/32 | awk '{print $2}')
-      [ -n "$iface" ] || { echo "no interface holds ${controlIp}" >&2; exit 1; }
+      [ -n "$iface" ] || { echo "no interface holds ${controlIp} (pid '$pid')" >&2; exit 1; }
       for ip in ${lib.concatStringsSep " " vpIps}; do
         nsenter -t "$pid" -n ip addr replace "$ip/32" dev "$iface"
       done
