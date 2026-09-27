@@ -17,5 +17,11 @@
   },
   "qcalCalendar": {
     "enabled": true
+  },
+  "gpuMonitor": {
+    "enabled": true
+  },
+  "vramMonitor": {
+    "enabled": true
   }
 }
