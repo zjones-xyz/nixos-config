@@ -57,7 +57,8 @@ the iGPU itself is never contended.
    systemctl status bambuddy-vp-ips                    # "VP addresses attached to …"
    docker exec bambuddy ip -4 -o addr | grep -E '192\.168\.8\.9[5-8]'   # four lines
    curl -sI https://bambuddy.3dp.zjones.dev | head -1
-   curl -s  https://obico.3dp.zjones.dev/hc/
+   docker exec bambuddy python3 -c "import urllib.request as u; print(u.urlopen('http://obico-ml-api:3333/hc/').read())"
+   #   Obico has no Traefik route; only the proxy network reaches it
    ```
    From another LAN host, `ping` .95–.98 — all four should answer.
 6. [ ] Restart resilience. Run the `docker exec … ip addr` check again after
