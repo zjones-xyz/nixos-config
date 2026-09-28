@@ -1916,3 +1916,39 @@ migrating a currently-500ing service first just compounds the state to sort out.
    memos' item 6, after the next nightly run.
 9. [x] **`SHARES.md` and `BACKUP-BORG.md` updated — done 2026-09-26**, same
    shape as the ferdium/karakeep and memos entries.
+
+---
+
+## 21. Morning brief — owner steps before first switch
+
+`hosts/galactica/morning-brief.nix` mirrors the daily "Morning brief" Claude
+routine onto the admin dashboard. claude.ai refuses to be framed
+(`frame-ancestors`/`X-Frame-Options`), and a private artifact can't be fetched
+without a browser login, so the routine pushes instead: each run force-pushes
+a single commit with `brief.html` to the private `zjones-xyz/morning-brief`
+repo, and a 15-minute timer here pulls it into `/var/lib/morning-brief`. A
+static-web-server container serves it on its own tsdproxy node,
+`brief.peacock-koi.ts.net`, only. It has no Traefik route and no zjones.dev
+name, because the page holds mail and calendar summaries. The `Today` group
+on the admin dashboard iframes it. Nothing is backed up: the next run
+recreates the file.
+
+1. [ ] **Create the private repo** `zjones-xyz/morning-brief` (empty is fine).
+2. [ ] **Mint a fine-grained PAT**: repository access "Only select
+   repositories" → `morning-brief`; permissions: Contents **read-only**,
+   nothing else. Note the expiry date; the dashboard tile goes stale when it
+   lapses.
+3. [ ] **Add it to sops before switching**:
+   `sops secrets/galactica.yaml` → `morning-brief: { githubToken: <PAT> }`.
+   A missing key fails activation, not eval.
+4. [ ] **Let the routine push**: the next "Morning brief" run needs GitHub
+   push access to `morning-brief` (it attaches the repo itself via
+   `add_repo`; approve it if asked). Confirm `brief.html` lands on `main`.
+5. [ ] **First switch.** Then `systemctl start morning-brief-fetch` and check
+   `/var/lib/morning-brief/index.html` exists.
+6. [ ] **Key expiry disabled on the new `brief` tsdproxy node**, same trap as
+   every prior batch.
+7. [ ] **Check the tile**: open `home.peacock-koi.ts.net`. The `Today` group
+   should show the brief, and a link inside it should open in a new tab. If the
+   frame is too short, change `classes` on the tile in
+   `homepage/admin/services.yaml`.

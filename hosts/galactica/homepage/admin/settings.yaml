@@ -9,6 +9,9 @@ target: _blank
 # Every group named here must exist in services.yaml (and vice versa) —
 # checks/homepage-config enforces that.
 layout:
+  Today:
+    style: row
+    columns: 1
   Media:
     style: row
     columns: 2

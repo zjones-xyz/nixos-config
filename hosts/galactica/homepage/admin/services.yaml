@@ -19,6 +19,18 @@
 # Any `{{HOMEPAGE_VAR_*}}` used here must be defined in this instance's sops
 # env template (homepages.nix) — also enforced by checks/homepage-config.
 
+- Today:
+    # Widget-only (no href): the brief is served on the tailnet alone
+    # (morning-brief.nix), so there is no name the container could poll for
+    # a siteMonitor dot. Links inside the brief open in new tabs.
+    - Morning brief:
+        widget:
+          type: iframe
+          name: morningbrief
+          src: https://brief.peacock-koi.ts.net
+          classes: h-96 sm:h-96 md:h-96 lg:h-96 xl:h-96 2xl:h-96
+          refreshInterval: 900000
+
 - Media:
     - Jellyfin:
         href: https://jellyfin.zjones.dev
