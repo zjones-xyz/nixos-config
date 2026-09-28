@@ -3,6 +3,8 @@
 # Obico ML API — print-failure detection for Bambuddy (bambuddy.nix). Only
 # this one Obico service: Bambuddy POSTs camera snapshots and reads back
 # failure scores. No Obico account, web UI, database or OctoPrint bridge.
+# No Traefik route: the API has no auth and fetches any URL it's given, and
+# Bambuddy reaches it directly on `proxy`.
 #
 # CPU inference — Obico's GPU path is CUDA-only — so it never contends for the
 # iGPU Jellyfin transcodes on; CPU contention is what the maker slice is for.
@@ -23,18 +25,6 @@
       FLASK_APP = "server.py";
     };
     cmd = [ "gunicorn" "--bind=0.0.0.0:3333" "--workers=1" "--access-logfile=-" "wsgi" ];
-    labels = {
-      "traefik.enable" = "true";
-      "traefik.http.routers.obico-ml-api-internal.rule" = "Host(`obico.memory-alpha.internal`)";
-      "traefik.http.routers.obico-ml-api-internal.entrypoints" = "websecure";
-      "traefik.http.routers.obico-ml-api-internal.tls" = "true";
-      "traefik.http.routers.obico-ml-api-internal.service" = "obico-ml-api";
-      "traefik.http.routers.obico-ml-api-dev.rule" = "Host(`obico.3dp.zjones.dev`)";
-      "traefik.http.routers.obico-ml-api-dev.entrypoints" = "websecure";
-      "traefik.http.routers.obico-ml-api-dev.tls.certresolver" = "letsencrypt";
-      "traefik.http.routers.obico-ml-api-dev.service" = "obico-ml-api";
-      "traefik.http.services.obico-ml-api.loadbalancer.server.port" = "3333";
-    };
     # `--tty` carries over the compose stack's `tty: true`.
     extraOptions = [
       "--network=proxy"
