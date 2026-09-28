@@ -172,7 +172,7 @@
       domain = "*.monitor.zjones.dev";
       answer = "192.168.8.99";
     }
-    # 3D printing (hosts/memory-alpha/{bambuddy,obico}.nix).
+    # 3D printing (hosts/memory-alpha/bambuddy.nix).
     {
       domain = "*.3dp.zjones.dev";
       answer = "192.168.8.99";

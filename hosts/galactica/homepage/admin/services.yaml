@@ -252,9 +252,9 @@
         icon: spoolman.png
         description: Filament spools
     # On memory-alpha, not galactica — so its LAN name is *.3dp.zjones.dev,
-    # not *.maker.*.
+    # not *.maker.*. href is off the tailnet until #160 (tsdproxy key).
     - Bambuddy:
-        href: https://bambuddy.peacock-koi.ts.net
+        href: https://bambuddy.3dp.zjones.dev
         siteMonitor: https://bambuddy.3dp.zjones.dev
         icon: sh-bambuddy
         description: 3D printer management

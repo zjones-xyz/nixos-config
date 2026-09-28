@@ -21,6 +21,8 @@ let
   controlIp = "192.168.8.98";
   vpIps = [ "192.168.8.95" "192.168.8.96" "192.168.8.97" ];
   docker = "${config.virtualisation.docker.package}/bin/docker";
+  lanOpts = "--driver=ipvlan --subnet=192.168.8.0/24 --gateway=192.168.8.1 --ip-range=192.168.8.80/29 --opt parent=eth-secondary --opt ipvlan_mode=l2";
+  lanSpec = builtins.substring 0 12 (builtins.hashString "sha256" lanOpts);
 in
 {
   # galactica's share, exported LAN-wide as fsid 103. Same options as the
@@ -61,8 +63,16 @@ in
       RemainAfterExit = true;
       # Unmanaged means nothing else brings the link up.
       ExecStartPre = "${pkgs.iproute2}/bin/ip link set eth-secondary up";
-      ExecStart = "${pkgs.bash}/bin/bash -c '${docker} network inspect bambuddy-lan >/dev/null 2>&1 || ${docker} network create --driver=ipvlan --subnet=192.168.8.0/24 --gateway=192.168.8.1 --ip-range=192.168.8.80/29 --opt parent=eth-secondary --opt ipvlan_mode=l2 bambuddy-lan'";
     };
+    # Docker can't edit a network in place, so the options' hash is stored as a
+    # label and a mismatch recreates it. On a switch this unit's restart takes
+    # docker-bambuddy down first (Requires), so the network is free to remove.
+    script = ''
+      have=$(${docker} network inspect --format '{{index .Labels "nixos.spec"}}' bambuddy-lan 2>/dev/null) || have=absent
+      [ "$have" = "${lanSpec}" ] && exit 0
+      [ "$have" = absent ] || ${docker} network rm bambuddy-lan
+      ${docker} network create ${lanOpts} --label nixos.spec=${lanSpec} bambuddy-lan
+    '';
   };
 
   # The library is only wanted: printer control must come up even while
@@ -87,8 +97,10 @@ in
       VIRTUAL_PRINTER_PASV_ADDRESS = controlIp;
     };
     # tsdproxy (homelab-stacks memory-alpha/tsdproxy) reaches services via
-    # host.docker.internal, so the UI has to be host-published.
-    ports = [ "8001:8000" ];
+    # host.docker.internal, i.e. docker0's 172.17.0.1, so the UI is published
+    # there only. Docker's DNAT bypasses the firewall, so 0.0.0.0 would put
+    # plain-HTTP Bambuddy on the LAN and tailscale0.
+    ports = [ "172.17.0.1:8001:8000" ];
     volumes = [
       "${dataDir}/data:/app/data"
       "${dataDir}/logs:/app/logs"
@@ -113,6 +125,8 @@ in
       # gw-priority: default route via the bridge, not the printer dongle.
       "--network=name=proxy,gw-priority=1"
       "--network=name=bambuddy-lan,ip=${controlIp}"
+      # VPs may bind .95–.97 before bambuddy-vp-ips has added them.
+      "--sysctl=net.ipv4.ip_nonlocal_bind=1"
       "--security-opt=no-new-privileges"
       "--cgroup-parent=system-maker.slice"
     ];
@@ -135,16 +149,19 @@ in
     };
     script = ''
       # Generous: on first start, `docker run` is still pulling the image.
-      pid=0
+      # Wait for a real PID *and* the ipvlan address; mid-create, inspect can
+      # return an empty or zero PID.
+      pid= iface=
       for _ in $(seq 600); do
-        pid=$(docker inspect --format '{{.State.Pid}}' bambuddy 2>/dev/null || echo 0)
-        [ "$pid" != 0 ] && break
+        pid=$(docker inspect --type container --format '{{.State.Pid}}' bambuddy 2>/dev/null || true)
+        case "$pid" in
+          "" | 0 | *[!0-9]*) ;;
+          *) iface=$(nsenter -t "$pid" -n ip -4 -o addr show to ${controlIp}/32 | awk '{print $2}')
+             if [ -n "$iface" ]; then break; fi ;;
+        esac
         sleep 1
       done
-      [ "$pid" != 0 ] || { echo "bambuddy container never started" >&2; exit 1; }
-
-      iface=$(nsenter -t "$pid" -n ip -4 -o addr show to ${controlIp}/32 | awk '{print $2}')
-      [ -n "$iface" ] || { echo "no interface holds ${controlIp}" >&2; exit 1; }
+      [ -n "$iface" ] || { echo "no interface holds ${controlIp} (pid '$pid')" >&2; exit 1; }
       for ip in ${lib.concatStringsSep " " vpIps}; do
         nsenter -t "$pid" -n ip addr replace "$ip/32" dev "$iface"
       done
