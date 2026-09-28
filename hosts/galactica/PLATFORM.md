@@ -1963,9 +1963,9 @@ the fix is still in the BIOS, not in Nix.
 router as a sync replica), the NFS server memory-alpha mounts, and the
 acquisition half of the media stack. There is no idle window to suspend into.
 
-### 13e. ⚠ Six things independently wake a sleeping disk on this host
+### 13e. ⚠ Seven things independently wake a sleeping disk on this host
 
-Any spin-down has to survive all six, or it looks like it worked for half an
+Any spin-down has to survive all seven, or it looks like it worked for half an
 hour and then quietly stops:
 
 1. **smartd, every 30 minutes.** `modules/nixos/smart.nix` monitors with `-a`,
@@ -2022,7 +2022,20 @@ hour and then quietly stops:
    into it, and Chaptarr's imports and Shelfmark's bookdrop land in the sibling
    directories. Bursty rather than continuous, like Paperless, and like
    Paperless not something a seed tier moves.
-6. **The rest of the workload**, for `tank` — §13d, and §13f for the part of it
+6. **NFS clients on other hosts**, which wake the array with nothing running on
+   galactica at all. All three exports are on the spinners: the \*arr library,
+   the hand-curated Jellyfin staging, and `tank/bambuddy_library` — which #155
+   turned from an export with no confirmed consumer into memory-alpha's Bambuddy
+   library. The first two were already implicit in §13d's scan caveat; the third
+   is new, and it is a separate dataset, so no amount of metadata on the special
+   vdev serves a content read from it.
+   > ⚠ The hardest of the seven to reason about, because the access does not
+   > appear in galactica's own process list — the waking process is on another
+   > machine. `nfsstat -s` on the server and the client's own timers are where it
+   > shows. #155 also makes the mount `wanted` rather than `required`, so
+   > Bambuddy runs while galactica is down: absence of complaints is not evidence
+   > the library is idle.
+7. **The rest of the workload**, for `tank` — §13d, and §13f for the part of it
    that can be moved.
 
 ⚠ **The ATA standby timer is volatile.** `hdparm -S` does not survive a power
@@ -2071,7 +2084,7 @@ that directory moves all of it.
 | | |
 |---|---|
 | Removes | The largest and steadiest toucher of the spinners |
-| Does **not** remove | §13e's other five — smartd (fixed), the Scrutiny sweep (**not** fixed), borgmatic's nightly window, Paperless's index and database, the reading stack's content on `tank/books` |
+| Does **not** remove | §13e's other six — smartd (fixed), the Scrutiny sweep (**not** fixed), borgmatic's nightly window, Paperless's index and database, the reading stack's content on `tank/books`, and the three NFS exports memory-alpha mounts |
 | Untested | Whether Jellyfin's and the \*arrs' scheduled scans stay metadata-only. All metadata is on the special vdev, so a stat-walk of an unchanged library *should* be served from SSD + ARC without waking a spinner — plausible, unverified, and decisive |
 
 So this is **necessary but not sufficient**. Two config items stand between it

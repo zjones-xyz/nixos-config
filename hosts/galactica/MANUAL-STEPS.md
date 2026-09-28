@@ -1615,6 +1615,11 @@ survive a power cycle.
      its own — but 30 minutes apart is still two wakes if the standby timer is
      shorter than the gap. Close it to ~01:25, or set a timer longer than the
      gap, once a spin-down is actually armed.
+   - **The three NFS exports memory-alpha mounts** are all on the spinners, and
+     `tank/bambuddy_library` gained a real consumer with PR #155 (§13e item 6).
+     Measure it from the server — `nfsstat -s`, plus the He12s'
+     `Start_Stop_Count` across a day — because the client is another machine and
+     nothing on galactica shows who woke the array.
    - Whether **Jellyfin's and the \*arrs' scheduled scans stay metadata-only**.
      All metadata is on the special vdev, so an unchanged library *should* walk
      from SSD + ARC without waking a spinner. Plausible, unverified, decisive.
