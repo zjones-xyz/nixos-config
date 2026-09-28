@@ -21,6 +21,8 @@ let
   controlIp = "192.168.8.98";
   vpIps = [ "192.168.8.95" "192.168.8.96" "192.168.8.97" ];
   docker = "${config.virtualisation.docker.package}/bin/docker";
+  lanOpts = "--driver=ipvlan --subnet=192.168.8.0/24 --gateway=192.168.8.1 --ip-range=192.168.8.80/29 --opt parent=eth-secondary --opt ipvlan_mode=l2";
+  lanSpec = builtins.substring 0 12 (builtins.hashString "sha256" lanOpts);
 in
 {
   # galactica's share, exported LAN-wide as fsid 103. Same options as the
@@ -61,8 +63,16 @@ in
       RemainAfterExit = true;
       # Unmanaged means nothing else brings the link up.
       ExecStartPre = "${pkgs.iproute2}/bin/ip link set eth-secondary up";
-      ExecStart = "${pkgs.bash}/bin/bash -c '${docker} network inspect bambuddy-lan >/dev/null 2>&1 || ${docker} network create --driver=ipvlan --subnet=192.168.8.0/24 --gateway=192.168.8.1 --ip-range=192.168.8.80/29 --opt parent=eth-secondary --opt ipvlan_mode=l2 bambuddy-lan'";
     };
+    # Docker can't edit a network in place, so the options' hash is stored as a
+    # label and a mismatch recreates it. On a switch this unit's restart takes
+    # docker-bambuddy down first (Requires), so the network is free to remove.
+    script = ''
+      have=$(${docker} network inspect --format '{{index .Labels "nixos.spec"}}' bambuddy-lan 2>/dev/null) || have=absent
+      [ "$have" = "${lanSpec}" ] && exit 0
+      [ "$have" = absent ] || ${docker} network rm bambuddy-lan
+      ${docker} network create ${lanOpts} --label nixos.spec=${lanSpec} bambuddy-lan
+    '';
   };
 
   # The library is only wanted: printer control must come up even while
