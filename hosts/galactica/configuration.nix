@@ -172,6 +172,11 @@
       domain = "*.monitor.zjones.dev";
       answer = "192.168.8.99";
     }
+    # 3D printing (hosts/memory-alpha/bambuddy.nix).
+    {
+      domain = "*.3dp.zjones.dev";
+      answer = "192.168.8.99";
+    }
     # jellyfin.zjones.dev: flat name, not *.memory-alpha.zjones.dev — Traefik
     # (modules/nixos/traefik.nix, on memory-alpha) already routes it with its
     # own single-name LE cert; this rewrite was the only missing piece.
