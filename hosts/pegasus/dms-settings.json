@@ -97,6 +97,14 @@
         "clipboard",
         "cpuUsage",
         "memUsage",
+        {
+          "id": "gpuMonitor",
+          "enabled": true
+        },
+        {
+          "id": "vramMonitor",
+          "enabled": true
+        },
         "notificationButton",
         "battery",
         "controlCenterButton",

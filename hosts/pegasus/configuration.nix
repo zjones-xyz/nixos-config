@@ -72,6 +72,26 @@
     # on top of the palette it is trying to apply.
   };
 
+  # ── DMS bar: GPU load + VRAM ────────────────────────────────────────────────
+  # DMS's built-in bar widgets stop at GPU temperature (dgop reports nothing
+  # else), so load/VRAM come from registry plugins that poll nvidia-smi. Here,
+  # not desktop-niri.nix, because they're NVIDIA-only. Installed plugins start
+  # disabled: enabling + bar placement live in the dms-*.json checkpoints.
+  programs.dank-material-shell.plugins = {
+    gpuMonitor.src = pkgs.fetchFromGitHub {
+      owner = "rollecode";
+      repo = "dms-gpu-monitor";
+      rev = "6a725d2c292c4cd8c7da38ed0e40ad77eb77ec25"; # v1.5.0
+      hash = "sha256-zSRCPbxIp9I67QBMtM7pho4T3AQmw0WQOME9MsPBeRM=";
+    };
+    vramMonitor.src = pkgs.fetchFromGitHub {
+      owner = "rollecode";
+      repo = "dms-vram-monitor";
+      rev = "136721e8d89e18aa7268a549d0c65a9493718365"; # v1.5.0
+      hash = "sha256-vrKV6o3fQTfRsn/YJ/9TMt6zQBKycLFOvLGbEpxMHdg=";
+    };
+  };
+
   # ── Boot ────────────────────────────────────────────────────────────────────
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
