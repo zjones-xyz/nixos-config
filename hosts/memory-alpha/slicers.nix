@@ -10,7 +10,9 @@
 let
   # Upstream tags each sidecar build `bambuddy-<version>`, after the Bambuddy
   # release it shipped with, so bumping bambuddy.nix's image bumps these too.
-  tag = "bambuddy-" + lib.last (lib.splitString ":" config.virtualisation.oci-containers.containers.bambuddy.image);
+  # The match skips a trailing @sha256 digest.
+  tag = "bambuddy-" + builtins.head (builtins.match ".*:([^@:/]+)(@.*)?"
+    config.virtualisation.oci-containers.containers.bambuddy.image);
 
   # listen: the activation socket Bambuddy calls. backend: the container,
   # published on loopback only. The +10000 keeps clear of Bambuddy's upstream
@@ -90,7 +92,10 @@ in
     // lib.mapAttrs' (name: _: lib.nameValuePair "docker-${name}" {
       unitConfig.StopWhenUnneeded = true;
       # `docker stop` on a Node PID 1: SIGTERM or SIGKILL, not a failure.
+      # That makes a crash look clean too, so restart on any exit; a stop
+      # systemd itself makes (StopWhenUnneeded) still never restarts.
       serviceConfig.SuccessExitStatus = "137 143";
+      serviceConfig.Restart = lib.mkForce "always";
     }) sidecars
     // {
       # Pull at boot and on switch, so a cold start never waits on a ~400 MB
@@ -105,9 +110,10 @@ in
           Type = "oneshot";
           RemainAfterExit = true;
         };
-        script = lib.concatMapStringsSep "\n" (name:
-          "${docker} image inspect ${image name} >/dev/null 2>&1 || ${docker} pull ${image name}"
-        ) (lib.attrNames sidecars);
+        # One failed pull must not skip the other.
+        script = "rc=0\n" + lib.concatMapStringsSep "\n" (name:
+          "${docker} image inspect ${image name} >/dev/null 2>&1 || ${docker} pull ${image name} || rc=1"
+        ) (lib.attrNames sidecars) + "\nexit $rc";
       };
     };
 }
