@@ -87,8 +87,10 @@ in
       VIRTUAL_PRINTER_PASV_ADDRESS = controlIp;
     };
     # tsdproxy (homelab-stacks memory-alpha/tsdproxy) reaches services via
-    # host.docker.internal, so the UI has to be host-published.
-    ports = [ "8001:8000" ];
+    # host.docker.internal, i.e. docker0's 172.17.0.1, so the UI is published
+    # there only. Docker's DNAT bypasses the firewall, so 0.0.0.0 would put
+    # plain-HTTP Bambuddy on the LAN and tailscale0.
+    ports = [ "172.17.0.1:8001:8000" ];
     volumes = [
       "${dataDir}/data:/app/data"
       "${dataDir}/logs:/app/logs"
