@@ -113,6 +113,8 @@ in
       # gw-priority: default route via the bridge, not the printer dongle.
       "--network=name=proxy,gw-priority=1"
       "--network=name=bambuddy-lan,ip=${controlIp}"
+      # VPs may bind .95–.97 before bambuddy-vp-ips has added them.
+      "--sysctl=net.ipv4.ip_nonlocal_bind=1"
       "--security-opt=no-new-privileges"
       "--cgroup-parent=system-maker.slice"
     ];
