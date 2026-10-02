@@ -22,6 +22,21 @@
     '';
   };
 
+  options.homelab.smart.selfTests = lib.mkOption {
+    type = lib.types.nullOr lib.types.str;
+    default = null;
+    example = "(S/../../7/03|L/../15/./03)";
+    description = ''
+      smartd `-s` regex scheduling drive self-tests (smartd.conf(5)), or null
+      for none. Applies to every autodetected disk. Only meaningful with
+      `monitor = true`.
+
+      Results surface through the attributes Scrutiny already collects (a long
+      test that hits bad sectors moves 197/198) and the drive's self-test log,
+      so a host shipping to the Scrutiny hub has somewhere a person looks.
+    '';
+  };
+
   config = lib.mkMerge [
     # Unconditional: the tool itself, everywhere.
     { environment.systemPackages = [ pkgs.smartmontools ]; }
@@ -32,9 +47,11 @@
         autodetect = true;
 
         # Full attribute set + the drive's own offline collection/autosave.
-        # Deliberately no `-s` self-test schedule until alerts go somewhere
-        # a person actually reads (see below).
-        defaults.monitored = "-a -o on -S on";
+        # Self-tests are opt-in per host (selfTests above): only hosts whose
+        # SMART data reaches Scrutiny have anyone reading the result.
+        defaults.monitored = "-a -o on -S on"
+          + lib.optionalString (config.homelab.smart.selfTests != null)
+            " -s ${config.homelab.smart.selfTests}";
 
         # Wall messages: useless headless, noisy on a desktop.
         notifications.wall.enable = false;
