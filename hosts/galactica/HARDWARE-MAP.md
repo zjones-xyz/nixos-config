@@ -77,7 +77,7 @@ serial-derived and stable.
 |---|---|---|---|---|---|
 | `h-HJDH` | HGST HUH721212ALE601 12 TB | `8DKUHJDH` | `ata-HUH721212ALE601_8DKUHJDH` | `sdc` | `tank` RAIDZ1 member |
 | `h-NS3Y` | HGST HUH721212ALE601 12 TB | `8DJPNS3Y` | `ata-HUH721212ALE601_8DJPNS3Y` | `sde` | `tank` RAIDZ1 member |
-| `h-X4WE` | HGST HUH721212ALE601 12 TB | `8CJZX4WE` | `ata-HUH721212ALE601_8CJZX4WE` | `sdg` | `tank` RAIDZ1 member |
+| `h-X4WE` | HGST HUH721212ALE601 12 TB | `8CJZX4WE` | `ata-HUH721212ALE601_8CJZX4WE` | `sdg` | `tank` RAIDZ1 member — ⚠ **failing, replacement pending** (below) |
 | `h-T97E` | HGST HUH721212ALE601 12 TB | `8CG7T97E` | `ata-HUH721212ALE601_8CG7T97E` | `sdi` | `tank` RAIDZ1 member |
 | `s-768C` | Crucial BX500 480 GB | `2422E8B6768C` | `ata-CT480BX500SSD1_2422E8B6768C` | `sdb` | `tank` special-vdev mirror member (on LSI) |
 | `s-8162` | Crucial BX500 480 GB | `2506E9A58162` | `ata-CT480BX500SSD1_2506E9A58162` | `sdf` | `tank` special-vdev mirror member (on LSI) |
@@ -106,6 +106,17 @@ Notes on the built pool:
 - The four 12 TB spinners' original array data was copied to `sidepool` before the
   destructive RAIDZ1 create; that copy is what is now being read back (read-only)
   onto `tank`.
+
+> **⚠ 2026-10-02 — `h-X4WE` is failing; replacement tracked in `MANUAL-STEPS.md`
+> §21.** Scrutiny flagged it Failed on 2026-10-01. Read with `smartctl` the next
+> day: **197 Current_Pending 184**, **198 Offline_Uncorrectable 46** (23 a day
+> earlier), 5 Reallocated 7, at 34,745 power-on hours. Overall health still
+> reads PASSED, which is the drive's own loose threshold, not reassurance. The
+> pool has not noticed: `tank` ONLINE, zero READ/WRITE/CKSUM on every member, and
+> the monthly scrub that finished 2026-10-01 repaired 0 B. The bad sectors sit
+> where ZFS has not read; the drive's own offline scan found them. The other
+> three spinners read 0 on 5/197/198/199, so this is one disk wearing out, not
+> the batch.
 
 ### `sidepool` — a fifth pool, missing from the 2026-08-07 Main-tab reading above
 
