@@ -1916,3 +1916,61 @@ migrating a currently-500ing service first just compounds the state to sort out.
    memos' item 6, after the next nightly run.
 9. [x] **`SHARES.md` and `BACKUP-BORG.md` updated — done 2026-09-26**, same
    shape as the ferdium/karakeep and memos entries.
+
+## 21. Replace `h-X4WE` — a failing `tank` member (opened 2026-10-02)
+
+Scrutiny flagged `h-X4WE` (serial `8CJZX4WE`, mapper `array-X4WE`, Unraid's old
+Parity 1) **Failed** on 2026-10-01. Read with `smartctl` on 2026-10-02: **197
+Current_Pending_Sector 184**, **198 Offline_Uncorrectable 46** (Scrutiny showed
+23 the day before), 5 Reallocated 7, 10 Spin_Retry 0, 199 UDMA_CRC 0, helium
+100, overall health PASSED, 34,745 power-on hours. The SMART error log holds a
+single UNC from hour 24,414, unrelated. No self-test had run since hour 29,132;
+the fix for that is a smartd self-test schedule
+(`homelab.smart.selfTests`).
+
+The pool has not noticed. `tank` is ONLINE with zero READ/WRITE/CKSUM on every
+member, `zpool events` has no I/O or checksum events, the kernel log has no ATA
+errors for the week, and the monthly scrub that finished 2026-10-01 16:56
+repaired 0 B with 0 errors. The bad sectors sit where ZFS has not read, which
+is why the drive's offline scan found them rather than the scrub. The other
+three spinners read 0 on 5/197/198/199. So `tank` is fully redundant, and this
+is a replace-within-weeks disk, not an emergency.
+
+**Escalate** if 197 or 198 keep climbing fast, `zpool status` shows any READ or
+CKSUM on `array-X4WE`, or another spinner's 5/197/198 leaves zero. Escalating
+means copying the `reacquirable` media onto sidepool's disks *before* anything
+else, per §9's degraded-disk contingency (a `zfs send` target, never a pool
+member).
+
+1. [ ] **Order the replacement.** ≥ 12 TB, CMR, ideally not this batch; no drawer
+   spare qualifies (§9).
+2. [ ] **Watch X4WE in Scrutiny every few days** until the new disk is in.
+3. [ ] **Burn the new disk in before it touches `tank`.** On the bare disk,
+   destructive: `sudo badblocks -wsv -b 4096 -t 0 /dev/disk/by-id/<new>`
+   (one write + read pass, about 1.5 days at 12 TB), then
+   `sudo smartctl -t long`. 5/197/198 must all still read 0.
+4. [ ] **Find X4WE's bay in cage A by serial.** Cage A's port-to-bay mapping is
+   still open (`HARDWARE-MAP.md` §7). Fill that table while doing this.
+5. [ ] **Connect the new disk alongside X4WE, not in place of it.** Any free port
+   works — sidepool is still cabled to the LSI (§9 step 3), so one of its
+   cables is the obvious one — and the disk need not be in a bay yet. Replacing
+   with X4WE still online keeps RAIDZ1's redundancy through the resilver.
+6. [ ] **LUKS it like the other members** (§9: whole-disk LUKS,
+   `luks/arrayKeyFile` in slot 0, the fleet recovery passphrase in slot 1).
+   Copy cipher and sector size from an existing member's `cryptsetup luksDump`
+   rather than trusting defaults. Open it as `array-<last 4 of serial>`.
+7. [ ] **`[galactica]` PR: add the new member** — its crypttab line (new LUKS
+   UUID) and its `zfs-import-tank` ordering entry in `configuration.nix`.
+   Switch *before* step 8, so a reboot mid-resilver reopens both disks.
+8. [ ] **`sudo zpool replace tank array-X4WE array-<last4>`**, then watch
+   `zpool status` until the resilver completes. X4WE detaches by itself at the
+   end.
+9. [ ] **Follow-up PR: remove `array-X4WE`'s crypttab line and ordering
+   entry.** Switch, then cold-boot once to prove `tank` imports with the new
+   member.
+10. [ ] **Pull X4WE; move the new disk into its bay.** Same session as §9 step 3
+    (sidepool's pull) if convenient. Update `HARDWARE-MAP.md` §1 with the new
+    row and ID, and print its caddy label (`docs/DISK-LABELLING.md`).
+11. [ ] **Retire X4WE.** `cryptsetup luksErase` destroys its keyslots, which is
+    enough since everything on it is ciphertext. It does not go in the drawer
+    as a spare; record it in `docs/DISK-DRAWER.md` as out of service.
