@@ -1779,6 +1779,21 @@ disks as the zero-cost hedge" reasoning wants them available as an emergency
 exactly as well as a drive spinning in the chassis, and arrives with less wear on
 it. The hedge and the watts are not in tension.
 
+⚠ **It is no longer the first thing to do, though.** `h-X4WE`, one of `tank`'s
+four RAIDZ1 members, is failing — 184 pending and 46 offline-uncorrectable
+sectors, while the pool itself still reads ONLINE with zero errors
+(`MANUAL-STEPS.md` §21). §21's escalation path copies the re-acquirable media
+onto sidepool's disks *before anything else*, and its step 5 cables the
+replacement disk through one of sidepool's own cables. Pulling the four now would
+put a case-open session between the hedge and the moment it is wanted. The
+paragraph above still holds — a drawer drive sends just as well — but the ~13 W
+waits for the swap.
+
+⭐ **Which collapses three of this section's items into one visit.** §21 step 10
+pulls sidepool in the same session as X4WE's replacement; item 3's LSI retirement
+and §5's coin cell both want the case open as well. One trip buys the ~13 W, the
+~9 W and a battery that will not silently revert item 2.
+
 If the in-case session is weeks out, `MANUAL-STEPS.md` §17 has an interim
 spin-down — but read §13e first, because two things in this host's own config
 will otherwise undo it.
@@ -1886,7 +1901,9 @@ measured* — and it sits in the same air.
 
 Verdict: the one item here that trades directly against disk life. **Not before
 there is a sustained-load temperature baseline** — §12's read-saturation test
-produces one as a side effect.
+produces one as a side effect. ⚠ And not while `h-X4WE` is failing and the pool
+is one disk from degraded (§21): a resilver is the hottest this chassis gets, and
+it is the worst moment to have less air moving.
 
 ### 13d. ⚠ Rejected — recorded so they are not re-proposed
 
@@ -1952,6 +1969,10 @@ least able to lose: RAIDZ1 tolerates one, and `MANUAL-STEPS.md` §9 records that
 ~$350 replacement is explicitly *not* on the shelf. ~2 W is not worth spending
 there.
 
+⚠ **And that one-disk tolerance is now spent in advance.** `h-X4WE` is failing
+and awaiting replacement (§21), with no drawer spare that qualifies. The
+rejection was already right; it is no longer close.
+
 **Setting `powerManagement.cpuFreqGovernor`.** Nothing to gain. `intel_pstate`
 drives Ivy Bridge in active mode with `powersave` as its default governor, which
 is already the efficient choice, and this generation has no HWP for the setting
@@ -1978,6 +1999,12 @@ hour and then quietly stops:
    > drive side, with smartd no longer the cause. Unverified here — watch the
    > skipped-poll log line and `Start_Stop_Count` on the first parked disk,
    > which is the cheapest test available and needs no extra tooling.
+   > ⭐ **`-o on` has since earned its place.** `h-X4WE`'s 184 pending and 46
+   > offline-uncorrectable sectors were found by the drive's own offline scan —
+   > *not* by the 2026-10-01 scrub, which repaired 0 B (§21). Whatever the
+   > directive costs in spin-ups, it is what noticed a member wearing out before
+   > ZFS did. It is also why `-n standby`'s missing `,N` is tolerable only on
+   > disks awaiting removal, and never on a live pool member.
 2. **The Scrutiny collector, daily at 01:00.** It runs privileged with every
    block device visible and sweeps them all, with no standby awareness and no
    per-device exclusion. One guaranteed spin-up per disk per day. The wear is

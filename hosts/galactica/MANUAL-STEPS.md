@@ -1526,7 +1526,11 @@ survive a power cycle.
    checklist so a battery change does not silently undo it.
 4. [ ] **Interim: park `sidepool`'s four disks.** *Optional* — the durable fix
    is §9 step 3's physical pull, and this is only worth doing if that session is
-   weeks out. ~13 W. They have been LUKS-closed and unreferenced since
+   weeks out. ~13 W. ⭐ **Since 2026-10-02 it is the only way to get these watts
+   for now**: §21 defers the pull until `h-X4WE` is replaced, because its
+   escalation path wants sidepool reachable without a screwdriver. Parking is
+   compatible with that — a parked disk still accepts a `zfs send` after one
+   spin-up — where pulling is not. They have been LUKS-closed and unreferenced since
    2026-09-02, so this risks nothing, but confirm that before issuing anything:
    ```sh
    # Resolve each by serial — they are behind mpt3sas, so the by-id names are
@@ -1569,6 +1573,10 @@ survive a power cycle.
    failure that landmine is exposed to, and steps 3–5 here plus §9 step 3 all
    want the same case-open visit. Doing them together is what makes the
    controller swap safe rather than a new dependency on an unreplaced 2011 cell.
+   ⚠ **And §21 step 10 now sets when that visit happens**: X4WE's replacement
+   needs the case open anyway, and until it is done sidepool's cables are what
+   step 5 there uses to attach the new disk. Sequence is X4WE first, then
+   sidepool's pull, then weigh the LSI — all in one session.
 6. [ ] **Measure the seed set.** The number that decides §13f, and the cheapest
    of the three. It is the *active seed* total, not just what is in flight:
    ```sh
