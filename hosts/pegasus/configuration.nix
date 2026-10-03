@@ -43,6 +43,16 @@
     nmap
   ];
 
+  # ── Wireshark ───────────────────────────────────────────────────────────────
+  # The module, not a bare package: it's what installs the setcap'd dumpcap
+  # wrapper, so z can capture without running the GUI as root. The default
+  # package is wireshark-cli (tshark only) — the Qt GUI has to be asked for.
+  programs.wireshark = {
+    enable = true;
+    package = pkgs.wireshark;
+  };
+  users.users.z.extraGroups = [ "wireshark" ];
+
   # ── DDC/CI (ddcutil) ─────────────────────────────────────────────────────────
   # ddcutil itself is installed via home.packages (home.nix) — this is just the
   # kernel/udev wiring it needs: loads i2c-dev and grants read/write on
