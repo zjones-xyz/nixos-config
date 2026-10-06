@@ -349,11 +349,12 @@ against the source, plus the Unraid flash+config insurance into
    ✅ 2026-09-02 — all seven (8.94 T) staged; `tank/media`/`tank/books` empty.
 2. [x] Retire sidepool *logically*: unmounted + all four LUKS mappers closed
    2026-09-02 — disks are inert (LUKS-closed, nothing references them).
-3. [ ] Pull sidepool's drives during the next in-case session (deliberately
+3. [x] Pull sidepool's drives during the next in-case session (deliberately
    deferred with other case cleanup: the dead MX100 wants pulling too, the
    WD Blue's cable label is stale post-recable, and HARDWARE-MAP §3/§7's
    cage/port enumeration needs eyes-in-the-case anyway). Disks return to
    the drawer after a cooling-off period.
+   ✅ 2026-10-06 — sidepool's four disks and the MX100 pulled.
    > **2026-09-03 — data-safety precondition met; the pull leaves nothing
    > behind.** sidepool was reopened one last time (read-only: `cryptsetup
    > open --readonly` ×4 + `mount -o ro,rescue=nologreplay`) and its `pools/`
