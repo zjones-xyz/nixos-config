@@ -82,7 +82,7 @@ serial-derived and stable.
 | `s-768C` | Crucial BX500 480 GB | `2422E8B6768C` | `ata-CT480BX500SSD1_2422E8B6768C` | `sdb` | `tank` special-vdev mirror member (on LSI) |
 | `s-8162` | Crucial BX500 480 GB | `2506E9A58162` | `ata-CT480BX500SSD1_2506E9A58162` | `sdf` | `tank` special-vdev mirror member (on LSI) |
 | `s-3255` | WD Blue SA510 500 GB | `244964803255` | `ata-WD_Blue_SA510_2.5_500GB_244964803255` | `sda` | `tank` special-vdev mirror member **+ `/boot` ESP** (recabled to onboard `ata1`) |
-| `s-3100` | Crucial MX100 512 GB | `15090EE23100` | `ata-Crucial_CT512MX100SSD1_15090EE23100` | `sdd` | ✖ **written off 2026-10-06** — failed on first write; still cabled, pull at the next case session |
+| `s-3100` | Crucial MX100 512 GB | `15090EE23100` | `ata-Crucial_CT512MX100SSD1_15090EE23100` | `sdd` | ✖ **written off 2026-10-06** — failed on first write; pulled 2026-10-06 |
 | `s-9545` | SATA SSD (generic) 224 GB | `19013024009545` | `ata-SATA_SSD_19013024009545` | `sdh` | **midden** — `/var/log/journal` + nix build scratch (no longer `/boot`) |
 | — | SPCC M.2 PCIe SSD 932 GB | `AA2300905N401KG00206` | `nvme-SPCC_M.2_PCIe_SSD_AA2300905N401KG00206` | `nvme0n1` | LUKS root (`cryptroot`) + swap + vestigial ESP |
 
@@ -101,8 +101,8 @@ Notes on the built pool:
   the LSI to onboard `ata1` so the firmware can UEFI-boot its ESP.
 - `s-3100` (MX100) carried leftover Unraid-era partitions and was earmarked to host
   both `/boot` and a special-vdev partition; **it failed on its first write**, so
-  it hosts neither. **Written off 2026-10-06** — not retested, not a spare. It
-  leaves the case with sidepool's disks (`MANUAL-STEPS.md` §9 step 3).
+  it hosts neither. **Written off 2026-10-06** — not retested, not a spare.
+  Pulled 2026-10-06 with sidepool's disks.
 - The four 12 TB spinners' original array data was copied to `sidepool` before the
   destructive RAIDZ1 create; that copy is what is now being read back (read-only)
   onto `tank`.
@@ -125,6 +125,9 @@ Notes on the built pool:
 `lsblk`-ing the whole machine and finding four `crypto_LUKS` disks that
 matched none of the serials above. Called `sidepool` by the owner; functions
 as Unraid's staging area for the migration.
+
+> **Update 2026-10-06 — pulled.** All four disks left the case (with the MX100);
+> LSI ports 2–7 are now empty. Contents already live in `tank/backups/sidepool-pools`.
 
 > **Update 2026-09-01 — reconnected on the LSI HBA for the copy-back.** Kept
 > physically out during `tank`'s destructive create, `sidepool`'s four disks are
