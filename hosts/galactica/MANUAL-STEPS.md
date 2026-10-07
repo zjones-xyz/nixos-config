@@ -15,8 +15,8 @@ read-only discovery like this):
 
 | What | Confirmed value |
 |---|---|
-| NVMe root | `nvme-SPCC_M.2_PCIe_SSD_AA2300905N401KG00206` |
-| midden (formerly Unraid's `fastservices` pool) | `ata-SATA_SSD_19013024009545` |
+| NVMe root | `nvme-SPCC_M.2_PCIe_SSD_*0206` |
+| midden (formerly Unraid's `fastservices` pool) | `ata-SATA_SSD_*9545` |
 | Onboard NIC driver | `e1000e` |
 
 Both `disko.nix` and `configuration.nix` already have these baked in. Still
@@ -349,11 +349,12 @@ against the source, plus the Unraid flash+config insurance into
    ✅ 2026-09-02 — all seven (8.94 T) staged; `tank/media`/`tank/books` empty.
 2. [x] Retire sidepool *logically*: unmounted + all four LUKS mappers closed
    2026-09-02 — disks are inert (LUKS-closed, nothing references them).
-3. [ ] Pull sidepool's drives during the next in-case session (deliberately
+3. [x] Pull sidepool's drives during the next in-case session (deliberately
    deferred with other case cleanup: the dead MX100 wants pulling too, the
    WD Blue's cable label is stale post-recable, and HARDWARE-MAP §3/§7's
    cage/port enumeration needs eyes-in-the-case anyway). Disks return to
    the drawer after a cooling-off period.
+   ✅ 2026-10-06 — sidepool's four disks and the MX100 pulled.
    > **2026-09-03 — data-safety precondition met; the pull leaves nothing
    > behind.** sidepool was reopened one last time (read-only: `cryptsetup
    > open --readonly` ×4 + `mount -o ro,rescue=nologreplay`) and its `pools/`
@@ -2065,7 +2066,7 @@ migrating a currently-500ing service first just compounds the state to sort out.
 
 ## 21. Replace `h-X4WE` — a failing `tank` member (opened 2026-10-02)
 
-Scrutiny flagged `h-X4WE` (serial `8CJZX4WE`, mapper `array-X4WE`, Unraid's old
+Scrutiny flagged `h-X4WE` (serial `*X4WE`, mapper `array-X4WE`, Unraid's old
 Parity 1) **Failed** on 2026-10-01. Read with `smartctl` on 2026-10-02: **197
 Current_Pending_Sector 184**, **198 Offline_Uncorrectable 46** (Scrutiny showed
 23 the day before), 5 Reallocated 7, 10 Spin_Retry 0, 199 UDMA_CRC 0, helium
@@ -2088,8 +2089,9 @@ means copying the `reacquirable` media onto sidepool's disks *before* anything
 else, per §9's degraded-disk contingency (a `zfs send` target, never a pool
 member).
 
-1. [ ] **Order the replacement.** ≥ 12 TB, CMR, ideally not this batch; no drawer
-   spare qualifies (§9).
+1. [x] **Order the replacement.** ≥ 12 TB, CMR, ideally not this batch; no drawer
+   spare qualifies (§9). ✅ `h-YWAH`, an HPE-branded HC520 (`HARDWARE-MAP.md`),
+   in the case 2026-10-06; used (hours reset, ≈ 255 TB written), same capacity as X4WE.
 2. [ ] **Watch X4WE in Scrutiny every few days** until the new disk is in.
 3. [ ] **Burn the new disk in before it touches `tank`.** On the bare disk,
    destructive: `sudo badblocks -wsv -b 4096 -t 0 /dev/disk/by-id/<new>`
@@ -2097,10 +2099,12 @@ member).
    `sudo smartctl -t long`. 5/197/198 must all still read 0.
 4. [ ] **Find X4WE's bay in cage A by serial.** Cage A's port-to-bay mapping is
    still open (`HARDWARE-MAP.md` §7). Fill that table while doing this.
-5. [ ] **Connect the new disk alongside X4WE, not in place of it.** Any free port
-   works — sidepool is still cabled to the LSI (§9 step 3), so one of its
-   cables is the obvious one — and the disk need not be in a bay yet. Replacing
-   with X4WE still online keeps RAIDZ1's redundancy through the resilver.
+5. [ ] **Swap bays, powered off: YWAH into X4WE's cage-A bay, X4WE onto YWAH's
+   loose LSI lead.** Both stay connected, so `tank` keeps full redundancy; ZFS
+   finds members by mapper name, not port. At the initrd unlock prompt, before
+   the passphrase, `ls /dev/disk/by-id/` must show both `…_*YWAH` and
+   `…_*X4WE`. YWAH missing = cage A's backplane feeds 3.3 V to the
+   power-disable pin: power off, Kapton pins 1–3, retry. Nothing is degraded.
 6. [ ] **LUKS it like the other members** (§9: whole-disk LUKS,
    `luks/arrayKeyFile` in slot 0, the fleet recovery passphrase in slot 1).
    Copy cipher and sector size from an existing member's `cryptsetup luksDump`
@@ -2114,9 +2118,9 @@ member).
 9. [ ] **Follow-up PR: remove `array-X4WE`'s crypttab line and ordering
    entry.** Switch, then cold-boot once to prove `tank` imports with the new
    member.
-10. [ ] **Pull X4WE; move the new disk into its bay.** Same session as §9 step 3
-    (sidepool's pull) if convenient. Update `HARDWARE-MAP.md` §1 with the new
-    row and ID, and print its caddy label (`docs/DISK-LABELLING.md`).
+10. [ ] **Pull X4WE off the loose LSI lead** (the new disk is already in its
+    bay, step 5). Update `HARDWARE-MAP.md` §1 with the new row and ID, and
+    print its caddy label (`docs/DISK-LABELLING.md`).
 11. [ ] **Retire X4WE.** `cryptsetup luksErase` destroys its keyslots, which is
     enough since everything on it is ciphertext. It does not go in the drawer
     as a spare; record it in `docs/DISK-DRAWER.md` as out of service.

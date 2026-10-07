@@ -454,6 +454,9 @@ diagram read from one source rather than drifting. Columns:
 id,form,recording,serial_suffix,serial_full,model,size,location,role,colour,physical_label
 ```
 
+`serial_full` is **masked** in this public repo (`*X4WE`, see `CLAUDE.md`); the
+unmasked value lives in the private `fleet-inventory` repo.
+
 `form` is one of `hdd35`, `hdd25`, `ssd25`, `m2-nvme`, `m2-sata`, `msata`, `ide`, `usb2`, `usb3`, `usb2adap`,
 `usb3adap` — mirroring the prefixes in §1, so internal entries carry a form factor
 and external ones carry an interface generation. `colour` is the optional suffix

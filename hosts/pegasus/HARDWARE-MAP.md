@@ -31,10 +31,10 @@ Dates are UTC.
 
 | ID | Device | Size | Full serial | Role | `sdX` | FS | Enc. |
 |---|---|---|---|---|---|---|---|
-| `m2-0257` | **PNY CS3250 2TB SSD** | 2 TB | `PNY25372509080100257` | **Root** | `nvme0n1` | LUKS → btrfs | **yes** |
-| `h-XDAS` | **Toshiba DT01ACA300** | 3 TB | `76HE4XDAS` | unassigned (parachute role never used — see §1a) | `sdb` | btrfs + exfat, **both empty** | **no** |
-| `s-636E` | **Samsung SSD 860 QVO 1TB** | 1 TB | `S59HNG0N417636E` | **Windows** | `sda` | ntfs (+ESP) | **no** |
-| `h-P2NJ` | **WDC WD10EZEX-08WN4A0** | 1 TB | `WD-WCC6Y5LKP2NJ` | data — "Spinner" | `sdc` | ntfs | **no** |
+| `m2-0257` | **PNY CS3250 2TB SSD** | 2 TB | `*0257` | **Root** | `nvme0n1` | LUKS → btrfs | **yes** |
+| `h-XDAS` | **Toshiba DT01ACA300** | 3 TB | `*XDAS` | unassigned (parachute role never used — see §1a) | `sdb` | btrfs + exfat, **both empty** | **no** |
+| `s-636E` | **Samsung SSD 860 QVO 1TB** | 1 TB | `*636E` | **Windows** | `sda` | ntfs (+ESP) | **no** |
+| `h-P2NJ` | **WDC WD10EZEX-08WN4A0** | 1 TB | `WD-*P2NJ` | data — "Spinner" | `sdc` | ntfs | **no** |
 
 `sdd` is **not a disk** and is deliberately absent from this table — see below.
 
@@ -363,10 +363,10 @@ Bay labels remain blocked on §3, which is a decision rather than a reading.
 
 ```csv
 id,form,recording,serial_suffix,serial_full,model,size,location,role,colour,physical_label
-m2-0257,m2-nvme,,0257,PNY25372509080100257,PNY CS3250 2TB SSD,2TB,m2-slot,root,,no
-h-XDAS,hdd35,cmr,XDAS,76HE4XDAS,TOSHIBA DT01ACA300,3TB,internal,parachute-earmarked,,yes
-s-636E,ssd25,,636E,S59HNG0N417636E,Samsung SSD 860 QVO 1TB,1TB,internal,windows,,yes
-h-P2NJ,hdd35,cmr,P2NJ,WD-WCC6Y5LKP2NJ,WDC WD10EZEX-08WN4A0,1TB,internal,data,,yes
+m2-0257,m2-nvme,,0257,*0257,PNY CS3250 2TB SSD,2TB,m2-slot,root,,no
+h-XDAS,hdd35,cmr,XDAS,*XDAS,TOSHIBA DT01ACA300,3TB,internal,parachute-earmarked,,yes
+s-636E,ssd25,,636E,*636E,Samsung SSD 860 QVO 1TB,1TB,internal,windows,,yes
+h-P2NJ,hdd35,cmr,P2NJ,WD-*P2NJ,WDC WD10EZEX-08WN4A0,1TB,internal,data,,yes
 ```
 
 Both `cmr` values are **model-number lookups, not measurements**
@@ -464,8 +464,8 @@ day):
 
 | Panel | Model | Serial | Size | Active area | PPI | Native mode |
 |---|---|---|---|---|---|---|
-| LG UltraFine Ergo | **32UN880-B** | `111NTEP7X460` | 31.5″ | 697 × 392 mm | **140** | `3840x2160@59.997` (preferred) |
-| Dell | **S2721QS** | `44B9513` | 27″ | 598 × 336 mm | **163** | `3840x2160@59.997` (preferred) |
+| LG UltraFine Ergo | **32UN880-B** | `*X460` | 31.5″ | 697 × 392 mm | **140** | `3840x2160@59.997` (preferred) |
+| Dell | **S2721QS** | `*9513` | 27″ | 598 × 336 mm | **163** | `3840x2160@59.997` (preferred) |
 
 ⚠ **The LG's EDID does not carry its model number.** It reports only
 `LG Electronics LG HDR 4K` — a generic string LG's GoldStar (`GSM`) vendor
