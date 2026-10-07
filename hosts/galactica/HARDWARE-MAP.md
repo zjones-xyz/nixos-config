@@ -205,7 +205,7 @@ has been wiped and handed to NixOS.
 
 | ID | Device | Size | Full serial | Notes |
 |---|---|---|---|---|
-| `h-YWAH` | **HPE MB012000GWDFE** = HGST HUH721212ALE604, firmware `HPG5` | 12 TB | `AAGXYWAH` | X4WE's replacement (`MANUAL-STEPS.md` §21). Cabled on the LSI, burn-in in progress. ⚠ **Needs the power-disable adapter cable** — invisible to the HBA without it. ⚠ HPE firmware exposes no 197/198, so scrub and self-tests are its early warning. Same byte capacity as the HUH721212ALE601s. |
+| `h-YWAH` | **HPE MB012000GWDFE** = HGST HUH721212ALE604, firmware `HPG5` | 12 TB | `AAGXYWAH` | X4WE's replacement (`MANUAL-STEPS.md` §21). Cabled on the LSI, burn-in in progress. ⚠ **Needs the power-disable adapter cable** — invisible to the HBA without it. ⚠ **Used, SMART hours reset:** devstat shows ≈ 255 TB written, 61 power-on resets; 0 reallocated/uncorrectable/CRC. ⚠ HPE firmware has no 197 (pending); 198/199/5 equivalents are in `smartctl -l devstat`. Scrub and self-tests are its early warning. Same byte capacity as the HUH721212ALE601s. |
 | `m2-140B` | **Silicon Power UD90**, M.2 **2230**, NVMe PCIe Gen 4 ×4, on a PCIe adapter | 1 TB | `23049339-090140B` | Intended root, replacing `s-5509`. **No physical label** — no cable to trace, unambiguous by location, and no room on the card. Identifier is for inventory only. |
 
 Read off the drive's own label 2026-08-07 and confirmed by the owner. **2230, not
