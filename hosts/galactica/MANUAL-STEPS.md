@@ -1943,8 +1943,9 @@ means copying the `reacquirable` media onto sidepool's disks *before* anything
 else, per §9's degraded-disk contingency (a `zfs send` target, never a pool
 member).
 
-1. [ ] **Order the replacement.** ≥ 12 TB, CMR, ideally not this batch; no drawer
-   spare qualifies (§9).
+1. [x] **Order the replacement.** ≥ 12 TB, CMR, ideally not this batch; no drawer
+   spare qualifies (§9). ✅ `h-YWAH`, an HPE-branded HC520 (`HARDWARE-MAP.md`),
+   in the case 2026-10-06; 0 power-on hours, same capacity as X4WE.
 2. [ ] **Watch X4WE in Scrutiny every few days** until the new disk is in.
 3. [ ] **Burn the new disk in before it touches `tank`.** On the bare disk,
    destructive: `sudo badblocks -wsv -b 4096 -t 0 /dev/disk/by-id/<new>`
