@@ -25,6 +25,9 @@ stay consistent. This file documents the repo's structure and patterns.
   `hosts/galactica/homepage/*.yaml`. ⚠ `nix flake check --no-build` only
   *evaluates* these; anything that has to actually run needs its own
   `nix build .#checks.…` step in `.github/workflows/nix-check.yml`.
+- **`certs/`** — public certificates more than one host trusts (e.g.
+  `bambuddy-vp-ca.crt`, appended to the slicers' `printer.cer` on pegasus and
+  serenity). Certificates only, never keys.
 - **`docs/<topic>.md`** — fleet-wide documentation that belongs to no single host
   (e.g. `DISK-LABELLING.md`, the physical disk naming and cable-labelling
   convention; `DISK-DRAWER.md`, unassigned spare disks; `BACKUP.md`, which host
