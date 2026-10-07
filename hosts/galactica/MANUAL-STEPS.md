@@ -1953,10 +1953,12 @@ member).
    `sudo smartctl -t long`. 5/197/198 must all still read 0.
 4. [ ] **Find X4WE's bay in cage A by serial.** Cage A's port-to-bay mapping is
    still open (`HARDWARE-MAP.md` §7). Fill that table while doing this.
-5. [ ] **Connect the new disk alongside X4WE, not in place of it.** Any free port
-   works — sidepool is still cabled to the LSI (§9 step 3), so one of its
-   cables is the obvious one — and the disk need not be in a bay yet. Replacing
-   with X4WE still online keeps RAIDZ1's redundancy through the resilver.
+5. [ ] **Swap bays, powered off: YWAH into X4WE's cage-A bay, X4WE onto YWAH's
+   loose LSI lead.** Both stay connected, so `tank` keeps full redundancy; ZFS
+   finds members by mapper name, not port. At the initrd unlock prompt, before
+   the passphrase, `ls /dev/disk/by-id/` must show both `…_AAGXYWAH` and
+   `…_8CJZX4WE`. YWAH missing = cage A's backplane feeds 3.3 V to the
+   power-disable pin: power off, Kapton pins 1–3, retry. Nothing is degraded.
 6. [ ] **LUKS it like the other members** (§9: whole-disk LUKS,
    `luks/arrayKeyFile` in slot 0, the fleet recovery passphrase in slot 1).
    Copy cipher and sector size from an existing member's `cryptsetup luksDump`
@@ -1970,9 +1972,9 @@ member).
 9. [ ] **Follow-up PR: remove `array-X4WE`'s crypttab line and ordering
    entry.** Switch, then cold-boot once to prove `tank` imports with the new
    member.
-10. [ ] **Pull X4WE; move the new disk into its bay.** Same session as §9 step 3
-    (sidepool's pull) if convenient. Update `HARDWARE-MAP.md` §1 with the new
-    row and ID, and print its caddy label (`docs/DISK-LABELLING.md`).
+10. [ ] **Pull X4WE off the loose LSI lead** (the new disk is already in its
+    bay, step 5). Update `HARDWARE-MAP.md` §1 with the new row and ID, and
+    print its caddy label (`docs/DISK-LABELLING.md`).
 11. [ ] **Retire X4WE.** `cryptsetup luksErase` destroys its keyslots, which is
     enough since everything on it is ciphertext. It does not go in the drawer
     as a spare; record it in `docs/DISK-DRAWER.md` as out of service.
