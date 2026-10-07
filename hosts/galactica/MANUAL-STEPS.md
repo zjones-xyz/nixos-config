@@ -1497,9 +1497,15 @@ middleware is the natural fix if that's ever wanted; not built.
 
 ## 17. Power draw — the measurements this box has never taken
 
-`PLATFORM.md` §13 is the analysis: an estimated ~105–155 W at the wall, with the
-reclaimable share concentrated in three places. **Nothing here blocks anything**;
-it is queued work, ordered so each step makes the next one interpretable.
+`PLATFORM.md` §13 is the analysis: an estimated **~90–140 W at the wall** (it was
+~105–155 W before the 2026-10-06 pull), with the reclaimable share now
+concentrated in two places — §13c item 2's unverified BIOS idle configuration and
+item 3's LSI. **Nothing here blocks anything**; it is queued work, ordered so each
+step makes the next one interpretable.
+
+⚠ **Still not one measured watt.** Every figure in §13 is a datasheet estimate,
+including the ~13 W that item 1 has now collected. Step 1 is what changes that,
+and it is free.
 
 ⚠ **Read `PLATFORM.md` §13e before spinning anything down.** smartd and the
 Scrutiny collector both wake sleeping disks, and the ATA standby timer does not
@@ -1525,59 +1531,38 @@ survive a power cycle.
    `PLATFORM.md` §13c item 2. Re-run step 2 afterwards; that is the
    confirmation, not the setup screen. Already added to §5's post-CMOS-clear
    checklist so a battery change does not silently undo it.
-4. [ ] **Interim: park `sidepool`'s four disks.** *Optional* — the durable fix
-   is §9 step 3's physical pull, and this is only worth doing if that session is
-   weeks out. ~13 W. ⭐ **Since 2026-10-02 it is the only way to get these watts
-   for now**: §21 defers the pull until `h-X4WE` is replaced, because its
-   escalation path wants sidepool reachable without a screwdriver. Parking is
-   compatible with that — a parked disk still accepts a `zfs send` after one
-   spin-up — where pulling is not. They have been LUKS-closed and unreferenced since
-   2026-09-02, so this risks nothing, but confirm that before issuing anything:
-   ```sh
-   # Resolve each by serial — they are behind mpt3sas, so the by-id names are
-   # scsi-/wwn- forms, not the ata-* ones the onboard disks get.
-   for s in 76HE4XDAS WD-WXD2D534CY72 WD-WXM2D72D3V35 WD-WXD2D534CJE9; do
-     ls -l /dev/disk/by-id/ | grep -i "$s"
-   done
-   # Confirm inert: no mapper, no mountpoint, no holder
-   lsblk -o NAME,SERIAL,FSTYPE,MOUNTPOINTS
-   ```
-   ⚠ Watch `hdparm -C` and `Start_Stop_Count` over the first day or two: with
-   `-o on` in smartd's monitored string, some drives run the firmware's own
-   offline-collection routine and spin themselves up, which no smartd flag
-   prevents. That is the one failure mode `homelab.smart.standbyAware` cannot
-   cover.
+4. [x] **✅ Interim: park `sidepool`'s four disks — overtaken by the pull, done
+   2026-10-06.** This step existed only for the case where §9 step 3 was weeks
+   out. It was not: all four disks and the written-off MX100 left the case in the
+   same session that brought `h-YWAH` in, so the ~13 W was collected the durable
+   way and there is nothing left to park. ⚠ The `hdparm -S`/`-y` procedure that
+   stood here is deliberately *not* kept for reuse — nothing else in this chassis
+   can be parked without touching a live `tank` member, which `PLATFORM.md` §13d
+   rejects. It also carried four full serials, which the repo's masking
+   convention no longer allows.
 
-   Then, per disk — `-y` (STANDBY), never `-Y` (SLEEP, which needs a bus reset
-   to come back):
-   ```sh
-   hdparm -S 120 /dev/disk/by-id/<path>   # arm the drive's own 10-min timer
-   hdparm -y    /dev/disk/by-id/<path>    # spin down now
-   hdparm -C    /dev/disk/by-id/<path>    # expect: drive state is: standby
-   ```
-   `-S` is the load-bearing half: it is what puts the drive *back* to sleep ten
-   minutes after the Scrutiny collector's midnight sweep wakes it. Without it
-   the disk spins down once and then idles at full RPM until the next reboot.
-   > ⚠ If `hdparm` returns `SG_IO: bad/missing sense data`, the SAT layer on
-   > this HBA is not passing the ATA command through; use `sg_start --stop`
-   > (`sg3_utils`) or `sdparm --command=stop` instead. Those issue SCSI START
-   > STOP UNIT, which mpt3sas translates — but they have no equivalent of
-   > `-S`, so a re-arm would then need a systemd timer, which is more machinery
-   > than disks scheduled for removal deserve. Prefer the pull.
-5. [ ] **At the in-case session, weigh the LSI.** Once `sidepool`'s disks are
-   out the card drives two SSDs and still draws ~9 W. `PLATFORM.md` §13c item 3
+   One thing from it is worth keeping, because it outlives the disks: `hdparm`
+   on this HBA can return `SG_IO: bad/missing sense data`, meaning the SAT layer
+   is not passing ATA through. `sg_start --stop` (`sg3_utils`) or
+   `sdparm --command=stop` issue SCSI START STOP UNIT instead, which mpt3sas
+   translates — but neither has an equivalent of `-S`, so a re-arm would need a
+   systemd timer. `PLATFORM.md` §13e records why that matters generally.
+
+5. [ ] **Weigh the LSI — now the largest item left.** ⭐ The precondition is met:
+   `sidepool`'s disks and the MX100 came out 2026-10-06, so ports 2–7 are empty
+   and the card drives two SSDs while still drawing ~9 W. `PLATFORM.md` §13c item 3
    has the port arithmetic; the short version is that the ASM1166 is a proven
    replacement (§6e: Gen3 x2, no downgrade marker) and the real trade is that it
    needs two BIOS settings held where the LSI needs none — §1's landmine. Not a
    decision to make from the desk.
    ⭐ **Bundle it with §5's coin cell and the BIOS rows.** The battery is the
-   failure that landmine is exposed to, and steps 3–5 here plus §9 step 3 all
-   want the same case-open visit. Doing them together is what makes the
-   controller swap safe rather than a new dependency on an unreplaced 2011 cell.
-   ⚠ **And §21 step 10 now sets when that visit happens**: X4WE's replacement
-   needs the case open anyway, and until it is done sidepool's cables are what
-   step 5 there uses to attach the new disk. Sequence is X4WE first, then
-   sidepool's pull, then weigh the LSI — all in one session.
+   failure that landmine is exposed to, and steps 3 and 5 here want the same
+   case-open visit. Doing them together is what makes the controller swap safe
+   rather than a new dependency on an unreplaced 2011 cell.
+   ⚠ **Not before §21 finishes.** `h-YWAH` is on one of the freed LSI leads for
+   its burn-in and stays there until §21's bay swap, so the card still has a job.
+   Sequence: finish the replacement, then weigh the LSI at the visit that pulls
+   X4WE off the loose lead (§21 step 10).
 6. [ ] **Measure the seed set.** The number that decides §13f, and the cheapest
    of the three. It is the *active seed* total, not just what is in flight:
    ```sh

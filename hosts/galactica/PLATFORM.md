@@ -1740,7 +1740,8 @@ today.
 ### 13b. The estimated idle budget
 
 Idle, DC side, everything as it stands today. Ranges are honest uncertainty, not
-load variation.
+load variation. Still every figure a datasheet estimate: **nothing here has been
+measured**, including the one row that has since been collected.
 
 | Item | Est. idle | Basis |
 |---|---|---|
@@ -1748,18 +1749,18 @@ load variation.
 | Board + C204 + BMC (AST2300) + 82574L | 20–25 W | Platform floor; the BMC alone is ~5 W and is not optional |
 | 4× 8 GB dual-rank DDR3-1333 ECC UDIMM | ~12 W | `dmidecode`: four dual-rank sticks at 1333 MT/s |
 | 4× HGST He12 12 TB (`tank`), idle spinning | ~20 W | 5.0 W idle each |
-| 4× `sidepool` spinners, idle spinning | ~13 W | Toshiba 3 TB ~6 W + 3× WD 4 TB ~2.4 W |
-| 4× SATA SSD + 1× NVMe | ~3 W | Idle, all five |
-| LSI SAS2008 (Fujitsu D2607) | ~9 W | Fixed, independent of how many disks it drives |
+| ~~4× `sidepool` spinners, idle spinning~~ | ~~~13 W~~ | ✅ **Pulled 2026-10-06** — §13c item 1, collected |
+| 4× SATA SSD + 1× NVMe | ~3 W | Idle. The MX100 left with sidepool, so this row's count is now right; it was one device short before |
+| LSI SAS2008 (Fujitsu D2607) | ~9 W | Fixed, independent of how many disks it drives — and it now drives two SSDs (§13c item 3) |
 | ASM1064 + ASM1042 | ~2 W | |
 | Chassis + CPU fans | 5–15 W | Unknown fan count and BMC fan mode (§13c item 4) |
-| **DC subtotal** | **~90–130 W** | |
-| PSU conversion loss | +15–25 W | Assuming ~85 %; the unit is unidentified (`HARDWARE-MAP.md` §7) |
-| **At the wall** | **~105–155 W** | ≈ 920–1,360 kWh/yr |
+| **DC subtotal** | **~77–117 W** | Was ~90–130 W before the pull |
+| PSU conversion loss | +13–21 W | Assuming ~85 %; the unit is unidentified (`HARDWARE-MAP.md` §7) |
+| **At the wall** | **~90–140 W** | ≈ 790–1,230 kWh/yr. Was ~105–155 W ≈ 920–1,360 |
 
 ### 13c. ✅ Worth doing, in order
 
-#### 1. `sidepool`'s four disks are spinning for nothing — ~13 W
+#### 1. ✅ `sidepool`'s four disks were spinning for nothing — ~13 W, BANKED 2026-10-06
 
 `MANUAL-STEPS.md` §9 step 2 closed their LUKS mappers on 2026-09-02, and step 3's
 2026-09-03 note established that nothing on them is still needed. Nothing in the
@@ -1769,9 +1770,15 @@ none, so all four have been idling at full RPM ever since. Their own counters
 agree that this is their normal state: `Start_Stop_Count` is 23–35 on the three
 WDs, i.e. they effectively never stop.
 
-So §9 step 3 — "pull sidepool's drives during the next in-case session" — is not
-only case tidiness. It is **the single largest reclaimable load on the machine**,
-~13 W ≈ 115 kWh/yr, and it is already on the list.
+So §9 step 3 — "pull sidepool's drives during the next in-case session" — was not
+only case tidiness. It was **the single largest reclaimable load on the machine**,
+~13 W ≈ 115 kWh/yr.
+
+✅ **Done 2026-10-06.** All four left the case, along with the written-off MX100,
+in the same session that brought `h-YWAH` in as X4WE's replacement — which is the
+consolidation the struck-through note below was arguing for. LSI ports 2–7 are
+now empty. This is the only item in §13 that has actually been collected; §13b's
+subtotal is updated for it.
 
 ⭐ **Pulling them does not cost the degraded-pool hedge.** §9's "keep sidepool's
 disks as the zero-cost hedge" reasoning wants them available as an emergency
@@ -1779,24 +1786,21 @@ disks as the zero-cost hedge" reasoning wants them available as an emergency
 exactly as well as a drive spinning in the chassis, and arrives with less wear on
 it. The hedge and the watts are not in tension.
 
-⚠ **It is no longer the first thing to do, though.** `h-X4WE`, one of `tank`'s
-four RAIDZ1 members, is failing — 184 pending and 46 offline-uncorrectable
-sectors, while the pool itself still reads ONLINE with zero errors
-(`MANUAL-STEPS.md` §21). §21's escalation path copies the re-acquirable media
-onto sidepool's disks *before anything else*, and its step 5 cables the
-replacement disk through one of sidepool's own cables. Pulling the four now would
-put a case-open session between the hedge and the moment it is wanted. The
-paragraph above still holds — a drawer drive sends just as well — but the ~13 W
-waits for the swap.
+~~⚠ It is no longer the first thing to do, though~~ — written 2026-10-02, when
+§21 had just opened and the pull looked like it should wait behind the
+replacement. It did not have to: both happened in one session, so the argument
+was for a sequence that the event overtook.
 
-⭐ **Which collapses three of this section's items into one visit.** §21 step 10
-pulls sidepool in the same session as X4WE's replacement; item 3's LSI retirement
-and §5's coin cell both want the case open as well. One trip buys the ~13 W, the
-~9 W and a battery that will not silently revert item 2.
+⚠ **One residual, and it is the real cost of having done it.** §21's escalation
+path copies the re-acquirable media onto sidepool's disks *before anything else*.
+Those disks are now in the drawer, so that hedge costs a re-attach where it used
+to cost a command. It remains a sound hedge — a drawer drive is as good a
+`zfs send` target as a spinning one — but if §21 escalates while `tank` is still
+one-tolerant, the screwdriver comes first. `MANUAL-STEPS.md` §21's escalation
+trigger is the thing to watch, not this section.
 
-If the in-case session is weeks out, `MANUAL-STEPS.md` §17 has an interim
-spin-down — but read §13e first, because two things in this host's own config
-will otherwise undo it.
+The interim spin-down `MANUAL-STEPS.md` §17 used to carry is retired with the
+disks; nothing left in the chassis is parkable without touching a live pool.
 
 #### 2. The BIOS's idle configuration is unverified, and it is the biggest unknown — 10–20 W
 
@@ -1833,10 +1837,16 @@ healthy one.
 ⚠ **Add whatever is found to §5's post-CMOS-clear checklist.** A battery change
 wipes it, and it is exactly the kind of setting nobody re-checks.
 
-#### 3. The LSI's slot stops paying for itself once `sidepool` leaves — ~9 W
+#### 3. The LSI's slot has stopped paying for itself — ~9 W, and now the largest item left
 
-§7b put the card in to drive eight spinners at once. After the pull it drives
-two: the BX500 pair in `tank`'s special vdev. A SAS2008 draws ~9–11 W whether it
+⭐ **The precondition is met as of 2026-10-06**: with sidepool and the MX100 out,
+LSI ports 2–7 are empty. With item 1 collected this is the biggest single
+reclaimable load remaining, behind only item 2's unmeasured BIOS spread.
+
+§7b put the card in to drive eight spinners at once. It now drives
+two: the BX500 pair in `tank`'s special vdev. ⚠ Three, briefly — `h-YWAH` is on
+one of the freed leads for its §21 burn-in, and §21's revised step 5 keeps it
+there until the bay swap. Nothing to act on before the replacement completes. A SAS2008 draws ~9–11 W whether it
 is feeding eight disks or two — the largest *fixed* load on the machine after
 the CPU and the array.
 
@@ -2005,6 +2015,13 @@ hour and then quietly stops:
    > directive costs in spin-ups, it is what noticed a member wearing out before
    > ZFS did. It is also why `-n standby`'s missing `,N` is tolerable only on
    > disks awaiting removal, and never on a live pool member.
+   > ⚠ **The replacement will not report the same way.** `h-YWAH`'s HPE firmware
+   > omits SMART 197 and 198 altogether. devstat (GP log 0x04) carries
+   > equivalents for 198, 199 and 5 — but **197, the pending-sector count that
+   > flagged X4WE first, has no devstat equivalent at all**. Once YWAH joins
+   > `tank`, the attribute that gave this pool its earliest warning is simply
+   > absent on one of its four members, and scheduled self-tests are what is
+   > left in its place.
 2. **The Scrutiny collector, daily at 01:00.** It runs privileged with every
    block device visible and sweeps them all, with no standby awareness and no
    per-device exclusion. One guaranteed spin-up per disk per day. The wear is
@@ -2066,8 +2083,11 @@ hour and then quietly stops:
    that can be moved.
 
 ⚠ **The ATA standby timer is volatile.** `hdparm -S` does not survive a power
-cycle or a controller reset. That is the second reason the durable answer for
-`sidepool` is a screwdriver rather than a systemd unit.
+cycle or a controller reset. That was the second reason the durable answer for
+`sidepool` was a screwdriver rather than a systemd unit — which is how it was
+settled on 2026-10-06. The point survives the example: any spin-down armed this
+way has to be re-armed after every reset, which is why §13f is about moving a
+workload rather than about a timer.
 
 ### 13f. A separate seed tier — the one change that could let `tank` sleep
 
