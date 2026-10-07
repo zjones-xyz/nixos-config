@@ -159,6 +159,22 @@
         declarations = builtins.filter (nixpkgs.lib.hasPrefix "HOMEPAGE_VAR_") lines;
       in
       map (line: builtins.head (nixpkgs.lib.splitString "=" line)) declarations;
+
+    # ── Bambuddy's virtual-printer CA in the slicers' printer.cer ──
+    # Bambu Studio/OrcaSlicer trust printers only via their bundled
+    # cert/printer.cer, and SLIC3R_FHS bakes its path into the binary, so the CA
+    # is appended in the package itself. serenity's casks:
+    # modules/darwin/slicer-certs.nix.
+    bambuddyCa = ./certs/bambuddy-vp-ca.crt;
+    withBambuddyCa = appDir: pkg:
+      pkg.overrideAttrs (old: {
+        postInstall = (old.postInstall or "") + ''
+          cer=$out/share/${appDir}/cert/printer.cer
+          test -f "$cer"
+          [ -z "$(tail -c1 "$cer")" ] || echo >> "$cer"
+          cat ${bambuddyCa} >> "$cer"
+        '';
+      });
   in
   {
     formatter = {
@@ -250,21 +266,22 @@
                   hash = "sha256-EAmqAX4XKllVk1bN8sNBRcetUhIA0huoIu4jVNMlb0k=";
                 };
               });
-              orcaSlicerNewer = nixpkgs-orca-slicer.legacyPackages.x86_64-linux.orca-slicer;
+              orcaSlicerNewer = withBambuddyCa "OrcaSlicer" nixpkgs-orca-slicer.legacyPackages.x86_64-linux.orca-slicer;
               ferdiumNewer = nixpkgs-ferdium.legacyPackages.x86_64-linux.ferdium;
               # bambu-studio is unfree (agpl3Plus + unfree, marked as of the
               # pinned commit) — legacyPackages defaults to allowUnfree =
               # false, unlike the main `nixpkgs` above (set globally via
               # modules/nixos/common.nix), so this needs its own pkgs import
               # rather than plain legacyPackages.
-              bambuStudioNewer =
+              bambuStudioNewer = withBambuddyCa "BambuStudio" (
                 (import nixpkgs-bambu-studio {
                   system = "x86_64-linux";
                   config.allowUnfree = true;
                 }).bambu-studio.override
                   {
                     withNvidiaGLWorkaround = true;
-                  };
+                  }
+              );
             };
             # Niri's own auto-generated ~/.config/niri/config.kdl (a plain,
             # not-home-manager-owned file, hand-edited in place during Niri
