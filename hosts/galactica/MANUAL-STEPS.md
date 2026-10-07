@@ -15,8 +15,8 @@ read-only discovery like this):
 
 | What | Confirmed value |
 |---|---|
-| NVMe root | `nvme-SPCC_M.2_PCIe_SSD_AA2300905N401KG00206` |
-| midden (formerly Unraid's `fastservices` pool) | `ata-SATA_SSD_19013024009545` |
+| NVMe root | `nvme-SPCC_M.2_PCIe_SSD_*0206` |
+| midden (formerly Unraid's `fastservices` pool) | `ata-SATA_SSD_*9545` |
 | Onboard NIC driver | `e1000e` |
 
 Both `disko.nix` and `configuration.nix` already have these baked in. Still
@@ -1920,7 +1920,7 @@ migrating a currently-500ing service first just compounds the state to sort out.
 
 ## 21. Replace `h-X4WE` — a failing `tank` member (opened 2026-10-02)
 
-Scrutiny flagged `h-X4WE` (serial `8CJZX4WE`, mapper `array-X4WE`, Unraid's old
+Scrutiny flagged `h-X4WE` (serial `*X4WE`, mapper `array-X4WE`, Unraid's old
 Parity 1) **Failed** on 2026-10-01. Read with `smartctl` on 2026-10-02: **197
 Current_Pending_Sector 184**, **198 Offline_Uncorrectable 46** (Scrutiny showed
 23 the day before), 5 Reallocated 7, 10 Spin_Retry 0, 199 UDMA_CRC 0, helium
@@ -1956,8 +1956,8 @@ member).
 5. [ ] **Swap bays, powered off: YWAH into X4WE's cage-A bay, X4WE onto YWAH's
    loose LSI lead.** Both stay connected, so `tank` keeps full redundancy; ZFS
    finds members by mapper name, not port. At the initrd unlock prompt, before
-   the passphrase, `ls /dev/disk/by-id/` must show both `…_AAGXYWAH` and
-   `…_8CJZX4WE`. YWAH missing = cage A's backplane feeds 3.3 V to the
+   the passphrase, `ls /dev/disk/by-id/` must show both `…_*YWAH` and
+   `…_*X4WE`. YWAH missing = cage A's backplane feeds 3.3 V to the
    power-disable pin: power off, Kapton pins 1–3, retry. Nothing is degraded.
 6. [ ] **LUKS it like the other members** (§9: whole-disk LUKS,
    `luks/arrayKeyFile` in slot 0, the fleet recovery passphrase in slot 1).

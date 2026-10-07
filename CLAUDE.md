@@ -46,6 +46,18 @@ stay consistent. This file documents the repo's structure and patterns.
   the story of finding it.
 - Each host sets `system.stateVersion`; don't bump it casually.
 
+## Serial numbers
+
+- **This repo is public, so serials are masked:** `*` plus the last four
+  characters (`*X4WE`), more only where four collide. Full serials, purchase,
+  warranty and RMA records live in the private `zjones-xyz/fleet-inventory`,
+  keyed by the same fleet IDs.
+- The `*` doubles as a shell glob, so documented commands still run:
+  `/dev/disk/by-id/ata-*_*X4WE`.
+- Exception: a `.nix` file that must match a device (disko `by-id` paths,
+  niri output serials) keeps the full string. Prefer a UUID where one exists.
+- WWNs, MACs and LUKS UUIDs are not masked.
+
 ## Secrets (sops-nix)
 
 - The host's SSH ed25519 key is its age identity

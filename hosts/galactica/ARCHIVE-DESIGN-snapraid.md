@@ -637,7 +637,7 @@ Two things to verify on the machine before committing `[unverified]`:
   from a bare Linux live environment, no Unraid involved — `btrfs filesystem
   show` reported all members present, nothing missing. That's a harder case
   than the main array's two *single-disk* data disks, which were identified
-  by serial (`8CG7T97E` = Disk 1, `8DJPNS3Y` = Disk 2) but not yet
+  by serial (`*T97E` = Disk 1, `*NS3Y` = Disk 2) but not yet
   mount-tested themselves — a quick follow-up, not a real unknown anymore.
 
 ### 6.2 Recommended sequence

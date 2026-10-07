@@ -26,16 +26,16 @@ temperatures 30–39 °C.
 
 | ID | Device | Size | Full serial | Role | `sdX` | FS | Used / free | Enc. |
 |---|---|---|---|---|---|---|---|---|
-| `h-X4WE` | HGST HUH721212ALE601 | 12 TB | `8CJZX4WE` | **Parity** | `sde` | — | — | n/a |
-| `h-HJDH` | HGST HUH721212ALE601 | 12 TB | `8DKUHJDH` | **Parity 2** | `sdd` | — | — | n/a |
-| `h-T97E` | HGST HUH721212ALE601 | 12 TB | `8CG7T97E` | **Disk 1** (data) | `sdf` | btrfs | 9.05 TB / 2.95 TB | **yes** |
-| `h-NS3Y` | HGST HUH721212ALE601 | 12 TB | `8DJPNS3Y` | **Disk 2** (data) | `sdg` | btrfs | 8.06 TB / 3.94 TB | **yes** |
-| `s-3255` | WD Blue SA510 | 500 GB | `244964803255` | **Cache** pool | `sdb` | btrfs | 9.31 GB / 487 GB | **yes** |
-| `s-9545` | SATA SSD (generic) | 240 GB | `19013024009545` | **Fastservices** pool | `sdc` | btrfs | 38.5 GB / 199 GB | **yes** |
-| `s-768C` | Crucial BX500 | 480 GB | `2422E8B6768C` | **Services** pool, dev 1 | `sdh` | btrfs | 240 GB / 239 GB | **yes** |
-| `s-8162` | Crucial BX500 | 480 GB | `2506E9A58162` | **Services** pool, dev 2 | `sdi` | *(same pool)* | *(same pool)* | **yes** |
-| `s-3100` | Crucial MX100 | 512 GB | `15090EE23100` | ⚠ **unassigned** | `sdj` | **ntfs** | not mounted | **no** |
-| `s-5509` | Kingston SH103S3120G | 120 GB | `50026B7239015509` | ⚠ **Boot pool slot** — see below | `sdk` | unmountable | — | **no** |
+| `h-X4WE` | HGST HUH721212ALE601 | 12 TB | `*X4WE` | **Parity** | `sde` | — | — | n/a |
+| `h-HJDH` | HGST HUH721212ALE601 | 12 TB | `*HJDH` | **Parity 2** | `sdd` | — | — | n/a |
+| `h-T97E` | HGST HUH721212ALE601 | 12 TB | `*T97E` | **Disk 1** (data) | `sdf` | btrfs | 9.05 TB / 2.95 TB | **yes** |
+| `h-NS3Y` | HGST HUH721212ALE601 | 12 TB | `*NS3Y` | **Disk 2** (data) | `sdg` | btrfs | 8.06 TB / 3.94 TB | **yes** |
+| `s-3255` | WD Blue SA510 | 500 GB | `*3255` | **Cache** pool | `sdb` | btrfs | 9.31 GB / 487 GB | **yes** |
+| `s-9545` | SATA SSD (generic) | 240 GB | `*9545` | **Fastservices** pool | `sdc` | btrfs | 38.5 GB / 199 GB | **yes** |
+| `s-768C` | Crucial BX500 | 480 GB | `*768C` | **Services** pool, dev 1 | `sdh` | btrfs | 240 GB / 239 GB | **yes** |
+| `s-8162` | Crucial BX500 | 480 GB | `*8162` | **Services** pool, dev 2 | `sdi` | *(same pool)* | *(same pool)* | **yes** |
+| `s-3100` | Crucial MX100 | 512 GB | `*3100` | ⚠ **unassigned** | `sdj` | **ntfs** | not mounted | **no** |
+| `s-5509` | Kingston SH103S3120G | 120 GB | `*5509` | ⚠ **Boot pool slot** — see below | `sdk` | unmountable | — | **no** |
 
 **Array total: 24 TB, 17.1 TB used, 6.88 TB free.** That is the number the
 migration plan turns on — see `DESIGN.md` §6, where it closes an assumption.
@@ -75,16 +75,16 @@ serial-derived and stable.
 
 | ID | Model | Serial | `by-id` (stable) | Build-boot `sdX` | Role (built) |
 |---|---|---|---|---|---|
-| `h-HJDH` | HGST HUH721212ALE601 12 TB | `8DKUHJDH` | `ata-HUH721212ALE601_8DKUHJDH` | `sdc` | `tank` RAIDZ1 member |
-| `h-NS3Y` | HGST HUH721212ALE601 12 TB | `8DJPNS3Y` | `ata-HUH721212ALE601_8DJPNS3Y` | `sde` | `tank` RAIDZ1 member |
-| `h-X4WE` | HGST HUH721212ALE601 12 TB | `8CJZX4WE` | `ata-HUH721212ALE601_8CJZX4WE` | `sdg` | `tank` RAIDZ1 member — ⚠ **failing, replacement pending** (below) |
-| `h-T97E` | HGST HUH721212ALE601 12 TB | `8CG7T97E` | `ata-HUH721212ALE601_8CG7T97E` | `sdi` | `tank` RAIDZ1 member |
-| `s-768C` | Crucial BX500 480 GB | `2422E8B6768C` | `ata-CT480BX500SSD1_2422E8B6768C` | `sdb` | `tank` special-vdev mirror member (on LSI) |
-| `s-8162` | Crucial BX500 480 GB | `2506E9A58162` | `ata-CT480BX500SSD1_2506E9A58162` | `sdf` | `tank` special-vdev mirror member (on LSI) |
-| `s-3255` | WD Blue SA510 500 GB | `244964803255` | `ata-WD_Blue_SA510_2.5_500GB_244964803255` | `sda` | `tank` special-vdev mirror member **+ `/boot` ESP** (recabled to onboard `ata1`) |
-| `s-3100` | Crucial MX100 512 GB | `15090EE23100` | `ata-Crucial_CT512MX100SSD1_15090EE23100` | `sdd` | ✖ **written off 2026-10-06** — failed on first write; pulled 2026-10-06 |
-| `s-9545` | SATA SSD (generic) 224 GB | `19013024009545` | `ata-SATA_SSD_19013024009545` | `sdh` | **midden** — `/var/log/journal` + nix build scratch (no longer `/boot`) |
-| — | SPCC M.2 PCIe SSD 932 GB | `AA2300905N401KG00206` | `nvme-SPCC_M.2_PCIe_SSD_AA2300905N401KG00206` | `nvme0n1` | LUKS root (`cryptroot`) + swap + vestigial ESP |
+| `h-HJDH` | HGST HUH721212ALE601 12 TB | `*HJDH` | `ata-HUH721212ALE601_*HJDH` | `sdc` | `tank` RAIDZ1 member |
+| `h-NS3Y` | HGST HUH721212ALE601 12 TB | `*NS3Y` | `ata-HUH721212ALE601_*NS3Y` | `sde` | `tank` RAIDZ1 member |
+| `h-X4WE` | HGST HUH721212ALE601 12 TB | `*X4WE` | `ata-HUH721212ALE601_*X4WE` | `sdg` | `tank` RAIDZ1 member — ⚠ **failing, replacement pending** (below) |
+| `h-T97E` | HGST HUH721212ALE601 12 TB | `*T97E` | `ata-HUH721212ALE601_*T97E` | `sdi` | `tank` RAIDZ1 member |
+| `s-768C` | Crucial BX500 480 GB | `*768C` | `ata-CT480BX500SSD1_*768C` | `sdb` | `tank` special-vdev mirror member (on LSI) |
+| `s-8162` | Crucial BX500 480 GB | `*8162` | `ata-CT480BX500SSD1_*8162` | `sdf` | `tank` special-vdev mirror member (on LSI) |
+| `s-3255` | WD Blue SA510 500 GB | `*3255` | `ata-WD_Blue_SA510_2.5_500GB_*3255` | `sda` | `tank` special-vdev mirror member **+ `/boot` ESP** (recabled to onboard `ata1`) |
+| `s-3100` | Crucial MX100 512 GB | `*3100` | `ata-Crucial_CT512MX100SSD1_*3100` | `sdd` | ✖ **written off 2026-10-06** — failed on first write; pulled 2026-10-06 |
+| `s-9545` | SATA SSD (generic) 224 GB | `*9545` | `ata-SATA_SSD_*9545` | `sdh` | **midden** — `/var/log/journal` + nix build scratch (no longer `/boot`) |
+| — | SPCC M.2 PCIe SSD 932 GB | `*0206` | `nvme-SPCC_M.2_PCIe_SSD_*0206` | `nvme0n1` | LUKS root (`cryptroot`) + swap + vestigial ESP |
 
 Notes on the built pool:
 - **`tank` ≈ 31.6 TiB usable.** `ashift=12` (forced — these are 512e drives with
@@ -138,10 +138,10 @@ as Unraid's staging area for the migration.
 
 | Serial | Size | Model | LUKS |
 |---|---|---|---|
-| `76HE4XDAS` | 2.7 TB | TOSHIBA DT01ACA300 | yes |
-| `WD-WXD2D534CY72` | 3.6 TB | WDC WD40EFAX-68JH4N1 | yes |
-| `WD-WXM2D72D3V35` | 3.6 TB | WDC WD40EFPX-68C6CN0 | yes |
-| `WD-WXD2D534CJE9` | 3.6 TB | WDC WD40EFAX-68JH4N1 | yes |
+| `*XDAS` | 2.7 TB | TOSHIBA DT01ACA300 | yes |
+| `WD-*CY72` | 3.6 TB | WDC WD40EFAX-68JH4N1 | yes |
+| `WD-*3V35` | 3.6 TB | WDC WD40EFPX-68C6CN0 | yes |
+| `WD-*CJE9` | 3.6 TB | WDC WD40EFAX-68JH4N1 | yes |
 
 **One btrfs filesystem spanning all four** (`blkid` shows a shared `UUID` plus
 a per-device `UUID_SUB` — btrfs's own multi-device signature), ~13.5 TB raw,
@@ -205,8 +205,8 @@ has been wiped and handed to NixOS.
 
 | ID | Device | Size | Full serial | Notes |
 |---|---|---|---|---|
-| `h-YWAH` | **HPE MB012000GWDFE** = HGST HUH721212ALE604, firmware `HPG5` | 12 TB | `AAGXYWAH` | X4WE's replacement (`MANUAL-STEPS.md` §21). Cabled on the LSI, burn-in in progress. ⚠ **Needs the power-disable adapter cable** — invisible to the HBA without it. ⚠ **Used, SMART hours reset:** devstat shows ≈ 255 TB written, 61 power-on resets; 0 reallocated/uncorrectable/CRC. ⚠ HPE firmware has no 197 (pending); 198/199/5 equivalents are in `smartctl -l devstat`. Scrub and self-tests are its early warning. Same byte capacity as the HUH721212ALE601s. |
-| `m2-140B` | **Silicon Power UD90**, M.2 **2230**, NVMe PCIe Gen 4 ×4, on a PCIe adapter | 1 TB | `23049339-090140B` | Intended root, replacing `s-5509`. **No physical label** — no cable to trace, unambiguous by location, and no room on the card. Identifier is for inventory only. |
+| `h-YWAH` | **HPE MB012000GWDFE** = HGST HUH721212ALE604, firmware `HPG5` | 12 TB | `*YWAH` | X4WE's replacement (`MANUAL-STEPS.md` §21). Cabled on the LSI, burn-in in progress. ⚠ **Needs the power-disable adapter cable** — invisible to the HBA without it. ⚠ **Used, SMART hours reset:** devstat shows ≈ 255 TB written, 61 power-on resets; 0 reallocated/uncorrectable/CRC. ⚠ HPE firmware has no 197 (pending); 198/199/5 equivalents are in `smartctl -l devstat`. Scrub and self-tests are its early warning. Same byte capacity as the HUH721212ALE601s. |
+| `m2-140B` | **Silicon Power UD90**, M.2 **2230**, NVMe PCIe Gen 4 ×4, on a PCIe adapter | 1 TB | `*140B` | Intended root, replacing `s-5509`. **No physical label** — no cable to trace, unambiguous by location, and no room on the card. Identifier is for inventory only. |
 
 Read off the drive's own label 2026-08-07 and confirmed by the owner. **2230, not
 2242** as an earlier revision recorded.
@@ -292,8 +292,8 @@ Worth stating because it decides where documentation comes from.
 |---|---|
 | System manufacturer | **Seneca** (Seneca Data, a US integrator) |
 | System product | **`pro499926`** |
-| System serial | `1212363` |
-| Baseboard | Supermicro **X9SCL/X9SCM**, version `1.11A`, serial `ZM148S009088` |
+| System serial | `*2363` |
+| Baseboard | Supermicro **X9SCL/X9SCM**, version `1.11A`, serial `*9088` |
 | Chassis, **actual** | **Chenbro `SR20969`** — SR209-series ATX tower. Suffix read as `-01`, ⚠ last character uncertain |
 | Originally sold as | A **Windows Storage Server 2012 Workgroup** appliance |
 
@@ -592,17 +592,17 @@ The other cages need enumerating before their cables can be labelled at all.
 
 ```csv
 id,form,recording,serial_suffix,serial_full,model,size,location,role,colour,physical_label
-h-HJDH,hdd35,cmr,HJDH,8DKUHJDH,HUH721212ALE601,12TB,cage-A,array,,yes
-h-X4WE,hdd35,cmr,X4WE,8CJZX4WE,HUH721212ALE601,12TB,cage-A,array,,yes
-h-T97E,hdd35,cmr,T97E,8CG7T97E,HUH721212ALE601,12TB,cage-A,array,,yes
-h-NS3Y,hdd35,cmr,NS3Y,8DJPNS3Y,HUH721212ALE601,12TB,cage-A,array,,yes
-s-3255,ssd25,,3255,244964803255,WD Blue SA510,500GB,internal,cache,,yes
-s-9545,ssd25,,9545,19013024009545,SATA SSD,223.6GB,internal,fastservices,,yes
-s-768C,ssd25,,768C,2422E8B6768C,Crucial BX500,480GB,internal,pool,,yes
-s-8162,ssd25,,8162,2506E9A58162,Crucial BX500,480GB,internal,pool,,yes
-s-3100,ssd25,,3100,15090EE23100,Crucial MX100,512GB,internal,unassigned,,yes
-s-5509,ssd25,,5509,50026B7239015509,Kingston SH103S3120G,120GB,internal,retiring,,no
-m2-140B,m2-nvme,,140B,23049339-090140B,Silicon Power UD90 2230,1TB,pcie-adapter,root,,no
+h-HJDH,hdd35,cmr,HJDH,*HJDH,HUH721212ALE601,12TB,cage-A,array,,yes
+h-X4WE,hdd35,cmr,X4WE,*X4WE,HUH721212ALE601,12TB,cage-A,array,,yes
+h-T97E,hdd35,cmr,T97E,*T97E,HUH721212ALE601,12TB,cage-A,array,,yes
+h-NS3Y,hdd35,cmr,NS3Y,*NS3Y,HUH721212ALE601,12TB,cage-A,array,,yes
+s-3255,ssd25,,3255,*3255,WD Blue SA510,500GB,internal,cache,,yes
+s-9545,ssd25,,9545,*9545,SATA SSD,223.6GB,internal,fastservices,,yes
+s-768C,ssd25,,768C,*768C,Crucial BX500,480GB,internal,pool,,yes
+s-8162,ssd25,,8162,*8162,Crucial BX500,480GB,internal,pool,,yes
+s-3100,ssd25,,3100,*3100,Crucial MX100,512GB,internal,unassigned,,yes
+s-5509,ssd25,,5509,*5509,Kingston SH103S3120G,120GB,internal,retiring,,no
+m2-140B,m2-nvme,,140B,*140B,Silicon Power UD90 2230,1TB,pcie-adapter,root,,no
 ```
 
 **All four 12 TB disks are CMR** — the HGST Ultrastar He12 line is conventional
