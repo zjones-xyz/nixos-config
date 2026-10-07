@@ -85,7 +85,14 @@
     openscad
     obsidian
     spotify
-    ticktick
+    # Ahead of nixpkgs (8.0.11 on master) — drop once it catches up.
+    (ticktick.overrideAttrs (finalAttrs: old: {
+      version = "8.0.20";
+      src = fetchurl {
+        url = "https://d2atcrkye2ik4e.cloudfront.net/download/linux/linux_deb_x64/ticktick-${finalAttrs.version}-amd64.deb";
+        hash = "sha256-+XDYvG0qR9P2S68Rd+z3RhLD/jvGB3a7nDyvj2awNGc=";
+      };
+    }))
     prusa-slicer
     jellyfin-desktop
     vlc
