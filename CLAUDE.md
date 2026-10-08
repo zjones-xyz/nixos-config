@@ -60,7 +60,9 @@ stay consistent. This file documents the repo's structure and patterns.
 - **New equipment → prompt for its records.** When the user mentions buying or
   receiving hardware, remind them to log it in `fleet-inventory`: invoice
   (`raw/invoices/`), full serial, seller, order #, warranty card and terms, and
-  label photo. Offer a `send_later` reminder if they can't do it then.
+  label photo. Secondhand gear often has no receipt or warranty: log the serial,
+  source, date and price paid, and "none" for warranty rather than leaving it
+  blank. Offer a `send_later` reminder if they can't do it then.
 
 ## Secrets (sops-nix)
 
