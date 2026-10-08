@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 
 let
   # ── Monitor identities ──────────────────────────────────────────────────
@@ -10,6 +10,32 @@ let
   monLeft = "Dell Inc. DELL S2722QC 1NC1J24";
   monCentre = "LG Electronics LG HDR 4K 111NTEP7X460";
   monRight = "Dell Inc. DELL S2721QS 44B9513";
+
+  niri = "${config.programs.niri.package}/bin/niri";
+
+  # Runs inside the minimal session only. DMS's display-profile auto-select
+  # re-applies its saved three-panel layout live, so the side panels are
+  # switched back off whenever they reappear. DND is timed and renewed
+  # rather than indefinite: a crash can't leave the daily session silenced.
+  minimalGuard = pkgs.writeShellScript "niri-minimal-guard" ''
+    renew=0
+    while ${niri} msg version >/dev/null 2>&1; do
+      ${niri} msg --json outputs \
+        | ${pkgs.jq}/bin/jq -r '.[] | select(.logical != null) | "\(.make) \(.model) \(.serial)"' \
+        | while read -r o; do
+            case "$o" in
+              ${lib.escapeShellArg monLeft} | ${lib.escapeShellArg monRight}) ${niri} msg output "$o" off ;;
+            esac
+          done
+      if [ "$renew" -le 0 ]; then
+        case "$(dms ipc notifications enableDoNotDisturbFor 15 2>/dev/null)" in
+          *SUCCESS*) renew=300 ;;
+        esac
+      fi
+      renew=$((renew - 1))
+      sleep 2
+    done
+  '';
 in
 {
   # ── Declarative niri config (niri-flake's homeModules.config) ──────────────
@@ -24,6 +50,35 @@ in
   # Validates against the installed nixpkgs niri, not niri-flake's build.
   # Sibling of `settings` below, not nested under it.
   programs.niri.package = pkgs.niri;
+
+  # ── "Niri (Minimal Single Screen)" session config ──────────────────────
+  # The full config plus overrides, read via NIRI_CONFIG by that session
+  # (modules/nixos/desktop-niri.nix). niri uses the *first* `output` block
+  # matching a panel, so the `off` blocks must precede the main config's.
+  # The opacity rule also hides critical notifications, which bypass DND.
+  xdg.configFile."niri/minimal.kdl".source = pkgs.runCommand "niri-minimal.kdl"
+    {
+      config = ''
+        output "${monLeft}" {
+            off
+        }
+        output "${monRight}" {
+            off
+        }
+        ${config.programs.niri.finalConfig}
+        spawn-at-startup "${minimalGuard}"
+        layer-rule {
+            match namespace="^dms:notification-popup$"
+            opacity 0.0
+        }
+      '';
+      passAsFile = [ "config" ];
+      nativeBuildInputs = [ config.programs.niri.package ];
+    }
+    ''
+      niri validate -c $configPath
+      cp $configPath $out
+    '';
 
   programs.niri.settings = {
     # ── Session environment ────────────────────────────────────────────────

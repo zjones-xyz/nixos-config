@@ -1,5 +1,27 @@
 { config, pkgs, lib, self, ... }:
 
+let
+  # niri-session imports NIRI_CONFIG into the systemd --user manager, which
+  # outlives the session: take it back out, or the next plain "Niri" login
+  # comes up single-screen too.
+  niriMinimalStart = pkgs.writeShellScript "niri-minimal-session" ''
+    trap '${pkgs.systemd}/bin/systemctl --user unset-environment NIRI_CONFIG' EXIT
+    trap 'exit 143' HUP INT TERM
+    export NIRI_CONFIG="$HOME/.config/niri/minimal.kdl"
+    ${config.programs.niri.package}/bin/niri-session "$@"
+  '';
+
+  niriMinimalSessionFile = (pkgs.writeTextDir "share/wayland-sessions/niri-minimal.desktop" ''
+    [Desktop Entry]
+    Type=Application
+    Name=Niri (Minimal Single Screen)
+    Comment=Niri + DMS on the centre panel only, notifications silenced
+    Exec=${niriMinimalStart}
+    DesktopNames=niri
+  '').overrideAttrs (old: {
+    passthru = (old.passthru or { }) // { providedSessions = [ "niri-minimal" ]; };
+  });
+in
 {
   # ── Niri, as a fourth selectable SDDM session ───────────────────────────────
   # Scrollable-tiling Wayland compositor, evaluated alongside Plasma/COSMIC/
@@ -81,6 +103,11 @@
     # glue, matugen, cava, khal) — left at upstream defaults rather than
     # trimmed, nothing here conflicts with anything else on this host.
   };
+
+  # ── "Niri (Minimal Single Screen)" — for proctored tests ────────────────────
+  # Same niri + DMS, run against ~/.config/niri/minimal.kdl (rendered in
+  # hosts/pegasus/niri-settings.nix): side panels off, DND held on.
+  services.displayManager.sessionPackages = [ niriMinimalSessionFile ];
 
   # The niri config itself is declared in hosts/pegasus/niri-settings.nix via
   # niri-flake's homeModules.config — deliberately ONLY that module, never its
