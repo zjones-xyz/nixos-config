@@ -420,6 +420,7 @@
       "array-NS3Y"
       "array-X4WE"
       "array-T97E"
+      "array-YWAH"
       "special-3255"
       "special-768C"
       "special-8162"
@@ -460,6 +461,10 @@
         config.sops.secrets."luks/arrayKeyFile".path
       } luks,nofail
       array-T97E   UUID=dbf28412-07e7-4b61-8afa-33c38bd6d1f6 ${
+        config.sops.secrets."luks/arrayKeyFile".path
+      } luks,nofail
+      # X4WE's replacement (MANUAL-STEPS.md §21). UUID set at luksFormat --uuid.
+      array-YWAH   UUID=8688b77c-28d9-49a1-a1c5-75210cdc2d7f ${
         config.sops.secrets."luks/arrayKeyFile".path
       } luks,nofail
       special-3255 UUID=016d6496-2bc1-456d-bdcc-21ca45436d5e ${
