@@ -595,6 +595,10 @@
 
   # smartd across the twelve-plus real disks; smart.nix ships the package.
   homelab.smart.monitor = true;
+  # Weekly short (Sun 03:00), monthly long (15th 03:00). The 15th keeps the
+  # ~20 h spinner long test clear of the scrub, which starts on the 1st and
+  # runs ~12 h. No stagger: the index counts every disk, SSDs included.
+  homelab.smart.selfTests = "(S/../../7/03|L/../15/./03)";
 
   # Flipped after staging issuance was proven (which is what the flag is
   # for). Separate cert storage per CA, so this is freely reversible.
