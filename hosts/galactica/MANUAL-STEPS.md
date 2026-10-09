@@ -1975,6 +1975,9 @@ member).
 10. [ ] **Pull X4WE off the loose LSI lead** (the new disk is already in its
     bay, step 5). Update `HARDWARE-MAP.md` §1 with the new row and ID, and
     print its caddy label (`docs/DISK-LABELLING.md`).
-11. [ ] **Retire X4WE.** `cryptsetup luksErase` destroys its keyslots, which is
-    enough since everything on it is ciphertext. It does not go in the drawer
-    as a spare; record it in `docs/DISK-DRAWER.md` as out of service.
+11. [ ] **RMA X4WE to the seller.** Warranty claim approved 2026-10-09; RMA
+    number, address and terms are in `fleet-inventory`. Only after step 8's
+    resilver: `cryptsetup luksErase` (destroys the keyslots, which is enough
+    since everything on it is ciphertext), photograph the drive and its pins,
+    pack it padded in an anti-static bag, keep the tracking number. It does not
+    go in the drawer; whatever comes back is a new disk with its own ID.
