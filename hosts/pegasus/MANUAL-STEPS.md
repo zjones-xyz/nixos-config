@@ -650,6 +650,25 @@ own Xwayland and takes satellite out of the loop; `gaming.nix` already
 installs it. Interim workaround: keep a freshly launched game focused for
 its first minute or two.
 
+**gamescope is not usable here as of 2026-10-08** — tried against ACE COMBAT
+8 and it never reached a window. Launched from Steam's environment,
+gamescope 3.16.23 aborts during backend setup (`CSDLBackend::~CSDLBackend` ←
+`IBackend::Set` ← `main`, "terminate called without an active exception").
+From a clean shell both backends *do* initialise, but each dumps core on
+teardown once the child exits: SIGABRT under `--backend sdl`, SIGSEGV under
+`--backend wayland`. A compositor that crashes while tearing its outputs down
+is the same event that takes Discord and Steam's CEF windows with it, so this
+trades a freeze for a crash. Revisit on a gamescope bump; the command to
+retry with is:
+`gamescope -f -w 2560 -h 1440 -W 3840 -H 2160 --force-grab-cursor --backend sdl -- gamemoderun %command%`
+— `-W`/`-H` is the output's *native* mode (the centre LG is 3840x2160) and
+`-w`/`-h` the render size, so the panel is never asked to change mode. Also
+note Lutris's own gamescope toggle is NOT a substitute for Steam titles:
+Lutris's Steam runner hands launching off to the Steam client, so Lutris
+system options never wrap the game process
+(https://github.com/lutris/lutris/issues/3085). It only applies to games
+Lutris itself execs (Wine/native/GOG/EGS).
+
 To try, roughly cheapest-first:
 
 1. [ ] Stock Discord: toggle **off** hardware acceleration (User Settings →
@@ -662,23 +681,21 @@ To try, roughly cheapest-first:
    `vesktop` in `home.nix` (keep or drop `discord` — either works; note
    Discord's ToS technically frowns on modified clients, enforcement against
    plain client mods has historically been nil, judgement call).
-3. [ ] For each affected game (Steam → Properties → Launch Options):
-   `gamescope -f -w 2560 -h 1440 -W 2560 -H 1440 --force-grab-cursor --backend sdl -- %command%`
-   (swap in the monitor's real resolution), then confirm the unfocused
-   early-freeze stops. `--backend sdl` is currently load-bearing (gamescope's
-   Wayland backend doesn't lock the cursor properly, per the niri wiki).
-   Note: Lutris's own gamescope toggle is NOT a substitute for Steam titles —
-   Lutris's Steam runner hands launching off to the Steam client, so Lutris
-   system options never wrap the game process
-   (https://github.com/lutris/lutris/issues/3085). It only applies to games
-   Lutris itself execs (Wine/native/GOG/EGS).
-4. [ ] Proton titles only, alternative to gamescope:
-   `PROTON_ENABLE_WAYLAND=1 %command%` (recent Proton) — native Wayland
-   avoids the satellite bug entirely, per the issue reporter.
-5. [ ] Check https://github.com/Supreeeme/xwayland-satellite/issues/201
-   occasionally; once fixed and the nixpkgs package carries it, steps 3–4
-   become unnecessary for the unfocused-freeze (gamescope may still be nice
-   for other reasons).
+3. [ ] Proton titles (Steam → Properties → Launch Options) — with gamescope
+   out, this is the one to try first:
+   `PROTON_ENABLE_WAYLAND=1 gamemoderun %command%` (recent Proton). Native
+   Wayland avoids the satellite bug at its root rather than working around
+   it, per the issue reporter, and needs no nested compositor.
+   `gamemoderun` is what registers the title with `gamemoded`: Proton titles
+   don't request gamemode themselves, so without it the `ollama-pause` GPU
+   drain in `modules/nixos/ollama.nix` never fires — on 2026-10-08 that unit
+   had never been activated once since it was written.
+   ⚠ ACE COMBAT 8 launches through `start_protected_game.exe` (Denuvo), which
+   can be fussy about Wayland — if it refuses to start at all, suspect that
+   before the flag.
+4. [ ] Check https://github.com/Supreeeme/xwayland-satellite/issues/201
+   occasionally; once fixed and the nixpkgs package carries it, step 3
+   becomes unnecessary for the unfocused-freeze.
 
 ## 22. Stream privacy block-outs — verify app-ids on real hardware
 
