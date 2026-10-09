@@ -22,6 +22,38 @@
     '';
   };
 
+  options.homelab.smart.standbyAware = lib.mkOption {
+    type = lib.types.bool;
+    default = false;
+    description = ''
+      Skip a disk's SMART poll while it is in standby, rather than spinning it
+      up to read attributes.
+
+      Defaults to false: on a host where nothing parks a disk the clause is
+      inert, and on one where something does, skipping checks should be a
+      deliberate choice rather than a fleet default. Enable it on hosts that
+      deliberately park disks — the 30-minute poll otherwise defeats every
+      spin-down on the box (galactica's PLATFORM.md §13e).
+
+      Deliberately *without* smartd's `,q` suffix: the "is in STANDBY mode"
+      line each skipped poll logs is the only cheap confirmation that the
+      spin-down is actually holding.
+
+      ⚠ Also without a `,N` count, which is a real gap rather than an
+      oversight: a disk that stays parked is never SMART-checked, for as long
+      as it stays parked. That is the right trade for disks awaiting physical
+      removal, and a deliberate blind spot if a live pool ever parks
+      long-term — `standby,N` forces a check every N skipped polls if it stops
+      being acceptable.
+
+      ⚠ This flag does not cover `-o on`, which stays in the monitored string
+      above. On some drives the firmware's armed offline-collection routine
+      spins the disk up on its own, which would defeat the spin-down from the
+      drive side where smartd is no longer the cause. Unverified on this
+      fleet; the skipped-poll log line is what would show it.
+    '';
+  };
+
   config = lib.mkMerge [
     # Unconditional: the tool itself, everywhere.
     { environment.systemPackages = [ pkgs.smartmontools ]; }
@@ -34,7 +66,8 @@
         # Full attribute set + the drive's own offline collection/autosave.
         # Deliberately no `-s` self-test schedule until alerts go somewhere
         # a person actually reads (see below).
-        defaults.monitored = "-a -o on -S on";
+        defaults.monitored = "-a -o on -S on"
+          + lib.optionalString config.homelab.smart.standbyAware " -n standby";
 
         # Wall messages: useless headless, noisy on a desktop.
         notifications.wall.enable = false;
