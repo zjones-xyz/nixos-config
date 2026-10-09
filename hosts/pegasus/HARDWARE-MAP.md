@@ -455,6 +455,34 @@ The 4070 itself exposes four outputs: `DP-1`, `DP-2`, `DP-3`, `HDMI-A-1`
 (`/sys/class/drm/card1-*`) — the standard Ada desktop-card layout, 3×DP 1.4a +
 1×HDMI 2.1.
 
+### Usable VRAM is ~11.87 GiB, not the nameplate 12
+
+`nvidia-smi` reports `12282 MiB` total, but `memory.used + memory.free` only
+ever sums to about **11,874 MiB** — roughly 400 MiB is driver/firmware
+reserved and never allocatable. Sampled every few seconds across a ~40-minute
+load on 2026-10-08; the gap held at every sample, so it is a fixed reserve
+rather than transient.
+
+This is the real budget for anything sized against "12 GB of VRAM", the
+models in `modules/nixos/ollama.nix` included — something picked against the
+nameplate figure has ~400 MiB less room than it thinks.
+
+⚠ **Exhaustion logs an `*ERROR*`, not an Xid.** Filling the card shows up as
+
+```
+[drm:nv_drm_gem_alloc_nvkms_memory_ioctl [nvidia_drm]] *ERROR* [nvidia-drm]
+[GPU ID 0x00002b00] Failed to allocate NVKMS memory for GEM object
+```
+
+and, once the driver spills to host memory, `NV_ERR_NO_MEMORY` from
+`system_mem.c` followed by `dmaAllocMapping_GM107: can't update VA space`.
+**No Xid is logged** — the GPU never faulted, an allocation just failed — so
+grepping only for `Xid` reads as a clean log while the card is actually full.
+Observed 2026-10-08 when a game's working set crossed the ceiling: the screen
+stopped updating while audio and controller input carried on, because the
+render path could not get a buffer while nothing else needed one. The failure
+shape and the game-side resolution are in `MANUAL-STEPS.md` §21.
+
 ### Current displays
 
 Two identical-resolution, differently-sized 4K panels, both `3840x2160`,

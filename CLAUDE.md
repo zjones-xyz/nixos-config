@@ -57,6 +57,14 @@ stay consistent. This file documents the repo's structure and patterns.
 - Exception: a `.nix` file that must match a device (disko `by-id` paths,
   niri output serials) keeps the full string. Prefer a UUID where one exists.
 - WWNs, MACs and LUKS UUIDs are not masked.
+- **New equipment → prompt for its records.** When the user mentions buying or
+  receiving hardware, remind them to log it in `fleet-inventory`: invoice
+  (`raw/invoices/`), full serial, seller, order #, warranty card and terms, and
+  label photo. Secondhand gear often has no receipt or warranty: log the serial,
+  source, date and price paid, and "none" for warranty rather than leaving it
+  blank. External PSU or adapter: its output volts/amps/watts, plug/tip type
+  and maker, and whether it carries a label naming the item it belongs to.
+  Offer a `send_later` reminder if they can't do it then.
 
 ## Secrets (sops-nix)
 
