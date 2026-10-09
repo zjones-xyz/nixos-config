@@ -677,6 +677,13 @@ had never been activated once before. Proton titles don't request gamemode
 themselves, so this is per-game — every title that should drain the GPU needs
 `gamemoderun` in its own launch options, and the drain stays dead for any
 that don't.
+⚠ **But it prompts for authentication, so it is not yet unattended.**
+`gamemoded` is a *user* unit, so `custom.start`/`end` run as z, and
+`systemctl start ollama-pause.service` on a *system* unit goes through
+polkit's `org.freedesktop.systemd1.manage-units` action — DMS's auth dialog
+pops mid-launch, and the 2s figure above was measured with it authenticated.
+Needs a polkit rule granting z that one unit before the drain runs on its
+own.
 
 To try, roughly cheapest-first:
 
