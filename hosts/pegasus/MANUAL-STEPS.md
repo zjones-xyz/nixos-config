@@ -669,6 +669,15 @@ system options never wrap the game process
 (https://github.com/lutris/lutris/issues/3085). It only applies to games
 Lutris itself execs (Wine/native/GOG/EGS).
 
+**`gamemoderun` in a game's launch options is verified working, 2026-10-08.**
+Added to ACE COMBAT 8's line, `gamemoded` registered the title and the
+`ollama-pause` GPU drain in `modules/nixos/ollama.nix` fired within 2s of the
+game starting: `ollama` went `inactive`, `ollama-pause` `active`. That unit
+had never been activated once before. Proton titles don't request gamemode
+themselves, so this is per-game — every title that should drain the GPU needs
+`gamemoderun` in its own launch options, and the drain stays dead for any
+that don't.
+
 To try, roughly cheapest-first:
 
 1. [ ] Stock Discord: toggle **off** hardware acceleration (User Settings →
@@ -681,18 +690,21 @@ To try, roughly cheapest-first:
    `vesktop` in `home.nix` (keep or drop `discord` — either works; note
    Discord's ToS technically frowns on modified clients, enforcement against
    plain client mods has historically been nil, judgement call).
-3. [ ] Proton titles (Steam → Properties → Launch Options) — with gamescope
-   out, this is the one to try first:
-   `PROTON_ENABLE_WAYLAND=1 gamemoderun %command%` (recent Proton). Native
-   Wayland avoids the satellite bug at its root rather than working around
-   it, per the issue reporter, and needs no nested compositor.
-   `gamemoderun` is what registers the title with `gamemoded`: Proton titles
-   don't request gamemode themselves, so without it the `ollama-pause` GPU
-   drain in `modules/nixos/ollama.nix` never fires — on 2026-10-08 that unit
-   had never been activated once since it was written.
-   ⚠ ACE COMBAT 8 launches through `start_protected_game.exe` (Denuvo), which
-   can be fussy about Wayland — if it refuses to start at all, suspect that
-   before the flag.
+3. [ ] Native Wayland — `PROTON_ENABLE_WAYLAND=1 gamemoderun %command%`.
+   Avoids the satellite bug at its root rather than working around it, per
+   the issue reporter, and needs no nested compositor. **Blocked on the
+   Proton build:** the flag only does anything if that Proton ships
+   `winewayland.drv`, and none of the three here do — checked 2026-10-08,
+   Proton 11.0, Proton Hotfix (`hotfix-20261007-x86_64`) and GE-Proton11-1
+   (from `gaming.nix`) all carry `winex11.drv` only. Set against AC8 the
+   flag was simply inert: the game launched on X11 anyway, its niri window
+   still owned by `xwayland-satellite` (niri reports the satellite's PID,
+   not the game's — that's how to tell, not the window's app-id, which is
+   `steam_app_<appid>` either way). So this step needs Proton Experimental
+   installed first (Steam → Properties → Compatibility), then re-check for
+   `winewayland.drv` before trusting the flag.
+   Denuvo is *not* the blocker: AC8 goes through `start_protected_game.exe`
+   and started fine with the flag set.
 4. [ ] Check https://github.com/Supreeeme/xwayland-satellite/issues/201
    occasionally; once fixed and the nixpkgs package carries it, step 3
    becomes unnecessary for the unfocused-freeze.
