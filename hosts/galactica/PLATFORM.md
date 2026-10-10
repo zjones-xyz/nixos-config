@@ -2021,7 +2021,10 @@ hour and then quietly stops:
    > flagged X4WE first, has no devstat equivalent at all**. Once YWAH joins
    > `tank`, the attribute that gave this pool its earliest warning is simply
    > absent on one of its four members, and scheduled self-tests are what is
-   > left in its place.
+   > left in its place. The gap is already observable rather than theoretical:
+   > §21 step 3's acceptance check is written as "5/197/198 must all still read
+   > 0", and YWAH's passing burn-in could only be recorded against 5/196 plus
+   > the devstat counters.
 2. **The Scrutiny collector, daily at 01:00.** It runs privileged with every
    block device visible and sweeps them all, with no standby awareness and no
    per-device exclusion. One guaranteed spin-up per disk per day. The wear is
