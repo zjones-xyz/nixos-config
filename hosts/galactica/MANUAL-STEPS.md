@@ -1947,10 +1947,12 @@ member).
    spare qualifies (§9). ✅ `h-YWAH`, an HPE-branded HC520 (`HARDWARE-MAP.md`),
    in the case 2026-10-06; used (hours reset, ≈ 255 TB written), same capacity as X4WE.
 2. [ ] **Watch X4WE in Scrutiny every few days** until the new disk is in.
-3. [ ] **Burn the new disk in before it touches `tank`.** On the bare disk,
+3. [x] **Burn the new disk in before it touches `tank`.** On the bare disk,
    destructive: `sudo badblocks -wsv -b 4096 -t 0 /dev/disk/by-id/<new>`
    (one write + read pass, about 1.5 days at 12 TB), then
    `sudo smartctl -t long`. 5/197/198 must all still read 0.
+   ✅ YWAH 2026-10-08/09: badblocks 0 bad blocks (1d20h), long test completed
+   without error at hour 65; 5/196 and every devstat error counter 0.
 4. [ ] **Find X4WE's bay in cage A by serial.** Cage A's port-to-bay mapping is
    still open (`HARDWARE-MAP.md` §7). Fill that table while doing this.
 5. [ ] **Swap bays, powered off: YWAH into X4WE's cage-A bay, X4WE onto YWAH's
