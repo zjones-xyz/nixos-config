@@ -399,14 +399,15 @@ is moot for a single column.
 > from either side.
 
 **Read by label, 2026-10-11** (case open for the X4WE→YWAH swap, MANUAL-STEPS
-§21; label photos in `fleet-inventory`):
+§21; label photos in `fleet-inventory`); ports from sysfs the same day. The
+bays do not map to ports in order, so trust this table, not the pattern:
 
 | Bay | Feeding port | Disk |
 |---|---|---|
-| `A1` | ⟨TBD⟩ | `h-HJDH` (HGST label) |
-| `A2` | ⟨TBD⟩ | `h-T97E` (WD label) |
-| `A3` | ⟨TBD⟩ | `h-NS3Y` (HGST label) |
-| `A4` | ⟨TBD⟩ | `h-YWAH` (HPE label) — `h-X4WE`'s bay until 2026-10-11 |
+| `A1` | onboard C204 `ata5` | `h-HJDH` (HGST label) |
+| `A2` | onboard C204 `ata6` | `h-T97E` (WD label) |
+| `A3` | onboard C204 `ata3` | `h-NS3Y` (HGST label) |
+| `A4` | onboard C204 `ata4` | `h-YWAH` (HPE label) — `h-X4WE`'s bay until 2026-10-11 |
 
 **The backplane carries no 3.3 V** — it is fed by Molex. So power-disable (SATA
 pin 3) never engages in this cage, and that is the only reason it went unnoticed:
@@ -635,7 +636,7 @@ drawer is, so the answer is currently no on both counts.
 | ~~Confirm the encryption inferences in §2~~ | ~~Unraid Main tab~~ | **Closed 2026-08-07** — all confirmed |
 | ~~MX100 / `btrfs device remove missing` state~~ | ~~Unraid~~ | **Closed 2026-08-07** — completed; disk unassigned |
 | **Enumerate the non-primary cages** | Case open | Six installed disks recorded only as "internal" |
-| **Port-to-bay mapping for cage A** — disks per bay known 2026-10-11 (§3); ports still open | sysfs from serial, see §3 | Printing cable labels |
+| ~~Port-to-bay mapping for cage A~~ | ~~sysfs from serial~~ | **Closed 2026-10-11** — §3 table |
 | ~~`s-3100` actual state after the `/mnt/services` btrfs removal~~ | ~~Unraid, `btrfs filesystem show`~~ | **Closed 2026-08-07** — duplicate of the row above; §1 and §2 both carry the answer (unassigned, NTFS, unmounted) |
 | Enumerate the other cages — letters, arrangement, type | Eyes | Bay identifiers and cable labels for six of ten disks |
 | Port-to-bay mapping | Measure it — hotswap insertion + sysfs, see §3 | All cable labels |
