@@ -2,11 +2,11 @@
 
 let
   ca = ../../certs/bambuddy-vp-ca.crt;
-  apps = [ "/Applications/OrcaSlicer.app" "/Applications/BambuStudio.app" ];
+  apps = [ "/Applications/OrcaSlicer.app" ];
 in
 {
   # ── Bambuddy's virtual-printer CA in the slicers' printer.cer ──
-  # The casks' printer.cer is the only store the slicers trust printers from,
+  # The cask's printer.cer is the only store the slicer trusts printers from,
   # and a cask upgrade replaces it, so every switch re-appends the CA if it's
   # missing. Runs after `brew bundle`. Failures (e.g. no App Management
   # permission) only warn. Setup and caveats: hosts/serenity/MANUAL-STEPS.md §2.
