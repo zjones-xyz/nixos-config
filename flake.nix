@@ -144,9 +144,10 @@
       map (line: builtins.head (nixpkgs.lib.splitString "=" line)) declarations;
 
     # ── Bambuddy's virtual-printer CA in the slicers' printer.cer ──
-    # OrcaSlicer trusts printers only via its bundled cert/printer.cer, and
-    # SLIC3R_FHS bakes its path into the binary, so the CA is appended in the
-    # package itself. serenity's casks: modules/darwin/slicer-certs.nix.
+    # Bambu Studio/OrcaSlicer trust printers only via their bundled
+    # cert/printer.cer, and SLIC3R_FHS bakes its path into the binary, so the CA
+    # is appended in the package itself. serenity's casks:
+    # modules/darwin/slicer-certs.nix.
     bambuddyCa = ./certs/bambuddy-vp-ca.crt;
     withBambuddyCa = appDir: pkg:
       pkg.overrideAttrs (old: {
@@ -247,8 +248,9 @@
                   hash = "sha256-EAmqAX4XKllVk1bN8sNBRcetUhIA0huoIu4jVNMlb0k=";
                 };
               });
-              # Appends Bambuddy's CA to OrcaSlicer's printer.cer (see the
-              # banner above); home.nix applies it to pkgsApps.orca-slicer.
+              # Appends Bambuddy's CA to a slicer's printer.cer (see the banner
+              # above); home.nix applies it to pkgsApps' orca-slicer and
+              # bambu-studio.
               inherit withBambuddyCa;
             };
             # Niri's own auto-generated ~/.config/niri/config.kdl (a plain,

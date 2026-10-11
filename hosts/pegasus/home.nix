@@ -278,7 +278,7 @@
     operaBrowser
     # withNvidiaGLWorkaround fixes the blank Prepare/Preview build plate on
     # this host's NVIDIA GPU (nixpkgs#522161) — keep it.
-    (pkgsApps.bambu-studio.override { withNvidiaGLWorkaround = true; })
+    (withBambuddyCa "BambuStudio" (pkgsApps.bambu-studio.override { withNvidiaGLWorkaround = true; }))
     # No GL workaround (its Zink route regresses Orca; DECISIONS.md), but its
     # WebKit pages render black on NVIDIA without this one variable. The
     # Bambuddy CA is baked into the package; the variable is a thin wrapper.

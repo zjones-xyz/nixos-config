@@ -893,12 +893,13 @@ next garbage collection.
     systemd-boot menu, note here what broke, and leave the PR's fix to a
     config session rather than patching on the host.
 
-## 28. Bambuddy's CA in OrcaSlicer's `printer.cer`
+## 28. Bambuddy's CA in the slicers' `printer.cer`
 
 `flake.nix`'s `withBambuddyCa` appends `certs/bambuddy-vp-ca.crt` to the
-`printer.cer` inside `pkgsApps.orca-slicer`. Without it, connecting to a
-Bambuddy virtual printer fails with `code=-1`. OrcaSlicer no longer comes from the
-binary cache: the next switch compiles it locally.
+`printer.cer` inside `pkgsApps.orca-slicer` and `pkgsApps.bambu-studio`.
+Without it, connecting to a Bambuddy virtual printer fails with `code=-1`.
+OrcaSlicer no longer comes from the binary cache: the next switch compiles it
+locally (Bambu Studio already did, because of its GL override).
 
 1. [ ] Switch, then check the last entry is `CN=Virtual Printer CA …` with the
        fingerprint Bambuddy shows:
@@ -906,7 +907,9 @@ binary cache: the next switch compiles it locally.
        cer=$(dirname "$(readlink -f "$(which orca-slicer)")")/../share/OrcaSlicer/cert/printer.cer
        while openssl x509 -noout -subject -sha256 -fingerprint; do :; done < "$cer"
        ```
-2. [ ] Connect OrcaSlicer to VP-athena (.95) and confirm it no longer fails
-       with `code=-1`. Needs a working Bambu network plugin first: the stock
-       one crashes Orca 2.4.2 and is kept out (§27 step 7), so this waits for
-       its open-source replacement.
+       Same for `bambu-studio` / `share/BambuStudio`.
+2. [ ] Connect Bambu Studio to VP-athena (.95) and confirm it no longer fails
+       with `code=-1`.
+3. [ ] Same for OrcaSlicer. Needs a working Bambu network plugin first: the
+       stock one crashes Orca 2.4.2 and is kept out (§27 step 7), so this waits
+       for its open-source replacement.
