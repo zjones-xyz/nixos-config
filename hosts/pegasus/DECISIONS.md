@@ -1480,5 +1480,5 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   - The old Orca 2.3.2 segfaulted on opening a file on this boot. Moot now; it
     was never confirmed on the hardware (see the 2.3.2 entry above).
   - Bambu Studio's toolbar/tooltip strobing is **not** from this entry: 02.05
-    strobes too on the same boot, and under `GDK_BACKEND=x11`. Tracked in
-    MANUAL-STEPS §27 step 6.
+    strobes too on the same boot, under `GDK_BACKEND=x11`, and on the 7.1.9
+    generation. Deferred to #177.

@@ -867,14 +867,12 @@ next garbage collection.
 4. [x] Scheduler: `cat /sys/kernel/sched_ext/state` shows `disabled` and
    `systemctl status scx` is inactive, i.e. EEVDF (same as §3).
 5. [x] One Proton title launches and plays for a few minutes.
-6. [ ] Bambu Studio (now 02.08): the Prepare/Preview build plate renders
+6. [x] Bambu Studio (now 02.08): the Prepare/Preview build plate renders
    rather than going blank — that is the NVIDIA GL workaround still working.
-   The plate renders. **Open:** the toolbar and tooltips strobe on hover. Not
-   the version bump (02.05 strobes too on this boot) and not Wayland (it
-   strobes under `GDK_BACKEND=x11` too); the GL workaround's zink path is the
-   suspect. Untested: whether it strobed on 7.1 — one boot into the 7.1.9
-   generation answers whether the kernel is involved.
-7. [ ] OrcaSlicer (now 2.4.2). The stock Bambu network plugin Orca downloads
+   Separately, the toolbar and tooltips strobe on hover. That predates this
+   change: it happens on 02.05 too, under `GDK_BACKEND=x11` too, and on the
+   7.1.9 generation too. Deferred to #177 (suspect: the workaround's zink path).
+7. [x] OrcaSlicer (now 2.4.2). The stock Bambu network plugin Orca downloads
    into `~/.config/OrcaSlicer/plugins/` makes every later launch abort
    (`free(): invalid size`), so keep it out until the open-source replacement
    lands: `mv ~/.config/OrcaSlicer/plugins ~/.config/OrcaSlicer/plugins.stock-crashes`,
@@ -884,6 +882,7 @@ next garbage collection.
    render rather than black, the 3D viewport renders, the Device/Project pages
    and preset dialogs open — and it **survives a second launch**. Without the
    plugin, Orca can slice but cannot reach Bambu printers or Bambuddy.
+   Passed with `plugins/` moved aside, second launch included.
 8. [x] ferdium and ticktick open (same versions, rebuilt against unstable).
 9. [x] Claude Desktop (now 2.31226.1, up from 1.34493.1) launches, and its MCP
    servers start — Settings → Developer lists them as running. A 1.x → 2.x
