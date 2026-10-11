@@ -1453,3 +1453,22 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   rendering. The remaining Electron apps (discord, slack, signal-desktop,
   obsidian, …) stay on the shared nixpkgs; moving one is a one-word change.
   Validated by eval; real switch: MANUAL-STEPS §27.
+  *Found on the hardware, 2026-10-11 (6.18.45):*
+  - **OrcaSlicer 2.4.2's WebKit pages render black on NVIDIA** (Home page,
+    Setup Wizard). 2.4 moved to wxWidgets 3.3 and a newer WebKitGTK; nixpkgs
+    sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` for Orca only inside
+    `withNvidiaGLWorkaround`, which stays off here (its Zink route is the
+    regression above). Setting just that variable fixed it — Wizard and 3D
+    viewport both confirmed. Applied as a `symlinkJoin` + `wrapProgram` wrapper
+    in `home.nix` rather than `overrideAttrs`, so the cached build is reused
+    instead of compiling Orca locally. (#166's CA append will force a local
+    build anyway; fold the variable into that `overrideAttrs` then if simpler.)
+  - **OrcaSlicer 2.4.2 aborts at startup on 2.3's data dir**
+    (`free(): invalid size`, on Wayland and X11, with or without the
+    `system/` profile cache). Not worth rescuing — the user chose a fresh
+    `~/.config/OrcaSlicer` (old one kept as `OrcaSlicer.2.3-bak`).
+  - The old Orca 2.3.2 segfaulted on opening a file on this boot. Moot now; it
+    was never confirmed on the hardware (see the 2.3.2 entry above).
+  - Bambu Studio's toolbar/tooltip strobing is **not** from this entry: 02.05
+    strobes too on the same boot, and under `GDK_BACKEND=x11`. Tracked in
+    MANUAL-STEPS §27 step 6.

@@ -859,20 +859,30 @@ was outside the authoring session's network, so nothing has fetched it yet.
 The 7.1.9 generation stays in the systemd-boot menu as the rollback until the
 next garbage collection.
 
-1. [ ] Switch from another host or a TTY (decision 4 in `DECISIONS.md`), then
+1. [x] Switch from another host or a TTY (decision 4 in `DECISIONS.md`), then
    **reboot** — a kernel change only takes effect on boot.
-2. [ ] `uname -r` shows `6.18.x`.
-3. [ ] `nvidia-smi` shows the 4070 on driver 595.71.05, and the niri Wayland
+2. [x] `uname -r` shows `6.18.x`.
+3. [x] `nvidia-smi` shows the 4070 on driver 595.71.05, and the niri Wayland
    session logs in.
-4. [ ] Scheduler: `cat /sys/kernel/sched_ext/state` shows `disabled` and
+4. [x] Scheduler: `cat /sys/kernel/sched_ext/state` shows `disabled` and
    `systemctl status scx` is inactive, i.e. EEVDF (same as §3).
 5. [ ] One Proton title launches and plays for a few minutes.
 6. [ ] Bambu Studio (now 02.08): the Prepare/Preview build plate renders
    rather than going blank — that is the NVIDIA GL workaround still working.
-7. [ ] OrcaSlicer (now 2.4.2): the 3D viewport renders, and the
-   Home/Device/Project pages and printer/filament preset dialogs open — the
-   area the Zink regression hit on other NVIDIA setups.
-8. [ ] ferdium and ticktick open (same versions, rebuilt against unstable).
+   The plate renders. **Open:** the toolbar and tooltips strobe on hover. Not
+   the version bump (02.05 strobes too on this boot) and not Wayland (it
+   strobes under `GDK_BACKEND=x11` too); the GL workaround's zink path is the
+   suspect. Untested: whether it strobed on 7.1 — one boot into the 7.1.9
+   generation answers whether the kernel is involved.
+7. [ ] OrcaSlicer (now 2.4.2). First move the 2.3 settings aside — 2.4.2
+   aborts at startup (`free(): invalid size`) reading them, even with the
+   `system/` profile cache removed:
+   `mv ~/.config/OrcaSlicer ~/.config/OrcaSlicer.2.3-bak`. Then, launched
+   normally (the wrapper sets `WEBKIT_DISABLE_DMABUF_RENDERER`): the Home page
+   and Setup Wizard render rather than black, the 3D viewport renders, and the
+   Device/Project pages and preset dialogs open. Bambuddy virtual printers will
+   fail with `code=-1` until #166's CA lands — expected.
+8. [x] ferdium and ticktick open (same versions, rebuilt against unstable).
 9. [ ] Claude Desktop (now 2.31226.1, up from 1.34493.1) launches, and its MCP
    servers start — Settings → Developer lists them as running. A 1.x → 2.x
    jump is where an MCP config-format change would show up.

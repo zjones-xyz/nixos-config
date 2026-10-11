@@ -279,9 +279,17 @@
     # withNvidiaGLWorkaround fixes the blank Prepare/Preview build plate on
     # this host's NVIDIA GPU (nixpkgs#522161) — keep it.
     (pkgsApps.bambu-studio.override { withNvidiaGLWorkaround = true; })
-    # No GL workaround: OrcaSlicer's viewport renders without one here, and
-    # its Zink route has known regressions (DECISIONS.md).
-    pkgsApps.orca-slicer
+    # No GL workaround (its Zink route regresses Orca; DECISIONS.md), but its
+    # WebKit pages render black on NVIDIA without this one variable. A thin
+    # wrapper rather than overrideAttrs, so the cached build is reused.
+    (pkgs.symlinkJoin {
+      inherit (pkgsApps.orca-slicer) name meta;
+      paths = [ pkgsApps.orca-slicer ];
+      nativeBuildInputs = [ pkgs.makeWrapper ];
+      postBuild = ''
+        wrapProgram $out/bin/orca-slicer --set WEBKIT_DISABLE_DMABUF_RENDERER 1
+      '';
+    })
   ];
 
   # ── kitty: launch zsh directly, not the login shell ─────────────────────────
