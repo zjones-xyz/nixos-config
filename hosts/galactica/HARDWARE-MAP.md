@@ -398,12 +398,21 @@ is moot for a single column.
 > bottom. With one column there is no left/right to confuse, so `A1` is the top
 > from either side.
 
+**Read by label, 2026-10-11** (case open for the X4WE→YWAH swap, MANUAL-STEPS
+§21; label photos in `fleet-inventory`):
+
 | Bay | Feeding port | Disk |
 |---|---|---|
-| `A1` | ⟨TBD⟩ | ⟨TBD⟩ |
-| `A2` | ⟨TBD⟩ | ⟨TBD⟩ |
-| `A3` | ⟨TBD⟩ | ⟨TBD⟩ |
-| `A4` | ⟨TBD⟩ | ⟨TBD⟩ |
+| `A1` | ⟨TBD⟩ | `h-HJDH` (HGST label) |
+| `A2` | ⟨TBD⟩ | `h-T97E` (WD label) |
+| `A3` | ⟨TBD⟩ | `h-NS3Y` (HGST label) |
+| `A4` | ⟨TBD⟩ | `h-YWAH` (HPE label) — `h-X4WE`'s bay until 2026-10-11 |
+
+**The backplane carries no 3.3 V** — it is fed by Molex. So power-disable (SATA
+pin 3) never engages in this cage, and that is the only reason it went unnoticed:
+both `h-YWAH` (ALE604) *and* `h-X4WE` (ALE601) stay dark on a PSU SATA lead and
+only spin up in the cage or on a no-3.3 V adapter. Assume every HC520 here
+honours it.
 
 **Fill the port column by measurement.** Hotswap makes it directly observable,
 and it is quicker than tracing:
@@ -626,7 +635,7 @@ drawer is, so the answer is currently no on both counts.
 | ~~Confirm the encryption inferences in §2~~ | ~~Unraid Main tab~~ | **Closed 2026-08-07** — all confirmed |
 | ~~MX100 / `btrfs device remove missing` state~~ | ~~Unraid~~ | **Closed 2026-08-07** — completed; disk unassigned |
 | **Enumerate the non-primary cages** | Case open | Six installed disks recorded only as "internal" |
-| **Port-to-bay mapping for cage A** | Hotswap insertion + sysfs | Printing cable labels |
+| **Port-to-bay mapping for cage A** — disks per bay known 2026-10-11 (§3); ports still open | sysfs from serial, see §3 | Printing cable labels |
 | ~~`s-3100` actual state after the `/mnt/services` btrfs removal~~ | ~~Unraid, `btrfs filesystem show`~~ | **Closed 2026-08-07** — duplicate of the row above; §1 and §2 both carry the answer (unassigned, NTFS, unmounted) |
 | Enumerate the other cages — letters, arrangement, type | Eyes | Bay identifiers and cable labels for six of ten disks |
 | Port-to-bay mapping | Measure it — hotswap insertion + sysfs, see §3 | All cable labels |
