@@ -853,9 +853,11 @@ enabled) covers that with no extra host config.
 
 The kernel moves from 7.1.9 to the 6.18 LTS, and four apps now come from
 `nixpkgs-apps` (see `DECISIONS.md`: "Kernel → the release LTS" and "Desktop
-apps from `nixpkgs-apps`"). Both were validated by eval only. The 7.1.9
-generation stays in the systemd-boot menu as the rollback until the next
-garbage collection.
+apps from `nixpkgs-apps`"). Both were validated by eval only. The same switch
+is also the first build of Claude Desktop 2.31226.1 (#171): its `.deb` host
+was outside the authoring session's network, so nothing has fetched it yet.
+The 7.1.9 generation stays in the systemd-boot menu as the rollback until the
+next garbage collection.
 
 1. [ ] Switch from another host or a TTY (decision 4 in `DECISIONS.md`), then
    **reboot** — a kernel change only takes effect on boot.
@@ -871,6 +873,9 @@ garbage collection.
    Home/Device/Project pages and printer/filament preset dialogs open — the
    area the Zink regression hit on other NVIDIA setups.
 8. [ ] ferdium and ticktick open (same versions, rebuilt against unstable).
-9. [ ] If anything above fails: boot the previous generation from the
-   systemd-boot menu, note here what broke, and leave the PR's fix to a
-   config session rather than patching on the host.
+9. [ ] Claude Desktop (now 2.31226.1, up from 1.34493.1) launches, and its MCP
+   servers start — Settings → Developer lists them as running. A 1.x → 2.x
+   jump is where an MCP config-format change would show up.
+10. [ ] If anything above fails: boot the previous generation from the
+    systemd-boot menu, note here what broke, and leave the PR's fix to a
+    config session rather than patching on the host.
