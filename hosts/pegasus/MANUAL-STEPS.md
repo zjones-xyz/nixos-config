@@ -866,7 +866,7 @@ next garbage collection.
    session logs in.
 4. [x] Scheduler: `cat /sys/kernel/sched_ext/state` shows `disabled` and
    `systemctl status scx` is inactive, i.e. EEVDF (same as §3).
-5. [ ] One Proton title launches and plays for a few minutes.
+5. [x] One Proton title launches and plays for a few minutes.
 6. [ ] Bambu Studio (now 02.08): the Prepare/Preview build plate renders
    rather than going blank — that is the NVIDIA GL workaround still working.
    The plate renders. **Open:** the toolbar and tooltips strobe on hover. Not
@@ -874,18 +874,22 @@ next garbage collection.
    strobes under `GDK_BACKEND=x11` too); the GL workaround's zink path is the
    suspect. Untested: whether it strobed on 7.1 — one boot into the 7.1.9
    generation answers whether the kernel is involved.
-7. [ ] OrcaSlicer (now 2.4.2). First move the 2.3 settings aside — 2.4.2
-   aborts at startup (`free(): invalid size`) reading them, even with the
-   `system/` profile cache removed:
-   `mv ~/.config/OrcaSlicer ~/.config/OrcaSlicer.2.3-bak`. Then, launched
-   normally (the wrapper sets `WEBKIT_DISABLE_DMABUF_RENDERER`): the Home page
-   and Setup Wizard render rather than black, the 3D viewport renders, and the
-   Device/Project pages and preset dialogs open. Bambuddy virtual printers will
-   fail with `code=-1` until #166's CA lands — expected.
+7. [ ] OrcaSlicer (now 2.4.2). The stock Bambu network plugin Orca downloads
+   into `~/.config/OrcaSlicer/plugins/` makes every later launch abort
+   (`free(): invalid size`), so keep it out until the open-source replacement
+   lands: `mv ~/.config/OrcaSlicer/plugins ~/.config/OrcaSlicer/plugins.stock-crashes`,
+   and dismiss the "Bambu Network Plug-in Required" dialog (✕) on each start
+   rather than letting it download again. Launched normally (the wrapper sets
+   `WEBKIT_DISABLE_DMABUF_RENDERER`), check: the Home page and Setup Wizard
+   render rather than black, the 3D viewport renders, the Device/Project pages
+   and preset dialogs open — and it **survives a second launch**. Without the
+   plugin, Orca can slice but cannot reach Bambu printers or Bambuddy.
 8. [x] ferdium and ticktick open (same versions, rebuilt against unstable).
-9. [ ] Claude Desktop (now 2.31226.1, up from 1.34493.1) launches, and its MCP
+9. [x] Claude Desktop (now 2.31226.1, up from 1.34493.1) launches, and its MCP
    servers start — Settings → Developer lists them as running. A 1.x → 2.x
-   jump is where an MCP config-format change would show up.
+   jump is where an MCP config-format change would show up. Pegasus had no MCP
+   servers configured; a throwaway `npx` filesystem server came up running,
+   which exercises the FHS wrapper's `npx` path.
 10. [ ] If anything above fails: boot the previous generation from the
     systemd-boot menu, note here what broke, and leave the PR's fix to a
     config session rather than patching on the host.

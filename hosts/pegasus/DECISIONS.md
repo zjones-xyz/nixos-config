@@ -1463,10 +1463,20 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
     in `home.nix` rather than `overrideAttrs`, so the cached build is reused
     instead of compiling Orca locally. (#166's CA append will force a local
     build anyway; fold the variable into that `overrideAttrs` then if simpler.)
-  - **OrcaSlicer 2.4.2 aborts at startup on 2.3's data dir**
-    (`free(): invalid size`, on Wayland and X11, with or without the
-    `system/` profile cache). Not worth rescuing — the user chose a fresh
-    `~/.config/OrcaSlicer` (old one kept as `OrcaSlicer.2.3-bak`).
+  - **OrcaSlicer 2.4.2 aborts at startup once Bambu's stock network plugin is
+    installed** (`free(): invalid size`, on Wayland and X11). First diagnosed
+    as 2.3's data dir — wrong: a fresh data dir launched once, Orca downloaded
+    `libbambu_networking_02.03.00.62.so` (plus the Agora RTC libraries) into
+    `plugins/`, and every later launch aborted; removing `plugins/` alone
+    brought it back. Not a version mismatch — 02.03.00.62 is the version 2.4.2
+    asks for — and not NVIDIA: the same build, without the plugin, launches
+    repeatedly on Mesa/Xvfb. Orca 2.4.2's own plugin table already warns that a
+    stock version "may crash on startup due to Bambu Lab's signature
+    verification". Interim: keep `plugins/` out (MANUAL-STEPS §27 step 7).
+    Follow-up: replace it with open-bamboo-networking, an open-source drop-in
+    that is LAN-first and speaks the protocol Bambuddy's virtual printers
+    emulate. (The 2.3 data dir was reset along the way; that turned out to be
+    unnecessary but harmless — kept as `OrcaSlicer.2.3-bak`.)
   - The old Orca 2.3.2 segfaulted on opening a file on this boot. Moot now; it
     was never confirmed on the hardware (see the 2.3.2 entry above).
   - Bambu Studio's toolbar/tooltip strobing is **not** from this entry: 02.05
