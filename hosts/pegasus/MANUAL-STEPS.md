@@ -848,3 +848,33 @@ enabled) covers that with no extra host config.
        that needs a bridged libvirt network instead of the default NAT
        one — not set up here since it wasn't asked for; revisit only if the
        NAT setup actually fails for that reason.
+
+## 29. nix-daemon build limits + oomd — verify during a big build
+
+`modules/nixos/performance.nix` now runs nix-daemon builds at idle CPU/IO
+priority (`CPUWeight=idle` on the unit) with `MemoryHigh=40G`,
+`max-jobs = 4`, `cores = 8`, and turns oomd on for the user slices (it
+previously watched nothing). Evaluated only, never switched; reasoning in
+DECISIONS.md (nix-daemon build limits).
+
+1. [ ] After the switch, confirm the unit picked it up:
+   `systemctl show nix-daemon -p MemoryHigh -p CPUWeight -p CPUSchedulingPolicy -p IOSchedulingClass`
+   → `MemoryHigh=42949672960`, `CPUWeight=idle`, and the idle policy and
+   I/O class (systemd may print these as numbers: `5` and `3`). `nix config show | grep -E '^(max-jobs|cores) '` →
+   `4` / `8`.
+2. [ ] `cat /sys/fs/cgroup/system.slice/nix-daemon.service/cpu.idle` → `1`.
+3. [ ] `oomctl` lists `user.slice` (and `user@1000.service`'s slices) under
+   monitored memory-pressure cgroups, and does **not** list `system.slice`
+   or `-.slice`.
+4. [ ] Force a big local build (e.g. `nix build --rebuild` of Bambu Studio
+   or OrcaSlicer, or the next `nixos-rebuild switch` that compiles one). While
+   it runs: the desktop, video playback and a game stay responsive; `chrt -p "$(pgrep -n cc1plus)"`
+   reports `SCHED_IDLE`; `pgrep -c cc1plus` stays at or under ~32.
+5. [ ] During that build, watch `systemctl status nix-daemon` (the `Memory:`
+   line) and `cat /sys/fs/cgroup/system.slice/nix-daemon.service/memory.events`.
+   A rising `high` count is the throttle working; the build should finish,
+   just slower. If it crawls for long stretches, lower `cores` before
+   raising `MemoryHigh`.
+6. [ ] Note whether the build stalls while gaming (expected with `idle`). If
+   that turns out to be a problem, switch to `batch` per the DECISIONS entry
+   and record the result here.

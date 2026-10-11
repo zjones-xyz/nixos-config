@@ -1382,3 +1382,47 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   daily driver in service of one chat app.
   Validated by eval only (`nix flake check`, ferdium resolves to 7.2.3, kernel
   still 7.1.9); not yet confirmed by a real `nixos-rebuild switch`.
+- **nix-daemon builds run at idle priority, bounded in memory; oomd watches
+  user slices only (2026-10-11).** Local builds (Bambu Studio, OrcaSlicer)
+  took over the desktop during `nixos-rebuild switch`. The config in
+  `modules/nixos/performance.nix` covers both CPU and memory.
+  *Why on the daemon:* `nixos-rebuild` only asks nix-daemon to build; every
+  compiler runs inside `nix-daemon.service`'s cgroup. `nice`/`systemd-run`
+  around `nixos-rebuild` changes nothing.
+  *CPU:* `nix.daemonCPUSchedPolicy = "idle"` (per-process SCHED_IDLE) plus
+  `CPUWeight = "idle"` on the unit (cgroup `cpu.idle`, systemd ≥ 252; this
+  nixpkgs ships 260). Both are needed: once the cgroup CPU controller is on,
+  which setting `CPUWeight` on any unit does anyway, CPU is shared between
+  `system.slice` and `user.slice` by weight *before* per-process policy is
+  consulted, so SCHED_IDLE alone would still get `system.slice`'s full share.
+  `cpu.idle` on the daemon's cgroup makes the cgroup itself yield. I/O class
+  is `idle` too. ananicy-cpp was checked for a fight: its rule set
+  (nefelim4ag/ananicy at the pinned rev) types `gcc`/`g++`/`make`/`ninja`/
+  `cargo`/`rustc` as `compiler` = nice 1, with no `sched`, `ioclass` or
+  `cgroup` key, and has no rule for `cc1plus` or `nix-daemon`. nice is
+  ignored under SCHED_IDLE and nothing is moved out of the daemon's cgroup.
+  *Trade-off, idle vs batch:* `idle` means a build all but stops while a game
+  or anything else saturates the CPU; it catches up once the desktop goes
+  quiet. `batch` would be the gentler middle (still competes, just never
+  preempts). Chosen `idle` because the box has 16 threads and is rarely
+  saturated by the desktop alone; if a switch during a gaming session ever
+  needs to finish, drop both the policy and `CPUWeight` to the `batch`/
+  default pair rather than one of them.
+  *Memory:* `max-jobs × cores` is the real cap — each C++ compiler process
+  is ~1–2 GB. Was `auto × 0` = 16 jobs × 16 threads, up to 256 compilers.
+  Now `max-jobs = 4`, `cores = 8`: at most 32 compiler processes (2× the
+  thread count, so the CPU stays full when idle), and a single big build
+  still gets 8 threads. `MemoryHigh = 40G` backs that up by throttling and
+  reclaiming into zram, never killing; `MemoryMax` was rejected because a
+  kill fails the switch partway. That leaves ~24 GB for the desktop.
+  *oomd:* it was enabled with every slice option false, so it watched
+  nothing despite the comment claiming otherwise. Now `enableUserSlices`
+  only (kill at 80% memory pressure for 20 s): a runaway desktop app is
+  killed, builds and services never. `system.slice` was rejected on
+  purpose. The throttling that `MemoryHigh` applies shows up as memory
+  pressure, so oomd there would kill exactly the heavy build `MemoryHigh` is
+  meant to slow down. The root slice was rejected for the same reason.
+  *Alt kept in reserve:* oomd on `system.slice` with
+  `ManagedOOMPreference = "omit"` on nix-daemon, if a system service
+  (Ollama, docker) ever runs away.
+  Validated by eval only; MANUAL-STEPS.md §29 carries the on-hardware checks.
