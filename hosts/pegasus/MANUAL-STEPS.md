@@ -849,12 +849,13 @@ enabled) covers that with no extra host config.
        one — not set up here since it wasn't asked for; revisit only if the
        NAT setup actually fails for that reason.
 
-## 27. Bambuddy's CA in OrcaSlicer's `printer.cer`
+## 27. Bambuddy's CA in the slicers' `printer.cer`
 
 `flake.nix`'s `withBambuddyCa` appends `certs/bambuddy-vp-ca.crt` to the
-`printer.cer` inside `orcaSlicerNewer`. Without it, connecting to a Bambuddy
-virtual printer fails with `code=-1`. OrcaSlicer no longer comes from the
-binary cache: the next switch compiles it locally.
+`printer.cer` inside `orcaSlicerNewer` and `bambuStudioNewer`. Without it,
+connecting to a Bambuddy virtual printer fails with `code=-1`. OrcaSlicer no
+longer comes from the binary cache: the next switch compiles it locally (Bambu
+Studio already did, because of its GL override).
 
 1. [ ] Switch, then check the last entry is `CN=Virtual Printer CA …` with the
        fingerprint Bambuddy shows:
@@ -862,5 +863,6 @@ binary cache: the next switch compiles it locally.
        cer=$(dirname "$(readlink -f "$(which orca-slicer)")")/../share/OrcaSlicer/cert/printer.cer
        while openssl x509 -noout -subject -sha256 -fingerprint; do :; done < "$cer"
        ```
-2. [ ] Connect OrcaSlicer to VP-athena (.95) and confirm it no longer fails
+       Same for `bambu-studio` / `share/BambuStudio`.
+2. [ ] Connect each slicer to VP-athena (.95) and confirm it no longer fails
        with `code=-1`.
