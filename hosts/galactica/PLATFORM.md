@@ -1844,9 +1844,12 @@ LSI ports 2–7 are empty. With item 1 collected this is the biggest single
 reclaimable load remaining, behind only item 2's unmeasured BIOS spread.
 
 §7b put the card in to drive eight spinners at once. It now drives
-two: the BX500 pair in `tank`'s special vdev. ⚠ Three, briefly — `h-YWAH` is on
-one of the freed leads for its §21 burn-in, and §21's revised step 5 keeps it
-there until the bay swap. Nothing to act on before the replacement completes. A SAS2008 draws ~9–11 W whether it
+two: the BX500 pair in `tank`'s special vdev. ⚠ Three in the meantime, and since
+§21's bay swap it is **`h-X4WE`** on the loose lead rather than YWAH — the swap
+put YWAH into X4WE's cage-A bay and X4WE onto YWAH's old lead, where it stays
+until §21 step 10 pulls it for the RMA. So the gate on this item is step 10, not
+the bay swap; nothing to act on until the replacement is finished and X4WE is
+out. A SAS2008 draws ~9–11 W whether it
 is feeding eight disks or two — the largest *fixed* load on the machine after
 the CPU and the array.
 
