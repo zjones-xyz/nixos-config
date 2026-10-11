@@ -86,11 +86,12 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # Stock mainline kernel (NOT a CachyOS/Chaotic kernel), pinned to 7.1: the
-  # NVIDIA production driver (open and proprietary alike) doesn't build
-  # against 7.2's kernel-interface changes — see hosts/pegasus/DECISIONS.md.
-  # Bump back to `linuxPackages_latest` once nixpkgs/NVIDIA ship a 7.2 fix.
-  boot.kernelPackages = pkgs.linuxPackages_7_1;
+  # The release's LTS kernel, on purpose — not `_latest` or a pinned
+  # `linuxPackages_X_Y`. nixpkgs deletes non-LTS kernels at upstream EOL even
+  # on a stable release, and the NVIDIA module must build against whatever is
+  # chosen; LTS is the only kernel nixpkgs keeps for the whole release. See
+  # DECISIONS.md before changing it.
+  boot.kernelPackages = pkgs.linuxPackages;
 
   # Fleet default (modules/nixos/common.nix) reboots 10s after a panic. Pegasus
   # has a physical display attached, so widen that to 600s — enough time to
