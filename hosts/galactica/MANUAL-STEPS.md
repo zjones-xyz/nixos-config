@@ -15,8 +15,8 @@ read-only discovery like this):
 
 | What | Confirmed value |
 |---|---|
-| NVMe root | `nvme-SPCC_M.2_PCIe_SSD_AA2300905N401KG00206` |
-| midden (formerly Unraid's `fastservices` pool) | `ata-SATA_SSD_19013024009545` |
+| NVMe root | `nvme-SPCC_M.2_PCIe_SSD_*0206` |
+| midden (formerly Unraid's `fastservices` pool) | `ata-SATA_SSD_*9545` |
 | Onboard NIC driver | `e1000e` |
 
 Both `disko.nix` and `configuration.nix` already have these baked in. Still
@@ -1920,7 +1920,7 @@ migrating a currently-500ing service first just compounds the state to sort out.
 
 ## 21. Replace `h-X4WE` — a failing `tank` member (opened 2026-10-02)
 
-Scrutiny flagged `h-X4WE` (serial `8CJZX4WE`, mapper `array-X4WE`, Unraid's old
+Scrutiny flagged `h-X4WE` (serial `*X4WE`, mapper `array-X4WE`, Unraid's old
 Parity 1) **Failed** on 2026-10-01. Read with `smartctl` on 2026-10-02: **197
 Current_Pending_Sector 184**, **198 Offline_Uncorrectable 46** (Scrutiny showed
 23 the day before), 5 Reallocated 7, 10 Spin_Retry 0, 199 UDMA_CRC 0, helium
@@ -1947,16 +1947,20 @@ member).
    spare qualifies (§9). ✅ `h-YWAH`, an HPE-branded HC520 (`HARDWARE-MAP.md`),
    in the case 2026-10-06; used (hours reset, ≈ 255 TB written), same capacity as X4WE.
 2. [ ] **Watch X4WE in Scrutiny every few days** until the new disk is in.
-3. [ ] **Burn the new disk in before it touches `tank`.** On the bare disk,
+3. [x] **Burn the new disk in before it touches `tank`.** On the bare disk,
    destructive: `sudo badblocks -wsv -b 4096 -t 0 /dev/disk/by-id/<new>`
    (one write + read pass, about 1.5 days at 12 TB), then
    `sudo smartctl -t long`. 5/197/198 must all still read 0.
+   ✅ YWAH 2026-10-08/09: badblocks 0 bad blocks (1d20h), long test completed
+   without error at hour 65; 5/196 and every devstat error counter 0.
 4. [ ] **Find X4WE's bay in cage A by serial.** Cage A's port-to-bay mapping is
    still open (`HARDWARE-MAP.md` §7). Fill that table while doing this.
-5. [ ] **Connect the new disk alongside X4WE, not in place of it.** Any free port
-   works — sidepool is still cabled to the LSI (§9 step 3), so one of its
-   cables is the obvious one — and the disk need not be in a bay yet. Replacing
-   with X4WE still online keeps RAIDZ1's redundancy through the resilver.
+5. [ ] **Swap bays, powered off: YWAH into X4WE's cage-A bay, X4WE onto YWAH's
+   loose LSI lead.** Both stay connected, so `tank` keeps full redundancy; ZFS
+   finds members by mapper name, not port. At the initrd unlock prompt, before
+   the passphrase, `ls /dev/disk/by-id/` must show both `…_*YWAH` and
+   `…_*X4WE`. YWAH missing = cage A's backplane feeds 3.3 V to the
+   power-disable pin: power off, Kapton pins 1–3, retry. Nothing is degraded.
 6. [ ] **LUKS it like the other members** (§9: whole-disk LUKS,
    `luks/arrayKeyFile` in slot 0, the fleet recovery passphrase in slot 1).
    Copy cipher and sector size from an existing member's `cryptsetup luksDump`
@@ -1970,9 +1974,12 @@ member).
 9. [ ] **Follow-up PR: remove `array-X4WE`'s crypttab line and ordering
    entry.** Switch, then cold-boot once to prove `tank` imports with the new
    member.
-10. [ ] **Pull X4WE; move the new disk into its bay.** Same session as §9 step 3
-    (sidepool's pull) if convenient. Update `HARDWARE-MAP.md` §1 with the new
-    row and ID, and print its caddy label (`docs/DISK-LABELLING.md`).
-11. [ ] **Retire X4WE.** `cryptsetup luksErase` destroys its keyslots, which is
-    enough since everything on it is ciphertext. It does not go in the drawer
-    as a spare; record it in `docs/DISK-DRAWER.md` as out of service.
+10. [ ] **Pull X4WE off the loose LSI lead** (the new disk is already in its
+    bay, step 5). Update `HARDWARE-MAP.md` §1 with the new row and ID, and
+    print its caddy label (`docs/DISK-LABELLING.md`).
+11. [ ] **RMA X4WE to the seller.** Warranty claim approved 2026-10-09; RMA
+    number, address and terms are in `fleet-inventory`. Only after step 8's
+    resilver: `cryptsetup luksErase` (destroys the keyslots, which is enough
+    since everything on it is ciphertext), photograph the drive and its pins,
+    pack it padded in an anti-static bag, keep the tracking number. It does not
+    go in the drawer; whatever comes back is a new disk with its own ID.

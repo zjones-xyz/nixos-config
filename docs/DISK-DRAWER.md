@@ -30,19 +30,19 @@ SMR section, which is the most consequential thing in this file.
 
 | ID | Device | Size | Full serial | Made | Rec. | Notes |
 |---|---|---|---|---|---|---|
-| `h-3V35` | **WD Red Plus** WD40EFPX-68C6CN0 | 4 TB | `WXM2D72D3V35` | 2022-10-12 | **CMR** | Hand-marked **“1”**. The only CMR 4 TB in the drawer. |
-| `h-CJE9-smr` | **WD Red** WD40EFAX-68JH4N1 | 4 TB | `WXD2D534CJE9` | 2023-07-03 | ⚠ SMR | Hand-marked **“2”** |
-| `h-CY72-smr` | **WD Red** WD40EFAX-68JH4N1 | 4 TB | `WXD2D534CY72` | 2023-07-03 | ⚠ SMR | Hand-marked **“3”** |
-| `h-QUTK-smr` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `WX52A20CQUTK` | 2020-02-25 | ⚠ SMR | |
-| `h-0X2T-smr` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `WX52A20C0X2T` | 2020-02-25 | ⚠ SMR | Same batch as `h-QUTK-smr` |
-| `h-SDCP` | **WD Blue** WD20EZRZ-00Z5HB0 | 2 TB | `WCC4M4CZSDCP` | 2017-06-27 | CMR | 5400 class |
-| ~~`h-8742`~~ | **Samsung Spinpoint F4EG** HD204UI | 2 TB | `S2H7JD2ZB08742` | 2010-11 | CMR | 📦 **ARCHIVAL — out of service, 2026-08-08.** Firmware defect, see below. Rev. A. Red `RAPTOR` case sticker. |
-| `h-5N8F` | **WD Black** WD1003FZEX-00MK2A0 | 1 TB | `WCC3F0VZ5N8F` | 2016-02-27 | CMR | 7200 rpm, 64 MB |
-| `h-NYXN` | **WD Blue** WD10EZEX-00BN5A0 | 1 TB | `WCC3F2NRNYXN` | 2015-05-01 | CMR | 7200 class |
-| `h-6D0X` | **WD Blue** WD10EZRZ-00HTKB0 | 1 TB | `WCC4J6NP6D0X` | 2017-03-19 | CMR | 5400 class. Serial char **confirmed 2026-08-10** — digit zero |
-| `h-AFYJ` | **Seagate Barracuda ES** ST3500630NS | 500 GB | `9QG9AFYJ` | 2008 (date code `08396`) | CMR | Still sealed in an antistatic bag. Firmware `3.AQN`, P/N `9BL146-038`. |
-| `h25-8SRC` | **WD Black** WD5000LPLX-66ZNTT1 | 500 GB | `WX31A18K8SRC` | 2018-02-10 | CMR | **2.5", 7 mm**, 7200 rpm, hence `h25-`. HP OEM spare — see below. ⚠ untested |
-| `h25-P4TH` | **Hitachi Travelstar 5K250** HTS542560K9SA00 | ⚠ 40 GB? | `WAG0P4TH` | 2009 (date code `4907`) | CMR | **2.5"**, hence `h25-`. Carries a `Microsoft P/N` field. ⚠ capacity, see below |
+| `h-3V35` | **WD Red Plus** WD40EFPX-68C6CN0 | 4 TB | `*3V35` | 2022-10-12 | **CMR** | Hand-marked **“1”**. The only CMR 4 TB in the drawer. |
+| `h-CJE9-smr` | **WD Red** WD40EFAX-68JH4N1 | 4 TB | `*CJE9` | 2023-07-03 | ⚠ SMR | Hand-marked **“2”** |
+| `h-CY72-smr` | **WD Red** WD40EFAX-68JH4N1 | 4 TB | `*CY72` | 2023-07-03 | ⚠ SMR | Hand-marked **“3”** |
+| `h-QUTK-smr` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `*QUTK` | 2020-02-25 | ⚠ SMR | |
+| `h-0X2T-smr` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `*0X2T` | 2020-02-25 | ⚠ SMR | Same batch as `h-QUTK-smr` |
+| `h-SDCP` | **WD Blue** WD20EZRZ-00Z5HB0 | 2 TB | `*SDCP` | 2017-06-27 | CMR | 5400 class |
+| ~~`h-8742`~~ | **Samsung Spinpoint F4EG** HD204UI | 2 TB | `*8742` | 2010-11 | CMR | 📦 **ARCHIVAL — out of service, 2026-08-08.** Firmware defect, see below. Rev. A. Red `RAPTOR` case sticker. |
+| `h-5N8F` | **WD Black** WD1003FZEX-00MK2A0 | 1 TB | `*5N8F` | 2016-02-27 | CMR | 7200 rpm, 64 MB |
+| `h-NYXN` | **WD Blue** WD10EZEX-00BN5A0 | 1 TB | `*NYXN` | 2015-05-01 | CMR | 7200 class |
+| `h-6D0X` | **WD Blue** WD10EZRZ-00HTKB0 | 1 TB | `*6D0X` | 2017-03-19 | CMR | 5400 class. Serial char **confirmed 2026-08-10** — digit zero |
+| `h-AFYJ` | **Seagate Barracuda ES** ST3500630NS | 500 GB | `*AFYJ` | 2008 (date code `08396`) | CMR | Still sealed in an antistatic bag. Firmware `3.AQN`, P/N `9BL146-038`. |
+| `h25-8SRC` | **WD Black** WD5000LPLX-66ZNTT1 | 500 GB | `*8SRC` | 2018-02-10 | CMR | **2.5", 7 mm**, 7200 rpm, hence `h25-`. HP OEM spare — see below. ⚠ untested |
+| `h25-P4TH` | **Hitachi Travelstar 5K250** HTS542560K9SA00 | ⚠ 40 GB? | `*P4TH` | 2009 (date code `4907`) | CMR | **2.5"**, hence `h25-`. Carries a `Microsoft P/N` field. ⚠ capacity, see below |
 
 **Aggregate: ~24.0 TB** (was ~23.5 TB before `h25-8SRC` was catalogued
 2026-09-05). That is materially more than the ~12 TB this file
@@ -147,12 +147,12 @@ manufacturers' identifiers at once**, and only one of them is its identity:
 
 | Field | Value | Whose |
 |---|---|---|
-| `S/N` | `WX31A18K8SRC` | **WD — this is the identity** |
+| `S/N` | `*8SRC` | **WD — this is the identity** |
 | `MDL` | `WD5000LPLX-66ZNTT1` | WD |
 | `WWN` | `50014EE60B60B8BB` | WD |
 | `P/N` | `805754-002` | HP |
 | `SPARES NO.` | `916852-001`, and `916877-001` on a second sticker | HP |
-| `CT` | `2FQUU017ZAG3CW` | WD internal, not an identity |
+| `CT` | `*G3CW` | WD internal, not an identity |
 
 **Same rule as `m2-0627`** (the HP-OEM SanDisk in the M.2 table): the label
 prints `S/N:` explicitly, so that is what the identifier derives from, and the
@@ -193,7 +193,7 @@ Per `DISK-LABELLING.md`, a character that cannot be read confidently gets flagge
 rather than guessed — a confidently wrong suffix is worse than a missing one.
 
 - ~~**`h-6D0X`**~~ ✅ **Confirmed 2026-08-10 by the owner, holding the drive: the
-  glyph is a digit zero.** The full serial is `WCC4J6NP6D0X` and the identifier
+  glyph is a digit zero.** The full serial is `*6D0X` and the identifier
   `h-6D0X` stands as written — no reprint, no rename, and the caddy label is
   clear to print. Resolved at attach time exactly as this section intended.
 - **`h25-P4TH`** — the label reads **40 GB**, but the model number
@@ -206,7 +206,7 @@ rather than guessed — a confidently wrong suffix is worse than a missing one.
   because a 2.5" drive in a drawer of 3.5" drives is exactly the kind of thing
   that gets mislabelled — it takes `h25-`, not `h-` (`DISK-LABELLING.md` §1).
 
-  The full serial `9QG9AFYJ` on `h-AFYJ` has the same class of ambiguity in its
+  The full serial `*AFYJ` on `h-AFYJ` has the same class of ambiguity in its
   *third* character (`9` vs `3`, read differently across two photographs) — but
   that character is outside the four-char suffix, so the identifier is unaffected.
 
@@ -231,7 +231,7 @@ inventory only.
 | ID | Device | Size | Full serial | Notes |
 |---|---|---|---|---|
 | `m2-wtf?-kootion` | **KOOTION X15**, M.2 NVMe PCIe 3.0, length inferred 2280 | 256 GB | ⚠ **none found** | See below |
-| `m2-0627` | **SanDisk Z400s** (HP OEM), `SD8SMAT-032G-1006`, M.2 **2242** | 32 GB | `182186400627` | ⚠ **SATA, not NVMe** — B+M keyed, and the label carries the SERIAL ATA logo. `form: m2-sata`. |
+| `m2-0627` | **SanDisk Z400s** (HP OEM), `SD8SMAT-032G-1006`, M.2 **2242** | 32 GB | `*0627` | ⚠ **SATA, not NVMe** — B+M keyed, and the label carries the SERIAL ATA logo. `form: m2-sata`. |
 
 ⚠ **The KOOTION carries no usable serial.** The only alphanumeric on its rear
 sticker is `KB0001`, beside a QR code — six characters, and `0001` reads as unit
