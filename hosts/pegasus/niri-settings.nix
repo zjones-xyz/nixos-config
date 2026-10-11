@@ -282,6 +282,21 @@ in
         open-on-output = monRight;
         open-focused = false;
       }
+
+      # Steam titles open on the centre panel — the only one of the three in
+      # landscape at a game-shaped size; the right-hand Dell is rotated to
+      # portrait, which is where AC8 kept landing. Steam gives every title an
+      # app-id of `steam_app_<appid>` (AC8 is `steam_app_2288340`, verified
+      # via `niri msg windows`), through Xwayland or native Wayland alike, so
+      # one match covers the library. Lutris/native/GOG launches do NOT carry
+      # this id and are unaffected.
+      # ⚠ No `open-focused = false` here, unlike the rules above, and it must
+      # stay that way: X11 games under xwayland-satellite freeze permanently
+      # if they start unfocused (MANUAL-STEPS §21).
+      {
+        matches = [ { app-id = "^steam_app_[0-9]+$"; } ];
+        open-on-output = monCentre;
+      }
     ];
 
     # Same stream privacy for DMS's layer surfaces: notification popups
