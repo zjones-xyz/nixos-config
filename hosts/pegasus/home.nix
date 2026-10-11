@@ -1,4 +1,4 @@
-{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, orcaSlicerNewer, bambuStudioNewer, ferdiumNewer, ... }:
+{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, pkgsApps, ... }:
 
 {
   imports = [
@@ -44,9 +44,10 @@
   # ── Desktop apps ────────────────────────────────────────────────────────────
   # allowUnfree is already set globally in modules/nixos/common.nix, which
   # pegasus imports — vscode/google-chrome/vivaldi/1Password/discord/spotify/
-  # ticktick/obsidian/bambu-studio/operaBrowser are all unfree and need it;
-  # firefox/ferdium/signal-desktop/openscad/orca-slicer/streamdeck-ui/
-  # floorp-bin/zenBrowser are free/open.
+  # obsidian/operaBrowser are all unfree and need it; firefox/signal-desktop/
+  # openscad/streamdeck-ui/floorp-bin/zenBrowser are free/open. `pkgsApps.*`
+  # (the nixpkgs-apps input, see flake.nix) is a separate instance with its
+  # own allowUnfree — ticktick and bambu-studio there are unfree.
   #
   # Brain.fm was left out — no nixpkgs package, no native Linux client
   # anywhere (subscription web app only); usable via firefox/chrome.
@@ -76,17 +77,14 @@
     # away. Same call as Brain.fm below: web app via firefox/chrome.
 
     discord
-    # 7.2.3, from the separate nixpkgs-ferdium input rather than the shared
-    # pin — reaching it there would mean giving up this host's 7.1 kernel
-    # pin (see flake.nix).
-    ferdiumNewer
+    pkgsApps.ferdium
     signal-desktop
     slack
     openscad
     obsidian
     spotify
-    # Ahead of nixpkgs (8.0.11 on master) — drop once it catches up.
-    (ticktick.overrideAttrs (finalAttrs: old: {
+    # Ahead of nixpkgs-apps (8.0.11 on unstable) — drop once it catches up.
+    (pkgsApps.ticktick.overrideAttrs (finalAttrs: old: {
       version = "8.0.20";
       src = fetchurl {
         url = "https://d2atcrkye2ik4e.cloudfront.net/download/linux/linux_deb_x64/ticktick-${finalAttrs.version}-amd64.deb";
@@ -278,17 +276,12 @@
     # by a former nixpkgs maintainer) via home-manager.extraSpecialArgs in
     # flake.nix.
     operaBrowser
-    # 02.05.00.67, with the real upstream withNvidiaGLWorkaround applied —
-    # fixes the blank Prepare/Preview build plate on this host's NVIDIA GPU.
-    # From the separate nixpkgs-bambu-studio input (see flake.nix); this
-    # flake's main nixpkgs pin predates both that version bump and the fix.
-    bambuStudioNewer
-    # 2.3.2 — this flake's main nixpkgs pin predates nixpkgs' 2.3.1 -> 2.3.2
-    # bump, so this comes from the separate nixpkgs-orca-slicer input
-    # instead (see flake.nix). Confirmed viewport already renders fine on
-    # this host's NVIDIA setup at 2.3.1, so no GL workaround needed here
-    # unlike bambuStudioNewer above.
-    orcaSlicerNewer
+    # withNvidiaGLWorkaround fixes the blank Prepare/Preview build plate on
+    # this host's NVIDIA GPU (nixpkgs#522161) — keep it.
+    (pkgsApps.bambu-studio.override { withNvidiaGLWorkaround = true; })
+    # No GL workaround: OrcaSlicer's viewport renders without one here, and
+    # its Zink route has known regressions (DECISIONS.md).
+    pkgsApps.orca-slicer
   ];
 
   # ── kitty: launch zsh directly, not the login shell ─────────────────────────

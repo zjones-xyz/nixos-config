@@ -31,6 +31,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
 - **Stock latest kernel + `scx`**, no CachyOS/Chaotic kernel. `boot.kernelPackages
   = pkgs.linuxPackages_latest`. sched-ext is upstream since 6.12, so the stock
   kernel is sufficient; `services.scx` asserts kernel ≥ 6.12.
+  **Kernel half changed 2026-10-11:** now the release's LTS (`linuxPackages`),
+  still stock — see "Kernel → the release LTS" under Other decisions. The scx
+  half is unaffected; 6.18 LTS meets its ≥ 6.12 floor.
 - **GPU: RTX 4070 on the proprietary driver with OPEN kernel modules**
   (`hardware.nvidia.open = true`). No legacy pin.
 - **Dual-GTX-1070 box stays separate** — not added here (Pascal would force the
@@ -926,6 +929,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   `nixos-rebuild switch` + relaunch on pegasus still needed to confirm this
   refactor didn't change runtime behavior versus the already-confirmed
   hand-rolled version.
+  **Superseded 2026-10-11:** bambu-studio now comes from `nixpkgs-apps`,
+  workaround kept — see "Desktop apps from `nixpkgs-apps`" below.
 
 - **OrcaSlicer bumped 2.3.1 -> 2.3.2, 2026-08-22** — pulled from a third
   standalone flake input, `nixpkgs-orca-slicer`, pinned to nixpkgs commit
@@ -952,6 +957,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   Validated the same way as `nixpkgs-bambu-studio` above
   (`flake-check-sandboxed.sh`, exit 0). Not yet confirmed with a real
   `nixos-rebuild switch` on pegasus.
+  **Superseded 2026-10-11:** orca-slicer now comes from `nixpkgs-apps`, at
+  2.4.2 — see "Desktop apps from `nixpkgs-apps`" below.
 
 - **Opened UDP 2021 + 1900 on the firewall for Bambu printer LAN
   auto-discovery, 2026-08-22.** Bambu/Orca don't send a discovery query —
@@ -1026,6 +1033,7 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   break were both hit via actual `nrs` runs on pegasus (not just eval).
   The 7.1 kernel pin itself was validated with `flake-check-sandboxed.sh`
   (exit 0) but not yet confirmed with a real `nixos-rebuild switch`.
+  **Superseded 2026-10-11** by "Kernel → the release LTS" below.
 
 - **SDDM `defaultSession` switched from "plasma-dragonized" to "niri",
   2026-09-01.** Niri (added 2026-08-10, see above) is now the daily driver;
@@ -1382,3 +1390,66 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   daily driver in service of one chat app.
   Validated by eval only (`nix flake check`, ferdium resolves to 7.2.3, kernel
   still 7.1.9); not yet confirmed by a real `nixos-rebuild switch`.
+  **Superseded 2026-10-11:** the kernel is now LTS and ferdium comes from
+  `nixpkgs-apps` — both entries below.
+
+- **Kernel → the release LTS (`linuxPackages`, 6.18), was pinned
+  `linuxPackages_7_1`, 2026-10-11.** nixpkgs deletes non-LTS kernels at
+  upstream EOL *even on a stable release*: `linux_7_1` became a throw on
+  2026-09-02. The pin therefore held the **shared** nixpkgs at 2026-08-20 —
+  the last revision that still had 7.1 — freezing every host in the fleet
+  for this one, while pegasus itself ran a kernel getting no more fixes
+  (7.1.9). LTS is the only kernel nixpkgs keeps for a whole release, so it is
+  the only choice that cannot recreate this freeze. Stock kernel either way;
+  the brief's "no CachyOS/Chaotic" still holds.
+  *Reverses the ferdium entry's "Alt rejected" above.* That weighed a kernel
+  downgrade against one chat app; the real cost was the whole fleet's
+  nixpkgs plus an EOL kernel on the daily driver.
+  *Checked for an NVIDIA or scheduler reason against LTS — found none:*
+  - The 7.1 pin's only reason was that NVIDIA 595.71.05 does not build against
+    **7.2** (the strncpy and `drm_atomic_state` breaks above). Nothing in the
+    repo, its history or the run book ties NVIDIA to 7.x over 6.18; the open
+    module evaluates against 6.18.45 and is prebuilt in cache.nixos.org (per
+    the ferdium entry). §21's lockups are userspace (Discord,
+    xwayland-satellite, gamescope), not kernel.
+  - The scheduler in force is **EEVDF** — scx has been off since 2026-08-01
+    (game-launch crashes) — and EEVDF is the in-tree default since 6.6.
+    "Latest" in the brief was only ever for sched-ext's ≥ 6.12 floor; nixpkgs
+    enables `SCHED_CLASS_EXT` from 6.12, and pegasus with `scx_lavd` forced on
+    evaluates cleanly against 6.18.45. Whether the crash was `scx_lavd`, scx
+    in general, or kernel-specific remains untested on either kernel.
+  - No out-of-tree modules besides NVIDIA (`extraModulePackages = [ ]`, no
+    ZFS); all hardware (B550, RTL8125, MT7921K, Ada) predates 6.18.
+  *Not done here:* bumping the shared nixpkgs. This change makes it possible
+  without moving it — that is its own `[all]` PR.
+  Validated by eval: pegasus toplevel instantiates (6.18.45, NVIDIA
+  595.71.05 open, scx off); every other host's system is identical to main's
+  once motd's revision stamp is held constant. Real switch: MANUAL-STEPS §27.
+
+- **Desktop apps from `nixpkgs-apps` (nixos-unstable), 2026-10-11** —
+  replacing the per-app `nixpkgs-orca-slicer`, `nixpkgs-bambu-studio` and
+  `nixpkgs-ferdium` pins with one input, instantiated once in `flake.nix` as
+  `pkgsApps` (with its own `allowUnfree` — a separate instance does not
+  inherit `modules/nixos/common.nix`'s) and passed to `home.nix`.
+  *Policy:* a desktop app that has to move faster than the 26.05 release
+  comes from `pkgsApps.<name>`. Kernel, services and everything else stay on
+  `nixpkgs`. Never import NixOS *modules* from it — two nixpkgs' module sets
+  collide on option definitions; for a newer service binary use
+  `services.<x>.package` instead. This is the common community layering
+  (stable system, second nixpkgs for apps) rather than a pin per app.
+  *What moved:* ferdium 7.2.3 (unchanged); bambu-studio 02.05.00.67 →
+  02.08.00.50, `withNvidiaGLWorkaround` kept (verified: the installed
+  derivation is the override's, not plain); orca-slicer 2.3.2 → 2.4.2 —
+  2.4.x was deferred above for lack of a vetted nixpkgs patch set, which
+  unstable now carries. ticktick keeps its `overrideAttrs` (now on
+  `pkgsApps`): unstable is still at 8.0.11, behind the override's 8.0.20.
+  *Trade-off accepted:* apps on this input can no longer be bumped one at a
+  time — `nix flake update nixpkgs-apps` moves them together. A single app
+  that must hold back gets its own pin again, as the exception.
+  *Risk to watch:* apps now link a newer graphics stack than the NVIDIA
+  userspace from the system nixpkgs. Newer app over older driver is the
+  direction that usually works (the driver's libraries load fine under a
+  newer glibc), but it is the first suspect if one of these apps stops
+  rendering. The remaining Electron apps (discord, slack, signal-desktop,
+  obsidian, …) stay on the shared nixpkgs; moving one is a one-word change.
+  Validated by eval; real switch: MANUAL-STEPS §27.

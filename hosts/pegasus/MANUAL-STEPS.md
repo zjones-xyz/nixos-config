@@ -848,3 +848,29 @@ enabled) covers that with no extra host config.
        that needs a bridged libvirt network instead of the default NAT
        one — not set up here since it wasn't asked for; revisit only if the
        NAT setup actually fails for that reason.
+
+## 27. LTS kernel + `nixpkgs-apps` — verify after the next switch
+
+The kernel moves from 7.1.9 to the 6.18 LTS, and four apps now come from
+`nixpkgs-apps` (see `DECISIONS.md`: "Kernel → the release LTS" and "Desktop
+apps from `nixpkgs-apps`"). Both were validated by eval only. The 7.1.9
+generation stays in the systemd-boot menu as the rollback until the next
+garbage collection.
+
+1. [ ] Switch from another host or a TTY (decision 4 in `DECISIONS.md`), then
+   **reboot** — a kernel change only takes effect on boot.
+2. [ ] `uname -r` shows `6.18.x`.
+3. [ ] `nvidia-smi` shows the 4070 on driver 595.71.05, and the niri Wayland
+   session logs in.
+4. [ ] Scheduler: `cat /sys/kernel/sched_ext/state` shows `disabled` and
+   `systemctl status scx` is inactive, i.e. EEVDF (same as §3).
+5. [ ] One Proton title launches and plays for a few minutes.
+6. [ ] Bambu Studio (now 02.08): the Prepare/Preview build plate renders
+   rather than going blank — that is the NVIDIA GL workaround still working.
+7. [ ] OrcaSlicer (now 2.4.2): the 3D viewport renders, and the
+   Home/Device/Project pages and printer/filament preset dialogs open — the
+   area the Zink regression hit on other NVIDIA setups.
+8. [ ] ferdium and ticktick open (same versions, rebuilt against unstable).
+9. [ ] If anything above fails: boot the previous generation from the
+   systemd-boot menu, note here what broke, and leave the PR's fix to a
+   config session rather than patching on the host.
