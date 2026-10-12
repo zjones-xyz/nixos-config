@@ -1,5 +1,10 @@
 { config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, pkgsApps, ... }:
 
+let
+  # Built against pkgsApps, the nixpkgs Orca comes from, so the plugin's
+  # libstdc++/OpenSSL match the process that dlopens it.
+  openBambooNetworking = pkgsApps.callPackage ../../pkgs/open-bamboo-networking.nix { };
+in
 {
   imports = [
     ../../modules/home/common.nix
@@ -464,6 +469,40 @@
     if [ ! -e "$DMS_STATE_DIR/session.json" ] && [ -e "$CHECKPOINTS/dms-session.json" ]; then
       $DRY_RUN_CMD mkdir -p "$DMS_STATE_DIR"
       $DRY_RUN_CMD cp "$CHECKPOINTS/dms-session.json" "$DMS_STATE_DIR/session.json"
+    fi
+  '';
+
+  # ── OrcaSlicer: open-bamboo-networking instead of Bambu's plugin ──────────
+  # Bambu's stock network plugin aborts Orca 2.4.2 at startup (DECISIONS.md).
+  # Orca dlopens plugins/libbambu_networking_<network_plugin_version>.so from
+  # its data dir, so the open build is linked there and OrcaSlicer.conf is
+  # pointed at it. Orca owns that file, so only these keys are set, and only
+  # once it exists. Run book: MANUAL-STEPS.md §29.
+  xdg.configFile = lib.listToAttrs (map (so: {
+    name = "OrcaSlicer/plugins/${so}";
+    value.source = "${openBambooNetworking}/plugins/${so}";
+  }) [
+    "libbambu_networking_${openBambooNetworking.pluginVersion}.so"
+    "libBambuSource.so"
+    "liblive555.so"
+  ]);
+
+  home.activation.orcaNetworkPlugin = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    conf="${config.xdg.configHome}/OrcaSlicer/OrcaSlicer.conf"
+    if [ -f "$conf" ]; then
+      tmp=$(mktemp)
+      # network_plugin_skipped_versions is a ';'-joined string, not an array.
+      ${pkgs.jq}/bin/jq --arg v "${openBambooNetworking.pluginVersion}" '
+        .app.installed_networking = "true"
+        | .app.network_plugin_version = $v
+        | .app.network_plugin_remind_later = "true"
+        | .app.update_network_plugin = "false"
+        | if (.app.network_plugin_skipped_versions | type) == "string"
+          then .app.network_plugin_skipped_versions |=
+            (split(";") | map(select(. != "" and . != $v)) | join(";"))
+          else . end
+      ' "$conf" > "$tmp"
+      if cmp -s "$tmp" "$conf"; then rm -f "$tmp"; else $DRY_RUN_CMD mv "$tmp" "$conf"; fi
     fi
   '';
 

@@ -892,3 +892,28 @@ next garbage collection.
 10. [ ] If anything above fails: boot the previous generation from the
     systemd-boot menu, note here what broke, and leave the PR's fix to a
     config session rather than patching on the host.
+
+## 29. OrcaSlicer on open-bamboo-networking — verify after the next switch
+
+`home.nix` links open-bamboo-networking (OBN) into `~/.config/OrcaSlicer/plugins/`
+and points `OrcaSlicer.conf` at it (`DECISIONS.md`: "OrcaSlicer's network
+plugin → open-bamboo-networking"). The activation step only edits an existing
+`OrcaSlicer.conf`, and Orca rewrites that file when it exits, so quit Orca
+before switching.
+
+1. [ ] Quit OrcaSlicer. Move aside anything left in `plugins/` from the stock
+       plugin, or Home Manager refuses to replace `libBambuSource.so`:
+       `mv ~/.config/OrcaSlicer/plugins ~/.config/OrcaSlicer/plugins.stock-$(date +%F)`
+       (§27 step 7 may already have done this).
+2. [ ] Switch. `ls -l ~/.config/OrcaSlicer/plugins/` shows three links into
+       the store, and
+       `jq '.app | {installed_networking, network_plugin_version, update_network_plugin}' ~/.config/OrcaSlicer/OrcaSlicer.conf`
+       shows `"true"`, `"02.03.00.99"`, `"false"`.
+3. [ ] Launch Orca from a terminal. stderr shows
+       `[obn] Loaded Open Bamboo Networking plugin, version v2.2.0`, there is
+       no "Bambu Network Plug-in Required" dialog, and it **survives a second
+       launch**.
+4. [ ] Device tab: add a printer by IP and access code and confirm it
+       connects. A Bambuddy virtual printer also needs Bambuddy's CA in
+       Orca's `printer.cer` (#166, §28 there).
+
