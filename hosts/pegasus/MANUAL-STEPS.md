@@ -887,3 +887,32 @@ before switching.
        connects. A Bambuddy virtual printer also needs Bambuddy's CA in
        Orca's `printer.cer` (#166, §28 there).
 
+## 30. nix-daemon build limits + oomd — verify during a big build
+
+`modules/nixos/performance.nix` now runs nix-daemon builds at `batch` CPU
+priority with `MemoryHigh=40G`, `max-jobs = 4`, `cores = 8`, and turns oomd on
+for the user slices (it previously watched nothing). Evaluated only, never
+switched; reasoning in DECISIONS.md (nix-daemon build limits).
+
+1. [ ] After the switch, confirm the unit picked it up:
+   `systemctl show nix-daemon -p MemoryHigh -p CPUSchedulingPolicy -p IOSchedulingClass`
+   → `MemoryHigh=42949672960`, `CPUSchedulingPolicy=3` (batch),
+   `IOSchedulingClass=3` (idle).
+2. [ ] `nix config show | grep -E '^(max-jobs|cores) '` → `4` / `8`.
+3. [ ] `oomctl` lists `user.slice` (and the user manager's slices) under
+   monitored memory-pressure cgroups, and does **not** list `system.slice`
+   or `-.slice`.
+4. [ ] Force a big local build (e.g. `nix build --rebuild` of Bambu Studio
+   or OrcaSlicer, or the next `nixos-rebuild switch` that compiles one). While
+   it runs: the desktop, video playback and a game stay responsive;
+   `pid=$(pgrep -n cc1plus) && chrt -p "$pid"` reports `SCHED_BATCH`;
+   `pgrep -c cc1plus` stays at or under ~32.
+5. [ ] During that build, watch `systemctl status nix-daemon` (the `Memory:`
+   line) and `cat /sys/fs/cgroup/system.slice/nix-daemon.service/memory.events`.
+   A rising `high` count is the throttle working; the build should finish,
+   just slower. If it crawls for long stretches, lower `cores` before
+   raising `MemoryHigh`.
+6. [ ] Run a game during a build. Check whether the build keeps moving at
+   about half speed and the game holds its frame rate. If the game stutters,
+   switch to the root-level idle slice described in the DECISIONS entry and
+   record the result here.
