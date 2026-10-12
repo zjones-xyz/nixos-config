@@ -1981,15 +1981,20 @@ member).
    `zpool status` until the resilver completes. X4WE detaches by itself at the
    end. ✅ Started 2026-10-10 21:41; resilvered 4.32T in 18:53:42 with 0 errors,
    finished 2026-10-11 16:34. `array-YWAH` is a plain raidz1 member.
-9. [ ] **Follow-up PR: remove `array-X4WE`'s crypttab line and ordering
+9. [x] **Follow-up PR: remove `array-X4WE`'s crypttab line and ordering
    entry.** Switch, then cold-boot once to prove `tank` imports with the new
-   member. PR #179 open.
+   member. ✅ #179, switched 2026-10-11; the cold boot imported `tank` ONLINE
+   with all seven members and no errors.
 10. [ ] **Pull X4WE off the loose LSI lead** (the new disk is already in its
     bay, step 5). Update `HARDWARE-MAP.md` §1 with the new row and ID, and
     print its caddy label (`docs/DISK-LABELLING.md`).
+    Pulled and `HARDWARE-MAP.md` updated 2026-10-11; **the `h-YWAH` caddy label
+    is still to print.**
 11. [ ] **RMA X4WE to the seller.** Warranty claim approved 2026-10-09; RMA
     number, address and terms are in `fleet-inventory`. Only after step 8's
     resilver: `cryptsetup luksErase` (destroys the keyslots, which is enough
     since everything on it is ciphertext), photograph the drive and its pins,
     pack it padded in an anti-static bag, keep the tracking number. It does not
     go in the drawer; whatever comes back is a new disk with its own ID.
+    `luksErase` done 2026-10-11, before the cold boot; photos, packing and
+    shipping remain.
