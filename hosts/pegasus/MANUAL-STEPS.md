@@ -894,12 +894,17 @@ priority with `MemoryHigh=40G`, `max-jobs = 4`, `cores = 8`, and turns oomd on
 for the user slices (it previously watched nothing). Evaluated only, never
 switched; reasoning in DECISIONS.md (nix-daemon build limits).
 
-1. [ ] After the switch, confirm the unit picked it up:
+Steps 1–3 verified after the switch (2026-10-12): values exactly as listed,
+and `oomctl` monitors `/user.slice` and its descendants (`app.slice`,
+`background.slice`, `session.slice`) at 80% / 30 s, with no system or root
+slice and no swap-monitored cgroups.
+
+1. [x] After the switch, confirm the unit picked it up:
    `systemctl show nix-daemon -p MemoryHigh -p CPUSchedulingPolicy -p IOSchedulingClass`
    → `MemoryHigh=42949672960`, `CPUSchedulingPolicy=3` (batch),
    `IOSchedulingClass=3` (idle).
-2. [ ] `nix config show | grep -E '^(max-jobs|cores) '` → `4` / `8`.
-3. [ ] `oomctl` lists `user.slice` (and the user manager's slices) under
+2. [x] `nix config show | grep -E '^(max-jobs|cores) '` → `4` / `8`.
+3. [x] `oomctl` lists `user.slice` (and the user manager's slices) under
    monitored memory-pressure cgroups, and does **not** list `system.slice`
    or `-.slice`.
 4. [ ] Force a big local build (e.g. `nix build --rebuild` of Bambu Studio
