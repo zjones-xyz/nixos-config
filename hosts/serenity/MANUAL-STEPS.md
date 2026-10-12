@@ -29,7 +29,7 @@ If a workshop image turns out to be amd64-only, recreate the VM with Rosetta
 enabled: `colima delete`, then `colima start --vz-rosetta` with the flags above.
 `colima delete` wipes all images and volumes.
 
-## 2. Bambuddy's CA in OrcaSlicer's `printer.cer`
+## #166 Bambuddy's CA in OrcaSlicer's `printer.cer`
 
 `modules/darwin/slicer-certs.nix` appends `certs/bambuddy-vp-ca.crt` to the
 OrcaSlicer cask's `Contents/Resources/cert/printer.cer` on
