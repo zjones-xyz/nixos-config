@@ -1521,8 +1521,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   compiler runs inside `nix-daemon.service`'s cgroup. `nice`/`systemd-run`
   around `nixos-rebuild` changes nothing.
   *CPU — `batch`, after `idle` turned out not to reach the desktop:*
-  `nix.daemonCPUSchedPolicy = "batch"`: builds never preempt a waking task,
-  but still get CPU under contention. The first draft used `idle` plus
+  `nix.daemonCPUSchedPolicy = "batch"`: a waking build task never preempts
+  the running task, but builds still get CPU under contention. The first draft used `idle` plus
   `CPUWeight = "idle"` (cgroup `cpu.idle`), and review showed it does not do
   what it was meant to. The cpu controller is already on (systemd's
   `user@.service` delegates `cpu`), so at the root the scheduler compares

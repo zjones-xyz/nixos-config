@@ -912,7 +912,7 @@ switched; reasoning in DECISIONS.md (nix-daemon build limits).
    A rising `high` count is the throttle working; the build should finish,
    just slower. If it crawls for long stretches, lower `cores` before
    raising `MemoryHigh`.
-6. [ ] Run a game during a build. Expect the build to keep moving at about
-   half speed and the game to hold its frame rate. If the game stutters,
+6. [ ] Run a game during a build. Check whether the build keeps moving at
+   about half speed and the game holds its frame rate. If the game stutters,
    switch to the root-level idle slice described in the DECISIONS entry and
    record the result here.
