@@ -22,6 +22,22 @@
     '';
   };
 
+
+  options.homelab.smart.selfTests = lib.mkOption {
+    type = lib.types.nullOr lib.types.str;
+    default = null;
+    example = "(S/../../7/03|L/../15/./03)";
+    description = ''
+      smartd `-s` regex scheduling drive self-tests (smartd.conf(5)), or null
+      for none. Applies to every autodetected disk. Only meaningful with
+      `monitor = true`.
+
+      Results surface through the attributes Scrutiny already collects (a long
+      test that hits bad sectors moves 197/198) and the drive's self-test log,
+      so a host shipping to the Scrutiny hub has somewhere a person looks.
+    '';
+  };
+
   options.homelab.smart.standbyAware = lib.mkOption {
     type = lib.types.bool;
     default = false;
@@ -46,11 +62,14 @@
       long-term — `standby,N` forces a check every N skipped polls if it stops
       being acceptable.
 
-      ⚠ This flag does not cover `-o on`, which stays in the monitored string
-      above. On some drives the firmware's armed offline-collection routine
-      spins the disk up on its own, which would defeat the spin-down from the
-      drive side where smartd is no longer the cause. Unverified on this
-      fleet; the skipped-poll log line is what would show it.
+      ⚠ This flag covers neither `-o on` nor `-s`, both of which stay in the
+      monitored string above. A drive's armed offline-collection routine can
+      spin it up on its own, and a scheduled self-test has to spin it up to
+      run at all — so on a host setting `selfTests` as well, the schedule
+      defeats the spin-down this flag is protecting, at whatever hour the
+      regex names. Neither is smartd's periodic poll, so neither shows as a
+      skipped-poll line; galactica's PLATFORM.md §13e item 1 keeps the
+      reasoning.
     '';
   };
 
@@ -64,10 +83,14 @@
         autodetect = true;
 
         # Full attribute set + the drive's own offline collection/autosave.
-        # Deliberately no `-s` self-test schedule until alerts go somewhere
-        # a person actually reads (see below).
+# Self-tests are opt-in per host (selfTests): only hosts whose SMART
+        # data reaches Scrutiny have anyone reading the result. ⚠ Both `-o on`
+        # and `-s` spin a parked disk up regardless of `-n standby` — see
+        # standbyAware's description.
         defaults.monitored = "-a -o on -S on"
-          + lib.optionalString config.homelab.smart.standbyAware " -n standby";
+          + lib.optionalString config.homelab.smart.standbyAware " -n standby"
+          + lib.optionalString (config.homelab.smart.selfTests != null)
+            " -s ${config.homelab.smart.selfTests}";
 
         # Wall messages: useless headless, noisy on a desktop.
         notifications.wall.enable = false;

@@ -650,40 +650,17 @@ own Xwayland and takes satellite out of the loop; `gaming.nix` already
 installs it. Interim workaround: keep a freshly launched game focused for
 its first minute or two.
 
-**gamescope is not usable here as of 2026-10-08** — tried against ACE COMBAT
-8 and it never reached a window. Launched from Steam's environment,
-gamescope 3.16.23 aborts during backend setup (`CSDLBackend::~CSDLBackend` ←
-`IBackend::Set` ← `main`, "terminate called without an active exception").
-From a clean shell both backends *do* initialise, but each dumps core on
-teardown once the child exits: SIGABRT under `--backend sdl`, SIGSEGV under
-`--backend wayland`. A compositor that crashes while tearing its outputs down
-is the same event that takes Discord and Steam's CEF windows with it, so this
-trades a freeze for a crash. Revisit on a gamescope bump; the command to
-retry with is:
-`gamescope -f -w 2560 -h 1440 -W 3840 -H 2160 --force-grab-cursor --backend sdl -- gamemoderun %command%`
-— `-W`/`-H` is the output's *native* mode (the centre LG is 3840x2160) and
-`-w`/`-h` the render size, so the panel is never asked to change mode. Also
-note Lutris's own gamescope toggle is NOT a substitute for Steam titles:
-Lutris's Steam runner hands launching off to the Steam client, so Lutris
-system options never wrap the game process
-(https://github.com/lutris/lutris/issues/3085). It only applies to games
-Lutris itself execs (Wine/native/GOG/EGS).
-
-**`gamemoderun` in a game's launch options is verified working, 2026-10-08.**
-Added to ACE COMBAT 8's line, `gamemoded` registered the title and the
-`ollama-pause` GPU drain in `modules/nixos/ollama.nix` fired within 2s of the
-game starting: `ollama` went `inactive`, `ollama-pause` `active`. That unit
-had never been activated once before. Proton titles don't request gamemode
-themselves, so this is per-game — every title that should drain the GPU needs
-`gamemoderun` in its own launch options, and the drain stays dead for any
-that don't.
-⚠ **But it prompts for authentication, so it is not yet unattended.**
-`gamemoded` is a *user* unit, so `custom.start`/`end` run as z, and
-`systemctl start ollama-pause.service` on a *system* unit goes through
-polkit's `org.freedesktop.systemd1.manage-units` action — DMS's auth dialog
-pops mid-launch, and the 2s figure above was measured with it authenticated.
-Needs a polkit rule granting z that one unit before the drain runs on its
-own.
+**Launch options now live in `docs/runbooks/steam-launch-options.md`** — go
+there when setting up any new Steam title. Both halves were verified against
+ACE COMBAT 8 on the hardware, 2026-10-08: `gamemoderun %command%` works and is
+what the `ollama-pause` GPU drain depends on, **per-game**, because Proton
+titles never request gamemode themselves — so the drain stays dead for any
+title whose launch options lack it. gamescope does *not* work here: it crashes
+on teardown in both backends, taking Electron/CEF windows with it, so it trades
+an occasional freeze for a reliable crash. The runbook carries the crash
+signatures and retry command, the Proton `winewayland.drv` finding, the polkit
+prompt that still gates the drain, and the VRAM ceiling that decides whether a
+game fits at all.
 
 To try, roughly cheapest-first:
 
@@ -700,18 +677,11 @@ To try, roughly cheapest-first:
 3. [ ] Native Wayland — `PROTON_ENABLE_WAYLAND=1 gamemoderun %command%`.
    Avoids the satellite bug at its root rather than working around it, per
    the issue reporter, and needs no nested compositor. **Blocked on the
-   Proton build:** the flag only does anything if that Proton ships
-   `winewayland.drv`, and none of the three here do — checked 2026-10-08,
-   Proton 11.0, Proton Hotfix (`hotfix-20261007-x86_64`) and GE-Proton11-1
-   (from `gaming.nix`) all carry `winex11.drv` only. Set against AC8 the
-   flag was simply inert: the game launched on X11 anyway, its niri window
-   still owned by `xwayland-satellite` (niri reports the satellite's PID,
-   not the game's — that's how to tell, not the window's app-id, which is
-   `steam_app_<appid>` either way). So this step needs Proton Experimental
-   installed first (Steam → Properties → Compatibility), then re-check for
-   `winewayland.drv` before trusting the flag.
-   Denuvo is *not* the blocker: AC8 goes through `start_protected_game.exe`
-   and started fine with the flag set.
+   Proton build:** none of the three installed here ship `winewayland.drv`,
+   so the flag is inert — install Proton Experimental first (Steam →
+   Properties → Compatibility), then re-check for the driver before trusting
+   it. Which builds were checked, and how to tell native Wayland from
+   Xwayland afterwards, are in `docs/runbooks/steam-launch-options.md`.
 4. [ ] Check https://github.com/Supreeeme/xwayland-satellite/issues/201
    occasionally; once fixed and the nixpkgs package carries it, step 3
    becomes unnecessary for the unfocused-freeze.
@@ -848,3 +818,128 @@ enabled) covers that with no extra host config.
        that needs a bridged libvirt network instead of the default NAT
        one — not set up here since it wasn't asked for; revisit only if the
        NAT setup actually fails for that reason.
+
+## 27. LTS kernel + `nixpkgs-apps` — verify after the next switch
+
+The kernel moves from 7.1.9 to the 6.18 LTS, and four apps now come from
+`nixpkgs-apps` (see `DECISIONS.md`: "Kernel → the release LTS" and "Desktop
+apps from `nixpkgs-apps`"). Both were validated by eval only. The same switch
+is also the first build of Claude Desktop 2.31226.1 (#171): its `.deb` host
+was outside the authoring session's network, so nothing has fetched it yet.
+The 7.1.9 generation stays in the systemd-boot menu as the rollback until the
+next garbage collection.
+
+1. [x] Switch from another host or a TTY (decision 4 in `DECISIONS.md`), then
+   **reboot** — a kernel change only takes effect on boot.
+2. [x] `uname -r` shows `6.18.x`.
+3. [x] `nvidia-smi` shows the 4070 on driver 595.71.05, and the niri Wayland
+   session logs in.
+4. [x] Scheduler: `cat /sys/kernel/sched_ext/state` shows `disabled` and
+   `systemctl status scx` is inactive, i.e. EEVDF (same as §3).
+5. [x] One Proton title launches and plays for a few minutes.
+6. [x] Bambu Studio (now 02.08): the Prepare/Preview build plate renders
+   rather than going blank — that is the NVIDIA GL workaround still working.
+   Separately, the toolbar and tooltips strobe on hover. That predates this
+   change: it happens on 02.05 too, under `GDK_BACKEND=x11` too, and on the
+   7.1.9 generation too. Deferred to #177 (suspect: the workaround's zink path).
+7. [x] OrcaSlicer (now 2.4.2). The stock Bambu network plugin Orca downloads
+   into `~/.config/OrcaSlicer/plugins/` makes every later launch abort
+   (`free(): invalid size`), so keep it out until the open-source replacement
+   lands: `mv ~/.config/OrcaSlicer/plugins ~/.config/OrcaSlicer/plugins.stock-crashes`,
+   and dismiss the "Bambu Network Plug-in Required" dialog (✕) on each start
+   rather than letting it download again. Launched normally (the wrapper sets
+   `WEBKIT_DISABLE_DMABUF_RENDERER`), check: the Home page and Setup Wizard
+   render rather than black, the 3D viewport renders, the Device/Project pages
+   and preset dialogs open — and it **survives a second launch**. Without the
+   plugin, Orca can slice but cannot reach Bambu printers or Bambuddy.
+   Passed with `plugins/` moved aside, second launch included.
+8. [x] ferdium and ticktick open (same versions, rebuilt against unstable).
+9. [x] Claude Desktop (now 2.31226.1, up from 1.34493.1) launches, and its MCP
+   servers start — Settings → Developer lists them as running. A 1.x → 2.x
+   jump is where an MCP config-format change would show up. Pegasus had no MCP
+   servers configured; a throwaway `npx` filesystem server came up running,
+   which exercises the FHS wrapper's `npx` path.
+10. [ ] If anything above fails: boot the previous generation from the
+    systemd-boot menu, note here what broke, and leave the PR's fix to a
+    config session rather than patching on the host.
+
+## 29. OrcaSlicer on open-bamboo-networking — verify after the next switch
+
+`home.nix` links open-bamboo-networking (OBN) into `~/.config/OrcaSlicer/plugins/`
+and points `OrcaSlicer.conf` at it (`DECISIONS.md`: "OrcaSlicer's network
+plugin → open-bamboo-networking"). The activation step only edits an existing
+`OrcaSlicer.conf`, and Orca rewrites that file when it exits, so quit Orca
+before switching.
+
+1. [x] Quit OrcaSlicer. Move aside anything left in `plugins/` from the stock
+       plugin, or Home Manager refuses to replace `libBambuSource.so`:
+       `mv ~/.config/OrcaSlicer/plugins ~/.config/OrcaSlicer/plugins.stock-$(date +%F)`
+       (§27 step 7 may already have done this).
+2. [x] Switch. `ls -l ~/.config/OrcaSlicer/plugins/` shows three links into
+       the store, and
+       `jq '.app | {installed_networking, network_plugin_version, update_network_plugin}' ~/.config/OrcaSlicer/OrcaSlicer.conf`
+       shows `"true"`, `"02.03.00.99"`, `"false"`.
+3. [x] Launch Orca from a terminal. stderr shows
+       `[obn] Loaded Open Bamboo Networking plugin, version v2.2.0`, there is
+       no "Bambu Network Plug-in Required" dialog, and it **survives a second
+       launch**.
+4. [x] Device tab: add a printer by IP and access code and confirm it
+       connects. A Bambuddy virtual printer also needs Bambuddy's CA in
+       Orca's `printer.cer` (§#166).
+
+## 30. nix-daemon build limits + oomd — verify during a big build
+
+`modules/nixos/performance.nix` now runs nix-daemon builds at `batch` CPU
+priority with `MemoryHigh=40G`, `max-jobs = 4`, `cores = 8`, and turns oomd on
+for the user slices (it previously watched nothing). Evaluated only, never
+switched; reasoning in DECISIONS.md (nix-daemon build limits).
+
+Steps 1–3 verified after the switch (2026-10-12): values exactly as listed,
+and `oomctl` monitors `/user.slice` and its descendants (`app.slice`,
+`background.slice`, `session.slice`) at 80% / 30 s, with no system or root
+slice and no swap-monitored cgroups.
+
+1. [x] After the switch, confirm the unit picked it up:
+   `systemctl show nix-daemon -p MemoryHigh -p CPUSchedulingPolicy -p IOSchedulingClass`
+   → `MemoryHigh=42949672960`, `CPUSchedulingPolicy=3` (batch),
+   `IOSchedulingClass=3` (idle).
+2. [x] `nix config show | grep -E '^(max-jobs|cores) '` → `4` / `8`.
+3. [x] `oomctl` lists `user.slice` (and the user manager's slices) under
+   monitored memory-pressure cgroups, and does **not** list `system.slice`
+   or `-.slice`.
+4. [ ] Force a big local build (e.g. `nix build --rebuild` of Bambu Studio
+   or OrcaSlicer, or the next `nixos-rebuild switch` that compiles one). While
+   it runs: the desktop, video playback and a game stay responsive;
+   `pid=$(pgrep -n cc1plus) && chrt -p "$pid"` reports `SCHED_BATCH`;
+   `pgrep -c cc1plus` stays at or under ~32.
+5. [ ] During that build, watch `systemctl status nix-daemon` (the `Memory:`
+   line) and `cat /sys/fs/cgroup/system.slice/nix-daemon.service/memory.events`.
+   A rising `high` count is the throttle working; the build should finish,
+   just slower. If it crawls for long stretches, lower `cores` before
+   raising `MemoryHigh`.
+6. [ ] Run a game during a build. Check whether the build keeps moving at
+   about half speed and the game holds its frame rate. If the game stutters,
+   switch to the root-level idle slice described in the DECISIONS entry and
+   record the result here.
+
+## #166 Bambuddy's CA in OrcaSlicer's `printer.cer`
+
+`flake.nix`'s `withBambuddyCa` appends `certs/bambuddy-vp-ca.crt` to the
+`printer.cer` inside `pkgsApps.orca-slicer`. Without it, connecting to a
+Bambuddy virtual printer fails with `code=-1`. OrcaSlicer no longer comes from the
+binary cache: the next switch compiles it locally.
+
+1. [x] Switch, then check the last entry is `CN=Virtual Printer CA …` with the
+       fingerprint Bambuddy shows:
+       ```sh
+       cer=$(dirname "$(readlink -f "$(which orca-slicer)")")/../share/OrcaSlicer/cert/printer.cer
+       while openssl x509 -noout -subject -sha256 -fingerprint; do :; done < "$cer"
+       ```
+2. [x] Connect OrcaSlicer to a virtual printer and confirm it no longer fails
+       with `code=-1`. This goes through open-bamboo-networking (§29), which
+       checks the printer against this same `printer.cer`.
+
+Verified on pegasus with VP-queue (queue mode, .97): OBN logs `insecure=0`
+and `mqtt connect callback rc=0 (accepted)`. Test with a queue- or
+archive-mode VP: a proxy-mode VP announces the real printer's serial, so Orca
+treats the two as one device and connects to the printer directly.

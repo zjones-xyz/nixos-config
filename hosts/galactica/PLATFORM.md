@@ -1914,9 +1914,10 @@ measured* — and it sits in the same air.
 
 Verdict: the one item here that trades directly against disk life. **Not before
 there is a sustained-load temperature baseline** — §12's read-saturation test
-produces one as a side effect. ⚠ And not while `h-X4WE` is failing and the pool
-is one disk from degraded (§21): a resilver is the hottest this chassis gets, and
-it is the worst moment to have less air moving.
+produces one as a side effect. ⚠ The resilver that made this acutely
+bad finished 2026-10-12, so what is left is the standing thermal argument rather
+than a live one — but a resilver is still the hottest this chassis gets, which is
+worth remembering the next time a disk is replaced rather than re-derived then.
 
 ### 13d. ⚠ Rejected — recorded so they are not re-proposed
 
@@ -1982,9 +1983,12 @@ least able to lose: RAIDZ1 tolerates one, and `MANUAL-STEPS.md` §9 records that
 ~$350 replacement is explicitly *not* on the shelf. ~2 W is not worth spending
 there.
 
-⚠ **And that one-disk tolerance is now spent in advance.** `h-X4WE` is failing
-and awaiting replacement (§21), with no drawer spare that qualifies. The
-rejection was already right; it is no longer close.
+~~⚠ And that one-disk tolerance is now spent in advance~~ — true 2026-10-02 to
+2026-10-12, while `h-X4WE` was failing inside the pool. **The resilver onto
+`h-YWAH` finished 2026-10-12 and X4WE is out of `tank`** (§21 steps 8–9), so the
+tolerance is restored and the rejection goes back to resting on its own
+arithmetic rather than on an emergency. It still has no cold spare behind it:
+X4WE leaves under RMA, and whatever returns is a new disk, not a shelf spare.
 
 **Setting `powerManagement.cpuFreqGovernor`.** Nothing to gain. `intel_pstate`
 drives Ivy Bridge in active mode with `powersave` as its default governor, which
@@ -1997,9 +2001,9 @@ the fix is still in the BIOS, not in Nix.
 router as a sync replica), the NFS server memory-alpha mounts, and the
 acquisition half of the media stack. There is no idle window to suspend into.
 
-### 13e. ⚠ Seven things independently wake a sleeping disk on this host
+### 13e. ⚠ Eight things independently wake a sleeping disk on this host
 
-Any spin-down has to survive all seven, or it looks like it worked for half an
+Any spin-down has to survive all eight, or it looks like it worked for half an
 hour and then quietly stops:
 
 1. **smartd, every 30 minutes.** `modules/nixos/smart.nix` monitors with `-a`,
@@ -2018,8 +2022,9 @@ hour and then quietly stops:
    > directive costs in spin-ups, it is what noticed a member wearing out before
    > ZFS did. It is also why `-n standby`'s missing `,N` is tolerable only on
    > disks awaiting removal, and never on a live pool member.
-   > ⚠ **The replacement will not report the same way.** `h-YWAH`'s HPE firmware
-   > omits SMART 197 and 198 altogether. devstat (GP log 0x04) carries
+   > ⚠ **The replacement does not report the same way.** `h-YWAH` has been a
+   > `tank` member since the 2026-10-12 resilver, and its HPE firmware omits
+   > SMART 197 and 198 altogether. devstat (GP log 0x04) carries
    > equivalents for 198, 199 and 5 — but **197, the pending-sector count that
    > flagged X4WE first, has no devstat equivalent at all**. Once YWAH joins
    > `tank`, the attribute that gave this pool its earliest warning is simply
@@ -2027,7 +2032,9 @@ hour and then quietly stops:
    > left in its place. The gap is already observable rather than theoretical:
    > §21 step 3's acceptance check is written as "5/197/198 must all still read
    > 0", and YWAH's passing burn-in could only be recorded against 5/196 plus
-   > the devstat counters.
+   > the devstat counters. ⭐ **That gap is the stated reason `homelab.smart.selfTests`
+   > now exists** (#162): a long test exercises the media the attributes cannot
+   > report on, which is the one check that reaches YWAH's blind spot.
 2. **The Scrutiny collector, daily at 01:00.** It runs privileged with every
    block device visible and sweeps them all, with no standby awareness and no
    per-device exclusion. One guaranteed spin-up per disk per day. The wear is
@@ -2085,7 +2092,22 @@ hour and then quietly stops:
    > shows. #155 also makes the mount `wanted` rather than `required`, so
    > Bambuddy runs while galactica is down: absence of complaints is not evidence
    > the library is idle.
-7. **The rest of the workload**, for `tank` — §13d, and §13f for the part of it
+7. **smartd's own self-test schedule**, as of #162 — weekly short on Sundays at
+   03:00 and monthly long on the 15th at 03:00, set by `homelab.smart.selfTests`.
+   A long test on a 12 TB spinner runs for hours, so once a month this is the
+   longest deliberate wake on the box. ⚠ And unlike item 1's poll, **no flag
+   suppresses it**: a scheduled test has to spin the disk up to run, exactly as
+   the armed offline collection does, so `standbyAware` cannot cover it — the
+   module's option description says so.
+   > ⭐ It is still the right trade, and it closes a gap rather than opening one.
+   > The `-n standby` directive this section asked for comes without a `,N`
+   > count, so a parked disk would otherwise go unchecked indefinitely; a
+   > self-test schedule is what examines the media regardless. #162's own
+   > reasoning is that X4WE's bad sectors were found only by the drive's offline
+   > scan after ~5,600 power-on hours with no self-test — §21 is the case for it.
+   > What it costs is a third fixed hour (03:00) that any spin-down plan has to
+   > work around, alongside item 2's 01:00 and item 3's 01:30.
+8. **The rest of the workload**, for `tank` — §13d, and §13f for the part of it
    that can be moved.
 
 ⚠ **The ATA standby timer is volatile.** `hdparm -S` does not survive a power
@@ -2137,7 +2159,7 @@ that directory moves all of it.
 | | |
 |---|---|
 | Removes | The largest and steadiest toucher of the spinners |
-| Does **not** remove | §13e's other six — smartd (fixed), the Scrutiny sweep (**not** fixed), borgmatic's nightly window, Paperless's index and database, the reading stack's content on `tank/books`, and the three NFS exports memory-alpha mounts |
+| Does **not** remove | §13e's other seven — smartd (fixed), the Scrutiny sweep (**not** fixed), borgmatic's nightly window, Paperless's index and database, the reading stack's content on `tank/books`, the three NFS exports memory-alpha mounts, and smartd's 03:00 self-test schedule |
 | Untested | Whether Jellyfin's and the \*arrs' scheduled scans stay metadata-only. All metadata is on the special vdev, so a stat-walk of an unchanged library *should* be served from SSD + ARC without waking a spinner — plausible, unverified, and decisive |
 
 So this is **necessary but not sufficient**. Two config items stand between it
