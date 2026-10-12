@@ -1,5 +1,10 @@
-{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, orcaSlicerNewer, bambuStudioNewer, ferdiumNewer, ... }:
+{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, pkgsApps, ... }:
 
+let
+  # Built against pkgsApps, the nixpkgs Orca comes from, so the plugin's
+  # libstdc++/OpenSSL match the process that dlopens it.
+  openBambooNetworking = pkgsApps.callPackage ../../pkgs/open-bamboo-networking.nix { };
+in
 {
   imports = [
     ../../modules/home/common.nix
@@ -44,9 +49,10 @@
   # ── Desktop apps ────────────────────────────────────────────────────────────
   # allowUnfree is already set globally in modules/nixos/common.nix, which
   # pegasus imports — vscode/google-chrome/vivaldi/1Password/discord/spotify/
-  # ticktick/obsidian/bambu-studio/operaBrowser are all unfree and need it;
-  # firefox/ferdium/signal-desktop/openscad/orca-slicer/streamdeck-ui/
-  # floorp-bin/zenBrowser are free/open.
+  # obsidian/operaBrowser are all unfree and need it; firefox/signal-desktop/
+  # openscad/streamdeck-ui/floorp-bin/zenBrowser are free/open. `pkgsApps.*`
+  # (the nixpkgs-apps input, see flake.nix) is a separate instance with its
+  # own allowUnfree — ticktick and bambu-studio there are unfree.
   #
   # Brain.fm was left out — no nixpkgs package, no native Linux client
   # anywhere (subscription web app only); usable via firefox/chrome.
@@ -76,17 +82,14 @@
     # away. Same call as Brain.fm below: web app via firefox/chrome.
 
     discord
-    # 7.2.3, from the separate nixpkgs-ferdium input rather than the shared
-    # pin — reaching it there would mean giving up this host's 7.1 kernel
-    # pin (see flake.nix).
-    ferdiumNewer
+    pkgsApps.ferdium
     signal-desktop
     slack
     openscad
     obsidian
     spotify
-    # Ahead of nixpkgs (8.0.11 on master) — drop once it catches up.
-    (ticktick.overrideAttrs (finalAttrs: old: {
+    # Ahead of nixpkgs-apps (8.0.11 on unstable) — drop once it catches up.
+    (pkgsApps.ticktick.overrideAttrs (finalAttrs: old: {
       version = "8.0.20";
       src = fetchurl {
         url = "https://d2atcrkye2ik4e.cloudfront.net/download/linux/linux_deb_x64/ticktick-${finalAttrs.version}-amd64.deb";
@@ -278,17 +281,20 @@
     # by a former nixpkgs maintainer) via home-manager.extraSpecialArgs in
     # flake.nix.
     operaBrowser
-    # 02.05.00.67, with the real upstream withNvidiaGLWorkaround applied —
-    # fixes the blank Prepare/Preview build plate on this host's NVIDIA GPU.
-    # From the separate nixpkgs-bambu-studio input (see flake.nix); this
-    # flake's main nixpkgs pin predates both that version bump and the fix.
-    bambuStudioNewer
-    # 2.3.2 — this flake's main nixpkgs pin predates nixpkgs' 2.3.1 -> 2.3.2
-    # bump, so this comes from the separate nixpkgs-orca-slicer input
-    # instead (see flake.nix). Confirmed viewport already renders fine on
-    # this host's NVIDIA setup at 2.3.1, so no GL workaround needed here
-    # unlike bambuStudioNewer above.
-    orcaSlicerNewer
+    # withNvidiaGLWorkaround fixes the blank Prepare/Preview build plate on
+    # this host's NVIDIA GPU (nixpkgs#522161) — keep it.
+    (pkgsApps.bambu-studio.override { withNvidiaGLWorkaround = true; })
+    # No GL workaround (its Zink route regresses Orca; DECISIONS.md), but its
+    # WebKit pages render black on NVIDIA without this one variable. A thin
+    # wrapper rather than overrideAttrs, so the cached build is reused.
+    (pkgs.symlinkJoin {
+      inherit (pkgsApps.orca-slicer) name meta;
+      paths = [ pkgsApps.orca-slicer ];
+      nativeBuildInputs = [ pkgs.makeWrapper ];
+      postBuild = ''
+        wrapProgram $out/bin/orca-slicer --set WEBKIT_DISABLE_DMABUF_RENDERER 1
+      '';
+    })
   ];
 
   # ── kitty: launch zsh directly, not the login shell ─────────────────────────
@@ -463,6 +469,40 @@
     if [ ! -e "$DMS_STATE_DIR/session.json" ] && [ -e "$CHECKPOINTS/dms-session.json" ]; then
       $DRY_RUN_CMD mkdir -p "$DMS_STATE_DIR"
       $DRY_RUN_CMD cp "$CHECKPOINTS/dms-session.json" "$DMS_STATE_DIR/session.json"
+    fi
+  '';
+
+  # ── OrcaSlicer: open-bamboo-networking instead of Bambu's plugin ──────────
+  # Bambu's stock network plugin aborts Orca 2.4.2 at startup (DECISIONS.md).
+  # Orca dlopens plugins/libbambu_networking_<network_plugin_version>.so from
+  # its data dir, so the open build is linked there and OrcaSlicer.conf is
+  # pointed at it. Orca owns that file, so only these keys are set, and only
+  # once it exists. Run book: MANUAL-STEPS.md §29.
+  xdg.configFile = lib.listToAttrs (map (so: {
+    name = "OrcaSlicer/plugins/${so}";
+    value.source = "${openBambooNetworking}/plugins/${so}";
+  }) [
+    "libbambu_networking_${openBambooNetworking.pluginVersion}.so"
+    "libBambuSource.so"
+    "liblive555.so"
+  ]);
+
+  home.activation.orcaNetworkPlugin = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    conf="${config.xdg.configHome}/OrcaSlicer/OrcaSlicer.conf"
+    if [ -f "$conf" ]; then
+      tmp=$(mktemp)
+      # network_plugin_skipped_versions is a ';'-joined string, not an array.
+      ${pkgs.jq}/bin/jq --arg v "${openBambooNetworking.pluginVersion}" '
+        .app.installed_networking = "true"
+        | .app.network_plugin_version = $v
+        | .app.network_plugin_remind_later = "true"
+        | .app.update_network_plugin = "false"
+        | if (.app.network_plugin_skipped_versions | type) == "string"
+          then .app.network_plugin_skipped_versions |=
+            (split(";") | map(select(. != "" and . != $v)) | join(";"))
+          else . end
+      ' "$conf" > "$tmp"
+      if cmp -s "$tmp" "$conf"; then rm -f "$tmp"; else $DRY_RUN_CMD mv "$tmp" "$conf"; fi
     fi
   '';
 

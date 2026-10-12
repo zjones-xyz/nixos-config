@@ -418,7 +418,6 @@
     ++ map (n: "systemd-cryptsetup@${lib.replaceString "-" "\\x2d" n}.service") [
       "array-HJDH"
       "array-NS3Y"
-      "array-X4WE"
       "array-T97E"
       "array-YWAH"
       "special-3255"
@@ -455,9 +454,6 @@
         config.sops.secrets."luks/arrayKeyFile".path
       } luks,nofail
       array-NS3Y   UUID=d55d13e2-91b1-4bba-96da-2f25facee673 ${
-        config.sops.secrets."luks/arrayKeyFile".path
-      } luks,nofail
-      array-X4WE   UUID=78811230-8648-4b32-afcc-c93fbb99e927 ${
         config.sops.secrets."luks/arrayKeyFile".path
       } luks,nofail
       array-T97E   UUID=dbf28412-07e7-4b61-8afa-33c38bd6d1f6 ${
@@ -600,6 +596,10 @@
 
   # smartd across the twelve-plus real disks; smart.nix ships the package.
   homelab.smart.monitor = true;
+  # Weekly short (Sun 03:00), monthly long (15th 03:00). The 15th keeps the
+  # ~20 h spinner long test clear of the scrub, which starts on the 1st and
+  # runs ~12 h. No stagger: the index counts every disk, SSDs included.
+  homelab.smart.selfTests = "(S/../../7/03|L/../15/./03)";
 
   # Flipped after staging issuance was proven (which is what the flag is
   # for). Separate cert storage per CA, so this is freely reversible.
