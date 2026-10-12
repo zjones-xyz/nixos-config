@@ -1946,34 +1946,44 @@ member).
 1. [x] **Order the replacement.** ≥ 12 TB, CMR, ideally not this batch; no drawer
    spare qualifies (§9). ✅ `h-YWAH`, an HPE-branded HC520 (`HARDWARE-MAP.md`),
    in the case 2026-10-06; used (hours reset, ≈ 255 TB written), same capacity as X4WE.
-2. [ ] **Watch X4WE in Scrutiny every few days** until the new disk is in.
+2. [x] **Watch X4WE in Scrutiny every few days** until the new disk is in.
+   ✅ Held at 5 = 14, 197 = 184, 198 = 70 through the resilver, with 0 READ
+   errors in `zpool status`.
 3. [x] **Burn the new disk in before it touches `tank`.** On the bare disk,
    destructive: `sudo badblocks -wsv -b 4096 -t 0 /dev/disk/by-id/<new>`
    (one write + read pass, about 1.5 days at 12 TB), then
    `sudo smartctl -t long`. 5/197/198 must all still read 0.
    ✅ YWAH 2026-10-08/09: badblocks 0 bad blocks (1d20h), long test completed
    without error at hour 65; 5/196 and every devstat error counter 0.
-4. [ ] **Find X4WE's bay in cage A by serial.** Cage A's port-to-bay mapping is
+4. [x] **Find X4WE's bay in cage A by serial.** Cage A's port-to-bay mapping is
    still open (`HARDWARE-MAP.md` §7). Fill that table while doing this.
+   ✅ 2026-10-11: bay `A4` (onboard `ata4`); cage A table filled in `HARDWARE-MAP.md` §3.
 5. [ ] **Swap bays, powered off: YWAH into X4WE's cage-A bay, X4WE onto YWAH's
    loose LSI lead.** Both stay connected, so `tank` keeps full redundancy; ZFS
    finds members by mapper name, not port. At the initrd unlock prompt, before
    the passphrase, `ls /dev/disk/by-id/` must show both `…_*YWAH` and
    `…_*X4WE`. YWAH missing = cage A's backplane feeds 3.3 V to the
    power-disable pin: power off, Kapton pins 1–3, retry. Nothing is degraded.
+   ✅ 2026-10-11. YWAH came up in `A4` (the backplane carries no 3.3 V). X4WE was
+   the one missing at initrd: on the loose lead it needed the power-disable
+   adapter cable too, so ALE601s honour the pin.
 6. [ ] **LUKS it like the other members** (§9: whole-disk LUKS,
    `luks/arrayKeyFile` in slot 0, the fleet recovery passphrase in slot 1).
    Copy cipher and sector size from an existing member's `cryptsetup luksDump`
    rather than trusting defaults. Open it as `array-<last 4 of serial>`.
+   ✅ 2026-10-11: `array-YWAH`, parameters copied from T97E, UUID preset with
+   `luksFormat --uuid`; `luksDump` showed slots 0 and 1.
 7. [ ] **`[galactica]` PR: add the new member** — its crypttab line (new LUKS
    UUID) and its `zfs-import-tank` ordering entry in `configuration.nix`.
    Switch *before* step 8, so a reboot mid-resilver reopens both disks.
-8. [ ] **`sudo zpool replace tank array-X4WE array-<last4>`**, then watch
+   ✅ #170, switched 2026-10-11.
+8. [x] **`sudo zpool replace tank array-X4WE array-<last4>`**, then watch
    `zpool status` until the resilver completes. X4WE detaches by itself at the
-   end.
+   end. ✅ Started 2026-10-10 21:41; resilvered 4.32T in 18:53:42 with 0 errors,
+   finished 2026-10-11 16:34. `array-YWAH` is a plain raidz1 member.
 9. [ ] **Follow-up PR: remove `array-X4WE`'s crypttab line and ordering
    entry.** Switch, then cold-boot once to prove `tank` imports with the new
-   member.
+   member. PR #179 open.
 10. [ ] **Pull X4WE off the loose LSI lead** (the new disk is already in its
     bay, step 5). Update `HARDWARE-MAP.md` §1 with the new row and ID, and
     print its caddy label (`docs/DISK-LABELLING.md`).
