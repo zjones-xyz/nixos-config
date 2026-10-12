@@ -89,6 +89,8 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
 ## Workflow
 
 - `.md`/comment/bootstrap-script changes → commit straight to `main`.
+  Exception: `.claude/skills/**/SKILL.md` is executable markdown — an agent
+  acts on it — so skill changes take the `.nix` route below, as `[all] …`.
 - Pending human/manual steps in markdown (`SECRETS-TODO.md`, `MANUAL-STEPS.md`,
   `DEPLOY.md`, etc.) use numbered checkboxes (`1. [ ]`, `2. [ ]`, …), not plain
   numbers or dashes, so they can be checked off as done while keeping sequence
