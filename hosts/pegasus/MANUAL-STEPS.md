@@ -650,40 +650,17 @@ own Xwayland and takes satellite out of the loop; `gaming.nix` already
 installs it. Interim workaround: keep a freshly launched game focused for
 its first minute or two.
 
-**gamescope is not usable here as of 2026-10-08** — tried against ACE COMBAT
-8 and it never reached a window. Launched from Steam's environment,
-gamescope 3.16.23 aborts during backend setup (`CSDLBackend::~CSDLBackend` ←
-`IBackend::Set` ← `main`, "terminate called without an active exception").
-From a clean shell both backends *do* initialise, but each dumps core on
-teardown once the child exits: SIGABRT under `--backend sdl`, SIGSEGV under
-`--backend wayland`. A compositor that crashes while tearing its outputs down
-is the same event that takes Discord and Steam's CEF windows with it, so this
-trades a freeze for a crash. Revisit on a gamescope bump; the command to
-retry with is:
-`gamescope -f -w 2560 -h 1440 -W 3840 -H 2160 --force-grab-cursor --backend sdl -- gamemoderun %command%`
-— `-W`/`-H` is the output's *native* mode (the centre LG is 3840x2160) and
-`-w`/`-h` the render size, so the panel is never asked to change mode. Also
-note Lutris's own gamescope toggle is NOT a substitute for Steam titles:
-Lutris's Steam runner hands launching off to the Steam client, so Lutris
-system options never wrap the game process
-(https://github.com/lutris/lutris/issues/3085). It only applies to games
-Lutris itself execs (Wine/native/GOG/EGS).
-
-**`gamemoderun` in a game's launch options is verified working, 2026-10-08.**
-Added to ACE COMBAT 8's line, `gamemoded` registered the title and the
-`ollama-pause` GPU drain in `modules/nixos/ollama.nix` fired within 2s of the
-game starting: `ollama` went `inactive`, `ollama-pause` `active`. That unit
-had never been activated once before. Proton titles don't request gamemode
-themselves, so this is per-game — every title that should drain the GPU needs
-`gamemoderun` in its own launch options, and the drain stays dead for any
-that don't.
-⚠ **But it prompts for authentication, so it is not yet unattended.**
-`gamemoded` is a *user* unit, so `custom.start`/`end` run as z, and
-`systemctl start ollama-pause.service` on a *system* unit goes through
-polkit's `org.freedesktop.systemd1.manage-units` action — DMS's auth dialog
-pops mid-launch, and the 2s figure above was measured with it authenticated.
-Needs a polkit rule granting z that one unit before the drain runs on its
-own.
+**Launch options now live in `docs/runbooks/steam-launch-options.md`** — go
+there when setting up any new Steam title. Both halves were verified against
+ACE COMBAT 8 on the hardware, 2026-10-08: `gamemoderun %command%` works and is
+what the `ollama-pause` GPU drain depends on, **per-game**, because Proton
+titles never request gamemode themselves — so the drain stays dead for any
+title whose launch options lack it. gamescope does *not* work here: it crashes
+on teardown in both backends, taking Electron/CEF windows with it, so it trades
+an occasional freeze for a reliable crash. The runbook carries the crash
+signatures and retry command, the Proton `winewayland.drv` finding, the polkit
+prompt that still gates the drain, and the VRAM ceiling that decides whether a
+game fits at all.
 
 To try, roughly cheapest-first:
 
@@ -700,18 +677,11 @@ To try, roughly cheapest-first:
 3. [ ] Native Wayland — `PROTON_ENABLE_WAYLAND=1 gamemoderun %command%`.
    Avoids the satellite bug at its root rather than working around it, per
    the issue reporter, and needs no nested compositor. **Blocked on the
-   Proton build:** the flag only does anything if that Proton ships
-   `winewayland.drv`, and none of the three here do — checked 2026-10-08,
-   Proton 11.0, Proton Hotfix (`hotfix-20261007-x86_64`) and GE-Proton11-1
-   (from `gaming.nix`) all carry `winex11.drv` only. Set against AC8 the
-   flag was simply inert: the game launched on X11 anyway, its niri window
-   still owned by `xwayland-satellite` (niri reports the satellite's PID,
-   not the game's — that's how to tell, not the window's app-id, which is
-   `steam_app_<appid>` either way). So this step needs Proton Experimental
-   installed first (Steam → Properties → Compatibility), then re-check for
-   `winewayland.drv` before trusting the flag.
-   Denuvo is *not* the blocker: AC8 goes through `start_protected_game.exe`
-   and started fine with the flag set.
+   Proton build:** none of the three installed here ship `winewayland.drv`,
+   so the flag is inert — install Proton Experimental first (Steam →
+   Properties → Compatibility), then re-check for the driver before trusting
+   it. Which builds were checked, and how to tell native Wayland from
+   Xwayland afterwards, are in `docs/runbooks/steam-launch-options.md`.
 4. [ ] Check https://github.com/Supreeeme/xwayland-satellite/issues/201
    occasionally; once fixed and the nixpkgs package carries it, step 3
    becomes unnecessary for the unfocused-freeze.
