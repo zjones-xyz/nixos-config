@@ -1475,10 +1475,41 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
     verification". Interim: keep `plugins/` out (MANUAL-STEPS §27 step 7).
     Follow-up: replace it with open-bamboo-networking, an open-source drop-in
     that is LAN-first and speaks the protocol Bambuddy's virtual printers
-    emulate. (The 2.3 data dir was reset along the way; that turned out to be
+    emulate. Done in the entry below. (The 2.3 data dir was reset along the way; that turned out to be
     unnecessary but harmless — kept as `OrcaSlicer.2.3-bak`.)
   - The old Orca 2.3.2 segfaulted on opening a file on this boot. Moot now; it
     was never confirmed on the hardware (see the 2.3.2 entry above).
   - Bambu Studio's toolbar/tooltip strobing is **not** from this entry: 02.05
     strobes too on the same boot, under `GDK_BACKEND=x11`, and on the 7.1.9
     generation. Deferred to #177.
+
+- **OrcaSlicer's network plugin → open-bamboo-networking 2.2.0, built from
+  source, 2026-10-12.** Replaces Bambu's stock plugin, which aborts Orca 2.4.2
+  at startup (entry above). OBN exports the same `dlsym` ABI. Orca loads it as
+  `plugins/libbambu_networking_02.03.00.99.so` (`.99` is upstream's
+  convention for "newer than any stock build" in the 02.03.00 series Orca has
+  asked for since 2.3.2), with OBN's own `libBambuSource.so`/`liblive555.so`
+  beside it. `pkgs/open-bamboo-networking.nix` builds it against `pkgsApps`,
+  the nixpkgs Orca comes from, and `home.nix` links the three libraries into
+  `~/.config/OrcaSlicer/plugins/` and sets four `OrcaSlicer.conf` keys
+  (`installed_networking`, `network_plugin_version`,
+  `network_plugin_remind_later`, `update_network_plugin`) the way upstream's
+  own installer does. Orca owns the rest of that file, so it is patched, not
+  managed.
+  *Alt rejected:* upstream's prebuilt release tarball plus
+  `autoPatchelfHook`. Less to maintain, but binaries built on another distro
+  against other OpenSSL/libstdc++ builds, loaded into a nixpkgs process. The
+  source build is small (one CMake project; mosquitto and cJSON, which it
+  vendors via FetchContent, are fetched by Nix and handed over).
+  *Alt rejected:* OBN for Bambu Studio too. Studio's stock plugin works on
+  this host, and OBN's Studio build tracks Studio's own version, so it would
+  need rebuilding on every Studio bump. Revisit if Studio's plugin breaks.
+  Cloud printing is not used, so OBN's own defaults stand: `block_cloud = 1`
+  keeps printing and telemetry on the LAN (only sign-in and preset sync may
+  reach Bambu), and `obn.conf` is left to the plugin, which writes it on first
+  launch.
+  Note that OBN verifies printer TLS against the slicer's own
+  `cert/printer.cer`, so the Bambuddy CA append (#166) still applies.
+  Validated here: the package builds, and upstream's `probe_plugin` loads it
+  (version `02.03.00.99`, all 108 + 21 ABI symbols present). Not yet run
+  inside Orca: MANUAL-STEPS §29.
