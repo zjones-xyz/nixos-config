@@ -124,7 +124,11 @@
     description = "Chime: LUKS unlock finished";
     after = [ "cryptsetup.target" ];
     wantedBy = [ "initrd.target" ];
-    before = [ "shutdown.target" ];
+    # initrd.target waits for the chime; otherwise switch-root SIGTERMs it mid-beep.
+    before = [
+      "initrd.target"
+      "shutdown.target"
+    ];
     conflicts = [ "shutdown.target" ];
     unitConfig.DefaultDependencies = false;
     serviceConfig.Type = "oneshot";
