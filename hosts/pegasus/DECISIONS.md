@@ -1513,47 +1513,64 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   Validated here: the package builds, and upstream's `probe_plugin` loads it
   (version `02.03.00.99`, all 108 + 21 ABI symbols present). Not yet run
   inside Orca: MANUAL-STEPS §29.
-- **nix-daemon builds run at idle priority, bounded in memory; oomd watches
+- **nix-daemon builds run at batch priority, bounded in memory; oomd watches
   user slices only (2026-10-11).** Local builds (Bambu Studio, OrcaSlicer)
-  took over the desktop during `nixos-rebuild switch`. The config in
-  `modules/nixos/performance.nix` covers both CPU and memory.
+  took over the desktop during `nixos-rebuild switch`. The config is in
+  `modules/nixos/performance.nix`.
   *Why on the daemon:* `nixos-rebuild` only asks nix-daemon to build; every
   compiler runs inside `nix-daemon.service`'s cgroup. `nice`/`systemd-run`
   around `nixos-rebuild` changes nothing.
-  *CPU:* `nix.daemonCPUSchedPolicy = "idle"` (per-process SCHED_IDLE) plus
-  `CPUWeight = "idle"` on the unit (cgroup `cpu.idle`, systemd ≥ 252; this
-  nixpkgs ships 260). Both are needed: once the cgroup CPU controller is on,
-  which setting `CPUWeight` on any unit does anyway, CPU is shared between
-  `system.slice` and `user.slice` by weight *before* per-process policy is
-  consulted, so SCHED_IDLE alone would still get `system.slice`'s full share.
-  `cpu.idle` on the daemon's cgroup makes the cgroup itself yield. I/O class
-  is `idle` too. ananicy-cpp was checked for a fight: its rule set
-  (nefelim4ag/ananicy at the pinned rev) types `gcc`/`g++`/`make`/`ninja`/
-  `cargo`/`rustc` as `compiler` = nice 1, with no `sched`, `ioclass` or
-  `cgroup` key, and has no rule for `cc1plus` or `nix-daemon`. nice is
-  ignored under SCHED_IDLE and nothing is moved out of the daemon's cgroup.
-  *Trade-off, idle vs batch:* `idle` means a build all but stops while a game
-  or anything else saturates the CPU; it catches up once the desktop goes
-  quiet. `batch` would be the gentler middle (still competes, just never
-  preempts). Chosen `idle` because the box has 16 threads and is rarely
-  saturated by the desktop alone; if a switch during a gaming session ever
-  needs to finish, drop both the policy and `CPUWeight` to the `batch`/
-  default pair rather than one of them.
+  *CPU — `batch`, after `idle` turned out not to reach the desktop:*
+  `nix.daemonCPUSchedPolicy = "batch"`: builds never preempt a waking task,
+  but still get CPU under contention. The first draft used `idle` plus
+  `CPUWeight = "idle"` (cgroup `cpu.idle`), and review showed it does not do
+  what it was meant to. The cpu controller is already on (systemd's
+  `user@.service` delegates `cpu`), so at the root the scheduler compares
+  `system.slice` against `user.slice`, each at weight 100. A per-task
+  SCHED_IDLE, or `cpu.idle` set on a unit *inside* `system.slice`, only ranks
+  builds against other system services, and the build keeps roughly half of
+  every contested CPU either way. So `idle` would not have stopped builds
+  for the desktop. Its one real effect was builds losing to Ollama and
+  docker. `batch` gets about the same share against the desktop without
+  starving builds behind other services, and is the honest description.
+  *Alt kept in reserve:* if builds must truly yield to the desktop, move
+  nix-daemon to its own root-level slice with `CPUWeight = "idle"`
+  (`systemd.slices.nixbuild` + `Slice = "nixbuild.slice"`; no dash in the
+  name, or it nests). That puts `cpu.idle` level with `user.slice`, at the
+  cost of builds all but stopping while a game runs.
+  *I/O:* `daemonIOSchedClass = "idle"` is kept but is probably a no-op. The
+  NVMe uses the `none` scheduler, which ignores ioprio, and dm-crypt's
+  workqueues drop the submitter's priority anyway. It matters only if BFQ is
+  ever enabled.
+  ananicy-cpp was checked for a fight: its rule set (nefelim4ag/ananicy at
+  the pinned rev) types `gcc`/`g++`/`make`/`ninja`/`cargo`/`rustc` as
+  `compiler` = nice 1, with no `sched`, `ioclass` or `cgroup` key, and has
+  no rule for `cc1plus` or `nix-daemon`. Nothing is moved out of the
+  daemon's cgroup or re-policied.
   *Memory:* `max-jobs × cores` is the real cap — each C++ compiler process
   is ~1–2 GB. Was `auto × 0` = 16 jobs × 16 threads, up to 256 compilers.
   Now `max-jobs = 4`, `cores = 8`: at most 32 compiler processes (2× the
-  thread count, so the CPU stays full when idle), and a single big build
-  still gets 8 threads. `MemoryHigh = 40G` backs that up by throttling and
-  reclaiming into zram, never killing; `MemoryMax` was rejected because a
-  kill fails the switch partway. That leaves ~24 GB for the desktop.
+  thread count, so the CPU stays full), and a single big build still gets 8
+  threads. `MemoryHigh = 40G` backs that up by throttling and reclaiming,
+  never killing. `MemoryMax` was rejected because a kill fails the switch
+  partway. It is a soft bound, not a hard one. Pages reclaimed into zram
+  leave the build's `memory.current`, but zram's compressed store is not
+  charged to the cgroup, so a build past 40G still grows in system RAM via
+  zram. If a hard bound is ever needed, `MemorySwapMax=` on the daemon is
+  the lever.
   *oomd:* it was enabled with every slice option false, so it watched
   nothing despite the comment claiming otherwise. Now `enableUserSlices`
-  only (kill at 80% memory pressure for 20 s): a runaway desktop app is
-  killed, builds and services never. `system.slice` was rejected on
-  purpose. The throttling that `MemoryHigh` applies shows up as memory
-  pressure, so oomd there would kill exactly the heavy build `MemoryHigh` is
-  meant to slow down. The root slice was rejected for the same reason.
-  *Alt kept in reserve:* oomd on `system.slice` with
-  `ManagedOOMPreference = "omit"` on nix-daemon, if a system service
-  (Ollama, docker) ever runs away.
-  Validated by eval only; MANUAL-STEPS.md §30 carries the on-hardware checks.
+  only: kill once memory pressure stays at 80% for 30 s, systemd's default.
+  It kills the descendant cgroup with the most reclaim activity. That is
+  usually an app scope, but `session.slice` (the compositor) is in scope
+  too, so in the worst case oomd ends the session rather than one app.
+  Under global pressure from a build, oomd's only targets are desktop apps,
+  never the build. That is the accepted cost of the next point.
+  `system.slice` was rejected on purpose. The throttling that `MemoryHigh`
+  applies shows up as memory pressure, so oomd there would kill exactly the
+  heavy build `MemoryHigh` is meant to slow down. The root slice was
+  rejected for the same reason. *Alt kept in reserve:* oomd on
+  `system.slice` with `ManagedOOMPreference = "omit"` on nix-daemon, if a
+  system service (Ollama, docker) ever runs away.
+  Validated by eval and an independent review; MANUAL-STEPS.md §30 carries
+  the on-hardware checks.

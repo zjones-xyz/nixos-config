@@ -28,19 +28,16 @@
 
   # ── nix-daemon build limits ─────────────────────────────────────────────────
   # Compilers run in nix-daemon's cgroup, not under nixos-rebuild, so the limits
-  # go here. cpu.idle (CPUWeight) is what yields to user.slice once the cgroup
-  # CPU controller is on; MemoryHigh throttles rather than kills, so a switch
-  # never fails on it. Sizing and trade-offs: DECISIONS.md.
-  nix.daemonCPUSchedPolicy = "idle";
+  # go here. batch, not idle: builds and the desktop split CPU by slice weight
+  # either way, so idle would only starve builds behind other services. MemoryHigh
+  # throttles rather than kills, so a switch never fails on it. See DECISIONS.md.
+  nix.daemonCPUSchedPolicy = "batch";
   nix.daemonIOSchedClass = "idle";
   nix.settings = {
     max-jobs = 4;
     cores = 8;
   };
-  systemd.services.nix-daemon.serviceConfig = {
-    CPUWeight = "idle";
-    MemoryHigh = "40G";
-  };
+  systemd.services.nix-daemon.serviceConfig.MemoryHigh = "40G";
 
   # ananicy-cpp auto-applies nice/ioprio/cgroup rules per process (desktop
   # responsiveness under load).
