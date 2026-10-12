@@ -1958,7 +1958,7 @@ member).
 4. [x] **Find X4WE's bay in cage A by serial.** Cage A's port-to-bay mapping is
    still open (`HARDWARE-MAP.md` §7). Fill that table while doing this.
    ✅ 2026-10-11: bay `A4` (onboard `ata4`); cage A table filled in `HARDWARE-MAP.md` §3.
-5. [ ] **Swap bays, powered off: YWAH into X4WE's cage-A bay, X4WE onto YWAH's
+5. [x] **Swap bays, powered off: YWAH into X4WE's cage-A bay, X4WE onto YWAH's
    loose LSI lead.** Both stay connected, so `tank` keeps full redundancy; ZFS
    finds members by mapper name, not port. At the initrd unlock prompt, before
    the passphrase, `ls /dev/disk/by-id/` must show both `…_*YWAH` and
@@ -1967,13 +1967,13 @@ member).
    ✅ 2026-10-11. YWAH came up in `A4` (the backplane carries no 3.3 V). X4WE was
    the one missing at initrd: on the loose lead it needed the power-disable
    adapter cable too, so ALE601s honour the pin.
-6. [ ] **LUKS it like the other members** (§9: whole-disk LUKS,
+6. [x] **LUKS it like the other members** (§9: whole-disk LUKS,
    `luks/arrayKeyFile` in slot 0, the fleet recovery passphrase in slot 1).
    Copy cipher and sector size from an existing member's `cryptsetup luksDump`
    rather than trusting defaults. Open it as `array-<last 4 of serial>`.
    ✅ 2026-10-11: `array-YWAH`, parameters copied from T97E, UUID preset with
    `luksFormat --uuid`; `luksDump` showed slots 0 and 1.
-7. [ ] **`[galactica]` PR: add the new member** — its crypttab line (new LUKS
+7. [x] **`[galactica]` PR: add the new member** — its crypttab line (new LUKS
    UUID) and its `zfs-import-tank` ordering entry in `configuration.nix`.
    Switch *before* step 8, so a reboot mid-resilver reopens both disks.
    ✅ #170, switched 2026-10-11.
