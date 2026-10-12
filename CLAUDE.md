@@ -95,6 +95,16 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
   for order-dependent steps. Narrative/history — what already happened, what
   was verified on real hardware — stays prose; only actually-pending action
   items get a checkbox.
+- **`MANUAL-STEPS.md` sections are keyed by issue/PR number**, not numbered in
+  sequence: `## #155 Bambuddy + Obico — owner steps before first switch`, cited
+  as `MANUAL-STEPS.md` §#155. Use the PR that brought the steps. If there is no
+  PR, as with a straight-to-`main` doc commit, use the issue that tracks them,
+  and open one if none exists. The point is that nothing ever gets renumbered:
+  a key stays put when a section is added, dropped or reordered, so citations
+  don't go stale. It also leads back to the reasoning. A second section from the same
+  PR in the same file takes a letter (`#155b`). New sections go at the end.
+  Sections written before this rule keep their `§1`… numbers, so the many
+  existing cross-references stay valid.
 - `.nix`/config changes → feature branch + PR, title prefixed with the host scope
   in brackets, e.g. `[memory-alpha] …`, `[pegasus] …`, `[all] …`.
 - **Entry-only suffixes.** `/dashboard`, `/dns` and `/dhcp` after the host mark
