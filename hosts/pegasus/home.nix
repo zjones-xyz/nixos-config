@@ -1,4 +1,4 @@
-{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, pkgsApps, ... }:
+{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, pkgsApps, withBambuddyCa, ... }:
 
 let
   # Built against pkgsApps, the nixpkgs Orca comes from, so the plugin's
@@ -285,11 +285,11 @@ in
     # this host's NVIDIA GPU (nixpkgs#522161) — keep it.
     (pkgsApps.bambu-studio.override { withNvidiaGLWorkaround = true; })
     # No GL workaround (its Zink route regresses Orca; DECISIONS.md), but its
-    # WebKit pages render black on NVIDIA without this one variable. A thin
-    # wrapper rather than overrideAttrs, so the cached build is reused.
+    # WebKit pages render black on NVIDIA without this one variable. The
+    # Bambuddy CA is baked into the package; the variable is a thin wrapper.
     (pkgs.symlinkJoin {
       inherit (pkgsApps.orca-slicer) name meta;
-      paths = [ pkgsApps.orca-slicer ];
+      paths = [ (withBambuddyCa "OrcaSlicer" pkgsApps.orca-slicer) ];
       nativeBuildInputs = [ pkgs.makeWrapper ];
       postBuild = ''
         wrapProgram $out/bin/orca-slicer --set WEBKIT_DISABLE_DMABUF_RENDERER 1

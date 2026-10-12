@@ -871,21 +871,21 @@ plugin → open-bamboo-networking"). The activation step only edits an existing
 `OrcaSlicer.conf`, and Orca rewrites that file when it exits, so quit Orca
 before switching.
 
-1. [ ] Quit OrcaSlicer. Move aside anything left in `plugins/` from the stock
+1. [x] Quit OrcaSlicer. Move aside anything left in `plugins/` from the stock
        plugin, or Home Manager refuses to replace `libBambuSource.so`:
        `mv ~/.config/OrcaSlicer/plugins ~/.config/OrcaSlicer/plugins.stock-$(date +%F)`
        (§27 step 7 may already have done this).
-2. [ ] Switch. `ls -l ~/.config/OrcaSlicer/plugins/` shows three links into
+2. [x] Switch. `ls -l ~/.config/OrcaSlicer/plugins/` shows three links into
        the store, and
        `jq '.app | {installed_networking, network_plugin_version, update_network_plugin}' ~/.config/OrcaSlicer/OrcaSlicer.conf`
        shows `"true"`, `"02.03.00.99"`, `"false"`.
-3. [ ] Launch Orca from a terminal. stderr shows
+3. [x] Launch Orca from a terminal. stderr shows
        `[obn] Loaded Open Bamboo Networking plugin, version v2.2.0`, there is
        no "Bambu Network Plug-in Required" dialog, and it **survives a second
        launch**.
-4. [ ] Device tab: add a printer by IP and access code and confirm it
+4. [x] Device tab: add a printer by IP and access code and confirm it
        connects. A Bambuddy virtual printer also needs Bambuddy's CA in
-       Orca's `printer.cer` (#166, §28 there).
+       Orca's `printer.cer` (§#166).
 
 ## 30. nix-daemon build limits + oomd — verify during a big build
 
@@ -921,3 +921,25 @@ slice and no swap-monitored cgroups.
    about half speed and the game holds its frame rate. If the game stutters,
    switch to the root-level idle slice described in the DECISIONS entry and
    record the result here.
+
+## #166 Bambuddy's CA in OrcaSlicer's `printer.cer`
+
+`flake.nix`'s `withBambuddyCa` appends `certs/bambuddy-vp-ca.crt` to the
+`printer.cer` inside `pkgsApps.orca-slicer`. Without it, connecting to a
+Bambuddy virtual printer fails with `code=-1`. OrcaSlicer no longer comes from the
+binary cache: the next switch compiles it locally.
+
+1. [x] Switch, then check the last entry is `CN=Virtual Printer CA …` with the
+       fingerprint Bambuddy shows:
+       ```sh
+       cer=$(dirname "$(readlink -f "$(which orca-slicer)")")/../share/OrcaSlicer/cert/printer.cer
+       while openssl x509 -noout -subject -sha256 -fingerprint; do :; done < "$cer"
+       ```
+2. [x] Connect OrcaSlicer to a virtual printer and confirm it no longer fails
+       with `code=-1`. This goes through open-bamboo-networking (§29), which
+       checks the printer against this same `printer.cer`.
+
+Verified on pegasus with VP-queue (queue mode, .97): OBN logs `insecure=0`
+and `mqtt connect callback rc=0 (accepted)`. Test with a queue- or
+archive-mode VP: a proxy-mode VP announces the real printer's serial, so Orca
+treats the two as one device and connects to the printer directly.
