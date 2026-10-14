@@ -1587,8 +1587,10 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   since it is a desktop app and its own CI builds against unstable. The flake
   has a bot that bumps it daily; `flake.lock` pins the commit, so a bump only
   lands through `nix flake update hushmic-nix`. Upstream's `package.nix` still
-  uses `xorg.*` names, which unstable now deprecates. That costs only eval
-  warnings, and it is upstream's to fix.
+  takes the `xorg` set, which unstable now deprecates. The module overrides
+  that argument with the renamed attributes (`libx11`, …) to silence the eval
+  warnings. The output path is unchanged. Drop the override once upstream
+  moves to the new names.
   *Started as a NixOS user unit with `--tray`,* the same shape as `dcal`
   (`dankcalendar.nix`). Upstream's shipped unit runs `--headless` on
   `default.target`. Upstream offers the tray only through the

@@ -1,7 +1,19 @@
 { config, pkgs, lib, self, ... }:
 
 let
-  hushmic = self.inputs.hushmic-nix.packages.${pkgs.stdenv.hostPlatform.system}.hushmic;
+  system = pkgs.stdenv.hostPlatform.system;
+  # Upstream's package.nix still takes the deprecated `xorg` set; hand it the
+  # renamed attrs from the same nixpkgs so eval stays quiet. Same derivation.
+  appsPkgs = self.inputs.nixpkgs-apps.legacyPackages.${system};
+  hushmic = self.inputs.hushmic-nix.packages.${system}.hushmic.override {
+    xorg = {
+      inherit (appsPkgs) libxcb;
+      libX11 = appsPkgs.libx11;
+      libXcursor = appsPkgs.libxcursor;
+      libXi = appsPkgs.libxi;
+      libXrandr = appsPkgs.libxrandr;
+    };
+  };
 in
 {
   # ── HushMic ─────────────────────────────────────────────────────────────────
