@@ -108,6 +108,14 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # HushMic (pegasus) — noise-suppressing PipeWire virtual mic. Not in
+    # nixpkgs; this is the upstream author's own flake. Follows nixpkgs-apps,
+    # the input its own CI builds against (unstable) — app policy, not a pin.
+    hushmic-nix = {
+      url = "git+https://github.com/Fovty/hushmic-nix.git";
+      inputs.nixpkgs.follows = "nixpkgs-apps";
+    };
+
     # Desktop apps that should move faster than the 26.05 system (used on
     # pegasus) — deliberately NOT inputs.nixpkgs.follows. Instantiated once
     # below as `pkgsApps`; kernel, services and everything else stay on
