@@ -970,4 +970,8 @@ minutes). Rationale: DECISIONS.md, "HushMic as the noise-suppressed mic".
 
 Verified on pegasus, 2026-10-14: after a manual `start` the unit is active and
 the tray icon shows in DMS. On a Discord call with HushMic as the input, the
-other side could not hear the keyboard.
+other side could not hear the keyboard. At first the voice came through
+quiet: the mic's input volume was low, and the default strength (100 dB)
+damped speech too. Both were fixed from the tray. These settings are runtime
+state, not Nix: HushMic keeps the strength per mic in
+`~/.config/hushmic/config.toml`, and WirePlumber remembers the input volume.
