@@ -11,6 +11,7 @@
     ../../modules/nixos/desktop-dragonized.nix
     ../../modules/nixos/desktop-niri.nix
     ../../modules/nixos/dankcalendar.nix
+    ../../modules/nixos/hushmic.nix
     ../../modules/nixos/scrutiny-collector.nix
     # Settles which of the two Secret Service providers the desktop modules
     # above each drag in silently is the one that actually runs.

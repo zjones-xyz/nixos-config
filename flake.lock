@@ -153,6 +153,26 @@
         "type": "github"
       }
     },
+    "hushmic-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs-apps"
+        ]
+      },
+      "locked": {
+        "lastModified": 1791679988,
+        "narHash": "sha256-KTSfAa/FyiyzULyMobGj7ZYM39drp/lB0o6HrNNit8c=",
+        "ref": "refs/heads/master",
+        "rev": "b2af2236e162a1d3454bc479125b6cb2a31fc029",
+        "revCount": 23,
+        "type": "git",
+        "url": "https://github.com/Fovty/hushmic-nix.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://github.com/Fovty/hushmic-nix.git"
+      }
+    },
     "mkdocs-catppuccin": {
       "flake": false,
       "locked": {
@@ -392,6 +412,7 @@
         "dank-material-shell": "dank-material-shell",
         "dr460nized-src": "dr460nized-src",
         "home-manager": "home-manager",
+        "hushmic-nix": "hushmic-nix",
         "niri-flake": "niri-flake",
         "nix-darwin": "nix-darwin",
         "nixflix": "nixflix",
