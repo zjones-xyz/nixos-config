@@ -951,7 +951,7 @@ treats the two as one device and connects to the printer directly.
 as their input. The first switch compiles HushMic locally (Rust, a few
 minutes). Rationale: DECISIONS.md, "HushMic as the noise-suppressed mic".
 
-1. [ ] Start it, then check it is running and the tray icon shows up in
+1. [x] Start it, then check it is running and the tray icon shows up in
        DMS. A switch does not start a new user unit; it starts by itself
        from the next login on.
        ```sh
@@ -961,9 +961,13 @@ minutes). Rationale: DECISIONS.md, "HushMic as the noise-suppressed mic".
        ```
 2. [ ] Pick the real microphone in the tray menu. Then use **Test my mic** to
        record a sample and compare the raw and cleaned playback.
-3. [ ] Select **HushMic** as the input in Discord (or another app) and
+3. [x] Select **HushMic** as the input in Discord (or another app) and
        confirm the other side hears the cleaned voice.
 4. [ ] Leave the tray's **Start on login** off. The unit already starts
        HushMic at login, and a second instance would lose the
        single-instance lock. If `~/.config/autostart/hushmic.desktop` exists,
        run `hushmic config set autostart false`.
+
+Verified on pegasus, 2026-10-14: after a manual `start` the unit is active and
+the tray icon shows in DMS. On a Discord call with HushMic as the input, the
+other side could not hear the keyboard.
