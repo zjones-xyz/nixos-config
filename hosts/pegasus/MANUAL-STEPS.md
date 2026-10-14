@@ -951,8 +951,11 @@ treats the two as one device and connects to the printer directly.
 as their input. The first switch compiles HushMic locally (Rust, a few
 minutes). Rationale: DECISIONS.md, "HushMic as the noise-suppressed mic".
 
-1. [ ] Check the unit is running and the tray icon shows up in DMS:
+1. [ ] Start it, then check it is running and the tray icon shows up in
+       DMS. A switch does not start a new user unit; it starts by itself
+       from the next login on.
        ```sh
+       systemctl --user start hushmic
        systemctl --user status hushmic
        hushmic status
        ```
