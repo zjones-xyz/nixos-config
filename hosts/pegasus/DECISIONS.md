@@ -1605,5 +1605,5 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   every change, so it is runtime state and Home Manager does not own it.
   *Alt rejected:* EasyEffects with HushMic's LADSPA plugin. That is a full
   effects suite to run just to get one filter.
-  Validated by eval and a local build of the package; MANUAL-STEPS carries
-  the on-hardware checks.
+  Validated by eval and a local build of the package; MANUAL-STEPS.md §#185
+  carries the on-hardware checks.

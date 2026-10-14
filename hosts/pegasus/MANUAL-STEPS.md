@@ -943,3 +943,24 @@ Verified on pegasus with VP-queue (queue mode, .97): OBN logs `insecure=0`
 and `mqtt connect callback rc=0 (accepted)`. Test with a queue- or
 archive-mode VP: a proxy-mode VP announces the real printer's serial, so Orca
 treats the two as one device and connects to the printer directly.
+
+## #185 HushMic — verify after the next switch
+
+`modules/nixos/hushmic.nix` runs `hushmic --tray` as a user unit. It adds a
+"HushMic" PipeWire source, and apps that should get the cleaned voice pick it
+as their input. The first switch compiles HushMic locally (Rust, a few
+minutes). Rationale: DECISIONS.md, "HushMic as the noise-suppressed mic".
+
+1. [ ] Check the unit is running and the tray icon shows up in DMS:
+       ```sh
+       systemctl --user status hushmic
+       hushmic status
+       ```
+2. [ ] Pick the real microphone in the tray menu. Then use **Test my mic** to
+       record a sample and compare the raw and cleaned playback.
+3. [ ] Select **HushMic** as the input in Discord (or another app) and
+       confirm the other side hears the cleaned voice.
+4. [ ] Leave the tray's **Start on login** off. The unit already starts
+       HushMic at login, and a second instance would lose the
+       single-instance lock. If `~/.config/autostart/hushmic.desktop` exists,
+       run `hushmic config set autostart false`.
