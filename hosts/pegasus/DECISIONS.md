@@ -1574,3 +1574,38 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   system service (Ollama, docker) ever runs away.
   Validated by eval and an independent review; MANUAL-STEPS.md §30 carries
   the on-hardware checks.
+
+- **HushMic as the noise-suppressed mic, 2026-10-14** —
+  `modules/nixos/hushmic.nix`. HushMic adds a PipeWire virtual source,
+  "HushMic", that runs the DPDFNet model over the real mic (80 ms added
+  latency, CPU only). Apps that should get the clean voice pick it as their
+  input. The system default input stays the raw mic unless the tray's "Set
+  as default microphone" is turned on.
+  *Packaging:* not in nixpkgs. The `hushmic-nix` input is the upstream
+  author's own flake. It builds from source, which NixOS needs because the
+  prebuilt binaries won't run there. Its nixpkgs follows `nixpkgs-apps`,
+  since it is a desktop app and its own CI builds against unstable. The flake
+  has a bot that bumps it daily; `flake.lock` pins the commit, so a bump only
+  lands through `nix flake update hushmic-nix`. Upstream's `package.nix` still
+  takes the `xorg` set, which unstable now deprecates. The module overrides
+  that argument with the renamed attributes (`libx11`, …) to silence the eval
+  warnings. The output path is unchanged. Drop the override once upstream
+  moves to the new names.
+  *Started as a NixOS user unit with `--tray`,* the same shape as `dcal`
+  (`dankcalendar.nix`). Upstream's shipped unit runs `--headless` on
+  `default.target`. Upstream offers the tray only through the
+  `~/.config/autostart` entry its "Start on login" writes. A declared unit
+  replaces that entry here, and the tray is HushMic's whole UI: mic choice,
+  suppress/bypass/mute, model, strength and the A/B test. A tray process
+  needs the display, so the unit binds to `graphical-session.target` and the
+  virtual mic stops at logout. That is fine on a desktop. The rest is
+  upstream's: `KillMode=mixed`, so the `pipewire -c` child can restore the
+  previous default mic; `Restart=on-failure`, because "already running"
+  exits 0; and `session.slice`, where session-critical services sit beside
+  the compositor rather than among the apps in `app.slice`.
+  *Left mutable:* `~/.config/hushmic/config.toml`. The tray writes it on
+  every change, so it is runtime state and Home Manager does not own it.
+  *Alt rejected:* EasyEffects with HushMic's LADSPA plugin. That is a full
+  effects suite to run just to get one filter.
+  Validated by eval and a local build of the package. On pegasus, keyboard
+  noise is gone on a Discord call (MANUAL-STEPS.md §#186).
