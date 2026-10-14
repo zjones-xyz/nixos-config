@@ -944,7 +944,7 @@ and `mqtt connect callback rc=0 (accepted)`. Test with a queue- or
 archive-mode VP: a proxy-mode VP announces the real printer's serial, so Orca
 treats the two as one device and connects to the printer directly.
 
-## #185 HushMic — verify after the next switch
+## #186 HushMic — verify after the next switch
 
 `modules/nixos/hushmic.nix` runs `hushmic --tray` as a user unit. It adds a
 "HushMic" PipeWire source, and apps that should get the cleaned voice pick it
