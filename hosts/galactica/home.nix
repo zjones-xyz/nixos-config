@@ -9,8 +9,10 @@
   home.homeDirectory = "/home/z";
 
   home.shellAliases = {
-    nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#galactica";
-    nrt = "sudo nixos-rebuild test --flake ~/nixos-config#galactica";
+    # Scripts, not bare `sudo nixos-rebuild …` aliases — the alias built
+    # whatever was checked out without ever naming the branch.
+    nrs = "~/nixos-config/scripts/nrebuild.sh nixos-rebuild switch galactica";
+    nrt = "~/nixos-config/scripts/nrebuild.sh nixos-rebuild test galactica";
     npull = "~/nixos-config/scripts/npull.sh";
     # A script, not "npull && nrs" — an alias would put the PR number on nrs.
     npullnrs = "~/nixos-config/scripts/npull-rebuild.sh nixos-rebuild galactica";
