@@ -371,7 +371,7 @@ Consequences, in order of how much they matter:
    `users.users.z.extraGroups = [ "media" ]`, not `members`. ⚠ Still read
    `getent group media` first: if the live number differs from what you pin, plan
    a recursive `chgrp` over `/tank/nixflix_media`.
-3. **A fourth hand-carried nixflix patch** (`DECISIONS.md` §10 tracks three)
+3. **Another hand-carried nixflix patch** (`DECISIONS.md` §10 tracks four)
    removing the two `mkForce`es. Fixes the cause, restores `z`'s membership at
    normal priority, and adds to the carried debt.
 4. ~~**A dedicated `reading` group.**~~ ⚠ **Dead, not merely imperfect.**
@@ -715,7 +715,7 @@ through a **second FlareSolverr of its own**; **IRC is disabled.** The shape:
    both are the point of this arrangement rather than incidental:
    - `nixflix` **hardcodes** `http://127.0.0.1:8191` for Prowlarr's indexer proxy
      (`modules/prowlarr/indexerProxies.nix:67`). Confining the shared instance
-     breaks that and buys a fourth hand-carried nixflix patch (`DECISIONS.md` §10).
+     breaks that and buys another hand-carried nixflix patch (`DECISIONS.md` §10).
    - Routing indexer scraping through a VPN exit is actively harmful: private
      trackers commonly block or flag datacenter ranges, and **Cloudflare is
      harsher on known VPN ranges — so it would make FlareSolverr worse at the only

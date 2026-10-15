@@ -500,7 +500,7 @@ plus `UMask = "0002"`. Anything not group-writable is left behind by the next
 *arr rename. The qBittorrent umask bug in `MANUAL-STEPS.md` §12 step 10 is the
 same lesson from the other end of the pipeline.
 
-## 10. nixflix rides upstream; the private fork is the canary — at the cost of three hand-applied fixes
+## 10. nixflix rides upstream; the private fork is the canary — at the cost of four hand-carried fixes
 
 **The flake input points at upstream `kiriwalawren/nixflix`, pinned to the
 exact revision the `zjones-xyz/nixflix-exp` fork's CI has proven against
@@ -523,10 +523,23 @@ prowlarr-indexer-proxies, and a bounded Restart on navidrome-create-admin.
 the corrections the canary's CI does not rehearse — the phantom
 `navidrome-setup` unit (MANUAL-STEPS.md §12) is what that costs, concretely.
 
+*A fourth, of a different kind:* the pin fixes the module, not the packages
+— modules evaluate against galactica's nixpkgs, so a nixpkgs bump moves the
+*arrs underneath it. #188 took Radarr to 6.4 and Prowlarr to 2.6, which reject
+a host-config PUT without `allowedHosts`; upstream fixed it in `11774fc`
+(#356), past the pin. That sits inside a generated script, out of `mkForce`'s
+reach, so `flake.nix` imports nixflix's modules from an `applyPatches` copy
+carrying `hosts/galactica/nixflix-allowedhosts.patch`. Unlike the overrides it
+is loud on drift: once the pin includes `11774fc` the patch stops applying —
+delete it then. Its costs: import-from-derivation, so evaluating galactica on
+the Mac needs a Linux builder; and `flake.nix` restates
+`nixosModules.default`'s import list (the modules plus vpn-confinement), so a
+bump that changes that list must be mirrored.
+
 *The exit:* make the fork fetchable from CI (publish it, or give the workflow
 a credential) and point the input back at it — or upstream the three fixes.
-Either deletes the overrides. Until then this is carried debt, not a settled
-design.
+Either deletes the overrides; the patch leaves by itself once the pin passes
+`11774fc`. Until then this is carried debt, not a settled design.
 
 *Why never a branch URL:* upstream commits most days, and `follows` on
 nixpkgs already governs packages (modules evaluate against the consuming

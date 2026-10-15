@@ -289,7 +289,20 @@
           # option that hosts/galactica/nixflix.nix uses for the NAT-PMP
           # sidecar. The stack's own configuration lives in that file, which
           # configuration.nix imports.
-          nixflix.nixosModules.default
+          #
+          # Imported from a patched source rather than nixosModules.default:
+          # upstream 11774fc (allowedHosts), carried until the pin reaches it.
+          # The patch then fails to apply — delete it. DECISIONS.md §10.
+          {
+            imports = [
+              (import "${nixpkgs.legacyPackages.x86_64-linux.applyPatches {
+                name = "nixflix-patched";
+                src = nixflix;
+                patches = [ ./hosts/galactica/nixflix-allowedhosts.patch ];
+              }}/modules")
+              nixflix.inputs.vpn-confinement.nixosModules.default
+            ];
+          }
         ];
       };
 
