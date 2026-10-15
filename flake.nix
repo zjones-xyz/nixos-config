@@ -108,28 +108,19 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # A second, standalone nixpkgs — deliberately NOT inputs.nixpkgs.follows —
-    # pinned to exactly the commit that bumped `orca-slicer` (used on
-    # pegasus), so the diff is that one vetted version bump and nothing else.
-    # Bumping the *shared* nixpkgs instead would move package versions
-    # fleet-wide for one desktop app on one host (hosts/pegasus/DECISIONS.md).
-    nixpkgs-orca-slicer.url = "git+https://github.com/NixOS/nixpkgs.git?rev=e749b91730e1d4c612294f1e10dd351674d697fa&shallow=1";
+    # HushMic (pegasus) — noise-suppressing PipeWire virtual mic. Not in
+    # nixpkgs; this is the upstream author's own flake. Follows nixpkgs-apps,
+    # the input its own CI builds against (unstable) — app policy, not a pin.
+    hushmic-nix = {
+      url = "git+https://github.com/Fovty/hushmic-nix.git";
+      inputs.nixpkgs.follows = "nixpkgs-apps";
+    };
 
-    # Same idea as nixpkgs-orca-slicer above, for bambu-studio: the main
-    # nixpkgs pin has it at 02.03.01.51 with the NVIDIA-GL fix hand-applied
-    # via overrideAttrs (hosts/pegasus/home.nix). This pins the commit where
-    # nixpkgs both bumped it to 02.05.00.67 *and* already carries the real
-    # upstream withNvidiaGLWorkaround package arg (nixpkgs#522161) — so this
-    # replaces the hand-rolled overrideAttrs fix with the real thing, plus
-    # picks up two extra version bumps (02.04.00.70, 02.05.00.67).
-    nixpkgs-bambu-studio.url = "git+https://github.com/NixOS/nixpkgs.git?rev=13b979d75662827615c1de6dd22f87e6296ba71d&shallow=1";
-
-    # Same idea again, for ferdium (7.1.2 -> 7.2.3). Here the separate pin is
-    # forced rather than merely preferred: 26.05 dropped the EOL 7.1 kernel
-    # *before* the ferdium bump landed, and pegasus pins 7.1 because the
-    # NVIDIA driver still won't build against 7.2 — so no revision of the
-    # shared nixpkgs has both. See hosts/pegasus/DECISIONS.md.
-    nixpkgs-ferdium.url = "git+https://github.com/NixOS/nixpkgs.git?rev=d34d77df0bd187ec660064937ca01f91fe75f6df&shallow=1";
+    # Desktop apps that should move faster than the 26.05 system (used on
+    # pegasus) — deliberately NOT inputs.nixpkgs.follows. Instantiated once
+    # below as `pkgsApps`; kernel, services and everything else stay on
+    # `nixpkgs`. hosts/pegasus/DECISIONS.md has the policy for what goes here.
+    nixpkgs-apps.url = "git+https://github.com/NixOS/nixpkgs.git?ref=nixos-unstable&shallow=1";
 
     # Non-flake theme sources for pegasus's Dragonized session, pinned here so
     # every source pin lives in flake.lock — consumed by
@@ -144,7 +135,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, niri-flake, nixflix, nixpkgs-orca-slicer, nixpkgs-bambu-studio, nixpkgs-ferdium, dr460nized-src, window-title-applet-src, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, niri-flake, nixflix, nixpkgs-apps, dr460nized-src, window-title-applet-src, ... }:
   let
     # The HOMEPAGE_VAR_* names one Homepage instance actually receives, read
     # back out of the rendered sops template rather than restated here — so
@@ -159,6 +150,21 @@
         declarations = builtins.filter (nixpkgs.lib.hasPrefix "HOMEPAGE_VAR_") lines;
       in
       map (line: builtins.head (nixpkgs.lib.splitString "=" line)) declarations;
+
+    # ── Bambuddy's virtual-printer CA in the slicers' printer.cer ──
+    # OrcaSlicer trusts printers only via its bundled cert/printer.cer, and
+    # SLIC3R_FHS bakes its path into the binary, so the CA is appended in the
+    # package itself. serenity's casks: modules/darwin/slicer-certs.nix.
+    bambuddyCa = ./certs/bambuddy-vp-ca.crt;
+    withBambuddyCa = appDir: pkg:
+      pkg.overrideAttrs (old: {
+        postInstall = (old.postInstall or "") + ''
+          cer=$out/share/${appDir}/cert/printer.cer
+          test -f "$cer"
+          [ -z "$(tail -c1 "$cer")" ] || echo >> "$cer"
+          cat ${bambuddyCa} >> "$cer"
+        '';
+      });
   in
   {
     formatter = {
@@ -219,22 +225,21 @@
             ];
             # claude-desktop-debian has no HM module, just a package — pass it
             # through directly rather than adding it as a NixOS-level overlay.
-            # orcaSlicerNewer/bambuStudioNewer are the same idea, from the
-            # standalone nixpkgs-orca-slicer/nixpkgs-bambu-studio inputs above
-            # (see their comments for why they're separate nixpkgs rather than
-            # an overlay on the shared one). withNvidiaGLWorkaround is the
-            # real upstream fix (nixpkgs#522161) baked into that pin — see
-            # hosts/pegasus/home.nix and DECISIONS.md.
             home-manager.extraSpecialArgs = {
               claudeDesktop = claude-desktop-debian.packages.x86_64-linux.claude-desktop-fhs;
+              # A separate nixpkgs instance, so it needs its own allowUnfree:
+              # modules/nixos/common.nix only configures the system's.
+              pkgsApps = import nixpkgs-apps {
+                system = "x86_64-linux";
+                config.allowUnfree = true;
+              };
               # Askimo (multi-LLM desktop chat client) — not in nixpkgs at
-              # all, unlike claudeDesktop/orcaSlicerNewer/bambuStudioNewer
-              # above (which are all upstream packages nixpkgs just hasn't
-              # caught up to yet). pkgs/askimo.nix unpacks upstream's own
-              # jpackage .deb release and runs it on nixpkgs' jdk25 — see
-              # that file for why. callPackage against the main nixpkgs
-              # rather than a pin: no version-skew concern since there's no
-              # nixpkgs copy of this package to skew against.
+              # all, unlike claudeDesktop above (an upstream package nixpkgs
+              # just hasn't caught up to yet). pkgs/askimo.nix unpacks
+              # upstream's own jpackage .deb release and runs it on nixpkgs'
+              # jdk25 — see that file for why. callPackage against the main
+              # nixpkgs rather than a pin: no version-skew concern since
+              # there's no nixpkgs copy of this package to skew against.
               askimoDesktop = nixpkgs.legacyPackages.x86_64-linux.callPackage ./pkgs/askimo.nix { };
               # Zen and Opera: same "no HM module, just a package" shape as
               # claudeDesktop/askimoDesktop above — neither flake ships one.
@@ -250,21 +255,9 @@
                   hash = "sha256-EAmqAX4XKllVk1bN8sNBRcetUhIA0huoIu4jVNMlb0k=";
                 };
               });
-              orcaSlicerNewer = nixpkgs-orca-slicer.legacyPackages.x86_64-linux.orca-slicer;
-              ferdiumNewer = nixpkgs-ferdium.legacyPackages.x86_64-linux.ferdium;
-              # bambu-studio is unfree (agpl3Plus + unfree, marked as of the
-              # pinned commit) — legacyPackages defaults to allowUnfree =
-              # false, unlike the main `nixpkgs` above (set globally via
-              # modules/nixos/common.nix), so this needs its own pkgs import
-              # rather than plain legacyPackages.
-              bambuStudioNewer =
-                (import nixpkgs-bambu-studio {
-                  system = "x86_64-linux";
-                  config.allowUnfree = true;
-                }).bambu-studio.override
-                  {
-                    withNvidiaGLWorkaround = true;
-                  };
+              # Appends Bambuddy's CA to OrcaSlicer's printer.cer (see the
+              # banner above); home.nix applies it to pkgsApps.orca-slicer.
+              inherit withBambuddyCa;
             };
             # Niri's own auto-generated ~/.config/niri/config.kdl (a plain,
             # not-home-manager-owned file, hand-edited in place during Niri

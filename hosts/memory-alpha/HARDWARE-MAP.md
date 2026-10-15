@@ -22,7 +22,7 @@ on NixOS generation 36 (rev `0c6229f`).
 
 | ID | Device | Size | Full serial | Role | FS | Enc. |
 |---|---|---|---|---|---|---|
-| `m2-0590` | **PNY CS2130 1TB SSD** | 1 TB | `PNY21232106090100590` | **Root** | LUKS → btrfs | **yes** |
+| `m2-0590` | **PNY CS2130 1TB SSD** | 1 TB | `*0590` | **Root** | LUKS → btrfs | **yes** |
 
 | Partition | Size | Contents |
 |---|---|---|
@@ -97,7 +97,7 @@ than a slow build. It is also the borgmatic pilot's restore target (§1).
 **Fixed in #43**, merged 2026-08-09 — the middle option above. `swapDevices` now
 points at the raw partition with `randomEncryption.enable = true`. The device path
 was derived from the disk's model and serial, so it was checked against the host
-before merge rather than trusted: `/dev/disk/by-id/nvme-PNY_CS2130_1TB_SSD_PNY21232106090100590-part3`
+before merge rather than trusted: `/dev/disk/by-id/nvme-PNY_CS2130_1TB_SSD_*0590-part3`
 resolves to `nvme0n1p3`, the same partition this section caught sitting idle.
 
 The host has been switched repeatedly since the merge (the NFS cutover and the
@@ -213,7 +213,7 @@ transition. `services.thermald.enable` is the standard NixOS lever;
 
 ```csv
 id,form,recording,serial_suffix,serial_full,model,size,location,role,colour,physical_label
-m2-0590,m2-nvme,,0590,PNY21232106090100590,PNY CS2130 1TB SSD,1TB,m2-slot,root,,no
+m2-0590,m2-nvme,,0590,*0590,PNY CS2130 1TB SSD,1TB,m2-slot,root,,no
 ```
 
 `recording` does not apply to an NVMe. `physical_label` is `no` — M.2 cards take

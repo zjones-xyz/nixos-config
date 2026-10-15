@@ -15,8 +15,8 @@ read-only discovery like this):
 
 | What | Confirmed value |
 |---|---|
-| NVMe root | `nvme-SPCC_M.2_PCIe_SSD_AA2300905N401KG00206` |
-| midden (formerly Unraid's `fastservices` pool) | `ata-SATA_SSD_19013024009545` |
+| NVMe root | `nvme-SPCC_M.2_PCIe_SSD_*0206` |
+| midden (formerly Unraid's `fastservices` pool) | `ata-SATA_SSD_*9545` |
 | Onboard NIC driver | `e1000e` |
 
 Both `disko.nix` and `configuration.nix` already have these baked in. Still
@@ -349,11 +349,12 @@ against the source, plus the Unraid flash+config insurance into
    ✅ 2026-09-02 — all seven (8.94 T) staged; `tank/media`/`tank/books` empty.
 2. [x] Retire sidepool *logically*: unmounted + all four LUKS mappers closed
    2026-09-02 — disks are inert (LUKS-closed, nothing references them).
-3. [ ] Pull sidepool's drives during the next in-case session (deliberately
+3. [x] Pull sidepool's drives during the next in-case session (deliberately
    deferred with other case cleanup: the dead MX100 wants pulling too, the
    WD Blue's cable label is stale post-recable, and HARDWARE-MAP §3/§7's
    cage/port enumeration needs eyes-in-the-case anyway). Disks return to
    the drawer after a cooling-off period.
+   ✅ 2026-10-06 — sidepool's four disks and the MX100 pulled.
    > **2026-09-03 — data-safety precondition met; the pull leaves nothing
    > behind.** sidepool was reopened one last time (read-only: `cryptsetup
    > open --readonly` ×4 + `mount -o ro,rescue=nologreplay`) and its `pools/`
@@ -1916,3 +1917,84 @@ migrating a currently-500ing service first just compounds the state to sort out.
    memos' item 6, after the next nightly run.
 9. [x] **`SHARES.md` and `BACKUP-BORG.md` updated — done 2026-09-26**, same
    shape as the ferdium/karakeep and memos entries.
+
+## 21. Replace `h-X4WE` — a failing `tank` member (opened 2026-10-02)
+
+Scrutiny flagged `h-X4WE` (serial `*X4WE`, mapper `array-X4WE`, Unraid's old
+Parity 1) **Failed** on 2026-10-01. Read with `smartctl` on 2026-10-02: **197
+Current_Pending_Sector 184**, **198 Offline_Uncorrectable 46** (Scrutiny showed
+23 the day before), 5 Reallocated 7, 10 Spin_Retry 0, 199 UDMA_CRC 0, helium
+100, overall health PASSED, 34,745 power-on hours. The SMART error log holds a
+single UNC from hour 24,414, unrelated. No self-test had run since hour 29,132;
+the fix for that is a smartd self-test schedule
+(`homelab.smart.selfTests`).
+
+The pool has not noticed. `tank` is ONLINE with zero READ/WRITE/CKSUM on every
+member, `zpool events` has no I/O or checksum events, the kernel log has no ATA
+errors for the week, and the monthly scrub that finished 2026-10-01 16:56
+repaired 0 B with 0 errors. The bad sectors sit where ZFS has not read, which
+is why the drive's offline scan found them rather than the scrub. The other
+three spinners read 0 on 5/197/198/199. So `tank` is fully redundant, and this
+is a replace-within-weeks disk, not an emergency.
+
+**Escalate** if 197 or 198 keep climbing fast, `zpool status` shows any READ or
+CKSUM on `array-X4WE`, or another spinner's 5/197/198 leaves zero. Escalating
+means copying the `reacquirable` media onto sidepool's disks *before* anything
+else, per §9's degraded-disk contingency (a `zfs send` target, never a pool
+member).
+
+1. [x] **Order the replacement.** ≥ 12 TB, CMR, ideally not this batch; no drawer
+   spare qualifies (§9). ✅ `h-YWAH`, an HPE-branded HC520 (`HARDWARE-MAP.md`),
+   in the case 2026-10-06; used (hours reset, ≈ 255 TB written), same capacity as X4WE.
+2. [x] **Watch X4WE in Scrutiny every few days** until the new disk is in.
+   ✅ Held at 5 = 14, 197 = 184, 198 = 70 through the resilver, with 0 READ
+   errors in `zpool status`.
+3. [x] **Burn the new disk in before it touches `tank`.** On the bare disk,
+   destructive: `sudo badblocks -wsv -b 4096 -t 0 /dev/disk/by-id/<new>`
+   (one write + read pass, about 1.5 days at 12 TB), then
+   `sudo smartctl -t long`. 5/197/198 must all still read 0.
+   ✅ YWAH 2026-10-08/09: badblocks 0 bad blocks (1d20h), long test completed
+   without error at hour 65; 5/196 and every devstat error counter 0.
+4. [x] **Find X4WE's bay in cage A by serial.** Cage A's port-to-bay mapping is
+   still open (`HARDWARE-MAP.md` §7). Fill that table while doing this.
+   ✅ 2026-10-11: bay `A4` (onboard `ata4`); cage A table filled in `HARDWARE-MAP.md` §3.
+5. [x] **Swap bays, powered off: YWAH into X4WE's cage-A bay, X4WE onto YWAH's
+   loose LSI lead.** Both stay connected, so `tank` keeps full redundancy; ZFS
+   finds members by mapper name, not port. At the initrd unlock prompt, before
+   the passphrase, `ls /dev/disk/by-id/` must show both `…_*YWAH` and
+   `…_*X4WE`. YWAH missing = cage A's backplane feeds 3.3 V to the
+   power-disable pin: power off, Kapton pins 1–3, retry. Nothing is degraded.
+   ✅ 2026-10-11. YWAH came up in `A4` (the backplane carries no 3.3 V). X4WE was
+   the one missing at initrd: on the loose lead it needed the power-disable
+   adapter cable too, so ALE601s honour the pin.
+6. [x] **LUKS it like the other members** (§9: whole-disk LUKS,
+   `luks/arrayKeyFile` in slot 0, the fleet recovery passphrase in slot 1).
+   Copy cipher and sector size from an existing member's `cryptsetup luksDump`
+   rather than trusting defaults. Open it as `array-<last 4 of serial>`.
+   ✅ 2026-10-11: `array-YWAH`, parameters copied from T97E, UUID preset with
+   `luksFormat --uuid`; `luksDump` showed slots 0 and 1.
+7. [x] **`[galactica]` PR: add the new member** — its crypttab line (new LUKS
+   UUID) and its `zfs-import-tank` ordering entry in `configuration.nix`.
+   Switch *before* step 8, so a reboot mid-resilver reopens both disks.
+   ✅ #170, switched 2026-10-11.
+8. [x] **`sudo zpool replace tank array-X4WE array-<last4>`**, then watch
+   `zpool status` until the resilver completes. X4WE detaches by itself at the
+   end. ✅ Started 2026-10-10 21:41; resilvered 4.32T in 18:53:42 with 0 errors,
+   finished 2026-10-11 16:34. `array-YWAH` is a plain raidz1 member.
+9. [x] **Follow-up PR: remove `array-X4WE`'s crypttab line and ordering
+   entry.** Switch, then cold-boot once to prove `tank` imports with the new
+   member. ✅ #179, switched 2026-10-11; the cold boot imported `tank` ONLINE
+   with all seven members and no errors.
+10. [ ] **Pull X4WE off the loose LSI lead** (the new disk is already in its
+    bay, step 5). Update `HARDWARE-MAP.md` §1 with the new row and ID, and
+    print its caddy label (`docs/DISK-LABELLING.md`).
+    Pulled and `HARDWARE-MAP.md` updated 2026-10-11; **the `h-YWAH` caddy label
+    is still to print.**
+11. [ ] **RMA X4WE to the seller.** Warranty claim approved 2026-10-09; RMA
+    number, address and terms are in `fleet-inventory`. Only after step 8's
+    resilver: `cryptsetup luksErase` (destroys the keyslots, which is enough
+    since everything on it is ciphertext), photograph the drive and its pins,
+    pack it padded in an anti-static bag, keep the tracking number. It does not
+    go in the drawer; whatever comes back is a new disk with its own ID.
+    `luksErase` done 2026-10-11, before the cold boot; photos, packing and
+    shipping remain.
