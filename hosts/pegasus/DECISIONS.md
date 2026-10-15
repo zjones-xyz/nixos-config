@@ -1609,3 +1609,34 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   effects suite to run just to get one filter.
   Validated by eval and a local build of the package. On pegasus, keyboard
   noise is gone on a Discord call (MANUAL-STEPS.md §#186).
+
+- **Audio/webcam self-test on every switch, 2026-10-15** —
+  `modules/nixos/av-selftest.nix`. A switch on 2026-10-14 left the mic dead
+  until a reboot. Generation 158 dropped `hushmic.service`. Generation 159
+  brought it back, but a switch does not start a new user unit, so no
+  "HushMic" source existed and the app set to use it got no input. Every unit
+  the switch did touch came back `active`, so it reported no problem.
+  The self-test checks, as `z`: the PipeWire user units (plus `hushmic`)
+  are active, a default output and mic exist, the default mic and HushMic
+  each record samples, `pipewire-pulse` answers `pactl`, and there is a
+  `/dev/v4l/by-id/*-video-index0` webcam and a PipeWire `Video/Source` node.
+  It retries for about 20 s while the restarted units settle.
+  *Hook:* a system oneshot `wantedBy` and `before`
+  `sysinit-reactivation.target`. Every switch restarts that target, after
+  the per-user switch and before the system units restart. Being ordered
+  before it means the switch waits for the result. A failure therefore lands
+  in the switch's own closing `warning: the following units failed:`, along
+  with `systemctl status` showing the failure list. It also makes
+  `nixos-rebuild` exit 4, NixOS's usual "switched, but a unit failed". The
+  target never starts at boot, so the test does not run then.
+  The test reads only the webcam's device node and the PipeWire graph. It
+  never opens a video stream, so it can't collide with an app using the
+  camera. Skipped when `z` has no graphical session.
+  *Alt rejected:* `system.userActivationScripts`, which runs inside the user
+  `nixos-activation.service`. Its output goes only to the journal, and a
+  failure there would be blamed on `nixos-activation`. Also rejected: a
+  post-step on the `nrs` alias. Arguments typed after an alias land at the
+  end of the expansion (see `scripts/npull-rebuild.sh`), and the alias misses
+  any switch made another way.
+  *Not a build-time test:* the Nix sandbox has no devices and no session.
+  The test can only mean something on the running system.
