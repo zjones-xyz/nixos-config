@@ -943,3 +943,35 @@ Verified on pegasus with VP-queue (queue mode, .97): OBN logs `insecure=0`
 and `mqtt connect callback rc=0 (accepted)`. Test with a queue- or
 archive-mode VP: a proxy-mode VP announces the real printer's serial, so Orca
 treats the two as one device and connects to the printer directly.
+
+## #186 HushMic — verify after the next switch
+
+`modules/nixos/hushmic.nix` runs `hushmic --tray` as a user unit. It adds a
+"HushMic" PipeWire source, and apps that should get the cleaned voice pick it
+as their input. The first switch compiles HushMic locally (Rust, a few
+minutes). Rationale: DECISIONS.md, "HushMic as the noise-suppressed mic".
+
+1. [x] Start it, then check it is running and the tray icon shows up in
+       DMS. A switch does not start a new user unit; it starts by itself
+       from the next login on.
+       ```sh
+       systemctl --user start hushmic
+       systemctl --user status hushmic
+       hushmic status
+       ```
+2. [ ] Pick the real microphone in the tray menu. Then use **Test my mic** to
+       record a sample and compare the raw and cleaned playback.
+3. [x] Select **HushMic** as the input in Discord (or another app) and
+       confirm the other side hears the cleaned voice.
+4. [ ] Leave the tray's **Start on login** off. The unit already starts
+       HushMic at login, and a second instance would lose the
+       single-instance lock. If `~/.config/autostart/hushmic.desktop` exists,
+       run `hushmic config set autostart false`.
+
+Verified on pegasus, 2026-10-14: after a manual `start` the unit is active and
+the tray icon shows in DMS. On a Discord call with HushMic as the input, the
+other side could not hear the keyboard. At first the voice came through
+quiet: the mic's input volume was low, and the default strength (100 dB)
+damped speech too. Both were fixed from the tray. These settings are runtime
+state, not Nix: HushMic keeps the strength per mic in
+`~/.config/hushmic/config.toml`, and WirePlumber remembers the input volume.

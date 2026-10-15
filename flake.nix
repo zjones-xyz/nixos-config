@@ -108,6 +108,14 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # HushMic (pegasus) — noise-suppressing PipeWire virtual mic. Not in
+    # nixpkgs; this is the upstream author's own flake. Follows nixpkgs-apps,
+    # the input its own CI builds against (unstable) — app policy, not a pin.
+    hushmic-nix = {
+      url = "git+https://github.com/Fovty/hushmic-nix.git";
+      inputs.nixpkgs.follows = "nixpkgs-apps";
+    };
+
     # Desktop apps that should move faster than the 26.05 system (used on
     # pegasus) — deliberately NOT inputs.nixpkgs.follows. Instantiated once
     # below as `pkgsApps`; kernel, services and everything else stay on
@@ -281,7 +289,20 @@
           # option that hosts/galactica/nixflix.nix uses for the NAT-PMP
           # sidecar. The stack's own configuration lives in that file, which
           # configuration.nix imports.
-          nixflix.nixosModules.default
+          #
+          # Imported from a patched source rather than nixosModules.default:
+          # upstream 11774fc (allowedHosts), carried until the pin reaches it.
+          # The patch then fails to apply — delete it. DECISIONS.md §10.
+          {
+            imports = [
+              (import "${nixpkgs.legacyPackages.x86_64-linux.applyPatches {
+                name = "nixflix-patched";
+                src = nixflix;
+                patches = [ ./hosts/galactica/nixflix-allowedhosts.patch ];
+              }}/modules")
+              nixflix.inputs.vpn-confinement.nixosModules.default
+            ];
+          }
         ];
       };
 
