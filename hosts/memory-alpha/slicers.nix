@@ -11,7 +11,7 @@ let
   # Upstream tags each sidecar build `bambuddy-<version>`, after the Bambuddy
   # release it shipped with, so bumping bambuddy.nix's image bumps these too.
   # The match skips a trailing @sha256 digest.
-  tag = "bambuddy-" + builtins.head (builtins.match ".*:([^@:/]+)(@.*)?"
+  tag = "bambuddy-" + builtins.head (builtins.match "[^@]*:([^@:/]+)(@.*)?"
     config.virtualisation.oci-containers.containers.bambuddy.image);
 
   # listen: the activation socket Bambuddy calls. backend: the container,
