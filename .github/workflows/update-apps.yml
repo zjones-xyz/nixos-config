@@ -33,11 +33,14 @@ jobs:
         run: nix flake update nixpkgs-apps zen-browser opera-flake claude-desktop-debian
 
       # A PR opened with the default GITHUB_TOKEN does not trigger nix-check.yml,
-      # so the same evaluation runs here before the PR exists.
+      # so the same evaluation runs here before the PR exists. Evals first, as
+      # there: they build galactica's IFD input, which `flake check` can't.
       - name: Evaluate
         run: |
+          for attr in $(nix eval --json .#nixosConfigurations --apply builtins.attrNames | jq -r '.[]'); do
+            nix eval ".#nixosConfigurations.$attr.config.system.build.toplevel.drvPath"
+          done
           nix flake check --no-build
-          nix eval .#nixosConfigurations.pegasus.config.system.build.toplevel.drvPath
 
       - uses: peter-evans/create-pull-request@v7
         with:
@@ -48,7 +51,7 @@ jobs:
           title: "[pegasus] Bump app inputs"
           body: |
             Scheduled bump of `nixpkgs-apps`, `zen-browser`, `opera-flake` and
-            `claude-desktop-debian`. `nix flake check --no-build` and pegasus's
-            eval passed in the run that opened this PR.
+            `claude-desktop-debian`. Every host's eval and
+            `nix flake check --no-build` passed in the run that opened this PR.
 
             After merging: switch pegasus and open the browsers and chat apps.
