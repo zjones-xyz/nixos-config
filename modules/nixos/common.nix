@@ -13,6 +13,11 @@
       # Scheduled optimise (below), not auto-optimise-store: the latter
       # hardlink-dedupes inside every build's critical path.
       auto-optimise-store = false;
+      # Needed for Colmena's distributed-build delegation to pegasus
+      # (colmena.nix's `meta.machinesFile`) - Nix refuses to honor a
+      # `--builders`/machines-file override for a non-trusted user. `z` already
+      # has passwordless sudo and `docker`, both root-equivalent fleet-wide.
+      trusted-users = [ "root" "z" ];
     };
     optimise = {
       automatic = true;
