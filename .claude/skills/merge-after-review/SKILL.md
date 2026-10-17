@@ -31,6 +31,8 @@ would allow it.
 Start both, then wait for both.
 
 **CI.** Run `gh pr checks N --watch --fail-fast` as a background Bash command.
+Its output repeats the table on every poll, so ignore the stale `pending`
+lines and go by its exit code plus a final plain `gh pr checks N`.
 In the desktop app, `mcp__ccd_pr__get_status` reads the same thing. Bind the
 PR with `bind_pr` first if it isn't bound. Don't schedule wakeups or cron jobs
 to poll it.
@@ -65,8 +67,9 @@ Rules:
   "tested by Z") should be visible in the diff or plausibly true. Unbacked
   claims and undocumented changes are both findings.
 - Think about the running machine, not just evaluation. Ask what breaks at
-  switch time, at the next reboot (these hosts have LUKS roots that need a
-  manual unlock), for a service's existing state on disk, and for other hosts
+  switch time, at the next reboot (galactica, memory-alpha and pegasus have
+  LUKS roots that need a manual unlock), for a service's existing state on
+  disk, and for other hosts
   that import a changed shared module.
 - You may run `nix eval` / `nix flake check --no-build` to confirm a suspicion.
   CI runs those on its own, so don't repeat them for their own sake.
@@ -91,10 +94,12 @@ recorded decision, or make the PR's description false. Style nits and
 Merge only if **all** of these hold:
 
 1. The reviewer returned `VERDICT: APPROVE` and `BLOCKING: none`.
-2. Every check on SHA concluded `success`, `skipped` or `neutral`. A
-   `cancelled` run means it was superseded by a newer push (see the
-   `concurrency` note in `.github/workflows/nix-check.yml`), so the head has
-   moved and you go back to §1.
+2. Every check in `gh pr checks N` shows `pass` or `skipping`. Anything
+   else (`fail`, `pending`, `cancel`) blocks the merge. A `cancel` usually
+   means a newer push superseded the run (see the `concurrency` note in
+   `.github/workflows/nix-check.yml`), and then item 4 fails and you go back
+   to §1. If the head still equals SHA, the run was cancelled by hand or timed
+   out: treat it as a CI failure.
 3. CI actually ran on SHA. GitHub has gone through stretches of not creating
    runs at all, and an empty `gh pr checks` is not a pass. Offer
    `gh workflow run nix-check.yml --ref <headRefName>` and wait for it.
@@ -115,7 +120,8 @@ If CI fails, report the failing job and the relevant log lines
 gh pr merge N --squash --match-head-commit <SHA>
 ```
 
-- Squash, because `main`'s history is one `<title> (#N)` commit per PR.
+- Squash, because each PR lands on `main` as one `<title> (#N)` commit
+  (direct doc commits sit between them).
 - `--match-head-commit` makes GitHub refuse the merge if anything was pushed
   after the review.
 - Don't pass `--delete-branch`, because this session's worktree usually has
@@ -133,8 +139,9 @@ each configuration's toplevel derivation before and after the merge.
 `self.rev` into every NixOS host, so every commit changes every one of them,
 docs-only commits included. Export both trees with `git archive` and evaluate
 them as `path:` flakes. They have no rev, so the motd reads "unknown" on both
-sides and only real changes show. M is the merge commit (`git log -1
-origin/main` after a fetch, unless something landed on top). Use the
+sides and only real changes show. M is the merge commit, taken from
+`gh pr view N --json mergeCommit -q .mergeCommit.oid` (then `git fetch
+origin main`), not the tip of `main`, which may have moved. Use the
 scratchpad for D:
 
 ```
@@ -143,12 +150,15 @@ git archive M^ | tar -x -C "$D/before"; git archive M | tar -x -C "$D/after"
 drv() { nix eval --raw "path:$D/$1#$2.config.system.build.toplevel.drvPath"; }
 for kind in nixosConfigurations darwinConfigurations; do
   for h in $(nix eval --json "path:$D/after#$kind" --apply builtins.attrNames | jq -r '.[]'); do
-    [ "$(drv before "$kind.$h" 2>/dev/null)" = "$(drv after "$kind.$h")" ] || echo "CHANGED $h"
+    b=$(drv after "$kind.$h") || { echo "EVAL-FAILED $h"; continue; }
+    [ "$(drv before "$kind.$h" 2>/dev/null)" = "$b" ] || echo "CHANGED $h"
   done
 done
 ```
 
-It takes a couple of minutes. Ignore `galactica-live-iso`, since it's an
+It takes a couple of minutes. `EVAL-FAILED` means `main` no longer evaluates
+for that host. Don't put the host on the checklist; report it to Zoe as a
+broken `main` instead. Ignore `galactica-live-iso`, since it's an
 installer image and nothing runs it.
 
 - **No configuration changed** (docs, checks, CI): say "nothing to deploy" and
