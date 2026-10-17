@@ -5,10 +5,11 @@
   # (traefik.nix, traefik-local.nix, traefik-hamilton.nix, traefik-galactica.nix).
   #
   # The CA half of the staging/production switch lives here as a derived
-  # option; only the storage path is per-host. traefik-galactica.nix consumes
-  # it; ⟨follow-up: the three older Traefik modules still carry their own copy
-  # of the ternary, plus the shared ACME email, resolver pair and
-  # `docker-proxy-network` oneshot — collapse those when unifying them.⟩
+  # option; only the storage path is per-host. All four consume it, along with
+  # the shared ACME account email below. ⟨follow-up: the resolver pair and the
+  # `docker-proxy-network` oneshot are still duplicated — the oneshot differs
+  # per host (rootless vs rootful, deps, bridge opts), so lifting it needs a
+  # parameterized module, not a copy-paste collapse.⟩
   options.homelab.letsencryptStaging = lib.mkOption {
     type = lib.types.bool;
     default = true;
@@ -37,5 +38,16 @@
       else "https://acme-v02.api.letsencrypt.org/directory";
     defaultText = lib.literalExpression "the CA matching homelab.letsencryptStaging";
     description = "ACME caServer URL derived from `homelab.letsencryptStaging`.";
+  };
+
+  options.homelab.letsencryptEmail = lib.mkOption {
+    type = lib.types.str;
+    readOnly = true;
+    default = "zoejonestx91@gmail.com";
+    description = ''
+      ACME account email shared by every Traefik module. One value so all
+      hosts register against the same Let's Encrypt account — a per-host
+      drift would silently create a second account.
+    '';
   };
 }
