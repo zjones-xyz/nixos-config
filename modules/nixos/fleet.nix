@@ -38,6 +38,8 @@
       "*.memory-alpha.internal"
       "*.memory-alpha.zjones.dev"
       "*.monitor.zjones.dev"
+      # 3D printing (hosts/memory-alpha/bambuddy.nix).
+      "*.3dp.zjones.dev"
       # jellyfin.zjones.dev: flat name, not *.memory-alpha.zjones.dev —
       # Traefik (modules/nixos/traefik.nix, on memory-alpha) already routes
       # it with its own single-name LE cert.
@@ -59,6 +61,8 @@
   # galactica — also answers to the legacy names "tower" and "arr"
   # (identities it absorbed, hosts/galactica/DECISIONS.md §2). The *arr
   # stack's `.xyz` route was dropped entirely (owner's call: not needed).
+  # Flat names (home, guest, ferdium, …) each have their own Traefik router
+  # pair; read.* and maker.* are real subdomain groups, hence the wildcards.
   { name = "galactica"; ip = "192.168.8.190";
     domains = [
       "galactica.internal"
@@ -72,8 +76,28 @@
       "*.arr.internal"
       "arr.zjones.dev"
       "*.arr.zjones.dev"
-      "guesthome.zjones.xyz"
+      "read.internal"
+      "*.read.internal"
+      "read.zjones.dev"
+      "*.read.zjones.dev"
+      "home.internal"
+      "home.zjones.dev"
+      "guest.internal"
+      "guest.zjones.dev"
+      "guest.zjones.xyz"
+      "ferdium.internal"
+      "ferdium.zjones.dev"
+      "karakeep.internal"
+      "karakeep.zjones.dev"
+      "paperless.internal"
+      "paperless.zjones.dev"
+      "syncthing.internal"
+      "syncthing.zjones.dev"
+      "memos.internal"
+      "memos.zjones.dev"
+      "*.maker.internal"
+      "*.maker.zjones.dev"
     ]; }
 
-  # hamilton: not yet deployed, no known IP — add once it exists.
+  # hamilton: not in service, no known IP — add once it exists.
 ]

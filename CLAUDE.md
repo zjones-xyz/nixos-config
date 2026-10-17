@@ -1,14 +1,18 @@
 # Fleet conventions
 
 Conventions for this flake, inferred from the existing hosts so future sessions
-stay consistent. (Team-shared instructions live in `.claude/CLAUDE.md`; this file
-documents the repo's structure and patterns.)
+stay consistent. This file documents the repo's structure and patterns.
 
 ## Layout
 
 - **`flake.nix`** — one `nixosConfigurations.<host>` per machine (+
   `darwinConfigurations.<host>` for Macs). nixpkgs pinned to `nixos-26.05`;
-  home-manager and sops-nix follow it.
+  home-manager and sops-nix follow it. Desktop apps that must move faster
+  than the release come from `nixpkgs-apps` (nixos-unstable), handed to Home
+  Manager as `pkgsApps` — apps only, never the kernel, services or modules.
+  Hosts run the release's LTS kernel: nixpkgs deletes non-LTS kernels at EOL
+  even on stable, so pinning one freezes the shared nixpkgs for the whole
+  fleet. Both policies: `hosts/pegasus/DECISIONS.md`.
 - **`hosts/<host>/`** — `configuration.nix` (host wiring), `hardware-configuration.nix`,
   `home.nix` (per-host Home Manager). Pi hosts also have `DEPLOY.md`/`bootstrap.sh`.
   A host directory may exist as **documentation only**, before any config is written
@@ -20,6 +24,15 @@ documents the repo's structure and patterns.)
 - **`modules/home/<name>.nix`** — Home Manager modules shared across hosts/platforms
   (e.g. `common.nix`, consumed by both a NixOS host and a darwin host).
 - **`secrets/<host>.yaml`** — sops-encrypted, per host. Policy in `.sops.yaml`.
+- **`checks/<name>/`** — a `checks.<system>.<name>` flake output and whatever it
+  runs (linter config, validator script). For app config the fleet hand-maintains
+  as data rather than Nix — e.g. `checks/homepage-config` over
+  `hosts/galactica/homepage/*.yaml`. ⚠ `nix flake check --no-build` only
+  *evaluates* these; anything that has to actually run needs its own
+  `nix build .#checks.…` step in `.github/workflows/nix-check.yml`.
+- **`certs/`** — public certificates more than one host trusts (e.g.
+  `bambuddy-vp-ca.crt`, appended to OrcaSlicer's `printer.cer` on pegasus and
+  serenity). Certificates only, never keys.
 - **`docs/<topic>.md`** — fleet-wide documentation that belongs to no single host
   (e.g. `DISK-LABELLING.md`, the physical disk naming and cable-labelling
   convention; `DISK-DRAWER.md`, unassigned spare disks; `BACKUP.md`, which host
@@ -41,6 +54,26 @@ documents the repo's structure and patterns.)
   the story of finding it.
 - Each host sets `system.stateVersion`; don't bump it casually.
 
+## Serial numbers
+
+- **This repo is public, so serials are masked:** `*` plus the last four
+  characters (`*X4WE`), more only where four collide. Full serials, purchase,
+  warranty and RMA records live in the private `zjones-xyz/fleet-inventory`,
+  keyed by the same fleet IDs.
+- The `*` doubles as a shell glob, so documented commands still run:
+  `/dev/disk/by-id/ata-*_*X4WE`.
+- Exception: a `.nix` file that must match a device (disko `by-id` paths,
+  niri output serials) keeps the full string. Prefer a UUID where one exists.
+- WWNs, MACs and LUKS UUIDs are not masked.
+- **New equipment → prompt for its records.** When the user mentions buying or
+  receiving hardware, remind them to log it in `fleet-inventory`: invoice
+  (`raw/invoices/`), full serial, seller, order #, warranty card and terms, and
+  label photo. Secondhand gear often has no receipt or warranty: log the serial,
+  source, date and price paid, and "none" for warranty rather than leaving it
+  blank. External PSU or adapter: its output volts/amps/watts, plug/tip type
+  and maker, and whether it carries a label naming the item it belongs to.
+  Offer a `send_later` reminder if they can't do it then.
+
 ## Secrets (sops-nix)
 
 - The host's SSH ed25519 key is its age identity
@@ -59,18 +92,50 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
 ## Workflow
 
 - `.md`/comment/bootstrap-script changes → commit straight to `main`.
+  Exception: `.claude/skills/**/SKILL.md` is executable markdown — an agent
+  acts on it — so skill changes take the `.nix` route below, as `[all] …`.
 - Pending human/manual steps in markdown (`SECRETS-TODO.md`, `MANUAL-STEPS.md`,
   `DEPLOY.md`, etc.) use numbered checkboxes (`1. [ ]`, `2. [ ]`, …), not plain
   numbers or dashes, so they can be checked off as done while keeping sequence
   for order-dependent steps. Narrative/history — what already happened, what
   was verified on real hardware — stays prose; only actually-pending action
   items get a checkbox.
+- **`MANUAL-STEPS.md` sections are keyed by issue/PR number**, not numbered in
+  sequence: `## #155 Bambuddy + Obico — owner steps before first switch`, cited
+  as `MANUAL-STEPS.md` §#155. Use the PR that brought the steps. If there is no
+  PR, as with a straight-to-`main` doc commit, use the issue that tracks them,
+  and open one if none exists. The point is that nothing ever gets renumbered:
+  a key stays put when a section is added, dropped or reordered, so citations
+  don't go stale. It also leads back to the reasoning. A second section from the same
+  PR in the same file takes a letter (`#155b`). New sections go at the end.
+  Sections written before this rule keep their `§1`… numbers, so the many
+  existing cross-references stay valid.
 - `.nix`/config changes → feature branch + PR, title prefixed with the host scope
   in brackets, e.g. `[memory-alpha] …`, `[pegasus] …`, `[all] …`.
-- **Branch names carry no agent prefix.** `nfs-cutover`, not `claude/nfs-cutover`
-  — name the branch for the work, not for who did it. Where a session is handed
-  a prefixed branch by its harness, that one is out of our hands; every branch
-  created from inside the repo follows this.
+- **Entry-only suffixes.** `/dashboard`, `/dns` and `/dhcp` after the host mark
+  a PR that also changes *entries* elsewhere. The host named first is the node
+  at risk.
+  - `/dashboard`: a service or bookmark in `hosts/galactica/homepage/`. A
+    widget's `HOMEPAGE_VAR_*` line in `homepages.nix`, and its sops secret,
+    count too.
+  - `/dns`: an AdGuard rewrite on galactica.
+  - `/dhcp`: a DHCP reservation or pool exclusion. These live on the router
+    for now, so the PR body says what to set.
+  - `[memory-alpha/dashboard/dns] …`: the real change is on memory-alpha.
+  - `[galactica/dashboard] …`: only dashboard entries change.
+  - Changing the plumbing is not an entry: the rest of `homepages.nix`, the
+    homepage modules, `checks/homepage-config`, AdGuard's own settings. It
+    takes the plain host scope, `[galactica] …`.
+  - Suffixes go in the order `dashboard`, `dns`, `dhcp`.
+  - When the switch order matters, the PR body says it, e.g. "switch
+    memory-alpha, then galactica".
+- **Branch names carry no agent prefix and no generated words.** `nfs-cutover`,
+  not `claude/nfs-cutover` or `claude/nice-wozniak-vp619a` — name the branch for
+  the work, not for who did it. A session spawning another names the branch up
+  front (`create_session`'s `outcome_branch`); the generated shape is only what
+  you get when nobody passes one. A session already holding such a branch renames
+  it before opening the PR, via GitHub's branches page so an open PR follows —
+  pushing the new name and deleting the old one closes that PR instead.
 - Validate with `nix flake check` / `nix eval`. On the Mac (aarch64-darwin) the
   Linux closures can be *evaluated* but not *built* (no Linux builder); building
   and every `switch` happen on the target host.

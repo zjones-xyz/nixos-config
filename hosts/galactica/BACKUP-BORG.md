@@ -64,10 +64,10 @@ on the property. **Why this over an explicit path list:**
   exactly Critical + Precious (`hosts/galactica/SHARES.md` §5). Tagging those
   datasets puts the selection where the data and its tier already live, and it
   **survives dataset renames and remounts** — a path list in Nix does not.
-- **The dataset names are not finalised.** `MANUAL-STEPS.md` §10 still has
-  `tank/appdata` as "name TBD", and the array does not exist yet. A hardcoded
-  mountpoint list would be guessing; a property is applied once, live, when the
-  dataset is created with its final name.
+- **The dataset names were not finalised when this was chosen** (the array
+  didn't exist yet). A hardcoded mountpoint list would have been guessing; a
+  property is applied once, live, when a dataset is created with its final
+  name — and that reasoning still holds for future additions.
 - **One place to add scope later.** Bringing `tank/appdata` subtrees in becomes
   one `zfs set`, with no Nix change and no redeploy.
 
@@ -78,14 +78,63 @@ latter inheriting to both immich children; verified `local`/`inherited`)
 zfs set org.torsion.borgmatic:backup=auto tank/documents           # 🔴 Critical
 zfs set org.torsion.borgmatic:backup=auto tank/photos/immich        # 💎 Precious
 zfs set org.torsion.borgmatic:backup=auto tank/photos/immich_archived  # 💎 Precious
-# later, per SHARES.md §5, if appdata subtrees enter scope:
-# zfs set org.torsion.borgmatic:backup=auto tank/appdata/<service>
+```
+
+### First appdata subtrees promoted — 2026-09-13
+
+The `appdata` exception this section anticipated: `tank/appdata/ferdium` and
+`tank/appdata/karakeep`, each its own dataset (not a directory inside the
+shared `tank/appdata`), tagged `homelab:tier=precious` +
+`org.torsion.borgmatic:backup=auto` — owner's call, `SHARES.md` §5 carries
+the reasoning. Every other `appdata` subtree (bazarr, nixflix, the
+paperless broker's queue state) stays on the default untagged tier.
+
+```
+zfs create tank/appdata/ferdium
+zfs create tank/appdata/karakeep
+zfs set homelab:tier=precious tank/appdata/ferdium
+zfs set homelab:tier=precious tank/appdata/karakeep
+zfs set org.torsion.borgmatic:backup=auto tank/appdata/ferdium
+zfs set org.torsion.borgmatic:backup=auto tank/appdata/karakeep
+```
+
+### Memos promoted the same way — 2026-09-21
+
+Same reasoning as ferdium/karakeep above — personal notes are a real loss —
+so `tank/appdata/memos` (`hosts/galactica/memos.nix`) gets the same
+treatment, done **before the first switch** since this is a fresh service
+with no appdata restore to sequence around:
+
+```
+zfs create tank/appdata/memos
+zfs set homelab:tier=precious tank/appdata/memos
+zfs set org.torsion.borgmatic:backup=auto tank/appdata/memos
 ```
 
 (Dataset names above follow this task's `tank/photos/immich*` layout; if the
 array is built with the flat `immich_photos` / `immich_photos_archived` names the
 docs also use, tag those instead. The property does not care what the dataset is
 named — that is the point.)
+
+### Part-DB promoted — 2026-09-26
+
+Revisited from `MANUAL-STEPS.md` §16's original call to leave Part-DB on the
+default `appdata` tier — same reasoning as ferdium/karakeep/memos applies (a
+real, non-reacquirable loss), so it gets the same promotion. Unlike memos,
+this was **not** a fresh install: live data already sat in
+`/tank/appdata/partdb` as a plain directory inside the shared `tank/appdata`
+dataset with the container actively serving from it, so the directory had to
+move out of the way and back rather than `zfs create` onto an empty path —
+exact runbook in `MANUAL-STEPS.md` §20.
+
+```
+mv /tank/appdata/partdb /tank/appdata/partdb.pre-dataset
+zfs create tank/appdata/partdb
+zfs set homelab:tier=precious tank/appdata/partdb
+zfs set org.torsion.borgmatic:backup=auto tank/appdata/partdb
+cp -a /tank/appdata/partdb.pre-dataset/. /tank/appdata/partdb/
+rm -rf /tank/appdata/partdb.pre-dataset   # after verifying the copy and a healthy restart
+```
 
 The property **inherits to children**, so tagging a parent pulls in every child
 dataset. If a child should be excluded, set `=auto` on the parent and something
@@ -188,13 +237,11 @@ verified against the unit file and its own inline comments:
    snapshot both need `CAP_SYS_ADMIN` (the unit comment literally suggests adding
    it). Added.
 
-⚠ **Still needs a real run to confirm** the snapshot actually mounts under
-`ProtectSystem=full` + `RestrictNamespaces=yes`. Those should be fine — the mount
-lands in the unit's writable `/run/borgmatic`, `@mount` is in the unit's
-`SystemCallFilter`, and the zfs kernel module is preloaded at boot
-(`boot.supportedFilesystems`, `boot.zfs.extraPools`) so `ProtectKernelModules=yes`
-never has to load it on demand — but this is the one thing that can only be
-proven live. First scheduled run against a tagged dataset settles it.
+✅ **Confirmed by the first live run (2026-09-03):** the snapshot mounts fine
+under `ProtectSystem=full` + `RestrictNamespaces=yes` — the mount lands in the
+unit's writable `/run/borgmatic`, `@mount` is in the unit's `SystemCallFilter`,
+and the zfs kernel module is preloaded at boot so `ProtectKernelModules=yes`
+never has to load it on demand.
 
 ---
 

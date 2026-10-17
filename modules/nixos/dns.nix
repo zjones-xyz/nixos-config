@@ -111,9 +111,8 @@ in
         use_global_settings = true;
       }) fleetByAddress;
 
-      # Note: hopper and hamilton also import this module (currently dead
-      # code — hosts/README-rpi-os.md) alongside galactica, so any clients
-      # defined here would appear on all instances that actually run it.
+      # Every importer of this module (galactica live; hopper/hamilton staged)
+      # gets the same client list — keep it host-agnostic.
     };
   };
 

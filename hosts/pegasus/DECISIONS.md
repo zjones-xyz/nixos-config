@@ -31,6 +31,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
 - **Stock latest kernel + `scx`**, no CachyOS/Chaotic kernel. `boot.kernelPackages
   = pkgs.linuxPackages_latest`. sched-ext is upstream since 6.12, so the stock
   kernel is sufficient; `services.scx` asserts kernel ≥ 6.12.
+  **Kernel half changed 2026-10-11:** now the release's LTS (`linuxPackages`),
+  still stock — see "Kernel → the release LTS" under Other decisions. The scx
+  half is unaffected; 6.18 LTS meets its ≥ 6.12 floor.
 - **GPU: RTX 4070 on the proprietary driver with OPEN kernel modules**
   (`hardware.nvidia.open = true`). No legacy pin.
 - **Dual-GTX-1070 box stays separate** — not added here (Pascal would force the
@@ -84,6 +87,54 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
    intended install-time layout and can drive a declarative install.
 
 ## Other decisions
+
+- **kitty layouts → `splits` first, then `*`; ctrl+shift+l is a zoom flip, not
+  next_layout (2026-09-13).** *alt:* `enabled_layouts splits,stack`, which is
+  what this started as. *Why the alt was wrong:* it rested on the belief that
+  `splits` is absent from kitty's default `enabled_layouts`. It is not —
+  the default is `*`, and `parse_layout_names` expands that to
+  `sorted(all_layouts)`, which includes `Splits`. So naming two layouts never
+  *enabled* splits; it disabled the other five.
+  *What the option does earn:* `enabled_layouts` is an absolute list with no
+  append syntax, and its first entry is the startup layout. Leading with
+  `splits` matters because `launch --location=hsplit|vsplit` is, per kitty's
+  own `launch.py`, "only used by the `splits` layout" — in any other layout the
+  split binds would open a window in a layout-dependent spot instead. `*`
+  after it restores the remaining six (expansion order verified against the
+  real parser plus its order-preserving `uniq`: splits, fat, grid, horizontal,
+  stack, tall, vertical).
+  *Why the cycle is not simply shortened:* `enabled_layouts` gates both
+  directions. `next_layout` walks the list by index with no skip mechanism,
+  and `goto_layout` matches against the same list, logging
+  `Unknown or disabled layout` otherwise. A three-entry list would therefore
+  also make the other four unreachable by name. Rebinding ctrl+shift+l to
+  `toggle_layout stack` buys the two-state flip without disabling anything;
+  `ctrl+shift+m>…` covers explicit jumps.
+  *Why the jumps are bound at all:* the command palette lists unmapped actions
+  using bare action names (`add_unmapped_actions` sets
+  `'definition': action.name`), so its free `goto_layout` entry would run
+  without the layout name it requires. Only a *mapped* binding carries its
+  argument into the palette (`'definition': definition`). Binding the seven
+  makes them palette-searchable; `next_layout` needs no such help, since its
+  `delta` argument defaults and the bare entry works.
+  *The key audit* (against kitty 0.48.2, this flake's pin, reading
+  `kitty/options/definition.py` at tag `v0.48.2`, where `kitty_mod` defaults to
+  `ctrl+shift`). Free, shadowing nothing: `ctrl+shift+d` (hsplit),
+  `ctrl+shift+backslash` (vsplit), the `ctrl+shift+m>…` jump prefix, and
+  `ctrl+shift+space` — the `map kitty_mod+space` line in `definition.py` is a
+  docs *example of unmapping*, not a default. Deliberately shadowing a stock
+  bind, each leaving a fallback: the four arrows take `previous_tab`/`next_tab`
+  (which keep `ctrl+shift+tab` and `ctrl+tab`) and `scroll_line_up`/`down`
+  (which keep `ctrl+shift+k`/`j`); `ctrl+shift+space` takes the palette's own
+  `ctrl+shift+f3`; `ctrl+shift+l` takes `next_layout`, still reachable from the
+  palette per the paragraph above. Rejected for cause: `ctrl+shift+minus`, the
+  intuitive hsplit key, is stock `decrease_font_size` whose only other Linux
+  default is `ctrl+shift+kp_subtract` — numpad-only, and lopsided against
+  `ctrl+shift+equal`; `ctrl+shift+p` is not a binding but a chord prefix with
+  nine leaves (the hints/choose-files family), and the palette cannot give them
+  back. Re-derived from definition lines only, the unused keys in the stock
+  `ctrl+shift` space are `space`, `d`, `i`, `m`, `x`, `y` — `a` and `p` are
+  chord prefixes, not bindings.
 
 - **Storage / OS layout → drive-per-OS, not shared partitions.** *alt:* shrink
   CachyOS's existing LUKS+btrfs NVMe and carve partitions for NixOS (and later
@@ -196,6 +247,42 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
     and re-verified end-to-end from this session (nested
     `--override-input` paths for `flake-parts`/`nixpkgs-lib`, since they're
     transitive to `claude-desktop-debian` rather than direct root inputs).
+- **Opera, Zen, Floorp, added 2026-09-12** (requested batch, alongside the
+  existing firefox/vivaldi/google-chrome). None of the three could just be
+  added to `home.packages` like the 2026-07-11 batch above — each is missing
+  from the pinned nixpkgs in a different way, checked directly rather than
+  assumed:
+  - **Floorp** — nixpkgs' own `floorp` derivation now throws, pointing at
+    `floorp-bin` ("building from upstream sources has become unfeasible
+    starting with version 12.x"). `floorp-bin` is free (MPL-2.0/MIT, no
+    `allowUnfree` needed) and already in the pinned nixpkgs — just swapped
+    the package name, no new input.
+  - **Opera** — nixpkgs dropped `opera` outright ("removed due to lack of
+    maintenance"); the attribute still exists only as a throw. *alt
+    considered:* hand-writing a derivation from Opera's `.deb` in `pkgs/`
+    (the askimo.nix pattern) — rejected in favor of
+    `YisuiDenghua/opera-flake`, which already **is** that derivation (same
+    shape as nixpkgs' former `opera.nix`: unpack the official `.deb`,
+    `autoPatchelfHook`), carried forward by one of `opera`'s own former
+    nixpkgs maintainers rather than reinvented here. Added as
+    `inputs.opera-flake` with `inputs.nixpkgs.follows = "nixpkgs"`; unfree,
+    needs the global `allowUnfree` pegasus already sets.
+  - **Zen** — no nixpkgs package at all, not even a removed stub. Added as
+    `inputs.zen-browser` (`0xc000022070/zen-browser-flake`, the
+    community-maintained flake nixpkgs discussions point to for Zen on
+    NixOS), `inputs.nixpkgs.follows = "nixpkgs"`. Used its `packages.default`
+    (the `beta` channel — twilight/twilight-official also exist in the flake
+    but weren't asked for).
+  - Both new flakes' packages are passed into `hosts/pegasus/home.nix` via
+    `home-manager.extraSpecialArgs` in `flake.nix` as `operaBrowser`/
+    `zenBrowser` — same "no HM module, just a package" shape as
+    `claudeDesktop`/`askimoDesktop` above, since neither flake ships one.
+  - **`git+https`, not `github:`, for both new inputs** — same reasoning as
+    `claude-desktop-debian` above. Unlike that input, `nix flake lock` and
+    `nix flake check` (via `.claude/hooks/flake-check-sandboxed.sh`) both
+    resolved cleanly from this authoring session with no manual follow-up
+    needed — this session's GitHub scoping didn't 403 the fetch the way an
+    earlier session's did for `claude-desktop-debian`/`flake-parts`.
 - **COSMIC, added 2026-07-11 as a secondary session, not primary DE.**
   `services.desktopManager.cosmic` has been a first-class NixOS module since
   25.05 (well before this flake's 26.05 pin) — no third-party flake needed.
@@ -842,6 +929,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   `nixos-rebuild switch` + relaunch on pegasus still needed to confirm this
   refactor didn't change runtime behavior versus the already-confirmed
   hand-rolled version.
+  **Superseded 2026-10-11:** bambu-studio now comes from `nixpkgs-apps`,
+  workaround kept — see "Desktop apps from `nixpkgs-apps`" below.
 
 - **OrcaSlicer bumped 2.3.1 -> 2.3.2, 2026-08-22** — pulled from a third
   standalone flake input, `nixpkgs-orca-slicer`, pinned to nixpkgs commit
@@ -868,6 +957,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   Validated the same way as `nixpkgs-bambu-studio` above
   (`flake-check-sandboxed.sh`, exit 0). Not yet confirmed with a real
   `nixos-rebuild switch` on pegasus.
+  **Superseded 2026-10-11:** orca-slicer now comes from `nixpkgs-apps`, at
+  2.4.2 — see "Desktop apps from `nixpkgs-apps`" below.
 
 - **Opened UDP 2021 + 1900 on the firewall for Bambu printer LAN
   auto-discovery, 2026-08-22.** Bambu/Orca don't send a discovery query —
@@ -942,6 +1033,7 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   break were both hit via actual `nrs` runs on pegasus (not just eval).
   The 7.1 kernel pin itself was validated with `flake-check-sandboxed.sh`
   (exit 0) but not yet confirmed with a real `nixos-rebuild switch`.
+  **Superseded 2026-10-11** by "Kernel → the release LTS" below.
 
 - **SDDM `defaultSession` switched from "plasma-dragonized" to "niri",
   2026-09-01.** Niri (added 2026-08-10, see above) is now the daily driver;
@@ -1034,3 +1126,531 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   DP-3 (it has a DisplayPort input) and give `HDMI-A-1` back. The latter
   would also change that output's declared refresh from 60.000 to whatever
   DP negotiates; see the comment in `niri-settings.nix`.
+- **DMS's `session.json` checkpointed too, wholesale rather than filtered
+  (2026-09-09).** Extends the snapshot/restore decision above, which only
+  ever covered two of DMS's three persisted files. The third,
+  `$XDG_STATE_HOME/DankMaterialShell/session.json`, is misnamed for what it
+  holds: despite the state directory it carries durable configuration —
+  `isLightMode`, the wallpaper (including per-monitor and separate
+  light/dark wallpapers), the night-mode and auto-theme schedules, pinned
+  dock and bar apps, tray order, `recentColors`. 110 persisted properties in
+  all, confirmed against `quickshell/Common/SessionData.qml` at the revision
+  in `flake.lock`; the path is set at its line 1590 from
+  `StandardPaths.GenericStateLocation`. Left unhandled, a rebuild from
+  scratch came up with none of it, which is precisely what `seedDmsSettings`
+  exists to prevent.
+  *Wholesale, not a curated subset.* Some of those 110 are genuinely
+  transient — `monitorScrollPositions`, the runtime-discovered
+  `installedTerminals`, the computed `themeModeNextTransition` — so a filter
+  down to the durable ones was the obvious alternative, and would give
+  cleaner diffs. Rejected because the filter is the same bug in a new place:
+  it needs updating every time DMS adds a property, and when it inevitably
+  drifts the failure is silent — a new setting simply is not captured, and
+  nobody finds out until a rebuild loses it. That is the exact failure this
+  entry is fixing. A faithful copy cannot drift. Restoring a stale
+  `monitorScrollPositions` is also harmless in a way that failing to restore
+  a wallpaper is not, so the asymmetry favours copying everything.
+  *Location data, handled by surfacing rather than stripping.* `session.json`
+  carries `latitude`/`longitude` once night mode's location automation is
+  used, and `settings.json` carries `weatherLocation`/`weatherCoordinates` —
+  flagged in the entry above as worth knowing before committing. Filtering
+  them out would have made `restore` a half-restore, so instead
+  `dms-settings.sh` now names them at snapshot time, on stderr, while the
+  diff is still under review. The workflow already required a human to look
+  before committing; this makes that look an informed one rather than one
+  that depends on remembering. ⟨No checkpoint with real coordinates has been
+  committed — `hosts/pegasus/dms-session.json` does not exist until someone
+  runs `snapshot` on the host.⟩
+- **`qt.platformTheme = "qt5ct"` set system-wide, accepting that it changes
+  Qt theming in the Plasma and Dragonized sessions too, 2026-09-09.**
+  DMS's "apply colours to Qt" button reported `failed to apply Qt colors`.
+  The cause is not subtle: DMS's `quickshell/scripts/qt.sh` writes
+  `custom_palette=true` + `color_scheme_path=…/DankMatugen.colors` into
+  `qt5ct.conf`/`qt6ct.conf`, and `exit 1`s outright if neither a `qt5ct`
+  nor a `qt6ct` binary is on `PATH`. Neither was installed anywhere in this
+  flake.
+  *Why the NixOS `qt` module rather than an ad-hoc package + env var:*
+  `qt.platformTheme = "qt5ct"` is the single value that installs *both*
+  `libsForQt5.qt5ct` and `qt6Packages.qt6ct` and sets
+  `QT_QPA_PLATFORMTHEME` to the key both plugins register under —
+  home-manager's own `qt` module independently maps its `qtct` theme to the
+  same string, which is the corroboration that the Qt6 plugin answers to
+  the Qt5 name. `qt.enable` is set explicitly even though `plasma6.nix`
+  already sets it, so Qt theming does not quietly stop working the day the
+  Plasma session is removed.
+  *Why system-wide and not in niri's `environment` block, where DMS's docs
+  put it:* it cannot honestly be scoped there. `niri-settings.nix` already
+  documents that this host's `systemd --user` manager is shared and
+  persistent across session switches and that `niri-session` imports into
+  it — so a "niri-only" `QT_QPA_PLATFORMTHEME` would leak anyway, just
+  non-deterministically, depending on whether a niri session had run since
+  boot. `configuration.nix` states the real scope.
+  *The cost, taken knowingly:* the comment this replaces in
+  `niri-settings.nix` refused `QT_QPA_PLATFORMTHEME=gtk3` precisely because
+  leaking it would displace Plasma's native theming, and that reasoning
+  still holds for `qt5ct` — `plasma-workspace`'s `startplasma.cpp` sets no
+  `QT_QPA_PLATFORMTHEME` of its own, so nothing in the Plasma session wins
+  the argument back. Qt apps under Plasma/Dragonized will take qt6ct's
+  matugen palette instead of Breeze's. Accepted because those sessions are
+  no longer in daily use here (niri has been `defaultSession` since
+  2026-09-01). It is not a lock-in: deleting the `qt` block restores the
+  previous behaviour on the next rebuild.
+  *Still unverified:* the Plasma-side effect above is reasoned from
+  upstream source, not observed. Worth one look at a Plasma session after
+  the first rebuild.
+  *Deliberately left unset:* `qt.style`. It would export
+  `QT_STYLE_OVERRIDE`, which sits on top of the very palette DMS is trying
+  to apply.
+- **DMS's `scripts/qt.sh` is patched in-package (2026-09-08), rather than
+  worked around in the config** — the palette DMS generates for Qt apps had
+  never applied, on this host or any other. Two independent upstream bugs,
+  both in that one script:
+  *1. The palette is written to a file qt6ct cannot parse.* `qt.sh`
+  hardcodes `color_scheme_path` to `$HOME/.local/share/color-schemes/`
+  `DankMatugen.colors` — the **kcolorscheme** template's output, in KDE
+  format (`[KDE]`, `[General]`, `[Colors:*]`). qt6ct's own plugin reads
+  `custom_palette` and `color_scheme_path`, then parses the target for
+  `[ColorScheme]` / `active_colors` / `disabled_colors` /
+  `inactive_colors` (all four strings are present in
+  `libqt6ct-common.so.0.11`). The KDE file has none of them, so the palette
+  comes back empty and Qt apps fall back to stock Fusion grey — with the
+  button still reporting success. Meanwhile each tool's *own* matugen
+  template (`matugen/configs/qt{5,6}ct.toml`, both fed by
+  `templates/qtct-colors.conf`) already writes a correct 21-field
+  `[ColorScheme]` file to `$XDG_CONFIG_HOME/qt{5,6}ct/colors/matugen.conf`,
+  and always has: on this host both files carry the same mtime as
+  `DankMatugen.colors`, i.e. every matugen run has been generating them.
+  The patch shadows `color_scheme_path` inside `update_qt_config` with a
+  path derived from the config file being written, so each tool gets its
+  own scheme.
+  *2. The from-scratch write emits a literal `\n`.* When `qt5ct.conf` /
+  `qt6ct.conf` doesn't exist yet, `qt.sh` creates it with a `printf` whose
+  format string is single-quoted `\\n` — so the file lands as one
+  unparseable line. Masked on any machine where the qt6ct GUI has run
+  once, which is why it survived upstream; it fires on exactly the
+  rebuild-from-scratch case the DMS checkpointing exists to protect. Found
+  while testing fix 1 against a scratch `$HOME`, not by inspection.
+  *Why patch the package, not manage the config declaratively:*
+  `qt{5,6}ct.conf` is not ours to own — qt6ct writes fonts and its own
+  window geometry back into it at runtime, so it cannot be a read-only
+  home-manager symlink, and `qt.sh` `sed`s over the file on every "apply
+  colours to Qt" regardless. Fixing the writer is the only durable place.
+  *Why `--replace-fail` and not a patch file:* both anchors are single
+  lines, unique in the file, and the build fails loudly if upstream
+  changes either — which is the desired behaviour, since the shim should
+  be deleted the moment upstream fixes this rather than silently
+  no-op'ing.
+  *Upstream status, checked 2026-09-08:* unfixed at master HEAD
+  (`8fe918ff`). Only two commits have ever touched `qt.sh` — `24e80050`
+  (monorepo move) and `7c88865d` (pre-commit refactor), both structural —
+  so bumping the flake input will not fix it. No issue or PR reports
+  either bug. Issue #2951 (closed/completed, a different complaint about
+  the template's `BrightText` mapping) is corroboration rather than a
+  duplicate: its reporter's environment block quotes
+  `color_scheme_path=~/.config/qt6ct/colors/matugen.conf`, so upstream has
+  already accepted that as the correct wiring. PR #3019 (merged, qtengine
+  support) states outright that "`qt.sh` is unchanged" and routes around
+  its failure instead.
+  *Verified:* the built script rewritten as intended, and run end-to-end
+  against a scratch `$HOME` with stub `qt5ct`/`qt6ct` binaries — the
+  pre-existing-config path rewrites `color_scheme_path` to
+  `…/qt6ct/colors/matugen.conf`, the from-scratch path writes a proper
+  three-line `[Appearance]` block, and each tool gets its own scheme file.
+  Then confirmed on the hardware after a `nixos-rebuild test` (2026-09-08):
+  both configs held the old `DankMatugen.colors` path before pressing
+  **apply colours to Qt** and each held its own
+  `~/.config/qt{5,6}ct/colors/matugen.conf` after. Whether the palette then
+  renders in a Qt app was then confirmed too: qt6ct shows the matugen
+  palette instead of stock Fusion grey. The feature has never worked on this
+  host until now.
+- **Plasma and COSMIC to be removed, deferred 2026-09-09 — and `desktop-plasma.nix`
+  is not the file to delete when that happens.** Neither session is in daily use
+  since niri became `defaultSession` (2026-09-01) and both had degraded; the
+  removal was scoped, then deliberately postponed until there is time for the
+  downstream work. This entry exists so that work does not have to be
+  rediscovered — and so the trap below is not walked into.
+  *The trap:* `modules/nixos/desktop-plasma.nix` is named for Plasma but owns
+  four unrelated concerns, and exactly **one line** of it is Plasma
+  (`services.desktopManager.plasma6.enable`). The other three are load-bearing
+  for niri: `services.displayManager.sddm` (the sole display manager on this
+  host — no other module enables one), `services.displayManager.defaultSession
+  = "niri"`, and the entire audio stack (`services.pipewire`,
+  `security.rtkit.enable`, `services.pulseaudio.enable = false`). Deleting the
+  file to "remove Plasma" would leave the host with no way to log in and no
+  audio — the latter being the same subsystem whose failure took DMS/QuickShell
+  down during the multi-monitor bring-up. Removing Plasma means editing that
+  file, not deleting it; the SDDM/session/audio blocks want rehoming first.
+  *COSMIC, by contrast, is genuinely trivial:* `desktop-cosmic.nix` is a single
+  option, owns nothing shared, and can go with its import line whenever.
+  *Dragonized goes with Plasma, not separately:* its start script execs
+  `startplasma-wayland` from `kdePackages.plasma-workspace`, so it is a Plasma
+  session wearing a theme. Removing it also frees the `dr460nized-src` and
+  `window-title-applet-src` flake inputs and `modules/nixos/dragonized/`.
+  *What disappears silently:* Okular and Ark arrive via plasma6's default app
+  set, not via any explicit package entry. Two `home.nix` comments are written
+  around them — the `unrar` entry explains that it fixes RAR *in Ark*, and the
+  `zathura` entry explains that zathura is deliberately the lightweight
+  alternative to Okular rather than a replacement. Both comments become wrong
+  the moment plasma6 goes, so re-add whichever apps are wanted explicitly and
+  fix the comments in the same change.
+  *The rest of the surface:* `home.nix`'s `programs.plasma` block, its
+  vicinae-toggle desktop entry and `kbuildsycoca6` activation step, and
+  `flake.nix`'s `plasma-manager` input together with its
+  `home-manager.sharedModules` entry. Only pegasus imports any of the four
+  `desktop-*.nix` modules, so nothing fleet-wide is affected.
+  *Already paid forward:* the qt5ct/qt6ct change sets `qt.enable = true`
+  explicitly rather than relying on `plasma6.nix` setting it (see that entry),
+  so Qt theming survives Plasma's removal untouched.
+- **DMS's generated `niri/dms/colors.kdl` is deliberately not included
+  (2026-09-08).** DMS writes `$XDG_CONFIG_HOME/niri/dms/colors.kdl` on every
+  matugen run, carrying `focus-ring`, `border`, `shadow`, `tab-indicator` and
+  `insert-hint` colours, and its header invites you to `include` it. Nothing in
+  this host's `config.kdl` does, so the focus ring stays niri's default blue
+  rather than tracking the wallpaper. That is a decision, not an oversight —
+  don't "fix" it without reading this.
+  *Why not:* niri treats a missing `include` as a hard parse error, not a
+  skipped line (`failed to read included config … error parsing KDL`,
+  confirmed with `niri validate`). Two consequences. First, niri-flake runs
+  `niri validate -c` on the generated config inside a Nix sandbox
+  (`validated-config-for` in its flake, wired into
+  `xdg.configFile.niri-config.source`), where no `$HOME` exists and the include
+  can never resolve — so the build would fail on every rebuild. Working around
+  that means overriding `xdg.configFile."niri/config.kdl"` with `mkForce` to
+  sidestep validation entirely. Second, at runtime any moment the file is
+  absent — fresh install before DMS's first matugen run, or
+  `matugenTemplateNiri` turned off — invalidates the whole config and takes
+  every keybind with it, needing a `home.activation` stub to paper over.
+  *The trade rejected:* build-time validation is what turns a bad `binds` entry
+  into a failed build instead of a broken session. Trading that for wallpaper-
+  tracking ring colours is a bad exchange on a host whose entire niri config is
+  declarative. If the colours are ever wanted, hardcoding the accent as
+  `focus-ring.active.color` in `niri-settings.nix` gets most of the look at
+  none of the cost — it just won't follow a retheme.
+- **Monitors are referred to through `let` bindings, not repeated identity
+  strings (2026-09-09).** `niri-settings.nix` now opens with `monLeft` /
+  `monCentre` / `monRight`, and the `outputs` attrset is keyed `mon-left` /
+  `mon-centre` / `mon-right` with the identity string moved to niri-flake's
+  `name` attribute.
+  *Why:* niri has no output-alias concept — `outputs`, `open-on-output` and
+  window rules each take a raw connector name or `make model serial` string,
+  so a three-monitor host repeats each panel's identity once per reference.
+  Nothing validates those strings at build time, and both failure modes are
+  silent: a typo in an `outputs` entry leaves that panel on its preferred
+  mode, and one in `open-on-output` drops the window on the focused output
+  instead. One binding per panel makes that a single point of edit when a
+  monitor is replaced, and the readable `outputs` keys say which panel is
+  which without decoding a serial. niri-flake's key/name split (`outputs.<key>.name`,
+  defaulting to the key) is what makes the rekeying behaviour-neutral — the
+  key never reaches niri, it only sorts the emitted `output` nodes and breaks
+  ties for `focus-at-startup`, which this host doesn't set.
+  *Scope limit:* the bindings are file-local. If a monitor identity is ever
+  needed outside `niri-settings.nix` (a DMS setting, Plasma's output config),
+  promote them to a `homelab.*` option rather than copying the strings.
+- **Thunderbird is routed to `Mail` unconditionally, TickTick only at startup
+  (2026-09-09).** The named workspace `Mail` exists to hold Thunderbird, so
+  its window rule carries no `at-startup` matcher — a mid-session launch
+  belongs there too. TickTick's does: "the right monitor's first workspace"
+  is a login-time arrangement, and a rule without `at-startup` would fling
+  every later launch onto another monitor.
+  *The fragile half:* TickTick is placed with `open-on-output` alone, which
+  targets whatever workspace is *active* on that monitor. That is the first
+  one only because nothing else is homed there at login. Home any named
+  workspace to the right monitor and TickTick starts landing on it instead
+  — at which point give TickTick its own named workspace and switch the rule
+  to `open-on-workspace`. Chosen over declaring that workspace now because
+  it keeps the bar to one name; MANUAL-STEPS.md §25 carries the check.
+  *Focus:* both login instances set `open-focused = false`. niri won't focus
+  a window opening on a non-focused output anyway, but which output is
+  focused at startup isn't pinned on this host (no `focus-at-startup`), so
+  without it the choice of which app steals the cursor at login is luck.
+- **ferdium 7.2.3 comes from its own pinned nixpkgs, not the shared one
+  (2026-09-18).** `nixpkgs-ferdium` in `flake.nix` pins the exact commit that
+  bumped ferdium 7.2.2 -> 7.2.3, consumed as `ferdiumNewer` via
+  `home-manager.extraSpecialArgs` — the same shape as `nixpkgs-orca-slicer`
+  and `nixpkgs-bambu-studio`.
+  *Why a pin was forced, not merely preferred:* unlike those two, where a
+  shared-nixpkgs bump was simply disproportionate, here it is impossible.
+  26.05 removed the EOL 7.1 kernel *before* the ferdium bump landed on the
+  branch, and this host pins 7.1 (see the kernel entry above), so no single
+  revision of the shared nixpkgs carries both. Verified rather than assumed:
+  at the ferdium-7.2.3 commit `linuxPackages_7_1` already evaluates to
+  "linux 7.1 was removed because it has reached its end of life upstream".
+  *The 7.2 blocker is still live, re-checked at this nixpkgs:* building
+  `linuxPackages_7_2.nvidia_x11_production.open` still fails on the same
+  implicit-`strncpy` error in `nvidia/os-interface.c`, with the driver at the
+  same 595.71.05 and no new patches upstream — i.e. nothing has changed since
+  the kernel pin was taken, and the `drm_atomic_state` break behind it is
+  untouched.
+  *Exit:* when NVIDIA/nixpkgs ship a real 7.2 fix, the kernel unpins, the
+  shared nixpkgs bumps normally, and this input and its `ferdiumNewer`
+  plumbing all come back out in one commit.
+  *Alt rejected:* repinning the host to `linuxPackages` (6.18.52 LTS), where
+  the NVIDIA open module is already prebuilt in cache.nixos.org, which would
+  have let the shared nixpkgs move. Rejected as a kernel downgrade on the
+  daily driver in service of one chat app.
+  Validated by eval only (`nix flake check`, ferdium resolves to 7.2.3, kernel
+  still 7.1.9); not yet confirmed by a real `nixos-rebuild switch`.
+  **Superseded 2026-10-11:** the kernel is now LTS and ferdium comes from
+  `nixpkgs-apps` — both entries below.
+
+- **Kernel → the release LTS (`linuxPackages`, 6.18), was pinned
+  `linuxPackages_7_1`, 2026-10-11.** nixpkgs deletes non-LTS kernels at
+  upstream EOL *even on a stable release*: `linux_7_1` became a throw on
+  2026-09-02. The pin therefore held the **shared** nixpkgs at 2026-08-20 —
+  the last revision that still had 7.1 — freezing every host in the fleet
+  for this one, while pegasus itself ran a kernel getting no more fixes
+  (7.1.9). LTS is the only kernel nixpkgs keeps for a whole release, so it is
+  the only choice that cannot recreate this freeze. Stock kernel either way;
+  the brief's "no CachyOS/Chaotic" still holds.
+  *Reverses the ferdium entry's "Alt rejected" above.* That weighed a kernel
+  downgrade against one chat app; the real cost was the whole fleet's
+  nixpkgs plus an EOL kernel on the daily driver.
+  *Checked for an NVIDIA or scheduler reason against LTS — found none:*
+  - The 7.1 pin's only reason was that NVIDIA 595.71.05 does not build against
+    **7.2** (the strncpy and `drm_atomic_state` breaks above). Nothing in the
+    repo, its history or the run book ties NVIDIA to 7.x over 6.18; the open
+    module evaluates against 6.18.45 and is prebuilt in cache.nixos.org (per
+    the ferdium entry). §21's lockups are userspace (Discord,
+    xwayland-satellite, gamescope), not kernel.
+  - The scheduler in force is **EEVDF** — scx has been off since 2026-08-01
+    (game-launch crashes) — and EEVDF is the in-tree default since 6.6.
+    "Latest" in the brief was only ever for sched-ext's ≥ 6.12 floor; nixpkgs
+    enables `SCHED_CLASS_EXT` from 6.12, and pegasus with `scx_lavd` forced on
+    evaluates cleanly against 6.18.45. Whether the crash was `scx_lavd`, scx
+    in general, or kernel-specific remains untested on either kernel.
+  - No out-of-tree modules besides NVIDIA (`extraModulePackages = [ ]`, no
+    ZFS); all hardware (B550, RTL8125, MT7921K, Ada) predates 6.18.
+  *Not done here:* bumping the shared nixpkgs. This change makes it possible
+  without moving it — that is its own `[all]` PR.
+  Validated by eval: pegasus toplevel instantiates (6.18.45, NVIDIA
+  595.71.05 open, scx off); every other host's system is identical to main's
+  once motd's revision stamp is held constant. Real switch: MANUAL-STEPS §27.
+
+- **Desktop apps from `nixpkgs-apps` (nixos-unstable), 2026-10-11** —
+  replacing the per-app `nixpkgs-orca-slicer`, `nixpkgs-bambu-studio` and
+  `nixpkgs-ferdium` pins with one input, instantiated once in `flake.nix` as
+  `pkgsApps` (with its own `allowUnfree` — a separate instance does not
+  inherit `modules/nixos/common.nix`'s) and passed to `home.nix`.
+  *Policy:* a desktop app that has to move faster than the 26.05 release
+  comes from `pkgsApps.<name>`. Kernel, services and everything else stay on
+  `nixpkgs`. Never import NixOS *modules* from it — two nixpkgs' module sets
+  collide on option definitions; for a newer service binary use
+  `services.<x>.package` instead. This is the common community layering
+  (stable system, second nixpkgs for apps) rather than a pin per app.
+  *What moved:* ferdium 7.2.3 (unchanged); bambu-studio 02.05.00.67 →
+  02.08.00.50, `withNvidiaGLWorkaround` kept (verified: the installed
+  derivation is the override's, not plain); orca-slicer 2.3.2 → 2.4.2 —
+  2.4.x was deferred above for lack of a vetted nixpkgs patch set, which
+  unstable now carries. ticktick keeps its `overrideAttrs` (now on
+  `pkgsApps`): unstable is still at 8.0.11, behind the override's 8.0.20.
+  *Trade-off accepted:* apps on this input can no longer be bumped one at a
+  time — `nix flake update nixpkgs-apps` moves them together. A single app
+  that must hold back gets its own pin again, as the exception.
+  *Risk to watch:* apps now link a newer graphics stack than the NVIDIA
+  userspace from the system nixpkgs. Newer app over older driver is the
+  direction that usually works (the driver's libraries load fine under a
+  newer glibc), but it is the first suspect if one of these apps stops
+  rendering. The remaining Electron apps (discord, slack, signal-desktop,
+  obsidian, …) stay on the shared nixpkgs; moving one is a one-word change.
+  **Superseded 2026-10-17:** discord, slack and signal-desktop moved to
+  `nixpkgs-apps` with the browsers and zoom-us — see "Exposed apps on the
+  fast lane" below.
+  Validated by eval; real switch: MANUAL-STEPS §27.
+  *Found on the hardware, 2026-10-11 (6.18.45):*
+  - **OrcaSlicer 2.4.2's WebKit pages render black on NVIDIA** (Home page,
+    Setup Wizard). 2.4 moved to wxWidgets 3.3 and a newer WebKitGTK; nixpkgs
+    sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` for Orca only inside
+    `withNvidiaGLWorkaround`, which stays off here (its Zink route is the
+    regression above). Setting just that variable fixed it — Wizard and 3D
+    viewport both confirmed. Applied as a `symlinkJoin` + `wrapProgram` wrapper
+    in `home.nix` rather than `overrideAttrs`, so the cached build is reused
+    instead of compiling Orca locally. (#166's CA append will force a local
+    build anyway; fold the variable into that `overrideAttrs` then if simpler.)
+  - **OrcaSlicer 2.4.2 aborts at startup once Bambu's stock network plugin is
+    installed** (`free(): invalid size`, on Wayland and X11). First diagnosed
+    as 2.3's data dir — wrong: a fresh data dir launched once, Orca downloaded
+    `libbambu_networking_02.03.00.62.so` (plus the Agora RTC libraries) into
+    `plugins/`, and every later launch aborted; removing `plugins/` alone
+    brought it back. Not a version mismatch — 02.03.00.62 is the version 2.4.2
+    asks for — and not NVIDIA: the same build, without the plugin, launches
+    repeatedly on Mesa/Xvfb. Orca 2.4.2's own plugin table already warns that a
+    stock version "may crash on startup due to Bambu Lab's signature
+    verification". Interim: keep `plugins/` out (MANUAL-STEPS §27 step 7).
+    Follow-up: replace it with open-bamboo-networking, an open-source drop-in
+    that is LAN-first and speaks the protocol Bambuddy's virtual printers
+    emulate. Done in the entry below. (The 2.3 data dir was reset along the way; that turned out to be
+    unnecessary but harmless — kept as `OrcaSlicer.2.3-bak`.)
+  - The old Orca 2.3.2 segfaulted on opening a file on this boot. Moot now; it
+    was never confirmed on the hardware (see the 2.3.2 entry above).
+  - Bambu Studio's toolbar/tooltip strobing is **not** from this entry: 02.05
+    strobes too on the same boot, under `GDK_BACKEND=x11`, and on the 7.1.9
+    generation. Deferred to #177.
+
+- **OrcaSlicer's network plugin → open-bamboo-networking 2.2.0, built from
+  source, 2026-10-12.** Replaces Bambu's stock plugin, which aborts Orca 2.4.2
+  at startup (entry above). OBN exports the same `dlsym` ABI. Orca loads it as
+  `plugins/libbambu_networking_02.03.00.99.so` (`.99` is upstream's
+  convention for "newer than any stock build" in the 02.03.00 series Orca has
+  asked for since 2.3.2), with OBN's own `libBambuSource.so`/`liblive555.so`
+  beside it. `pkgs/open-bamboo-networking.nix` builds it against `pkgsApps`,
+  the nixpkgs Orca comes from, and `home.nix` links the three libraries into
+  `~/.config/OrcaSlicer/plugins/` and sets four `OrcaSlicer.conf` keys
+  (`installed_networking`, `network_plugin_version`,
+  `network_plugin_remind_later`, `update_network_plugin`) the way upstream's
+  own installer does. Orca owns the rest of that file, so it is patched, not
+  managed.
+  *Alt rejected:* upstream's prebuilt release tarball plus
+  `autoPatchelfHook`. Less to maintain, but binaries built on another distro
+  against other OpenSSL/libstdc++ builds, loaded into a nixpkgs process. The
+  source build is small (one CMake project; mosquitto and cJSON, which it
+  vendors via FetchContent, are fetched by Nix and handed over).
+  *Alt rejected:* OBN for Bambu Studio too. Studio's stock plugin works on
+  this host, and OBN's Studio build tracks Studio's own version, so it would
+  need rebuilding on every Studio bump. Revisit if Studio's plugin breaks.
+  Cloud printing is not used, so OBN's own defaults stand: `block_cloud = 1`
+  keeps printing and telemetry on the LAN (only sign-in and preset sync may
+  reach Bambu), and `obn.conf` is left to the plugin, which writes it on first
+  launch.
+  Note that OBN verifies printer TLS against the slicer's own
+  `cert/printer.cer`, so the Bambuddy CA append (#166) still applies.
+  Validated here: the package builds, and upstream's `probe_plugin` loads it
+  (version `02.03.00.99`, all 108 + 21 ABI symbols present). Not yet run
+  inside Orca: MANUAL-STEPS §29.
+- **nix-daemon builds run at batch priority, bounded in memory; oomd watches
+  user slices only (2026-10-11).** Local builds (Bambu Studio, OrcaSlicer)
+  took over the desktop during `nixos-rebuild switch`. The config is in
+  `modules/nixos/performance.nix`.
+  *Why on the daemon:* `nixos-rebuild` only asks nix-daemon to build; every
+  compiler runs inside `nix-daemon.service`'s cgroup. `nice`/`systemd-run`
+  around `nixos-rebuild` changes nothing.
+  *CPU — `batch`, after `idle` turned out not to reach the desktop:*
+  `nix.daemonCPUSchedPolicy = "batch"`: a waking build task never preempts
+  the running task, but builds still get CPU under contention. The first draft used `idle` plus
+  `CPUWeight = "idle"` (cgroup `cpu.idle`), and review showed it does not do
+  what it was meant to. The cpu controller is already on (systemd's
+  `user@.service` delegates `cpu`), so at the root the scheduler compares
+  `system.slice` against `user.slice`, each at weight 100. A per-task
+  SCHED_IDLE, or `cpu.idle` set on a unit *inside* `system.slice`, only ranks
+  builds against other system services, and the build keeps roughly half of
+  every contested CPU either way. So `idle` would not have stopped builds
+  for the desktop. Its one real effect was builds losing to Ollama and
+  docker. `batch` gets about the same share against the desktop without
+  starving builds behind other services, and is the honest description.
+  *Alt kept in reserve:* if builds must truly yield to the desktop, move
+  nix-daemon to its own root-level slice with `CPUWeight = "idle"`
+  (`systemd.slices.nixbuild` + `Slice = "nixbuild.slice"`; no dash in the
+  name, or it nests). That puts `cpu.idle` level with `user.slice`, at the
+  cost of builds all but stopping while a game runs.
+  *I/O:* `daemonIOSchedClass = "idle"` is kept but is probably a no-op. The
+  NVMe uses the `none` scheduler, which ignores ioprio, and dm-crypt's
+  workqueues drop the submitter's priority anyway. It matters only if BFQ is
+  ever enabled.
+  ananicy-cpp was checked for a fight: its rule set (nefelim4ag/ananicy at
+  the pinned rev) types `gcc`/`g++`/`make`/`ninja`/`cargo`/`rustc` as
+  `compiler` = nice 1, with no `sched`, `ioclass` or `cgroup` key, and has
+  no rule for `cc1plus` or `nix-daemon`. Nothing is moved out of the
+  daemon's cgroup or re-policied.
+  *Memory:* `max-jobs × cores` is the real cap — each C++ compiler process
+  is ~1–2 GB. Was `auto × 0` = 16 jobs × 16 threads, up to 256 compilers.
+  Now `max-jobs = 4`, `cores = 8`: at most 32 compiler processes (2× the
+  thread count, so the CPU stays full), and a single big build still gets 8
+  threads. `MemoryHigh = 40G` backs that up by throttling and reclaiming,
+  never killing. `MemoryMax` was rejected because a kill fails the switch
+  partway. It is a soft bound, not a hard one. Pages reclaimed into zram
+  leave the build's `memory.current`, but zram's compressed store is not
+  charged to the cgroup, so a build past 40G still grows in system RAM via
+  zram. If a hard bound is ever needed, `MemorySwapMax=` on the daemon is
+  the lever.
+  *oomd:* it was enabled with every slice option false, so it watched
+  nothing despite the comment claiming otherwise. Now `enableUserSlices`
+  only: kill once memory pressure stays at 80% for 30 s, systemd's default.
+  It kills the descendant cgroup with the most reclaim activity. That is
+  usually an app scope, but `session.slice` (the compositor) is in scope
+  too, so in the worst case oomd ends the session rather than one app.
+  Under global pressure from a build, oomd's only targets are desktop apps,
+  never the build. That is the accepted cost of the next point.
+  `system.slice` was rejected on purpose. The throttling that `MemoryHigh`
+  applies shows up as memory pressure, so oomd there would kill exactly the
+  heavy build `MemoryHigh` is meant to slow down. The root slice was
+  rejected for the same reason. *Alt kept in reserve:* oomd on
+  `system.slice` with `ManagedOOMPreference = "omit"` on nix-daemon, if a
+  system service (Ollama, docker) ever runs away.
+  Validated by eval and an independent review; MANUAL-STEPS.md §30 carries
+  the on-hardware checks.
+
+- **HushMic as the noise-suppressed mic, 2026-10-14** —
+  `modules/nixos/hushmic.nix`. HushMic adds a PipeWire virtual source,
+  "HushMic", that runs the DPDFNet model over the real mic (80 ms added
+  latency, CPU only). Apps that should get the clean voice pick it as their
+  input. The system default input stays the raw mic unless the tray's "Set
+  as default microphone" is turned on.
+  *Packaging:* not in nixpkgs. The `hushmic-nix` input is the upstream
+  author's own flake. It builds from source, which NixOS needs because the
+  prebuilt binaries won't run there. Its nixpkgs follows `nixpkgs-apps`,
+  since it is a desktop app and its own CI builds against unstable. The flake
+  has a bot that bumps it daily; `flake.lock` pins the commit, so a bump only
+  lands through `nix flake update hushmic-nix`. Upstream's `package.nix` still
+  takes the `xorg` set, which unstable now deprecates. The module overrides
+  that argument with the renamed attributes (`libx11`, …) to silence the eval
+  warnings. The output path is unchanged. Drop the override once upstream
+  moves to the new names.
+  *Started as a NixOS user unit with `--tray`,* the same shape as `dcal`
+  (`dankcalendar.nix`). Upstream's shipped unit runs `--headless` on
+  `default.target`. Upstream offers the tray only through the
+  `~/.config/autostart` entry its "Start on login" writes. A declared unit
+  replaces that entry here, and the tray is HushMic's whole UI: mic choice,
+  suppress/bypass/mute, model, strength and the A/B test. A tray process
+  needs the display, so the unit binds to `graphical-session.target` and the
+  virtual mic stops at logout. That is fine on a desktop. The rest is
+  upstream's: `KillMode=mixed`, so the `pipewire -c` child can restore the
+  previous default mic; `Restart=on-failure`, because "already running"
+  exits 0; and `session.slice`, where session-critical services sit beside
+  the compositor rather than among the apps in `app.slice`.
+  *Left mutable:* `~/.config/hushmic/config.toml`. The tray writes it on
+  every change, so it is runtime state and Home Manager does not own it.
+  *Alt rejected:* EasyEffects with HushMic's LADSPA plugin. That is a full
+  effects suite to run just to get one filter.
+  Validated by eval and a local build of the package. On pegasus, keyboard
+  noise is gone on a Discord call (MANUAL-STEPS.md §#186).
+
+- **Exposed apps on the fast lane, 2026-10-16** — browsers and web-facing
+  Electron apps carry the most attack surface on this host, so they join
+  `pkgsApps`: vivaldi, google-chrome, discord, slack, signal-desktop and
+  zoom-us. Five are prebuilt upstream binaries; signal-desktop builds from
+  source, but Hydra caches it, so none of the six builds locally. Firefox
+  stays on `pkgs`, because stable backports its security releases.
+  *Speed comes from cadence, not channel.* An app is only as fresh as
+  `flake.lock`, which was bumped by hand. `.github/workflows/update-apps.yml`
+  now bumps `nixpkgs-apps`, `zen-browser`, `opera-flake` and
+  `claude-desktop-debian` twice a week and opens a PR. Merging and switching
+  stay manual. `nixpkgs`, the kernel and service inputs stay out of it.
+  *Cost of each bump:* `nixpkgs-apps` also carries things pegasus builds
+  itself. OrcaSlicer recompiles locally whenever a bump moves it, because
+  the Bambuddy CA append (#166) is an `overrideAttrs`. open-bamboo-networking
+  and HushMic build against it too. Budget that time at switch. A newer
+  Signal, Slack or Discord can also upgrade its profile on first run, so
+  rolling back past a bump may leave the app unable to open it.
+  *Why not nixpkgs master:* it has no Hydra cache and no channel testing. It
+  would be days faster at best, at the cost of local builds and untested
+  revisions. For Electron apps the vendor picks the bundled Chromium anyway,
+  so a faster channel only delivers the vendor's build sooner.
+  *ticktick* keeps its hand override: its fixed `src` hash can't follow an
+  automated bump. It is a first-party to-do client, so low exposure. Drop the
+  override once unstable passes it.
+  *Claude Desktop:* `claude-desktop-debian` tracks its default branch, so the
+  scheduled bump keeps it current. Replace it when a vendor-backed source for
+  the official Linux build appears (a verified Flathub listing, an official
+  repo or flake).
+  *Rules for later (nothing enabled now):*
+  - **Flatpak** only for a verified, vendor-published Flathub app that keeps
+    outpacing unstable, or that refuses to run once outdated. Never a
+    browser: Chromium's own sandbox degrades to zypak under Flatpak. Declare
+    it with `nix-flatpak`, never by hand. Flatpak's real advantage is the
+    sandbox, but apps often punch holes in it, it lives outside `flake.lock`,
+    and NVIDIA needs a GL extension that matches the driver exactly.
+  - **Snaps** are out: NixOS has no supported snapd module.
+  - **AppImage for trials.** To try an app before packaging it, run the
+    vendor's AppImage through `programs.appimage` (`enable` + `binfmt`,
+    added when the first trial happens). Trial only: no updates, no sandbox,
+    usually unsigned. An app that stays gets a Nix package, or
+    `appimageTools` wrapping the same file.

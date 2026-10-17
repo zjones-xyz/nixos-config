@@ -14,8 +14,6 @@
   services.jellyfin = {
     enable = true;
     openFirewall = true;
-    # Runs as the `jellyfin` user; add it to the `render` and `video` groups
-    # for hardware transcoding access.
   };
 
   # Intel Quick Sync — exposes /dev/dri/renderD128 to the jellyfin user.
@@ -27,11 +25,6 @@
     ];
   };
 
+  # Hardware transcoding needs the render/video device access.
   users.users.jellyfin.extraGroups = [ "render" "video" ];
-
-  # Bind-mount media from NFS mount point into Jellyfin's expected path.
-  # Adjust source path to match your NFS mount.
-  # systemd.tmpfiles.rules = [
-  #   "d /mnt/media 0755 jellyfin jellyfin -"
-  # ];
 }
