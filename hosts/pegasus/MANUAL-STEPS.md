@@ -975,3 +975,23 @@ quiet: the mic's input volume was low, and the default strength (100 dB)
 damped speech too. Both were fixed from the tray. These settings are runtime
 state, not Nix: HushMic keeps the strength per mic in
 `~/.config/hushmic/config.toml`, and WirePlumber remembers the input volume.
+
+## #193 Exposed apps on the fast lane — owner steps and first switch
+
+Vivaldi, Chrome, Discord, Slack, Signal and Zoom now come from `nixpkgs-apps`,
+and `.github/workflows/update-apps.yml` bumps the app inputs twice a week.
+Rationale: DECISIONS.md, "Exposed apps on the fast lane".
+
+1. [ ] In the repo's Settings → Actions → General, turn on "Allow GitHub
+       Actions to create and approve pull requests". Without it the
+       workflow can't open its bump PR.
+2. [ ] Optional: add a fine-grained PAT (contents + pull requests, this repo
+       only) as the `APP_BUMP_TOKEN` secret. Bump PRs opened with the default
+       token don't trigger `nix-check.yml`. The workflow runs the same evals
+       itself, but `flake-check` never reports on the PR.
+3. [ ] Start one run by hand (Actions → "Bump app inputs" → Run workflow) and
+       confirm it opens a `[pegasus] Bump app inputs` PR, or none if nothing
+       moved.
+4. [ ] Switch pegasus (`npullnrs`), then open Vivaldi, Chrome, Discord,
+       Slack, Signal and Zoom. A newer app over the system's NVIDIA userspace
+       is the first suspect if one fails to render.
