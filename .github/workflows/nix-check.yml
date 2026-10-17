@@ -59,9 +59,6 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
-      - name: nix flake check
-        run: nix flake check --no-build
-
       - name: Evaluate all configuration outputs
         run: |
           for attr in $(nix eval --json .#nixosConfigurations --apply builtins.attrNames | jq -r '.[]'); do
@@ -72,6 +69,12 @@ jobs:
             echo "== darwinConfigurations.$attr =="
             nix eval ".#darwinConfigurations.$attr.config.system.build.toplevel.drvPath"
           done
+
+      # After the evals, not before: they build import-from-derivation inputs
+      # (galactica's patched nixflix), which this Nix's `flake check --no-build`
+      # can't, failing with "….drv is not valid".
+      - name: nix flake check
+        run: nix flake check --no-build
 
       # `nix flake check --no-build` above only *evaluates* check derivations —
       # anything that has to actually run (yamllint, a validator script, a

@@ -1609,3 +1609,39 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   effects suite to run just to get one filter.
   Validated by eval and a local build of the package. On pegasus, keyboard
   noise is gone on a Discord call (MANUAL-STEPS.md §#186).
+
+- **Exposed apps on the fast lane, 2026-10-16** — browsers and web-facing
+  Electron apps carry the most attack surface on this host, so they join
+  `pkgsApps`: vivaldi, google-chrome, discord, slack, signal-desktop and
+  zoom-us. All are prebuilt upstream binaries, so unstable costs no local
+  builds. Firefox stays on `pkgs`, because stable backports its security
+  releases.
+  *Speed comes from cadence, not channel.* An app is only as fresh as
+  `flake.lock`, which was bumped by hand. `.github/workflows/update-apps.yml`
+  now bumps `nixpkgs-apps`, `zen-browser`, `opera-flake` and
+  `claude-desktop-debian` twice a week and opens a PR. Merging and switching
+  stay manual. `nixpkgs`, the kernel and service inputs stay out of it.
+  *Why not nixpkgs master:* it has no Hydra cache and no channel testing. It
+  would be days faster at best, at the cost of local builds and untested
+  revisions. For Electron apps the vendor picks the bundled Chromium anyway,
+  so a faster channel only delivers the vendor's build sooner.
+  *ticktick* keeps its hand override: its fixed `src` hash can't follow an
+  automated bump. It is a first-party to-do client, so low exposure. Drop the
+  override once unstable passes it.
+  *Claude Desktop:* `claude-desktop-debian` tracks its default branch, so the
+  scheduled bump keeps it current. Replace it when a vendor-backed source for
+  the official Linux build appears (a verified Flathub listing, an official
+  repo or flake).
+  *Rules for later (nothing enabled now):*
+  - **Flatpak** only for a verified, vendor-published Flathub app that keeps
+    outpacing unstable, or that refuses to run once outdated. Never a
+    browser: Chromium's own sandbox degrades to zypak under Flatpak. Declare
+    it with `nix-flatpak`, never by hand. Flatpak's real advantage is the
+    sandbox, but apps often punch holes in it, it lives outside `flake.lock`,
+    and NVIDIA needs a GL extension that matches the driver exactly.
+  - **Snaps** are out: NixOS has no supported snapd module.
+  - **AppImage for trials.** To try an app before packaging it, run the
+    vendor's AppImage through `programs.appimage` (`enable` + `binfmt`,
+    added when the first trial happens). Trial only: no updates, no sandbox,
+    usually unsigned. An app that stays gets a Nix package, or
+    `appimageTools` wrapping the same file.
