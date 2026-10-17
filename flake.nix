@@ -20,7 +20,10 @@
     # is in cache.nixos.org, so the images build without compiling a kernel.
     # (We deliberately avoid raspberry-pi-nix: its downstream kernel isn't
     # cached, forcing a multi-hour emulated compile on every bump.)
-    nixos-hardware.url = "github:NixOS/nixos-hardware";
+    nixos-hardware = {
+      url = "github:NixOS/nixos-hardware";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     # nix-darwin for the Mac (Serenity). nix-darwin uses release branches that
     # must match the nixpkgs release — nix-darwin-26.05 pairs with nixpkgs 26.05
@@ -37,17 +40,13 @@
       inputs.home-manager.follows = "home-manager";
     };
 
-    # Claude Desktop (used on pegasus). Anthropic shipped an official Linux
-    # beta (.deb, own apt repo) on 2026-06-30 but hasn't reached nixpkgs yet
-    # (too recent). This flake repackages that *official* .deb for Nix as of
-    # its v3.0.0 — not the older community approach of patching the Windows/
-    # macOS build to run on Linux. See hosts/pegasus/DECISIONS.md.
-    # git+https rather than github: — this session's GitHub access is
-    # scoped to zjones-xyz/nixos-config only, so the github: tarball-API
-    # fetch 403s here (though it works fine anywhere with normal GitHub
-    # access, e.g. on pegasus itself). git+https uses plain git protocol
-    # instead, unaffected either way — see .claude/hooks/flake-check-sandboxed.sh
-    # for the same workaround applied to the other inputs.
+    # Claude Desktop (used on pegasus). Repackages Anthropic's *official*
+    # Linux .deb — not the old community patch of the Windows/macOS build.
+    # See hosts/pegasus/DECISIONS.md.
+    # git+https rather than github: — sandboxed web sessions can't use the
+    # github: tarball API (403 under scoped access), while plain git protocol
+    # works everywhere. The same applies to every git+https input below, and
+    # .claude/hooks/flake-check-sandboxed.sh applies it to the rest.
     claude-desktop-debian = {
       url = "git+https://github.com/aaddrick/claude-desktop-debian.git";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -57,54 +56,142 @@
     # desktop shell, not in nixpkgs. Quickshell itself IS in nixpkgs 26.05
     # (0.3.0, meets DMS's stated minimum) so no separate quickshell input is
     # needed — only DMS's own flake, for its NixOS module and package build.
-    # git+https rather than github: for the same sandboxed-GitHub-access
-    # reason as claude-desktop-debian above.
     dank-material-shell = {
       url = "git+https://github.com/AvengeMedia/DankMaterialShell.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # niri-flake (used on pegasus) — used ONLY for its homeModules.config,
-    # which provides `programs.niri.settings` (declarative, KDL-validated at
-    # build time) as a home-manager option. Deliberately NOT using
-    # niri-flake's nixosModules.niri: that module fully disables nixpkgs'
-    # own programs.niri module and installs niri-flake's own from-source
-    # build instead — a bigger swap than intended here, and, checked
-    # 2026-08-11, actually a downgrade at the moment (niri-flake's "stable"
-    # track is pinned to v25.08; nixpkgs 26.05 already ships niri 26.04).
-    # See hosts/pegasus/DECISIONS.md.
-    niri-flake = {
-      url = "github:sodiboo/niri-flake";
+    # zen-browser (used on pegasus) — Zen has no nixpkgs package at all (not
+    # even a removed/replaced stub, unlike opera-flake below). This is the
+    # community flake nixpkgs' own PR discussions point to; `beta` is its
+    # `packages.default`. git+https rather than github: — see
+    # claude-desktop-debian above for why.
+    zen-browser = {
+      url = "git+https://github.com/0xc000022070/zen-browser-flake.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # A second, standalone nixpkgs — deliberately NOT inputs.nixpkgs.follows,
-    # unlike every other input above — pinned only to pull a newer
-    # `orca-slicer` (used on pegasus) than the one in the main `nixpkgs`
-    # input above. The main nixpkgs is locked well before nixpkgs bumped
-    # orca-slicer 2.3.1 -> 2.3.2 (2026-03-23); this pins exactly that bump
-    # commit rather than a moving branch HEAD, so the diff here is nothing
-    # but that one already-vetted version bump. Moving the *shared* nixpkgs
-    # input instead was considered and rejected for the same reason as the
-    # Bambu Studio NVIDIA-GL fix (see hosts/pegasus/DECISIONS.md): it's a
-    # single input shared by every host in the fleet, so bumping it would
-    # move package versions fleet-wide just for one desktop app on one host.
-    # git+https rather than github: — see the claude-desktop-debian input
-    # comment above for why.
-    nixpkgs-orca-slicer.url = "git+https://github.com/NixOS/nixpkgs.git?rev=e749b91730e1d4c612294f1e10dd351674d697fa&shallow=1";
+    # Opera (used on pegasus) — nixpkgs removed `opera` outright ("lack of
+    # maintenance"); this is the same derivation ported into its own
+    # community-maintained flake by one of opera's former nixpkgs
+    # maintainers. git+https rather than github: — see claude-desktop-debian
+    # above for why.
+    opera-flake = {
+      url = "git+https://github.com/YisuiDenghua/opera-flake.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
-    # Same idea as nixpkgs-orca-slicer above, for bambu-studio: the main
-    # nixpkgs pin has it at 02.03.01.51 with the NVIDIA-GL fix hand-applied
-    # via overrideAttrs (hosts/pegasus/home.nix). This pins the commit where
-    # nixpkgs both bumped it to 02.05.00.67 *and* already carries the real
-    # upstream withNvidiaGLWorkaround package arg (nixpkgs#522161) — so this
-    # replaces the hand-rolled overrideAttrs fix with the real thing, plus
-    # picks up two extra version bumps (02.04.00.70, 02.05.00.67).
-    nixpkgs-bambu-studio.url = "git+https://github.com/NixOS/nixpkgs.git?rev=13b979d75662827615c1de6dd22f87e6296ba71d&shallow=1";
+    # niri-flake (used on pegasus) — ONLY for its homeModules.config, which
+    # provides `programs.niri.settings` (declarative, KDL-validated at build
+    # time). Deliberately NOT its nixosModules.niri: that fully disables
+    # nixpkgs' own programs.niri module and installs niri-flake's from-source
+    # build instead — a bigger swap than intended, and an older niri than
+    # nixpkgs ships. See hosts/pegasus/DECISIONS.md.
+    niri-flake = {
+      url = "github:sodiboo/niri-flake";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs-stable.follows = "nixpkgs";
+    };
+
+    # nixflix (galactica) — the declarative *arr media stack. Points at
+    # UPSTREAM, pinned to the exact rev the zjones-xyz/nixflix-exp canary has
+    # proven against 26.05 — never a branch URL, or a routine `nix flake
+    # update` pulls an unrehearsed revision. Bump = merge upstream into the
+    # fork, let its CI go green against 26.05, then move this rev to match.
+    #
+    # ⚠ Carried debt: the fork is private, CI cannot fetch it, and three of
+    # its fixes this host needs are therefore re-applied by hand in
+    # hosts/galactica/nixflix.nix. DECISIONS.md §10 has the full argument and
+    # the exit. git+https rather than github: — see claude-desktop-debian.
+    nixflix = {
+      url = "git+https://github.com/kiriwalawren/nixflix.git?rev=c5b5944791ecbc2a434fbf6d8d95859aee47b3b9&shallow=1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # HushMic (pegasus) — noise-suppressing PipeWire virtual mic. Not in
+    # nixpkgs; this is the upstream author's own flake. Follows nixpkgs-apps,
+    # the input its own CI builds against (unstable) — app policy, not a pin.
+    hushmic-nix = {
+      url = "git+https://github.com/Fovty/hushmic-nix.git";
+      inputs.nixpkgs.follows = "nixpkgs-apps";
+    };
+
+    # Desktop apps that should move faster than the 26.05 system (used on
+    # pegasus) — deliberately NOT inputs.nixpkgs.follows. Instantiated once
+    # below as `pkgsApps`; kernel, services and everything else stay on
+    # `nixpkgs`. hosts/pegasus/DECISIONS.md has the policy for what goes here.
+    nixpkgs-apps.url = "git+https://github.com/NixOS/nixpkgs.git?ref=nixos-unstable&shallow=1";
+
+    # Non-flake theme sources for pegasus's Dragonized session, pinned here so
+    # every source pin lives in flake.lock — consumed by
+    # modules/nixos/desktop-dragonized.nix via specialArgs.
+    dr460nized-src = {
+      url = "git+https://gitlab.com/garuda-linux/themes-and-settings/settings/garuda-dr460nized.git?rev=35eb3abbc534f4046257c43ad9e05a9c010235cf&shallow=1";
+      flake = false;
+    };
+    window-title-applet-src = {
+      url = "git+https://github.com/dhruv8sh/plasma6-window-title-applet.git?rev=a6eaf5086a473919ed2fffc5d3b8d98237c2dd41&shallow=1";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, niri-flake, nixpkgs-orca-slicer, nixpkgs-bambu-studio, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, niri-flake, nixflix, nixpkgs-apps, dr460nized-src, window-title-applet-src, ... }:
+  let
+    # The HOMEPAGE_VAR_* names one Homepage instance actually receives, read
+    # back out of the rendered sops template rather than restated here — so
+    # checks/homepage-config validates against what the container really gets.
+    # (`content` at this point holds sops-nix's placeholder tokens, not
+    # secrets; the real values are only substituted on the host at activation.)
+    homepageEnvVars = template:
+      let
+        lines = nixpkgs.lib.splitString "
+"
+          self.nixosConfigurations.galactica.config.sops.templates.${template}.content;
+        declarations = builtins.filter (nixpkgs.lib.hasPrefix "HOMEPAGE_VAR_") lines;
+      in
+      map (line: builtins.head (nixpkgs.lib.splitString "=" line)) declarations;
+
+    # ── Bambuddy's virtual-printer CA in the slicers' printer.cer ──
+    # OrcaSlicer trusts printers only via its bundled cert/printer.cer, and
+    # SLIC3R_FHS bakes its path into the binary, so the CA is appended in the
+    # package itself. serenity's casks: modules/darwin/slicer-certs.nix.
+    bambuddyCa = ./certs/bambuddy-vp-ca.crt;
+    withBambuddyCa = appDir: pkg:
+      pkg.overrideAttrs (old: {
+        postInstall = (old.postInstall or "") + ''
+          cer=$out/share/${appDir}/cert/printer.cer
+          test -f "$cer"
+          [ -z "$(tail -c1 "$cer")" ] || echo >> "$cer"
+          cat ${bambuddyCa} >> "$cer"
+        '';
+      });
+  in
   {
+    formatter = {
+      x86_64-linux = nixpkgs.legacyPackages.x86_64-linux.nixfmt-tree;
+      aarch64-linux = nixpkgs.legacyPackages.aarch64-linux.nixfmt-tree;
+      aarch64-darwin = nixpkgs.legacyPackages.aarch64-darwin.nixfmt-tree;
+    };
+
+    # galactica is x86_64-linux, so this only needs to exist there — on the
+    # Mac `nix flake check` evaluates it and builds nothing.
+    checks.x86_64-linux.homepage-config = import ./checks/homepage-config {
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      configDir = ./hosts/galactica/homepage;
+      instances = {
+        admin = {
+          env = homepageEnvVars "homepage-admin.env";
+          publicFacing = false;
+        };
+        # Reachable from the public internet through Pangolin — links must
+        # resolve off-network, and the key set stays minimal.
+        guest = {
+          env = homepageEnvVars "homepage-guest.env";
+          publicFacing = true;
+        };
+      };
+    };
+
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
@@ -121,7 +208,7 @@
       # Single NVMe, installed via hosts/pegasus/disko.nix (2026-07-11).
       pegasus = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
-        specialArgs = { inherit self; };
+        specialArgs = { inherit self dr460nized-src window-title-applet-src; };
         modules = [
           ./hosts/pegasus/configuration.nix
           home-manager.nixosModules.home-manager
@@ -138,28 +225,39 @@
             ];
             # claude-desktop-debian has no HM module, just a package — pass it
             # through directly rather than adding it as a NixOS-level overlay.
-            # orcaSlicerNewer/bambuStudioNewer are the same idea, from the
-            # standalone nixpkgs-orca-slicer/nixpkgs-bambu-studio inputs above
-            # (see their comments for why they're separate nixpkgs rather than
-            # an overlay on the shared one). withNvidiaGLWorkaround is the
-            # real upstream fix (nixpkgs#522161) baked into that pin — see
-            # hosts/pegasus/home.nix and DECISIONS.md.
             home-manager.extraSpecialArgs = {
               claudeDesktop = claude-desktop-debian.packages.x86_64-linux.claude-desktop-fhs;
-              orcaSlicerNewer = nixpkgs-orca-slicer.legacyPackages.x86_64-linux.orca-slicer;
-              # bambu-studio is unfree (agpl3Plus + unfree, marked as of the
-              # pinned commit) — legacyPackages defaults to allowUnfree =
-              # false, unlike the main `nixpkgs` above (set globally via
-              # modules/nixos/common.nix), so this needs its own pkgs import
-              # rather than plain legacyPackages.
-              bambuStudioNewer =
-                (import nixpkgs-bambu-studio {
-                  system = "x86_64-linux";
-                  config.allowUnfree = true;
-                }).bambu-studio.override
-                  {
-                    withNvidiaGLWorkaround = true;
-                  };
+              # A separate nixpkgs instance, so it needs its own allowUnfree:
+              # modules/nixos/common.nix only configures the system's.
+              pkgsApps = import nixpkgs-apps {
+                system = "x86_64-linux";
+                config.allowUnfree = true;
+              };
+              # Askimo (multi-LLM desktop chat client) — not in nixpkgs at
+              # all, unlike claudeDesktop above (an upstream package nixpkgs
+              # just hasn't caught up to yet). pkgs/askimo.nix unpacks
+              # upstream's own jpackage .deb release and runs it on nixpkgs'
+              # jdk25 — see that file for why. callPackage against the main
+              # nixpkgs rather than a pin: no version-skew concern since
+              # there's no nixpkgs copy of this package to skew against.
+              askimoDesktop = nixpkgs.legacyPackages.x86_64-linux.callPackage ./pkgs/askimo.nix { };
+              # Zen and Opera: same "no HM module, just a package" shape as
+              # claudeDesktop/askimoDesktop above — neither flake ships one.
+              zenBrowser = zen-browser.packages.x86_64-linux.default;
+              # opera-flake's pinned deb (129.0.5823.65) 404s — Opera's CDN
+              # only serves a handful of recent stable builds and the flake
+              # hasn't re-run its own update.sh since that commit. Override
+              # to the current live build until upstream catches up.
+              operaBrowser = opera-flake.packages.x86_64-linux.opera.overrideAttrs (old: rec {
+                version = "135.0.5973.133";
+                src = nixpkgs.legacyPackages.x86_64-linux.fetchurl {
+                  url = "https://download3.operacdn.com/ftp/pub/opera/desktop/${version}/linux/opera-stable_${version}_amd64.deb";
+                  hash = "sha256-EAmqAX4XKllVk1bN8sNBRcetUhIA0huoIu4jVNMlb0k=";
+                };
+              });
+              # Appends Bambuddy's CA to OrcaSlicer's printer.cer (see the
+              # banner above); home.nix applies it to pkgsApps.orca-slicer.
+              inherit withBambuddyCa;
             };
             # Niri's own auto-generated ~/.config/niri/config.kdl (a plain,
             # not-home-manager-owned file, hand-edited in place during Niri
@@ -174,20 +272,42 @@
         ];
       };
 
-      # hopper — Raspberry Pi 4, network-core node. Uses nixos-hardware's rpi-4
-      # profile plus nixpkgs' generic sd-image-aarch64 builder (mainline kernel,
-      # cached — see the nixos-hardware input comment above).
-      #
-      # Bootstrap: build the SD image on pegasus (aarch64 via binfmt) and
-      # flash it — boots straight into this config. See hosts/hopper/DEPLOY.md.
-      #   nix build .#nixosConfigurations.hopper.config.system.build.sdImage
-      # Routine deploys: `colmena apply --on hopper` (see colmena.nix) is now
-      # the standard path — it delegates the aarch64 build to pegasus via
-      # meta.machinesFile automatically. The manual fallback, with pegasus as
-      # the aarch64 build host:
-      #   nixos-rebuild switch --flake .#hopper \
-      #     --target-host z@hopper.internal \
-      #     --build-host z@pegasus.internal --use-remote-sudo
+      # galactica — Tower, bare-metal NixOS (replacing Unraid). Root: LUKS +
+      # btrfs on the NVMe (disko.nix); the RAIDZ1 array `tank` and the media
+      # stack are declared in hosts/galactica/. MANUAL-STEPS.md §12 tracks
+      # what's still manual.
+      galactica = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = { inherit self; };
+        modules = [
+          ./hosts/galactica/configuration.nix
+          home-manager.nixosModules.home-manager
+          sops-nix.nixosModules.sops
+          # Brings in nixflix's own modules AND vpn-confinement (nixflix's
+          # nixosModules.default imports it), which is what provides the
+          # `vpnNamespaces` options and the per-service `vpnConfinement`
+          # option that hosts/galactica/nixflix.nix uses for the NAT-PMP
+          # sidecar. The stack's own configuration lives in that file, which
+          # configuration.nix imports.
+          #
+          # Imported from a patched source rather than nixosModules.default:
+          # upstream 11774fc (allowedHosts), carried until the pin reaches it.
+          # The patch then fails to apply — delete it. DECISIONS.md §10.
+          {
+            imports = [
+              (import "${nixpkgs.legacyPackages.x86_64-linux.applyPatches {
+                name = "nixflix-patched";
+                src = nixflix;
+                patches = [ ./hosts/galactica/nixflix-allowedhosts.patch ];
+              }}/modules")
+              nixflix.inputs.vpn-confinement.nixosModules.default
+            ];
+          }
+        ];
+      };
+
+      # hopper — Raspberry Pi 4, network-core node (nixos-hardware rpi-4 +
+      # sd-image builder). Build and deploy commands: hosts/hopper/DEPLOY.md.
       hopper = nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
         specialArgs = { inherit self; };
@@ -200,20 +320,8 @@
         ];
       };
 
-      # hamilton — Raspberry Pi 3 (bcm2837), backup AdGuard/Unbound resolver.
-      # Same approach as hopper: nixos-hardware's rpi-3 profile plus nixpkgs'
-      # sd-image-aarch64 builder (SD-card boot).
-      #
-      # Bootstrap: build the SD image on pegasus (aarch64 via binfmt) and
-      # flash it — boots straight into this config. See hosts/hamilton/DEPLOY.md.
-      #   nix build .#nixosConfigurations.hamilton.config.system.build.sdImage
-      # Routine deploys: `colmena apply --on hamilton` (see colmena.nix) is now
-      # the standard path — it delegates the aarch64 build to pegasus via
-      # meta.machinesFile automatically. The manual fallback, with pegasus as
-      # the aarch64 build host:
-      #   nixos-rebuild switch --flake .#hamilton \
-      #     --target-host z@hamilton.internal \
-      #     --build-host z@pegasus.internal --use-remote-sudo
+      # hamilton — Raspberry Pi 3, backup AdGuard/Unbound resolver (same
+      # shape as hopper). Build and deploy commands: hosts/hamilton/DEPLOY.md.
       hamilton = nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
         specialArgs = { inherit self; };
@@ -226,12 +334,9 @@
         ];
       };
 
-      # galactica-live-iso — throwaway live ISO for Tower's bare metal, built
-      # to de-risk the migration plan (boot test, mounting the Unraid array
-      # read-only, hardware profile) BEFORE galactica has a real config — see
-      # hosts/galactica/README.md (no configuration.nix yet, deliberately) and
-      # hosts/galactica/live-iso.nix for the build/flash commands. This is not
-      # nixosConfigurations.galactica and never becomes the real host.
+      # galactica-live-iso — throwaway live ISO built to de-risk the migration
+      # (hosts/galactica/live-iso.nix has the build/flash commands). Not the
+      # real host and never becomes it.
       galactica-live-iso = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
@@ -244,17 +349,16 @@
     # ── Colmena ─────────────────────────────────────────────────────────────
     # Deployment layer on top of the `nixosConfigurations` above — see
     # colmena.nix for the hive itself (per-host `deployment.targetHost` and
-    # the aarch64-via-pegasus distributed-build wiring — plus the
-    # not-yet-active galactica LUKS-locked exclusion tag, staged there ready
-    # for when galactica gets a real `nixosConfigurations.galactica`) and
-    # colmena-builders.machines for the build delegation. `nix flake check`
+    # the aarch64-via-pegasus distributed-build wiring, and galactica's
+    # LUKS-locked exclusion tag) and colmena-builders.machines for the build delegation. `nix flake check`
     # does not evaluate this output (colmena isn't a recognized flake output
     # type to Nix itself, just a convention the `colmena` CLI looks for) —
     # validate hive changes with `colmena build --on <host>` instead.
     colmena = import ./colmena.nix {
       inherit self nixpkgs home-manager sops-nix nixos-hardware
         dank-material-shell plasma-manager niri-flake claude-desktop-debian
-        nixpkgs-orca-slicer nixpkgs-bambu-studio;
+        nixpkgs-apps zen-browser opera-flake nixflix dr460nized-src
+        window-title-applet-src withBambuddyCa;
     };
 
     # ── Darwin (macOS) ──────────────────────────────────────────────────────

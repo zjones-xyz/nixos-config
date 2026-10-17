@@ -22,7 +22,7 @@ on NixOS generation 36 (rev `0c6229f`).
 
 | ID | Device | Size | Full serial | Role | FS | Enc. |
 |---|---|---|---|---|---|---|
-| `m2-0590` | **PNY CS2130 1TB SSD** | 1 TB | `PNY21232106090100590` | **Root** | LUKS → btrfs | **yes** |
+| `m2-0590` | **PNY CS2130 1TB SSD** | 1 TB | `*0590` | **Root** | LUKS → btrfs | **yes** |
 
 | Partition | Size | Contents |
 |---|---|---|
@@ -35,14 +35,14 @@ on NixOS generation 36 (rev `0c6229f`).
 disambiguate anyway. The identifier is for inventory only.
 
 ⚠ **No spare capacity and no second disk.** Worth stating plainly because
-`hosts/galactica/DESIGN.md` §6.6 makes this host the **restore target for the
-borgmatic pilot** — restoring `partdb` and its paired appdata here needs free
+`hosts/galactica/ARCHIVE-DESIGN-snapraid.md` §6.6 makes this host the **restore
+target for the borgmatic pilot** — restoring `partdb` and its paired appdata here needs free
 space on the one root filesystem, and nobody has checked how much there is.
 ⟨`df -h /` settles it.⟩
 
 ---
 
-## 2. ⚠ Encrypted swap was declared but never opened — fixed, not yet deployed
+## 2. Encrypted swap was declared but never opened — fixed in #43, since deployed
 
 **`swapDevices` points at a device mapper node that nothing creates.**
 
@@ -100,14 +100,13 @@ it's also the borgmatic pilot's restore target, §1.)
 **Fixed in #43**, merged 2026-08-09 — the middle option above. `swapDevices` now
 points at the raw partition with `randomEncryption.enable = true`. The device path
 was derived from the disk's model and serial, so it was checked against the host
-before merge rather than trusted: `/dev/disk/by-id/nvme-PNY_CS2130_1TB_SSD_PNY21232106090100590-part3`
+before merge rather than trusted: `/dev/disk/by-id/nvme-PNY_CS2130_1TB_SSD_*0590-part3`
 resolves to `nvme0n1p3`, the same partition this section caught sitting idle.
 
-⚠ **Merged is not deployed.** The config is on `main`; this host still has no
-active swap until someone rebuilds it, because every `switch` happens on the
-target host (`CLAUDE.md` §Workflow). First activation `mkswap`s the partition,
-overwriting the stale `60b43e2c` LUKS header — free, since swap contents are
-worthless by definition. Confirm with the same command that exposed the defect:
+The host has been switched repeatedly since the merge (the NFS cutover and the
+borgmatic go-live both required it), so the fix is deployed: first activation
+`mkswap`'d the partition, overwriting the stale `60b43e2c` LUKS header — free,
+since swap contents are worthless by definition. To re-confirm any time:
 
 ```sh
 swapon --show && free -h
@@ -118,9 +117,8 @@ swapon --show && free -h
 ## 3. Encryption
 
 **The whole disk is encrypted apart from the ESP**, which cannot be. Root, `/home`
-and `/nix` are btrfs subvolumes inside LUKS `21aed1d9-…`; the swap partition holds
-a stale second LUKS container, superseded by random-key encrypted swap in #43 and
-rekeyed from `/dev/urandom` on every boot once this host is rebuilt (§2).
+and `/nix` are btrfs subvolumes inside LUKS `21aed1d9-…`; the swap partition runs
+random-key encrypted swap (#43), rekeyed from `/dev/urandom` on every boot (§2).
 
 **LUKS unlock is available pre-boot over SSH.** A tiny SSH server runs in the
 initrd before the root is decrypted, over MAC-pinned interface names so the
@@ -218,7 +216,7 @@ transition. `services.thermald.enable` is the standard NixOS lever;
 
 ```csv
 id,form,recording,serial_suffix,serial_full,model,size,location,role,colour,physical_label
-m2-0590,m2-nvme,,0590,PNY21232106090100590,PNY CS2130 1TB SSD,1TB,m2-slot,root,,no
+m2-0590,m2-nvme,,0590,*0590,PNY CS2130 1TB SSD,1TB,m2-slot,root,,no
 ```
 
 `recording` does not apply to an NVMe. `physical_label` is `no` — M.2 cards take

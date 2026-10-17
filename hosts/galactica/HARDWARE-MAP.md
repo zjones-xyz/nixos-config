@@ -26,19 +26,102 @@ temperatures 30–39 °C.
 
 | ID | Device | Size | Full serial | Role | `sdX` | FS | Used / free | Enc. |
 |---|---|---|---|---|---|---|---|---|
-| `h-X4WE` | HGST HUH721212ALE601 | 12 TB | `8CJZX4WE` | **Parity** | `sde` | — | — | n/a |
-| `h-HJDH` | HGST HUH721212ALE601 | 12 TB | `8DKUHJDH` | **Parity 2** | `sdd` | — | — | n/a |
-| `h-T97E` | HGST HUH721212ALE601 | 12 TB | `8CG7T97E` | **Disk 1** (data) | `sdf` | btrfs | 9.05 TB / 2.95 TB | **yes** |
-| `h-NS3Y` | HGST HUH721212ALE601 | 12 TB | `8DJPNS3Y` | **Disk 2** (data) | `sdg` | btrfs | 8.06 TB / 3.94 TB | **yes** |
-| `s-3255` | WD Blue SA510 | 500 GB | `244964803255` | **Cache** pool | `sdb` | btrfs | 9.31 GB / 487 GB | **yes** |
-| `s-9545` | SATA SSD (generic) | 240 GB | `19013024009545` | **Fastservices** pool | `sdc` | btrfs | 38.5 GB / 199 GB | **yes** |
-| `s-768C` | Crucial BX500 | 480 GB | `2422E8B6768C` | **Services** pool, dev 1 | `sdh` | btrfs | 240 GB / 239 GB | **yes** |
-| `s-8162` | Crucial BX500 | 480 GB | `2506E9A58162` | **Services** pool, dev 2 | `sdi` | *(same pool)* | *(same pool)* | **yes** |
-| `s-3100` | Crucial MX100 | 512 GB | `15090EE23100` | ⚠ **unassigned** | `sdj` | **ntfs** | not mounted | **no** |
-| `s-5509` | Kingston SH103S3120G | 120 GB | `50026B7239015509` | ⚠ **Boot pool slot** — see below | `sdk` | unmountable | — | **no** |
+| `h-X4WE` | HGST HUH721212ALE601 | 12 TB | `*X4WE` | **Parity** | `sde` | — | — | n/a |
+| `h-HJDH` | HGST HUH721212ALE601 | 12 TB | `*HJDH` | **Parity 2** | `sdd` | — | — | n/a |
+| `h-T97E` | HGST HUH721212ALE601 | 12 TB | `*T97E` | **Disk 1** (data) | `sdf` | btrfs | 9.05 TB / 2.95 TB | **yes** |
+| `h-NS3Y` | HGST HUH721212ALE601 | 12 TB | `*NS3Y` | **Disk 2** (data) | `sdg` | btrfs | 8.06 TB / 3.94 TB | **yes** |
+| `s-3255` | WD Blue SA510 | 500 GB | `*3255` | **Cache** pool | `sdb` | btrfs | 9.31 GB / 487 GB | **yes** |
+| `s-9545` | SATA SSD (generic) | 240 GB | `*9545` | **Fastservices** pool | `sdc` | btrfs | 38.5 GB / 199 GB | **yes** |
+| `s-768C` | Crucial BX500 | 480 GB | `*768C` | **Services** pool, dev 1 | `sdh` | btrfs | 240 GB / 239 GB | **yes** |
+| `s-8162` | Crucial BX500 | 480 GB | `*8162` | **Services** pool, dev 2 | `sdi` | *(same pool)* | *(same pool)* | **yes** |
+| `s-3100` | Crucial MX100 | 512 GB | `*3100` | ⚠ **unassigned** | `sdj` | **ntfs** | not mounted | **no** |
+| `s-5509` | Kingston SH103S3120G | 120 GB | `*5509` | ⚠ **Boot pool slot** — see below | `sdk` | unmountable | — | **no** |
 
 **Array total: 24 TB, 17.1 TB used, 6.88 TB free.** That is the number the
 migration plan turns on — see `DESIGN.md` §6, where it closes an assumption.
+
+### 2026-09-01 — current physical/logical state, read live under NixOS
+
+Read directly on the booted NixOS system (`lsblk`, `/dev/disk/by-id`) after the
+SATA/SAS cables were reconnected for the array build. **This is the source of
+truth for the ZFS pool config**, superseding the Unraid-era roles above (kept
+for provenance).
+
+> **Updated 2026-09-01 — the array is built and cold-boot-verified.** The table
+> below originally recorded *intended* roles read on the ISO before pool
+> creation; it now records the roles as built. Pool `tank` = RAIDZ1 over the
+> four 12 TB spinners + a **3-way mirror special vdev** over three SSDs, every
+> member **LUKS-under-ZFS** (`MANUAL-STEPS.md` §9, `DECISIONS.md` §7). Two
+> things changed from the plan during the build, both reflected below:
+>
+> - **The MX100 (`s-3100`) hard-failed on its first write** and was dropped, so
+>   the special vdev is a **3-way mirror** (WD Blue + both BX500s), not the
+>   planned 2×2. A forward path to 2×2 (`zpool detach` + `add`) exists if a
+>   fourth healthy SSD arrives.
+> - **`/boot` went to the WD Blue's ESP, not the MX100's.** This board's AMI
+>   BIOS UEFI-boots only the onboard C204, so the WD Blue was physically
+>   **recabled from the LSI HBA to onboard port `ata1`** and now carries `/boot`
+>   (`hardware-configuration.nix`'s `/boot` header, `MANUAL-STEPS.md` §9).
+>   `midden` no longer hosts `/boot`.
+>
+> `sidepool` is now **reconnected on the LSI HBA** (it was kept physically out
+> during destructive pool creation) and is currently **mounted read-only** for
+> the copy-back of its staged contents onto `tank`; see its section below. The
+> Kingston `s-5509` boot-pool disk stays absent, not reconnected.
+
+`sdX` names are noted only as they enumerated on the build boot; they are *not*
+stable across reboots. The pool is built against the `by-id` paths, which are
+serial-derived and stable.
+
+| ID | Model | Serial | `by-id` (stable) | Build-boot `sdX` | Role (built) |
+|---|---|---|---|---|---|
+| `h-HJDH` | HGST HUH721212ALE601 12 TB | `*HJDH` | `ata-HUH721212ALE601_*HJDH` | `sdc` | `tank` RAIDZ1 member |
+| `h-NS3Y` | HGST HUH721212ALE601 12 TB | `*NS3Y` | `ata-HUH721212ALE601_*NS3Y` | `sde` | `tank` RAIDZ1 member |
+| `h-X4WE` | HGST HUH721212ALE601 12 TB | `*X4WE` | `ata-HUH721212ALE601_*X4WE` | `sdg` | ✖ **replaced by `h-YWAH` 2026-10-11** — failing (below); LUKS-erased, pulled, RMA to seller (`MANUAL-STEPS.md` §21) |
+| `h-YWAH` | HPE MB012000GWDFE (= HUH721212ALE604) 12 TB | `*YWAH` | `ata-MB012000GWDFE_*YWAH` | — | `tank` RAIDZ1 member since 2026-10-11, cage A bay `A4`. Used, SMART hours reset; HPE firmware has no 197, so its early warning is `smartctl -l devstat`, scrubs and self-tests |
+| `h-T97E` | HGST HUH721212ALE601 12 TB | `*T97E` | `ata-HUH721212ALE601_*T97E` | `sdi` | `tank` RAIDZ1 member |
+| `s-768C` | Crucial BX500 480 GB | `*768C` | `ata-CT480BX500SSD1_*768C` | `sdb` | `tank` special-vdev mirror member (on LSI) |
+| `s-8162` | Crucial BX500 480 GB | `*8162` | `ata-CT480BX500SSD1_*8162` | `sdf` | `tank` special-vdev mirror member (on LSI) |
+| `s-3255` | WD Blue SA510 500 GB | `*3255` | `ata-WD_Blue_SA510_2.5_500GB_*3255` | `sda` | `tank` special-vdev mirror member **+ `/boot` ESP** (recabled to onboard `ata1`) |
+| `s-3100` | Crucial MX100 512 GB | `*3100` | `ata-Crucial_CT512MX100SSD1_*3100` | `sdd` | ✖ **written off 2026-10-06** — failed on first write; pulled 2026-10-06 |
+| `s-9545` | SATA SSD (generic) 224 GB | `*9545` | `ata-SATA_SSD_*9545` | `sdh` | **midden** — `/var/log/journal` + nix build scratch (no longer `/boot`) |
+| — | SPCC M.2 PCIe SSD 932 GB | `*0206` | `nvme-SPCC_M.2_PCIe_SSD_*0206` | `nvme0n1` | LUKS root (`cryptroot`) + swap + vestigial ESP |
+
+Notes on the built pool:
+- **`tank` ≈ 31.6 TiB usable.** `ashift=12` (forced — these are 512e drives with
+  4 K physical sectors), `compression` lz4 (zstd on some datasets), `atime=off`,
+  `xattr=sa`, `acltype=posixacl`. Encryption is **LUKS underneath ZFS**, not
+  ZFS-native — one sops `luks/arrayKeyFile` in slot 0 of all seven members plus a
+  fleet recovery passphrase in slot 1, opened in stage-2 crypttab. See
+  `DECISIONS.md` §7 for why LUKS-under-ZFS rather than native crypto.
+- **The two BX500s carry distinct serials**, so a future 2×2 layout (one BX500 per
+  mirror leg, each paired with a non-BX500) stays cleanly expressible by `by-id`.
+- **The special-vdev SSDs are split across controllers now.** The two BX500s are
+  on the **LSI HBA** (`02:00.0` — the SAS2008, *not* an ASMedia part; the ASM1064
+  moves to `04:00.0` when the LSI is present, §4). The WD Blue was recabled off
+  the LSI to onboard `ata1` so the firmware can UEFI-boot its ESP.
+- `s-3100` (MX100) carried leftover Unraid-era partitions and was earmarked to host
+  both `/boot` and a special-vdev partition; **it failed on its first write**, so
+  it hosts neither. **Written off 2026-10-06** — not retested, not a spare.
+  Pulled 2026-10-06 with sidepool's disks.
+- The four 12 TB spinners' original array data was copied to `sidepool` before the
+  destructive RAIDZ1 create; that copy is what is now being read back (read-only)
+  onto `tank`.
+
+> **⚠ 2026-10-02 — `h-X4WE` is failing; replacement tracked in `MANUAL-STEPS.md`
+> §21.** Scrutiny flagged it Failed on 2026-10-01. Read with `smartctl` the next
+> day: **197 Current_Pending 184**, **198 Offline_Uncorrectable 46** (23 a day
+> earlier), 5 Reallocated 7, at 34,745 power-on hours. Overall health still
+> reads PASSED, which is the drive's own loose threshold, not reassurance. The
+> pool has not noticed: `tank` ONLINE, zero READ/WRITE/CKSUM on every member, and
+> the monthly scrub that finished 2026-10-01 repaired 0 B. The bad sectors sit
+> where ZFS has not read; the drive's own offline scan found them. The other
+> three spinners read 0 on 5/197/198/199, so this is one disk wearing out, not
+> the batch.
+>
+> **Resolved 2026-10-11:** `zpool replace` onto `h-YWAH` resilvered 4.32T in
+> 18:53:42 with 0 errors; X4WE gave no READ errors throughout (5 = 14, 197 = 184,
+> 198 = 70 at the end). Cold boot afterwards imported `tank` with the new member.
 
 ### `sidepool` — a fifth pool, missing from the 2026-08-07 Main-tab reading above
 
@@ -48,12 +131,22 @@ migration plan turns on — see `DESIGN.md` §6, where it closes an assumption.
 matched none of the serials above. Called `sidepool` by the owner; functions
 as Unraid's staging area for the migration.
 
+> **Update 2026-10-06 — pulled.** All four disks left the case (with the MX100);
+> LSI ports 2–7 are now empty. Contents already live in `tank/backups/sidepool-pools`.
+
+> **Update 2026-09-01 — reconnected on the LSI HBA for the copy-back.** Kept
+> physically out during `tank`'s destructive create, `sidepool`'s four disks are
+> now cabled back onto the LSI and **mounted read-only** while their staged
+> contents are copied onto `tank`'s datasets. Read-only is deliberate: it is
+> still the only copy of the migrated data until the copy-back completes and is
+> verified, so nothing writes to it until then.
+
 | Serial | Size | Model | LUKS |
 |---|---|---|---|
-| `76HE4XDAS` | 2.7 TB | TOSHIBA DT01ACA300 | yes |
-| `WD-WXD2D534CY72` | 3.6 TB | WDC WD40EFAX-68JH4N1 | yes |
-| `WD-WXM2D72D3V35` | 3.6 TB | WDC WD40EFPX-68C6CN0 | yes |
-| `WD-WXD2D534CJE9` | 3.6 TB | WDC WD40EFAX-68JH4N1 | yes |
+| `*XDAS` | 2.7 TB | TOSHIBA DT01ACA300 | yes |
+| `WD-*CY72` | 3.6 TB | WDC WD40EFAX-68JH4N1 | yes |
+| `WD-*3V35` | 3.6 TB | WDC WD40EFPX-68C6CN0 | yes |
+| `WD-*CJE9` | 3.6 TB | WDC WD40EFAX-68JH4N1 | yes |
 
 **One btrfs filesystem spanning all four** (`blkid` shows a shared `UUID` plus
 a per-device `UUID_SUB` — btrfs's own multi-device signature), ~13.5 TB raw,
@@ -117,7 +210,7 @@ has been wiped and handed to NixOS.
 
 | ID | Device | Size | Full serial | Notes |
 |---|---|---|---|---|
-| `m2-140B` | **Silicon Power UD90**, M.2 **2230**, NVMe PCIe Gen 4 ×4, on a PCIe adapter | 1 TB | `23049339-090140B` | Intended root, replacing `s-5509`. **No physical label** — no cable to trace, unambiguous by location, and no room on the card. Identifier is for inventory only. |
+| `m2-140B` | **Silicon Power UD90**, M.2 **2230**, NVMe PCIe Gen 4 ×4, on a PCIe adapter | 1 TB | `*140B` | Intended root, replacing `s-5509`. **No physical label** — no cable to trace, unambiguous by location, and no room on the card. Identifier is for inventory only. |
 
 Read off the drive's own label 2026-08-07 and confirmed by the owner. **2230, not
 2242** as an earlier revision recorded.
@@ -203,8 +296,8 @@ Worth stating because it decides where documentation comes from.
 |---|---|
 | System manufacturer | **Seneca** (Seneca Data, a US integrator) |
 | System product | **`pro499926`** |
-| System serial | `1212363` |
-| Baseboard | Supermicro **X9SCL/X9SCM**, version `1.11A`, serial `ZM148S009088` |
+| System serial | `*2363` |
+| Baseboard | Supermicro **X9SCL/X9SCM**, version `1.11A`, serial `*9088` |
 | Chassis, **actual** | **Chenbro `SR20969`** — SR209-series ATX tower. Suffix read as `-01`, ⚠ last character uncertain |
 | Originally sold as | A **Windows Storage Server 2012 Workgroup** appliance |
 
@@ -309,12 +402,22 @@ is moot for a single column.
 > bottom. With one column there is no left/right to confuse, so `A1` is the top
 > from either side.
 
+**Read by label, 2026-10-11** (case open for the X4WE→YWAH swap, MANUAL-STEPS
+§21; label photos in `fleet-inventory`); ports from sysfs the same day. The
+bays do not map to ports in order, so trust this table, not the pattern:
+
 | Bay | Feeding port | Disk |
 |---|---|---|
-| `A1` | ⟨TBD⟩ | ⟨TBD⟩ |
-| `A2` | ⟨TBD⟩ | ⟨TBD⟩ |
-| `A3` | ⟨TBD⟩ | ⟨TBD⟩ |
-| `A4` | ⟨TBD⟩ | ⟨TBD⟩ |
+| `A1` | onboard C204 `ata5` | `h-HJDH` (HGST label) |
+| `A2` | onboard C204 `ata6` | `h-T97E` (WD label) |
+| `A3` | onboard C204 `ata3` | `h-NS3Y` (HGST label) |
+| `A4` | onboard C204 `ata4` | `h-YWAH` (HPE label) — `h-X4WE`'s bay until 2026-10-11 |
+
+**The backplane carries no 3.3 V** — it is fed by Molex. So power-disable (SATA
+pin 3) never engages in this cage, and that is the only reason it went unnoticed:
+both `h-YWAH` (ALE604) *and* `h-X4WE` (ALE601) stay dark on a PSU SATA lead and
+only spin up in the cage or on a no-3.3 V adapter. Assume every HC520 here
+honours it.
 
 **Fill the port column by measurement.** Hotswap makes it directly observable,
 and it is quicker than tracing:
@@ -468,7 +571,7 @@ mildly slower for ripping.
 
 ```
 h-HJDH
-h-X4WE
+h-YWAH
 h-T97E
 h-NS3Y
 s-3255
@@ -503,17 +606,18 @@ The other cages need enumerating before their cables can be labelled at all.
 
 ```csv
 id,form,recording,serial_suffix,serial_full,model,size,location,role,colour,physical_label
-h-HJDH,hdd35,cmr,HJDH,8DKUHJDH,HUH721212ALE601,12TB,cage-A,array,,yes
-h-X4WE,hdd35,cmr,X4WE,8CJZX4WE,HUH721212ALE601,12TB,cage-A,array,,yes
-h-T97E,hdd35,cmr,T97E,8CG7T97E,HUH721212ALE601,12TB,cage-A,array,,yes
-h-NS3Y,hdd35,cmr,NS3Y,8DJPNS3Y,HUH721212ALE601,12TB,cage-A,array,,yes
-s-3255,ssd25,,3255,244964803255,WD Blue SA510,500GB,internal,cache,,yes
-s-9545,ssd25,,9545,19013024009545,SATA SSD,223.6GB,internal,fastservices,,yes
-s-768C,ssd25,,768C,2422E8B6768C,Crucial BX500,480GB,internal,pool,,yes
-s-8162,ssd25,,8162,2506E9A58162,Crucial BX500,480GB,internal,pool,,yes
-s-3100,ssd25,,3100,15090EE23100,Crucial MX100,512GB,internal,unassigned,,yes
-s-5509,ssd25,,5509,50026B7239015509,Kingston SH103S3120G,120GB,internal,retiring,,no
-m2-140B,m2-nvme,,140B,23049339-090140B,Silicon Power UD90 2230,1TB,pcie-adapter,root,,no
+h-HJDH,hdd35,cmr,HJDH,*HJDH,HUH721212ALE601,12TB,cage-A,array,,yes
+h-X4WE,hdd35,cmr,X4WE,*X4WE,HUH721212ALE601,12TB,rma,retired,,yes
+h-YWAH,hdd35,cmr,YWAH,*YWAH,MB012000GWDFE,12TB,cage-A,array,,no
+h-T97E,hdd35,cmr,T97E,*T97E,HUH721212ALE601,12TB,cage-A,array,,yes
+h-NS3Y,hdd35,cmr,NS3Y,*NS3Y,HUH721212ALE601,12TB,cage-A,array,,yes
+s-3255,ssd25,,3255,*3255,WD Blue SA510,500GB,internal,cache,,yes
+s-9545,ssd25,,9545,*9545,SATA SSD,223.6GB,internal,fastservices,,yes
+s-768C,ssd25,,768C,*768C,Crucial BX500,480GB,internal,pool,,yes
+s-8162,ssd25,,8162,*8162,Crucial BX500,480GB,internal,pool,,yes
+s-3100,ssd25,,3100,*3100,Crucial MX100,512GB,internal,unassigned,,yes
+s-5509,ssd25,,5509,*5509,Kingston SH103S3120G,120GB,internal,retiring,,no
+m2-140B,m2-nvme,,140B,*140B,Silicon Power UD90 2230,1TB,pcie-adapter,root,,no
 ```
 
 **All four 12 TB disks are CMR** — the HGST Ultrastar He12 line is conventional
@@ -537,7 +641,7 @@ drawer is, so the answer is currently no on both counts.
 | ~~Confirm the encryption inferences in §2~~ | ~~Unraid Main tab~~ | **Closed 2026-08-07** — all confirmed |
 | ~~MX100 / `btrfs device remove missing` state~~ | ~~Unraid~~ | **Closed 2026-08-07** — completed; disk unassigned |
 | **Enumerate the non-primary cages** | Case open | Six installed disks recorded only as "internal" |
-| **Port-to-bay mapping for cage A** | Hotswap insertion + sysfs | Printing cable labels |
+| ~~Port-to-bay mapping for cage A~~ | ~~sysfs from serial~~ | **Closed 2026-10-11** — §3 table |
 | ~~`s-3100` actual state after the `/mnt/services` btrfs removal~~ | ~~Unraid, `btrfs filesystem show`~~ | **Closed 2026-08-07** — duplicate of the row above; §1 and §2 both carry the answer (unassigned, NTFS, unmounted) |
 | Enumerate the other cages — letters, arrangement, type | Eyes | Bay identifiers and cable labels for six of ten disks |
 | Port-to-bay mapping | Measure it — hotswap insertion + sysfs, see §3 | All cable labels |

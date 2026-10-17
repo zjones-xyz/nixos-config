@@ -89,7 +89,7 @@ System Information
 	Manufacturer: Seneca
 	Product Name: pro499926
 	Version: 0123456789
-	Serial Number: 1212363
+	Serial Number: *2363
 	UUID: 0f7ac40c-803b-0706-0cc4-7a0f3b800e0f
 	Wake-up Type: Power Switch
 	SKU Number: To be filled by O.E.M.
@@ -100,7 +100,7 @@ Base Board Information
 	Manufacturer: Supermicro
 	Product Name: X9SCL/X9SCM
 	Version: 1.11A
-	Serial Number: ZM148S009088
+	Serial Number: *9088
 	Asset Tag: To be filled by O.E.M.
 	Features:
 		Board is a hosting board
@@ -293,7 +293,7 @@ Memory Device
 	Type Detail: Synchronous
 	Speed: 1333 MT/s
 	Manufacturer: Transcend
-	Serial Number: 0014A62D
+	Serial Number: *A62D
 	Asset Tag: 9876543210
 	Part Number: M391B1G73QH0-YK0  
 	Rank: 2
@@ -324,7 +324,7 @@ Memory Device
 	Type Detail: Synchronous
 	Speed: 1333 MT/s
 	Manufacturer: Transcend
-	Serial Number: 0014A62D
+	Serial Number: *A62D
 	Asset Tag: 9876543210
 	Part Number: HMT41GU7DFR8C-PB  
 	Rank: 2
@@ -355,7 +355,7 @@ Memory Device
 	Type Detail: Synchronous
 	Speed: 1333 MT/s
 	Manufacturer: Transcend
-	Serial Number: 0014A62D
+	Serial Number: *A62D
 	Asset Tag: 9876543210
 	Part Number: M391B1G73QH0-YK0  
 	Rank: 2
@@ -386,7 +386,7 @@ Memory Device
 	Type Detail: Synchronous
 	Speed: 1333 MT/s
 	Manufacturer: Transcend
-	Serial Number: 0014A62D
+	Serial Number: *A62D
 	Asset Tag: 9876543210
 	Part Number: HMT41GU7DFR8C-PB  
 	Rank: 2
@@ -1947,7 +1947,7 @@ Device Descriptor:
   bcdDevice            1.00
   iManufacturer           1  USB
   iProduct                2  SanDisk 3.2Gen1
-  iSerial                 3 04011cfba2fa4aeca70c44f3942ac6aced2de5431ac8fc84e4b3e0014f2fc0baf04f000000000000000000005c0e733800888218915581079db0d8b5
+  iSerial                 3 *d8b5
   bNumConfigurations      1
   Configuration Descriptor:
     bLength                 9
@@ -2169,42 +2169,42 @@ Device Status:     0x0001
 ## lsblk
 NAME      SIZE TYPE FSTYPE      MOUNTPOINT     MODEL                   SERIAL                                                                                                                   WWN
 loop0     1.3G loop squashfs    /nix/.ro-store                                                                                                                                                  
-sda     476.9G disk                            Crucial_CT512MX100SSD1  15090EE23100                                                                                                             0x500a07510ee23100
+sda     476.9G disk                            Crucial_CT512MX100SSD1  *3100                                                                                                             0x500a07510ee23100
 ├─sda1    476G part ntfs                                                                                                                                                                        0x500a07510ee23100
 └─sda2    468M part ntfs                                                                                                                                                                        0x500a07510ee23100
-sdb      10.9T disk                            HUH721212ALE601         8CJZX4WE                                                                                                                 0x5000cca26fea3bd7
+sdb      10.9T disk                            HUH721212ALE601         *X4WE                                                                                                                 0x5000cca26fea3bd7
 └─sdb1   10.9T part                                                                                                                                                                             0x5000cca26fea3bd7
-sdc      10.9T disk                            HUH721212ALE601         8DKUHJDH                                                                                                                 0x5000cca253f5de15
+sdc      10.9T disk                            HUH721212ALE601         *HJDH                                                                                                                 0x5000cca253f5de15
 └─sdc1   10.9T part                                                                                                                                                                             0x5000cca253f5de15
-sdd     114.6G disk iso9660     /iso           SanDisk 3.2Gen1         04011cfba2fa4aeca70c44f3942ac6aced2de5431ac8fc84e4b3e0014f2fc0baf04f000000000000000000005c0e733800888218915581079db0d8b5 
+sdd     114.6G disk iso9660     /iso           SanDisk 3.2Gen1         *d8b5 
 ├─sdd1    1.4G part iso9660                                                                                                                                                                     
 └─sdd2      3M part vfat                                                                                                                                                                        
-sde      10.9T disk                            HUH721212ALE601         8CG7T97E                                                                                                                 0x5000cca26fc389cf
+sde      10.9T disk                            HUH721212ALE601         *T97E                                                                                                                 0x5000cca26fc389cf
 └─sde1   10.9T part crypto_LUKS                                                                                                                                                                 0x5000cca26fc389cf
-sdf      10.9T disk                            HUH721212ALE601         8DJPNS3Y                                                                                                                 0x5000cca253e608ad
+sdf      10.9T disk                            HUH721212ALE601         *NS3Y                                                                                                                 0x5000cca253e608ad
 └─sdf1   10.9T part crypto_LUKS                                                                                                                                                                 0x5000cca253e608ad
-sdg       2.7T disk                            TOSHIBA DT01ACA300      76HE4XDAS                                                                                                                0x5000039fe3d412c8
+sdg       2.7T disk                            TOSHIBA DT01ACA300      *XDAS                                                                                                                0x5000039fe3d412c8
 └─sdg1    2.7T part crypto_LUKS                                                                                                                                                                 0x5000039fe3d412c8
-sdh       3.6T disk                            WDC WD40EFAX-68JH4N1    WD-WXD2D534CY72                                                                                                          0x50014ee26b296f00
+sdh       3.6T disk                            WDC WD40EFAX-68JH4N1    WD-*CY72                                                                                                          0x50014ee26b296f00
 └─sdh1    3.6T part crypto_LUKS                                                                                                                                                                 0x50014ee26b296f00
-sdi       3.6T disk                            WDC WD40EFPX-68C6CN0    WD-WXM2D72D3V35                                                                                                          0x50014ee2c00e2cba
+sdi       3.6T disk                            WDC WD40EFPX-68C6CN0    WD-*3V35                                                                                                          0x50014ee2c00e2cba
 └─sdi1    3.6T part crypto_LUKS                                                                                                                                                                 0x50014ee2c00e2cba
-sdj       3.6T disk                            WDC WD40EFAX-68JH4N1    WD-WXD2D534CJE9                                                                                                          0x50014ee2c07f84ea
+sdj       3.6T disk                            WDC WD40EFAX-68JH4N1    WD-*CJE9                                                                                                          0x50014ee2c07f84ea
 └─sdj1    3.6T part crypto_LUKS                                                                                                                                                                 0x50014ee2c07f84ea
-sdk     447.1G disk                            CT480BX500SSD1          2422E8B6768C                                                                                                             0x500a0751e8b6768c
+sdk     447.1G disk                            CT480BX500SSD1          *768C                                                                                                             0x500a0751e8b6768c
 └─sdk1  447.1G part crypto_LUKS                                                                                                                                                                 0x500a0751e8b6768c
-sdl     447.1G disk                            CT480BX500SSD1          2506E9A58162                                                                                                             0x500a0751e9a58162
+sdl     447.1G disk                            CT480BX500SSD1          *8162                                                                                                             0x500a0751e9a58162
 └─sdl1  447.1G part crypto_LUKS                                                                                                                                                                 0x500a0751e9a58162
-sdm     223.6G disk                            SATA SSD                19013024009545                                                                                                           
+sdm     223.6G disk                            SATA SSD                *9545                                                                                                           
 └─sdm1  223.6G part crypto_LUKS                                                                                                                                                                 
-sdn     465.8G disk                            WD Blue SA510 2.5 500GB 244964803255                                                                                                             0x5001b448c99c5bf4
+sdn     465.8G disk                            WD Blue SA510 2.5 500GB *3255                                                                                                             0x5001b448c99c5bf4
 └─sdn1  465.8G part crypto_LUKS                                                                                                                                                                 0x5001b448c99c5bf4
-nvme0n1 931.5G disk                            SPCC M.2 PCIe SSD       AA2300905N401KG00206                                                                                                     eui.00000000000000014868340000000001
+nvme0n1 931.5G disk                            SPCC M.2 PCIe SSD       *0206                                                                                                     eui.00000000000000014868340000000001
 
 ## nvme list
 Node                  Generic               SN                   Model                                    Namespace  Usage                      Format           FW Rev  
 --------------------- --------------------- -------------------- ---------------------------------------- ---------- -------------------------- ---------------- --------
-/dev/nvme0n1          /dev/ng0n1            AA2300905N401KG00206 SPCC M.2 PCIe SSD                        0x1          1.00  TB /   1.00  TB    512   B +  0 B   W0417B0 
+/dev/nvme0n1          /dev/ng0n1            *0206 SPCC M.2 PCIe SSD                        0x1          1.00  TB /   1.00  TB    512   B +  0 B   W0417B0 
 
 ## smartctl --scan
 /dev/sda -d scsi # /dev/sda, SCSI device
@@ -2229,7 +2229,7 @@ Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org
 === START OF INFORMATION SECTION ===
 Model Family:     Crucial/Micron Client SSDs
 Device Model:     Crucial_CT512MX100SSD1
-Serial Number:    15090EE23100
+Serial Number:    *3100
 LU WWN Device Id: 5 00a075 10ee23100
 Firmware Version: MU01
 User Capacity:    512,110,190,592 bytes [512 GB]
@@ -2336,7 +2336,7 @@ Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org
 
 === START OF INFORMATION SECTION ===
 Device Model:     HUH721212ALE601
-Serial Number:    8CJZX4WE
+Serial Number:    *X4WE
 LU WWN Device Id: 5 000cca 26fea3bd7
 Firmware Version: LEGL0002
 User Capacity:    12,000,138,625,024 bytes [12.0 TB]
@@ -2475,7 +2475,7 @@ Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org
 
 === START OF INFORMATION SECTION ===
 Device Model:     HUH721212ALE601
-Serial Number:    8DKUHJDH
+Serial Number:    *HJDH
 LU WWN Device Id: 5 000cca 253f5de15
 Firmware Version: LEGL0002
 User Capacity:    12,000,138,625,024 bytes [12.0 TB]
@@ -2583,7 +2583,7 @@ Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org
 
 === START OF INFORMATION SECTION ===
 Device Model:     HUH721212ALE601
-Serial Number:    8CG7T97E
+Serial Number:    *T97E
 LU WWN Device Id: 5 000cca 26fc389cf
 Firmware Version: LEGL0002
 User Capacity:    12,000,138,625,024 bytes [12.0 TB]
@@ -2689,7 +2689,7 @@ Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org
 
 === START OF INFORMATION SECTION ===
 Device Model:     HUH721212ALE601
-Serial Number:    8DJPNS3Y
+Serial Number:    *NS3Y
 LU WWN Device Id: 5 000cca 253e608ad
 Firmware Version: LEGL0002
 User Capacity:    12,000,138,625,024 bytes [12.0 TB]
@@ -2798,7 +2798,7 @@ Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org
 === START OF INFORMATION SECTION ===
 Model Family:     Toshiba 3.5" DT01ACA... Desktop HDD
 Device Model:     TOSHIBA DT01ACA300
-Serial Number:    76HE4XDAS
+Serial Number:    *XDAS
 LU WWN Device Id: 5 000039 fe3d412c8
 Firmware Version: MX6OABB0
 User Capacity:    3,000,592,982,016 bytes [3.00 TB]
@@ -2897,7 +2897,7 @@ Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org
 === START OF INFORMATION SECTION ===
 Model Family:     Western Digital Red (SMR)
 Device Model:     WDC WD40EFAX-68JH4N1
-Serial Number:    WD-WXD2D534CY72
+Serial Number:    WD-*CY72
 LU WWN Device Id: 5 0014ee 26b296f00
 Firmware Version: 83.00A83
 User Capacity:    4,000,787,030,016 bytes [4.00 TB]
@@ -3006,7 +3006,7 @@ Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org
 === START OF INFORMATION SECTION ===
 Model Family:     Western Digital Red Plus
 Device Model:     WDC WD40EFPX-68C6CN0
-Serial Number:    WD-WXM2D72D3V35
+Serial Number:    WD-*3V35
 LU WWN Device Id: 5 0014ee 2c00e2cba
 Firmware Version: 81.00A81
 User Capacity:    4,000,787,030,016 bytes [4.00 TB]
@@ -3106,7 +3106,7 @@ Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org
 === START OF INFORMATION SECTION ===
 Model Family:     Western Digital Red (SMR)
 Device Model:     WDC WD40EFAX-68JH4N1
-Serial Number:    WD-WXD2D534CJE9
+Serial Number:    WD-*CJE9
 LU WWN Device Id: 5 0014ee 2c07f84ea
 Firmware Version: 83.00A83
 User Capacity:    4,000,787,030,016 bytes [4.00 TB]
@@ -3214,7 +3214,7 @@ Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org
 === START OF INFORMATION SECTION ===
 Model Family:     Crucial/Micron Client SSDs
 Device Model:     CT480BX500SSD1
-Serial Number:    2422E8B6768C
+Serial Number:    *768C
 LU WWN Device Id: 5 00a075 1e8b6768c
 Firmware Version: M6CR056
 User Capacity:    480,103,981,056 bytes [480 GB]
@@ -3314,7 +3314,7 @@ Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org
 === START OF INFORMATION SECTION ===
 Model Family:     Crucial/Micron Client SSDs
 Device Model:     CT480BX500SSD1
-Serial Number:    2506E9A58162
+Serial Number:    *8162
 LU WWN Device Id: 5 00a075 1e9a58162
 Firmware Version: M6CR056
 User Capacity:    480,103,981,056 bytes [480 GB]
@@ -3412,7 +3412,7 @@ Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org
 === START OF INFORMATION SECTION ===
 Model Family:     Phison Driven OEM SSDs
 Device Model:     SATA SSD
-Serial Number:    19013024009545
+Serial Number:    *9545
 Firmware Version: SBFM61.3
 User Capacity:    240,057,409,536 bytes [240 GB]
 Sector Size:      512 bytes logical/physical
@@ -3503,7 +3503,7 @@ Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org
 === START OF INFORMATION SECTION ===
 Model Family:     WD Blue / Red / Green SSDs
 Device Model:     WD Blue SA510 2.5 500GB
-Serial Number:    244964803255
+Serial Number:    *3255
 LU WWN Device Id: 5 001b44 8c99c5bf4
 Firmware Version: 52046100
 User Capacity:    500,107,862,016 bytes [500 GB]
@@ -3607,7 +3607,7 @@ Copyright (C) 2002-25, Bruce Allen, Christian Franke, www.smartmontools.org
 
 === START OF INFORMATION SECTION ===
 Model Number:                       SPCC M.2 PCIe SSD
-Serial Number:                      AA2300905N401KG00206
+Serial Number:                      *0206
 Firmware Version:                   W0417B0
 PCI Vendor/Subsystem ID:            0x126f
 IEEE OUI Identifier:                0x486834
@@ -3742,7 +3742,7 @@ galactica-live
     product: pro499926 (To be filled by O.E.M.)
     vendor: Seneca
     version: 0123456789
-    serial: 1212363
+    serial: *2363
     width: 64 bits
     capabilities: smbios-2.7 dmi-2.7 smp vsyscall32
     configuration: boot=normal chassis=desktop family=To be filled by O.E.M. sku=To be filled by O.E.M. uuid=0f7ac40c-803b-0706-0cc4-7a0f3b800e0f
@@ -3752,7 +3752,7 @@ galactica-live
        vendor: Supermicro
        physical id: 0
        version: 1.11A
-       serial: ZM148S009088
+       serial: *9088
        slot: To be filled by O.E.M.
      *-firmware
           description: BIOS
@@ -3799,7 +3799,7 @@ galactica-live
              product: M391B1G73QH0-YK0
              vendor: Transcend
              physical id: 0
-             serial: 0014A62D
+             serial: *A62D
              slot: DIMM_1A
              size: 8GiB
              width: 64 bits
@@ -3809,7 +3809,7 @@ galactica-live
              product: HMT41GU7DFR8C-PB
              vendor: Transcend
              physical id: 1
-             serial: 0014A62D
+             serial: *A62D
              slot: DIMM_2A
              size: 8GiB
              width: 64 bits
@@ -3819,7 +3819,7 @@ galactica-live
              product: M391B1G73QH0-YK0
              vendor: Transcend
              physical id: 2
-             serial: 0014A62D
+             serial: *A62D
              slot: DIMM_1B
              size: 8GiB
              width: 64 bits
@@ -3829,7 +3829,7 @@ galactica-live
              product: HMT41GU7DFR8C-PB
              vendor: Transcend
              physical id: 3
-             serial: 0014A62D
+             serial: *A62D
              slot: DIMM_2B
              size: 8GiB
              width: 64 bits
@@ -3872,7 +3872,7 @@ galactica-live
                 bus info: pci@0000:01:00.0
                 logical name: /dev/nvme0
                 version: W0417B0
-                serial: AA2300905N401KG00206
+                serial: *0206
                 width: 64 bits
                 clock: 33MHz
                 capabilities: nvme pm msi pciexpress msix bus_master cap_list
@@ -4068,7 +4068,7 @@ galactica-live
                       physical id: 4
                       bus info: usb@2:1.4
                       version: 1.00
-                      serial: 04011cfba2fa4aeca70c44f3942ac6aced2de5431ac8fc84e4b3e0014f2fc0baf04f000000000000
+                      serial: *0000
                       capabilities: usb-2.10 scsi
                       configuration: driver=usb-storage maxpower=224mA speed=480Mbit/s
         *-pci:5

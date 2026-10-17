@@ -19,7 +19,9 @@ Dates are UTC.
 
 Read from photographs of the drives' own labels, 2026-08-07. Twelve, not the five
 an earlier revision of this file assumed — that count came from recollection and
-was low on every size class except 4 TB.
+was low on every size class except 4 TB. **Thirteen as of 2026-09-05**, when
+`h25-8SRC` surfaced — which is the same lesson a second time: the drawer's
+contents are known by reading them, not by remembering them.
 
 Reading off the label rather than over a USB dock sidesteps the bridge-masking
 problem described below, so these identifiers are trustworthy. **Recording
@@ -28,20 +30,22 @@ SMR section, which is the most consequential thing in this file.
 
 | ID | Device | Size | Full serial | Made | Rec. | Notes |
 |---|---|---|---|---|---|---|
-| `h-3V35` | **WD Red Plus** WD40EFPX-68C6CN0 | 4 TB | `WXM2D72D3V35` | 2022-10-12 | **CMR** | Hand-marked **“1”**. The only CMR 4 TB in the drawer. |
-| `h-CJE9-smr` | **WD Red** WD40EFAX-68JH4N1 | 4 TB | `WXD2D534CJE9` | 2023-07-03 | ⚠ SMR | Hand-marked **“2”** |
-| `h-CY72-smr` | **WD Red** WD40EFAX-68JH4N1 | 4 TB | `WXD2D534CY72` | 2023-07-03 | ⚠ SMR | Hand-marked **“3”** |
-| `h-QUTK-smr` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `WX52A20CQUTK` | 2020-02-25 | ⚠ SMR | |
-| `h-0X2T-smr` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `WX52A20C0X2T` | 2020-02-25 | ⚠ SMR | Same batch as `h-QUTK-smr` |
-| `h-SDCP` | **WD Blue** WD20EZRZ-00Z5HB0 | 2 TB | `WCC4M4CZSDCP` | 2017-06-27 | CMR | 5400 class |
-| ~~`h-8742`~~ | **Samsung Spinpoint F4EG** HD204UI | 2 TB | `S2H7JD2ZB08742` | 2010-11 | CMR | 📦 **ARCHIVAL — out of service, 2026-08-08.** Firmware defect, see below. Rev. A. Red `RAPTOR` case sticker. |
-| `h-5N8F` | **WD Black** WD1003FZEX-00MK2A0 | 1 TB | `WCC3F0VZ5N8F` | 2016-02-27 | CMR | 7200 rpm, 64 MB |
-| `h-NYXN` | **WD Blue** WD10EZEX-00BN5A0 | 1 TB | `WCC3F2NRNYXN` | 2015-05-01 | CMR | 7200 class |
-| `h-6D0X` | **WD Blue** WD10EZRZ-00HTKB0 | 1 TB | `WCC4J6NP6D0X` | 2017-03-19 | CMR | 5400 class. Serial char **confirmed 2026-08-10** — digit zero |
-| `h-AFYJ` | **Seagate Barracuda ES** ST3500630NS | 500 GB | `9QG9AFYJ` | 2008 (date code `08396`) | CMR | Still sealed in an antistatic bag. Firmware `3.AQN`, P/N `9BL146-038`. |
-| `h25-P4TH` | **Hitachi Travelstar 5K250** HTS542560K9SA00 | ⚠ 40 GB? | `WAG0P4TH` | 2009 (date code `4907`) | CMR | **2.5"**, hence `h25-`. Carries a `Microsoft P/N` field. ⚠ capacity, see below |
+| `h-3V35` | **WD Red Plus** WD40EFPX-68C6CN0 | 4 TB | `*3V35` | 2022-10-12 | **CMR** | Hand-marked **“1”**. The only CMR 4 TB in the drawer. |
+| `h-CJE9-smr` | **WD Red** WD40EFAX-68JH4N1 | 4 TB | `*CJE9` | 2023-07-03 | ⚠ SMR | Hand-marked **“2”** |
+| `h-CY72-smr` | **WD Red** WD40EFAX-68JH4N1 | 4 TB | `*CY72` | 2023-07-03 | ⚠ SMR | Hand-marked **“3”** |
+| `h-QUTK-smr` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `*QUTK` | 2020-02-25 | ⚠ SMR | |
+| `h-0X2T-smr` | **WD Red** WD20EFAX-68FB5N0 | 2 TB | `*0X2T` | 2020-02-25 | ⚠ SMR | Same batch as `h-QUTK-smr` |
+| `h-SDCP` | **WD Blue** WD20EZRZ-00Z5HB0 | 2 TB | `*SDCP` | 2017-06-27 | CMR | 5400 class |
+| ~~`h-8742`~~ | **Samsung Spinpoint F4EG** HD204UI | 2 TB | `*8742` | 2010-11 | CMR | 📦 **ARCHIVAL — out of service, 2026-08-08.** Firmware defect, see below. Rev. A. Red `RAPTOR` case sticker. |
+| `h-5N8F` | **WD Black** WD1003FZEX-00MK2A0 | 1 TB | `*5N8F` | 2016-02-27 | CMR | 7200 rpm, 64 MB |
+| `h-NYXN` | **WD Blue** WD10EZEX-00BN5A0 | 1 TB | `*NYXN` | 2015-05-01 | CMR | 7200 class |
+| `h-6D0X` | **WD Blue** WD10EZRZ-00HTKB0 | 1 TB | `*6D0X` | 2017-03-19 | CMR | 5400 class. Serial char **confirmed 2026-08-10** — digit zero |
+| `h-AFYJ` | **Seagate Barracuda ES** ST3500630NS | 500 GB | `*AFYJ` | 2008 (date code `08396`) | CMR | Still sealed in an antistatic bag. Firmware `3.AQN`, P/N `9BL146-038`. |
+| `h25-8SRC` | **WD Black** WD5000LPLX-66ZNTT1 | 500 GB | `*8SRC` | 2018-02-10 | CMR | **2.5", 7 mm**, 7200 rpm, hence `h25-`. HP OEM spare — see below. ⚠ untested |
+| `h25-P4TH` | **Hitachi Travelstar 5K250** HTS542560K9SA00 | ⚠ 40 GB? | `*P4TH` | 2009 (date code `4907`) | CMR | **2.5"**, hence `h25-`. Carries a `Microsoft P/N` field. ⚠ capacity, see below |
 
-**Aggregate: ~23.5 TB.** That is materially more than the ~12 TB this file
+**Aggregate: ~24.0 TB** (was ~23.5 TB before `h25-8SRC` was catalogued
+2026-09-05). That is materially more than the ~12 TB this file
 previously credited, which changes the staging arithmetic — see below.
 
 #### ⚠ Four of these are SMR, including two of the three 4 TB disks
@@ -136,13 +140,60 @@ exception from SMART polling to be safe.
 burn-in material. Anywhere this document or `hosts/galactica/` counts drawer
 capacity, `h-8742` does not count.
 
+#### `h25-8SRC` is an HP OEM drive — read the identity off the WD fields
+
+Catalogued 2026-09-05 from a label photograph. The drive carries **two
+manufacturers' identifiers at once**, and only one of them is its identity:
+
+| Field | Value | Whose |
+|---|---|---|
+| `S/N` | `*8SRC` | **WD — this is the identity** |
+| `MDL` | `WD5000LPLX-66ZNTT1` | WD |
+| `WWN` | `50014EE60B60B8BB` | WD |
+| `P/N` | `805754-002` | HP |
+| `SPARES NO.` | `916852-001`, and `916877-001` on a second sticker | HP |
+| `CT` | `*G3CW` | WD internal, not an identity |
+
+**Same rule as `m2-0627`** (the HP-OEM SanDisk in the M.2 table): the label
+prints `S/N:` explicitly, so that is what the identifier derives from, and the
+HP part and spares numbers are ignored. Recorded because an HP spares sticker
+is physically the most prominent thing on this label — it is a black overlay
+across the centre — and is exactly the field someone would reach for first.
+
+**What the label does settle.** The black HP sticker reads `500GB 7.2K 7mm
+SATA`, which confirms rotational speed and 7 mm z-height without needing the
+drive attached. WD Black mobile is a **CMR** line throughout — no SMR part was
+ever shipped in it — so the `CMR` above is a stronger inference than §1's
+method-1 caveat usually allows, though it is still an inference. The `AF` logo
+means Advanced Format: 4 K physical sectors, 512-byte emulated.
+
+**What it does not settle, and this is the whole question for this disk.** The
+label gives a manufacture date of **2018-02-10**, which is not a wear figure. A
+mobile WD Black is a drive that lived in a laptop, and an HP spares sticker
+does not distinguish an unused spare from a pull. Three SMART attributes decide
+whether this disk is worth anything, and all three need it attached:
+
+1. **`Power_On_Hours`** (attr 9) — the actual age. A 2018 drive with 500 hours
+   and one with 40,000 are not the same disk.
+2. **`Load_Cycle_Count`** (attr 193) — the specific killer for WD mobile
+   drives, which park heads aggressively on an idle timer and can burn through
+   a ~600 k rating far faster than their hours suggest.
+3. **`Reallocated_Sector_Ct`** (attr 5) — as for anything else here.
+
+```sh
+smartctl -a -d sat /dev/sdX          # -d sat: pierce a USB bridge, see below
+```
+
+Until those are read, this disk falls under this file's standing constraint
+like everything else: **an untested spare is a guess.**
+
 #### Label readings to confirm at attach time — one of two now closed
 
 Per `DISK-LABELLING.md`, a character that cannot be read confidently gets flagged
 rather than guessed — a confidently wrong suffix is worse than a missing one.
 
 - ~~**`h-6D0X`**~~ ✅ **Confirmed 2026-08-10 by the owner, holding the drive: the
-  glyph is a digit zero.** The full serial is `WCC4J6NP6D0X` and the identifier
+  glyph is a digit zero.** The full serial is `*6D0X` and the identifier
   `h-6D0X` stands as written — no reprint, no rename, and the caddy label is
   clear to print. Resolved at attach time exactly as this section intended.
 - **`h25-P4TH`** — the label reads **40 GB**, but the model number
@@ -155,7 +206,7 @@ rather than guessed — a confidently wrong suffix is worse than a missing one.
   because a 2.5" drive in a drawer of 3.5" drives is exactly the kind of thing
   that gets mislabelled — it takes `h25-`, not `h-` (`DISK-LABELLING.md` §1).
 
-  The full serial `9QG9AFYJ` on `h-AFYJ` has the same class of ambiguity in its
+  The full serial `*AFYJ` on `h-AFYJ` has the same class of ambiguity in its
   *third* character (`9` vs `3`, read differently across two photographs) — but
   that character is outside the four-char suffix, so the identifier is unaffected.
 
@@ -180,7 +231,7 @@ inventory only.
 | ID | Device | Size | Full serial | Notes |
 |---|---|---|---|---|
 | `m2-wtf?-kootion` | **KOOTION X15**, M.2 NVMe PCIe 3.0, length inferred 2280 | 256 GB | ⚠ **none found** | See below |
-| `m2-0627` | **SanDisk Z400s** (HP OEM), `SD8SMAT-032G-1006`, M.2 **2242** | 32 GB | `182186400627` | ⚠ **SATA, not NVMe** — B+M keyed, and the label carries the SERIAL ATA logo. `form: m2-sata`. |
+| `m2-0627` | **SanDisk Z400s** (HP OEM), `SD8SMAT-032G-1006`, M.2 **2242** | 32 GB | `*0627` | ⚠ **SATA, not NVMe** — B+M keyed, and the label carries the SERIAL ATA logo. `form: m2-sata`. |
 
 ⚠ **The KOOTION carries no usable serial.** The only alphanumeric on its rear
 sticker is `KB0001`, beside a QR code — six characters, and `0001` reads as unit
@@ -294,12 +345,14 @@ produced it was sound and only became irrelevant when a real number arrived:
   Protected tier, array-resident, not re-acquirable, no offsite copy — at
   **2.1 TiB**, with all non-media array data at 2.4 TiB.
 
-  **One disk covers it, and it is not one of these.** The parachute lands on
-  pegasus's `h-XDAS` (3 TB Toshiba, empty — `hosts/pegasus/HARDWARE-MAP.md`),
-  off-box, costing zero Tower SATA ports. **The 2 TB disks stay in this drawer
-  permanently**, not pending a migration window.
+  **One disk covers it, and it is not one of these.** The parachute was slated
+  for pegasus's `h-XDAS` (3 TB Toshiba — `hosts/pegasus/HARDWARE-MAP.md`) but
+  was never used: the migration went copy-back-from-`sidepool` instead
+  (`hosts/galactica/DECISIONS.md` §8's banner). **The 2 TB disks stay in this
+  drawer permanently**, not pending a migration window.
 
-  ⚠ **One exception, and it is a real one.** `DESIGN.md` §6.4 — the copy-based
+  ⚠ **One exception, and it is a real one.** `ARCHIVE-DESIGN-snapraid.md` §6.4
+  (extracted from `DESIGN.md`) — the copy-based
   fallback if in-place conversion proves impossible — genuinely does need bulk
   scratch, because there you are evacuating and reformatting 12 TB disks one at a
   time rather than converting them in place. **Aggregate drawer capacity still
@@ -310,9 +363,10 @@ produced it was sound and only became irrelevant when a real number arrived:
   sequence was three careful revisions of a number that never mattered to the path
   actually being taken. Measuring the real requirement took one command and
   replaced all of them.
-- **The photo tier.** Two 4 TB disks in btrfs raid1 remains the shape, but the
-  recording-technology split above means the pair cannot be all-CMR without
-  buying a disk. See the options table.
+- ~~**The photo tier.**~~ 🗑 **Superseded by the ZFS pivot** — photos live as
+  `tank/photos/*` datasets on galactica's RAIDZ1 array
+  (`hosts/galactica/DECISIONS.md` §7), so there is no separate two-disk btrfs
+  raid1 photo tier and the CMR-pair question no longer applies.
 
 ⚠ **Capacity is not the binding constraint on any of these; trust is.** Nothing
 in this drawer has been tested, several are a decade old, one has a known
@@ -325,10 +379,9 @@ number here.
 
 **No budget for a fifth 12 TB disk at present**, and the drive market makes rapid
 replacement of a failed one unlikely. Any Tower layout must therefore work with
-four, and the question of whether to hold one back as a cold spare is analysed in
-`hosts/galactica/DESIGN.md` §5.5 — the short version being that shelving a 12 TB
-costs 12 TB of usable capacity to buy protection that dual parity provides more
-cheaply.
+four — and the built one does: all four are in `tank`'s RAIDZ1, none held back
+as a cold spare (`hosts/galactica/DESIGN.md` §5.5's analysis argued the same
+way).
 
 **Test any disk before it is relied on as a spare**, and periodically thereafter.
 A full surface read/write. An untested spare is a guess, and the moment you

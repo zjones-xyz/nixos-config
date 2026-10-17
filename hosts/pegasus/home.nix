@@ -1,5 +1,10 @@
-{ config, pkgs, lib, claudeDesktop, orcaSlicerNewer, bambuStudioNewer, ... }:
+{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, pkgsApps, withBambuddyCa, ... }:
 
+let
+  # Built against pkgsApps, the nixpkgs Orca comes from, so the plugin's
+  # libstdc++/OpenSSL match the process that dlopens it.
+  openBambooNetworking = pkgsApps.callPackage ../../pkgs/open-bamboo-networking.nix { };
+in
 {
   imports = [
     ../../modules/home/common.nix
@@ -9,81 +14,96 @@
   home.username = "z";
   home.homeDirectory = "/home/z";
 
-  # Host-specific rebuild aliases (layered on top of the shared portable ones
-  # from modules/home/common.nix's home.shellAliases).
-  #
-  # home.shellAliases, NOT programs.bash.shellAliases: the login shell is
-  # bash, but modules/home/interactive-zsh.nix execs every interactive bash
-  # session straight into zsh before it ever reaches a prompt (matches
-  # Serenity's default shell) — so bash-specific aliases never actually took
-  # effect interactively. This was dead code since the very first authoring
-  # session; nobody had tested an interactive login until now. The
-  # shell-agnostic option applies to whichever shell is actually running.
+  home.sessionVariables = {
+    SOPS_AGE_KEY_FILE = "${config.home.homeDirectory}/.config/sops/age/keys.txt";
+  };
+
+  # Host-specific aliases, layered on modules/home/common.nix's shared set.
+  # home.shellAliases, NOT programs.bash.shellAliases — interactive-zsh.nix
+  # execs every interactive bash into zsh, so bash-specific aliases never fire.
   programs.bash.enable = true;
   #
-  # The ipmi-tower-* pair binds onto scripts/ipmi-remote.sh. ⚠ Kept identical
-  # to hosts/serenity/home.nix on purpose: `PLATFORM.md` §2 has both machines
-  # carrying the FreeIPMI toolset deliberately, "so neither one being down
-  # blocks recovering the other". Duplicated aliases are the cost of that, and
-  # are cheaper than a shared module that would make the pair co-dependent.
-  # Note the repo path differs between the two (~/nixos-config here,
-  # ~/Code/nixos-config on the Mac), so the strings cannot be shared verbatim
-  # anyway.
-  #
-  # towerbmc.internal resolves through an AdGuard DNS rewrite this repo does
-  # not declare — provisioned out-of-band 2026-08-09, same situation as
-  # serenity's unlock-pegasus alias. If it ever stops resolving, the BMC's raw
-  # address is 192.168.8.191 (§2), and swapping it means editing both files.
+  # ⚠ The ipmi-tower-*/unlock-* recovery aliases are deliberately duplicated
+  # with hosts/serenity/home.nix (different repo paths anyway), so neither
+  # admin box being down blocks recovering the others — hosts/galactica/
+  # PLATFORM.md §2 has the rationale and the raw BMC address fallback.
   home.shellAliases = {
     nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#pegasus";
     nrt = "sudo nixos-rebuild test --flake ~/nixos-config#pegasus";
     npull = "~/nixos-config/scripts/npull.sh";
+    # A script, not "npull && nrs" — an alias would put the PR number on nrs.
+    npullnrs = "~/nixos-config/scripts/npull-rebuild.sh nixos-rebuild pegasus";
     ipmi-tower = ''~/nixos-config/scripts/ipmi-remote.sh run towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-open-tty = ''~/nixos-config/scripts/ipmi-remote.sh console towerbmc.internal "op://System Keys/tower ipmi/password"'';
     ipmi-tower-set-bios-next-boot = ''~/nixos-config/scripts/ipmi-remote.sh bios-next-boot towerbmc.internal "op://System Keys/tower ipmi/password"'';
+    # "tower", not "galactica" — these aliases are about the physical box, and
+    # the fleet name / service name are deliberately decoupled (galactica's
+    # DECISIONS.md §2).
+    unlock-tower = ''~/nixos-config/scripts/luks-unlock-remote.sh tower.internal "op://System Keys/tower luks/password"'';
+    unlock-memory-alpha = ''~/nixos-config/scripts/luks-unlock-remote.sh memory-alpha.internal "op://System Keys/memory-alpha luks/password"'';
     dms-settings-snapshot = "~/nixos-config/scripts/dms-settings.sh snapshot";
     dms-settings-restore = "~/nixos-config/scripts/dms-settings.sh restore";
     dms-settings-diff = "~/nixos-config/scripts/dms-settings.sh diff";
-
-    # Ad-hoc `sops secrets/pegasus.yaml` edits from pegasus itself, without
-    # needing Serenity's admin age key. `.sops.yaml` already lists pegasus's
-    # own host SSH key (&pegasus) as a recipient for that file — the only
-    # real blocker is that /etc/ssh/ssh_host_ed25519_key is root-only, and
-    # plain `sops` doesn't know to look there. z already has passwordless
-    # sudo (wheel, security.sudo.wheelNeedsPassword in common.nix), so this
-    # just runs sops as root with the right identity pointed out, forwarding
-    # $EDITOR through explicitly since sudo resets the environment by
-    # default. Usage is identical to plain sops, e.g.
-    # `sops-hostkey secrets/pegasus.yaml`.
-    sops-hostkey = ''sudo env SOPS_AGE_SSH_PRIVATE_KEY_FILE=/etc/ssh/ssh_host_ed25519_key EDITOR="$EDITOR" sops'';
   };
 
   # ── Desktop apps ────────────────────────────────────────────────────────────
   # allowUnfree is already set globally in modules/nixos/common.nix, which
   # pegasus imports — vscode/google-chrome/vivaldi/1Password/discord/spotify/
-  # ticktick/obsidian/bambu-studio are all unfree and need it; firefox/
-  # ferdium/signal-desktop/openscad/orca-slicer/streamdeck-ui are free/open.
+  # obsidian/operaBrowser are all unfree and need it; firefox/signal-desktop/
+  # openscad/streamdeck-ui/floorp-bin/zenBrowser are free/open. `pkgsApps.*`
+  # (the nixpkgs-apps input, see flake.nix) is a separate instance with its
+  # own allowUnfree — ticktick and bambu-studio there are unfree. Browsers
+  # and web-facing Electron apps come from it too (DECISIONS.md: "Exposed
+  # apps on the fast lane").
   #
   # Brain.fm was left out — no nixpkgs package, no native Linux client
   # anywhere (subscription web app only); usable via firefox/chrome.
   home.packages = with pkgs; [
     sl # for the inevitable `sl` typo
     vscode
-    google-chrome
+    pkgsApps.google-chrome
     firefox
-    vivaldi
+    pkgsApps.vivaldi
+    # nixpkgs' upstream `floorp` was replaced with this prebuilt variant —
+    # building it from source became unfeasible starting with its 12.x line.
+    floorp-bin
     claude-code
+    antigravity
+    # Google's terminal coding agent, the CLI counterpart to claude-code
+    # above — nixpkgs' own npm-sourced build (gemini-cli-bin, the prebuilt
+    # binary variant, also exists but isn't used here for the same
+    # build-from-source-when-available reason claude-code isn't the -bin
+    # variant either).
+    gemini-cli
+    # ChatGPT desktop: nixpkgs' `chatgpt` package unpacks a .dmg and is
+    # darwin-only (see hosts/serenity, via modules/darwin/homebrew.nix) —
+    # OpenAI ships no official Linux client. The only Linux option is a
+    # third-party repackaging of the extracted macOS Electron app, which
+    # re-hosts a proprietary binary outside OpenAI's own build pipeline —
+    # not worth the trust trade for a client that's also just a browser tab
+    # away. Same call as Brain.fm below: web app via firefox/chrome.
 
-    discord
-    ferdium
-    signal-desktop
+    pkgsApps.discord
+    pkgsApps.ferdium
+    pkgsApps.signal-desktop
+    pkgsApps.slack
     openscad
     obsidian
     spotify
-    ticktick
+    # Ahead of nixpkgs-apps (8.0.11 on unstable) — drop once it catches up.
+    (pkgsApps.ticktick.overrideAttrs (finalAttrs: old: {
+      version = "8.0.20";
+      src = fetchurl {
+        url = "https://d2atcrkye2ik4e.cloudfront.net/download/linux/linux_deb_x64/ticktick-${finalAttrs.version}-amd64.deb";
+        hash = "sha256-+XDYvG0qR9P2S68Rd+z3RhLD/jvGB3a7nDyvj2awNGc=";
+      };
+    }))
     prusa-slicer
     jellyfin-desktop
     vlc
+
+    thunderbird
+    protonmail-bridge-gui
 
     # file managers
     nemo
@@ -112,6 +132,12 @@
     # ollama.nix's gaming-drain oneshot is actually freeing VRAM/compute.
     nvtopPackages.nvidia
 
+    # Monitor control over DDC/CI (brightness, input source, etc. from the
+    # CLI, no on-screen-display fumbling). Needs the hardware.i2c.enable
+    # wiring in hosts/pegasus/configuration.nix and the NVIDIA software-I2C
+    # registry fix in modules/nixos/nvidia.nix — see those for why.
+    ddcutil
+
     # IPMI/BMC out-of-band management client — ipmi-sensors, ipmipower,
     # ipmiconsole (SOL), bmc-info. Same toolset as on serenity. Pegasus is a
     # consumer desktop board with no BMC, so this is the LAN client for
@@ -127,6 +153,8 @@
     # FreeIPMI-not-ipmitool rationale.
     freeipmi
 
+    expect
+
     # Desktop GUI for Borg.
     vorta
 
@@ -134,22 +162,10 @@
     unzip
     p7zip
 
-    # RAR extraction. NOT covered by p7zip above: nixpkgs builds p7zip with
-    # `enableUnfree = false` by default, which strips the RAR codec out of the
-    # source tree entirely — so `7z x foo.rar` fails with "Can not open the
-    # file as archive" rather than a missing-plugin error, which is a
-    # confusing way to find out. libarchive/bsdtar handles some RAR3 but not
-    # RAR5 (the default since WinRAR 5.0), so it isn't a substitute either.
-    # unrar is the reference extractor and covers both.
-    #
-    # This also fixes RAR in Ark (the GUI, already present via the plasma6
-    # module's default app set — Dolphin's "Extract here" goes through it):
-    # Ark's cli plugin shells out to the `unrar` binary on $PATH and silently
-    # hides the format when it's absent.
-    #
-    # Unfree — the UnRAR license permits redistribution but forbids using the
-    # source to build a RAR *compressor*. allowUnfree is already on globally
-    # in modules/nixos/common.nix. Extract-only by design; use zip/7z to pack.
+    # RAR extraction — NOT covered by p7zip above (nixpkgs strips its RAR
+    # codec, so `7z x foo.rar` fails confusingly) nor by bsdtar (no RAR5).
+    # Also what makes RAR appear in Ark, whose cli plugin shells out to the
+    # `unrar` binary on $PATH. Unfree, extract-only by license.
     unrar
 
     # Winetricks operations scoped to a specific Proton prefix — common
@@ -175,6 +191,11 @@
     # programs.kitty below now (not here) — see that block for why.
     ghostty
 
+    # Terminal multiplexer — mosh (hosts/pegasus/configuration.nix) survives
+    # roaming/sleep but not a dropped SSH-adjacent connection outright; zellij
+    # keeps panes/sessions alive across either.
+    zellij
+
     # Doxie Q2 (DX320) scan management — the scanner itself needs no driver
     # (mounts as plain USB mass storage; Wi-Fi direct-to-cloud setup is the
     # one piece still gated behind the proprietary Mac/Windows app). naps2
@@ -188,8 +209,7 @@
     # module: it's in plasma6's default optionalPackages set, and this repo
     # never sets environment.plasma6.excludePackages). Zathura is the
     # deliberate lightweight/keyboard-driven alternative for quick reads under
-    # niri, added 2026-08-20 per Zoe's request — not a duplicate, a different
-    # tool for a different moment.
+    # niri — not a duplicate, a different tool for a different moment.
     zathura
 
     # wl-paste, for the swappy screenshot-annotation bind below — niri's own
@@ -198,17 +218,16 @@
     # niri-settings.nix.
     wl-clipboard
 
-    # ── Found on Serenity's /Applications, not yet replicated (2026-07-12) ────
+    # ── Replicated from Serenity's /Applications ──────────────────────────────
     calibre # ebook library management
-    # makemkv disabled 2026-08-25: makemkv.com origin returning Cloudflare 525
-    # (SSL handshake failed), blocking nrs. Re-enable once it's reachable again.
-    # makemkv # disc ripping, pairs with the jellyfin/vlc media stack
+    # makemkv parked: upstream's download origin is unreachable, which fails
+    # the source fetch and blocks nrs. Re-add once it fetches again.
     filebot # media file renaming/organizing, same media stack
     arduino-ide
     proton-vpn # renamed from protonvpn-gui upstream
     protonmail-desktop
     dropbox
-    zoom-us # NOT `zoom` — that's an unrelated Z-code/interactive-fiction player
+    pkgsApps.zoom-us # NOT `zoom` — that's an unrelated Z-code/interactive-fiction player
     prismlauncher # Minecraft — better-maintained than the bare official launcher on Linux
     zeal # offline API docs, the real Linux equivalent of Dash
     speedtest-cli
@@ -235,8 +254,8 @@
     v4l-utils
     webcamoid
 
-    # Alfred-style launchers (Alfred replacement research, 2026-07-12) — both
-    # installed to compare hands-on. See DECISIONS.md for the writeup: Albert
+    # Alfred-style launchers — both installed to compare hands-on. See
+    # DECISIONS.md for the writeup: Albert
     # relicensed to proprietary freeware at v0.21.0 (disputed legitimacy,
     # hence nixpkgs' license = unfree), Vicinae is GPL-3.0 and runs actual
     # Raycast extensions natively.
@@ -249,30 +268,80 @@
     # flake.nix — the FHS-wrapped variant, needed for MCP servers to work
     # (they shell out to npx/uvx/etc. expecting a standard FHS layout).
     claudeDesktop
-    # 02.05.00.67, with the real upstream withNvidiaGLWorkaround applied —
-    # fixes the blank Prepare/Preview build plate on this host's NVIDIA GPU.
-    # From the separate nixpkgs-bambu-studio input (see flake.nix); this
-    # flake's main nixpkgs pin predates both that version bump and the fix.
-    bambuStudioNewer
-    # 2.3.2 — this flake's main nixpkgs pin predates nixpkgs' 2.3.1 -> 2.3.2
-    # bump, so this comes from the separate nixpkgs-orca-slicer input
-    # instead (see flake.nix). Confirmed viewport already renders fine on
-    # this host's NVIDIA setup at 2.3.1, so no GL workaround needed here
-    # unlike bambuStudioNewer above.
-    orcaSlicerNewer
+    # Askimo — multi-LLM desktop chat client (ChatGPT/Claude/Gemini/Ollama),
+    # not in nixpkgs. askimoDesktop comes from pkgs/askimo.nix via
+    # home-manager.extraSpecialArgs in flake.nix — see that file's comment
+    # and pkgs/askimo.nix itself for why it's a hand-written derivation
+    # rather than a flake input like claudeDesktop above.
+    askimoDesktop
+    # Zen — no nixpkgs package at all. zenBrowser comes from the zen-browser
+    # flake input via home-manager.extraSpecialArgs in flake.nix — see that
+    # file's comment.
+    zenBrowser
+    # Opera — nixpkgs dropped its own `opera` derivation outright. operaBrowser
+    # comes from the opera-flake input (the same derivation, carried forward
+    # by a former nixpkgs maintainer) via home-manager.extraSpecialArgs in
+    # flake.nix.
+    operaBrowser
+    # withNvidiaGLWorkaround fixes the blank Prepare/Preview build plate on
+    # this host's NVIDIA GPU (nixpkgs#522161) — keep it.
+    (pkgsApps.bambu-studio.override { withNvidiaGLWorkaround = true; })
+    # No GL workaround (its Zink route regresses Orca; DECISIONS.md), but its
+    # WebKit pages render black on NVIDIA without this one variable. The
+    # Bambuddy CA is baked into the package; the variable is a thin wrapper.
+    (pkgs.symlinkJoin {
+      inherit (pkgsApps.orca-slicer) name meta;
+      paths = [ (withBambuddyCa "OrcaSlicer" pkgsApps.orca-slicer) ];
+      nativeBuildInputs = [ pkgs.makeWrapper ];
+      postBuild = ''
+        wrapProgram $out/bin/orca-slicer --set WEBKIT_DISABLE_DMABUF_RENDERER 1
+      '';
+    })
   ];
 
   # ── kitty: launch zsh directly, not the login shell ─────────────────────────
-  # Login shell stays bash (modules/nixos/common.nix — kept for predictable
-  # non-interactive `ssh z@host cmd` semantics, see interactive-zsh.nix) and
-  # every interactive bash session execs into zsh anyway, but that's a hop
-  # kitty doesn't need to take: pointing it at zsh directly skips it. Per
-  # Zoe's request, 2026-08-20. Package now comes from programs.kitty.package
-  # (default) instead of the plain home.packages entry — same store path,
-  # declared once instead of twice.
+  # Login shell stays bash (predictable non-interactive `ssh z@host cmd`
+  # semantics — interactive-zsh.nix) and interactive bash execs into zsh
+  # anyway; pointing kitty at zsh directly just skips that hop. But skipping
+  # the hop also skips the `export SHELL=zsh` that lives in that bash exec, so
+  # $SHELL would otherwise still read the inherited login-shell value (bash);
+  # set it explicitly here to match the shell kitty actually runs.
   programs.kitty = {
     enable = true;
     settings.shell = "${pkgs.zsh}/bin/zsh";
+    environment.SHELL = "${pkgs.zsh}/bin/zsh";
+
+    # ── tmux-style directional splits ─────────────────────────────────────────
+    # `splits` leads enabled_layouts: it is the startup layout, and
+    # --location=hsplit/vsplit are ignored by every other layout. `*` keeps the
+    # rest reachable by name. --cwd=current makes a pane inherit the cwd, not
+    # $HOME. The arrows and ctrl+shift+l shadow stock binds, each of which
+    # keeps a fallback — DECISIONS.md has the key audit.
+    settings.enabled_layouts = "splits,*";
+    keybindings = {
+      "ctrl+shift+d" = "launch --location=hsplit --cwd=current";
+      "ctrl+shift+backslash" = "launch --location=vsplit --cwd=current";
+      "ctrl+shift+left" = "neighboring_window left";
+      "ctrl+shift+right" = "neighboring_window right";
+      "ctrl+shift+up" = "neighboring_window up";
+      "ctrl+shift+down" = "neighboring_window down";
+
+      # Rebound from kitty's own ctrl+shift+f3 — keeps the palette off the
+      # F-key row and matches the Alt+Space launcher bind above.
+      "ctrl+shift+space" = "command_palette";
+
+      # Layout switching. ctrl+shift+l replaces stock next_layout with a
+      # two-state zoom flip; the jumps are bound rather than left to the
+      # palette because only a mapped binding carries its argument there.
+      "ctrl+shift+l" = "toggle_layout stack";
+      "ctrl+shift+m>s" = "goto_layout splits";
+      "ctrl+shift+m>t" = "goto_layout tall";
+      "ctrl+shift+m>f" = "goto_layout fat";
+      "ctrl+shift+m>g" = "goto_layout grid";
+      "ctrl+shift+m>v" = "goto_layout vertical";
+      "ctrl+shift+m>h" = "goto_layout horizontal";
+      "ctrl+shift+m>k" = "goto_layout stack";
+    };
   };
 
   # ── Screenshot annotation (swappy) ──────────────────────────────────────────
@@ -318,35 +387,39 @@
     };
 
     # vicinae-toggle's binding, explicit — NOT via X-KDE-Shortcuts on the
-    # desktop entry below (see xdg.desktopEntries.vicinae-toggle for why:
-    # unreliable auto-application, confirmed hands-on 2026-07-13 — it also
-    # has the side effect of resetting *other* services' shortcuts, like
-    # krunner above, back to their compiled-in defaults whenever ksycoca
-    # gets rebuilt). Writing kglobalshortcutsrc explicitly is the one
-    # mechanism proven reliable throughout this whole saga.
+    # desktop entry below: that auto-application is unreliable AND resets
+    # other services' shortcuts whenever ksycoca rebuilds. Writing
+    # kglobalshortcutsrc explicitly is the one mechanism proven reliable.
     shortcuts."services/vicinae-toggle.desktop" = {
       _launch = "Alt+Space";
     };
   };
 
-  # Vicinae has no built-in global-shortcut support at all (confirmed via
-  # its own docs/FAQ) — by design, you're expected to bind the DE's own
-  # shortcut mechanism to its CLI toggle.
-  #
-  # NOT plasma-manager's programs.plasma.hotkeys.commands — confirmed real,
-  # reproduced hands-on (2026-07-13): it synthesizes a hidden multi-action
-  # desktop entry, and KGlobalAccel doesn't actually invoke the specific
-  # named action tied to the shortcut — it launches the entry's main (empty)
-  # Exec instead, producing exactly the "app flashes briefly in the
-  # taskbar, keybind doesn't work" symptom from the open upstream issue
-  # nix-community/plasma-manager#571. Confirmed via a clean A/B test:
-  # binding the same command through System Settings' native "Add Custom
-  # Shortcut" flow (Plasma 6.1+) worked with zero glitching.
-  #
-  # This is a plain, standalone, single-Exec desktop entry — same mechanism
-  # real KDE apps use for their own default shortcuts — but the shortcut
-  # itself is bound explicitly above via programs.plasma.shortcuts, not
-  # X-KDE-Shortcuts here (see that comment for why).
+  # ── Default browser: Vivaldi ───────────────────────────────────────────────
+  # Nothing in the fleet defined a default browser, so links from other apps
+  # had no handler at all. The desktop id is `vivaldi-stable.desktop`, not
+  # `vivaldi.desktop`: nixpkgs rewrites the contents of the .deb's desktop
+  # file but never renames it. Pairs with the Mod+B bind in niri-settings.nix.
+  xdg.mimeApps =
+    let
+      vivaldi = [ "vivaldi-stable.desktop" ];
+    in
+    {
+      enable = true;
+      defaultApplications = {
+        "text/html" = vivaldi;
+        "x-scheme-handler/http" = vivaldi;
+        "x-scheme-handler/https" = vivaldi;
+        "x-scheme-handler/about" = vivaldi;
+        "x-scheme-handler/unknown" = vivaldi;
+      };
+    };
+
+  # Vicinae has no built-in global-shortcut support by design — the DE's own
+  # shortcut mechanism binds its CLI toggle. A plain single-Exec desktop
+  # entry, deliberately NOT plasma-manager's hotkeys.commands (broken:
+  # nix-community/plasma-manager#571 — see DECISIONS.md); the shortcut is
+  # bound explicitly above via programs.plasma.shortcuts.
   xdg.desktopEntries.vicinae-toggle = {
     name = "Vicinae Toggle";
     type = "Application";
@@ -380,6 +453,9 @@
   # -restore/-diff above.
   home.activation.seedDmsSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     DMS_DIR="$HOME/.config/DankMaterialShell"
+    # session.json lives under XDG_STATE_HOME, not XDG_CONFIG_HOME — see
+    # scripts/dms-settings.sh for what it holds and why it is checkpointed.
+    DMS_STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/DankMaterialShell"
     CHECKPOINTS="$HOME/nixos-config/hosts/pegasus"
 
     if [ ! -e "$DMS_DIR/settings.json" ] && [ -e "$CHECKPOINTS/dms-settings.json" ]; then
@@ -390,6 +466,45 @@
     if [ ! -e "$DMS_DIR/plugin_settings.json" ] && [ -e "$CHECKPOINTS/dms-plugin-settings.json" ]; then
       $DRY_RUN_CMD mkdir -p "$DMS_DIR"
       $DRY_RUN_CMD cp "$CHECKPOINTS/dms-plugin-settings.json" "$DMS_DIR/plugin_settings.json"
+    fi
+
+    if [ ! -e "$DMS_STATE_DIR/session.json" ] && [ -e "$CHECKPOINTS/dms-session.json" ]; then
+      $DRY_RUN_CMD mkdir -p "$DMS_STATE_DIR"
+      $DRY_RUN_CMD cp "$CHECKPOINTS/dms-session.json" "$DMS_STATE_DIR/session.json"
+    fi
+  '';
+
+  # ── OrcaSlicer: open-bamboo-networking instead of Bambu's plugin ──────────
+  # Bambu's stock network plugin aborts Orca 2.4.2 at startup (DECISIONS.md).
+  # Orca dlopens plugins/libbambu_networking_<network_plugin_version>.so from
+  # its data dir, so the open build is linked there and OrcaSlicer.conf is
+  # pointed at it. Orca owns that file, so only these keys are set, and only
+  # once it exists. Run book: MANUAL-STEPS.md §29.
+  xdg.configFile = lib.listToAttrs (map (so: {
+    name = "OrcaSlicer/plugins/${so}";
+    value.source = "${openBambooNetworking}/plugins/${so}";
+  }) [
+    "libbambu_networking_${openBambooNetworking.pluginVersion}.so"
+    "libBambuSource.so"
+    "liblive555.so"
+  ]);
+
+  home.activation.orcaNetworkPlugin = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    conf="${config.xdg.configHome}/OrcaSlicer/OrcaSlicer.conf"
+    if [ -f "$conf" ]; then
+      tmp=$(mktemp)
+      # network_plugin_skipped_versions is a ';'-joined string, not an array.
+      ${pkgs.jq}/bin/jq --arg v "${openBambooNetworking.pluginVersion}" '
+        .app.installed_networking = "true"
+        | .app.network_plugin_version = $v
+        | .app.network_plugin_remind_later = "true"
+        | .app.update_network_plugin = "false"
+        | if (.app.network_plugin_skipped_versions | type) == "string"
+          then .app.network_plugin_skipped_versions |=
+            (split(";") | map(select(. != "" and . != $v)) | join(";"))
+          else . end
+      ' "$conf" > "$tmp"
+      if cmp -s "$tmp" "$conf"; then rm -f "$tmp"; else $DRY_RUN_CMD mv "$tmp" "$conf"; fi
     fi
   '';
 

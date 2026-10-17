@@ -8,7 +8,9 @@ let
 
     services:
       arcane:
-        image: ghcr.io/getarcaneapp/manager:v2.3.2
+        # Keep in lockstep with the edge-agent tag (modules/nixos/arcane-agent.nix):
+        # agents track the manager release, so bump both together.
+        image: ghcr.io/getarcaneapp/manager:v2.10.1
         container_name: arcane
         restart: unless-stopped
         # Improves the manager's own container/resource self-detection.
@@ -37,7 +39,7 @@ let
           - "traefik.http.routers.arcane.rule=Host(`arcane.memory-alpha.internal`)"
           - "traefik.http.routers.arcane.entrypoints=websecure"
           - "traefik.http.routers.arcane.tls=true"
-          - "traefik.http.routers.arcane-dev.rule=Host(`arcane.memory-alpha.zjones.dev`)"
+          - "traefik.http.routers.arcane-dev.rule=Host(`arcane.monitor.zjones.dev`)"
           - "traefik.http.routers.arcane-dev.entrypoints=websecure"
           - "traefik.http.routers.arcane-dev.tls.certresolver=letsencrypt"
           - "traefik.http.routers.arcane-dev.service=arcane"

@@ -26,7 +26,7 @@
 # change here too. Everything each module actually *contains*
 # (hosts/<host>/configuration.nix, home.nix, hardware-configuration.nix) is
 # still owned by exactly one file, same as before.
-{ self, nixpkgs, home-manager, sops-nix, nixos-hardware, dank-material-shell, plasma-manager, niri-flake, claude-desktop-debian, nixpkgs-orca-slicer, nixpkgs-bambu-studio }:
+{ self, nixpkgs, home-manager, sops-nix, nixos-hardware, dank-material-shell, plasma-manager, niri-flake, claude-desktop-debian, nixpkgs-apps, zen-browser, opera-flake, nixflix, dr460nized-src, window-title-applet-src, withBambuddyCa }:
 
 {
   meta = {
@@ -50,6 +50,8 @@
     # flake.nix's `specialArgs = { inherit self; };` on every
     # `nixosSystem` call.
     specialArgs = { inherit self; };
+    # pegasus's `nixosSystem` also passes the two non-flake theme sources.
+    nodeSpecialArgs.pegasus = { inherit self dr460nized-src window-title-applet-src; };
 
     # ── Distributed builds: hopper/hamilton's aarch64 closures build on
     # pegasus, not the machine running `colmena apply` ────────────────────────
@@ -91,11 +93,11 @@
   # ── pegasus ─────────────────────────────────────────────────────────────────
   # Mirrors flake.nix's `nixosConfigurations.pegasus` module list exactly,
   # including the DankMaterialShell module and the HM sharedModules/
-  # extraSpecialArgs/backupFileExtension block — pegasus's home.nix imports
-  # niri-settings.nix and reaches for `claudeDesktop`/`orcaSlicerNewer`/
-  # `bambuStudioNewer`, all of which only exist via that block. Omitting it
-  # here would make `colmena apply --on pegasus` build a materially different
+  # extraSpecialArgs/backupFileExtension block — pegasus's home.nix reaches
+  # for `claudeDesktop`/`pkgsApps`/etc., which only exist via that block.
+  # Omitting it would make `colmena apply --on pegasus` build a different
   # (broken) closure than `nixos-rebuild switch --flake .#pegasus` does.
+  # Keep in sync with flake.nix by hand (see header).
   pegasus = {
     deployment = {
       targetHost = "pegasus.internal";
@@ -114,57 +116,58 @@
         ];
         home-manager.extraSpecialArgs = {
           claudeDesktop = claude-desktop-debian.packages.x86_64-linux.claude-desktop-fhs;
-          orcaSlicerNewer = nixpkgs-orca-slicer.legacyPackages.x86_64-linux.orca-slicer;
-          bambuStudioNewer =
-            (import nixpkgs-bambu-studio {
-              system = "x86_64-linux";
-              config.allowUnfree = true;
-            }).bambu-studio.override
-              {
-                withNvidiaGLWorkaround = true;
-              };
+          pkgsApps = import nixpkgs-apps {
+            system = "x86_64-linux";
+            config.allowUnfree = true;
+          };
+          askimoDesktop = nixpkgs.legacyPackages.x86_64-linux.callPackage ./pkgs/askimo.nix { };
+          zenBrowser = zen-browser.packages.x86_64-linux.default;
+          operaBrowser = opera-flake.packages.x86_64-linux.opera.overrideAttrs (old: rec {
+            version = "135.0.5973.133";
+            src = nixpkgs.legacyPackages.x86_64-linux.fetchurl {
+              url = "https://download3.operacdn.com/ftp/pub/opera/desktop/${version}/linux/opera-stable_${version}_amd64.deb";
+              hash = "sha256-EAmqAX4XKllVk1bN8sNBRcetUhIA0huoIu4jVNMlb0k=";
+            };
+          });
+          inherit withBambuddyCa;
         };
         home-manager.backupFileExtension = "pre-declarative-niri-config";
       }
     ];
   };
 
-  # ── galactica — NOT YET IN THE HIVE ───────────────────────────────────────
-  # There is no `hosts/galactica/configuration.nix` and no
-  # `nixosConfigurations.galactica` in flake.nix as of this writing —
-  # hosts/galactica/README.md is explicit that this is deliberate (the
-  # storage layout isn't settled yet; see its DECISIONS.md decision 3). This
-  # file can't reference a module that doesn't exist, so there's no galactica
-  # node below, and `colmena apply`/`--on @fleet` today really does mean
-  # "all four real hosts" — there's no fifth one being silently skipped.
-  #
-  # Once `hosts/galactica/configuration.nix` and `nixosConfigurations.
-  # galactica` land, add its node here in the same shape as the others:
-  #
-  #   galactica = {
-  #     deployment = {
-  #       # tower.internal, NOT galactica.internal — the AdGuard rewrite that
-  #       # keeps the old Tower/Unraid hostname resolving to this box is the
-  #       # fleet's actual DNS story for it (see galactica's DECISIONS.md
-  #       # decision on naming); nothing answers to `galactica.internal`.
-  #       targetHost = "tower.internal";
-  #       targetUser = "z";
-  #       # Deliberately NOT tagged "fleet": galactica is periodically
-  #       # LUKS-locked at boot (initrd SSH unlock on :2222 — see
-  #       # scripts/luks-unlock-remote.sh / the `unlock-tower` aliases), and
-  #       # plain SSH to :22 simply times out until someone unlocks it —
-  #       # expected, not a deploy failure. `colmena apply --on @fleet`
-  #       # then skips it for exactly that reason; deploy to it explicitly
-  #       # (`colmena apply --on galactica`, or `--on @luks-locked`) once
-  #       # it's confirmed unlocked and reachable.
-  #       tags = [ "luks-locked" ];
-  #     };
-  #     imports = [
-  #       ./hosts/galactica/configuration.nix
-  #       home-manager.nixosModules.home-manager
-  #       sops-nix.nixosModules.sops
-  #     ];
-  #   };
+  # ── galactica ───────────────────────────────────────────────────────────────
+  galactica = {
+    deployment = {
+      # tower.internal, NOT galactica.internal — the AdGuard rewrite that keeps
+      # the old Tower hostname resolving to this box is the fleet's DNS story
+      # for it (hosts/galactica/DECISIONS.md §2).
+      targetHost = "tower.internal";
+      targetUser = "z";
+      # Deliberately NOT tagged "fleet": galactica is periodically LUKS-locked
+      # at boot (initrd SSH unlock on :2222, scripts/luks-unlock-remote.sh) and
+      # plain SSH to :22 times out until someone unlocks it — expected, not a
+      # deploy failure. `--on @fleet` skips it; deploy to it explicitly
+      # (`--on galactica`, or `--on @luks-locked`) once unlocked.
+      tags = [ "luks-locked" ];
+    };
+    imports = [
+      ./hosts/galactica/configuration.nix
+      home-manager.nixosModules.home-manager
+      sops-nix.nixosModules.sops
+      # Mirrors flake.nix's patched nixflix import (see the comment there).
+      {
+        imports = [
+          (import "${nixpkgs.legacyPackages.x86_64-linux.applyPatches {
+            name = "nixflix-patched";
+            src = nixflix;
+            patches = [ ./hosts/galactica/nixflix-allowedhosts.patch ];
+          }}/modules")
+          nixflix.inputs.vpn-confinement.nixosModules.default
+        ];
+      }
+    ];
+  };
 
   # ── hopper (Raspberry Pi 4) ─────────────────────────────────────────────────
   hopper = {
@@ -200,15 +203,11 @@
 }
 
 # ── Running it ───────────────────────────────────────────────────────────────
-#   colmena apply --on @fleet    # routine deploy — every host in the hive
-#   colmena apply                # same, today — no untagged host to skip yet
+#   colmena apply --on @fleet    # routine deploy — every host except galactica
+#   colmena apply --on galactica # galactica, once it is unlocked and reachable
 #   colmena apply --on pegasus   # single host, by name (globs work too: hop*)
 #
 # `--on` only supports positive selection (names, globs, `@tag`) — Colmena has
-# no `!host`/negation syntax as of the version current when this was written
-# (2026-08). `@fleet` vs plain `colmena apply` are equivalent right now (every
-# node is tagged `fleet`) but stop being equivalent the moment galactica's
-# node is added above with the `luks-locked` tag instead — at that point
-# `--on @fleet` becomes the routine, galactica-skipping command and plain
-# `colmena apply` starts trying (and, until unlocked, failing) to reach it
-# too. Reach for `@fleet` by habit once that lands.
+# no `!host`/negation syntax. Plain `colmena apply` targets everything,
+# including galactica (which fails until unlocked while LUKS-locked), so reach
+# for `@fleet` by habit.
