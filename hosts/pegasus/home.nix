@@ -52,16 +52,18 @@ in
   # obsidian/operaBrowser are all unfree and need it; firefox/signal-desktop/
   # openscad/streamdeck-ui/floorp-bin/zenBrowser are free/open. `pkgsApps.*`
   # (the nixpkgs-apps input, see flake.nix) is a separate instance with its
-  # own allowUnfree — ticktick and bambu-studio there are unfree.
+  # own allowUnfree — ticktick and bambu-studio there are unfree. Browsers
+  # and web-facing Electron apps come from it too (DECISIONS.md: "Exposed
+  # apps on the fast lane").
   #
   # Brain.fm was left out — no nixpkgs package, no native Linux client
   # anywhere (subscription web app only); usable via firefox/chrome.
   home.packages = with pkgs; [
     sl # for the inevitable `sl` typo
     vscode
-    google-chrome
+    pkgsApps.google-chrome
     firefox
-    vivaldi
+    pkgsApps.vivaldi
     # nixpkgs' upstream `floorp` was replaced with this prebuilt variant —
     # building it from source became unfeasible starting with its 12.x line.
     floorp-bin
@@ -81,10 +83,10 @@ in
     # not worth the trust trade for a client that's also just a browser tab
     # away. Same call as Brain.fm below: web app via firefox/chrome.
 
-    discord
+    pkgsApps.discord
     pkgsApps.ferdium
-    signal-desktop
-    slack
+    pkgsApps.signal-desktop
+    pkgsApps.slack
     openscad
     obsidian
     spotify
@@ -225,7 +227,7 @@ in
     proton-vpn # renamed from protonvpn-gui upstream
     protonmail-desktop
     dropbox
-    zoom-us # NOT `zoom` — that's an unrelated Z-code/interactive-fiction player
+    pkgsApps.zoom-us # NOT `zoom` — that's an unrelated Z-code/interactive-fiction player
     prismlauncher # Minecraft — better-maintained than the bare official launcher on Linux
     zeal # offline API docs, the real Linux equivalent of Dash
     speedtest-cli
