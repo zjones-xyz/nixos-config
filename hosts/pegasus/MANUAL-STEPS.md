@@ -975,3 +975,31 @@ quiet: the mic's input volume was low, and the default strength (100 dB)
 damped speech too. Both were fixed from the tray. These settings are runtime
 state, not Nix: HushMic keeps the strength per mic in
 `~/.config/hushmic/config.toml`, and WirePlumber remembers the input volume.
+
+## #190 Audio/webcam self-test — verify on the next switch
+
+`modules/nixos/av-selftest.nix` runs on every switch and fails
+`av-selftest.service` if audio or the webcam is broken. Rationale:
+DECISIONS.md, "Audio/webcam self-test on every switch".
+
+1. [ ] Switch with `nrs` from inside the desktop session (otherwise the test
+       logs "skipped" and passes without checking anything), then confirm the
+       test ran and passed:
+       ```sh
+       journalctl -u av-selftest -n 5
+       ```
+       It should end with `audio and webcam OK`.
+2. [ ] Check that a failure shows up. Stop HushMic and run the unit by hand:
+       ```sh
+       systemctl --user stop hushmic
+       sudo systemctl start av-selftest
+       systemctl status av-selftest
+       systemctl --user start hushmic
+       ```
+       After about 20 s the unit should be `failed`, listing
+       `hushmic.service is inactive` and `HushMic source missing`.
+3. [ ] Clear the failed state step 2 left behind (it would otherwise sit in
+       `systemctl --failed` until the next switch):
+       ```sh
+       sudo systemctl start av-selftest
+       ```
