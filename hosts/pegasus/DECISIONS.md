@@ -1452,6 +1452,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   newer glibc), but it is the first suspect if one of these apps stops
   rendering. The remaining Electron apps (discord, slack, signal-desktop,
   obsidian, …) stay on the shared nixpkgs; moving one is a one-word change.
+  **Superseded 2026-10-17:** discord, slack and signal-desktop moved to
+  `nixpkgs-apps` with the browsers and zoom-us — see "Exposed apps on the
+  fast lane" below.
   Validated by eval; real switch: MANUAL-STEPS §27.
   *Found on the hardware, 2026-10-11 (6.18.45):*
   - **OrcaSlicer 2.4.2's WebKit pages render black on NVIDIA** (Home page,
@@ -1613,14 +1616,20 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
 - **Exposed apps on the fast lane, 2026-10-16** — browsers and web-facing
   Electron apps carry the most attack surface on this host, so they join
   `pkgsApps`: vivaldi, google-chrome, discord, slack, signal-desktop and
-  zoom-us. All are prebuilt upstream binaries, so unstable costs no local
-  builds. Firefox stays on `pkgs`, because stable backports its security
-  releases.
+  zoom-us. Five are prebuilt upstream binaries; signal-desktop builds from
+  source, but Hydra caches it, so none of the six builds locally. Firefox
+  stays on `pkgs`, because stable backports its security releases.
   *Speed comes from cadence, not channel.* An app is only as fresh as
   `flake.lock`, which was bumped by hand. `.github/workflows/update-apps.yml`
   now bumps `nixpkgs-apps`, `zen-browser`, `opera-flake` and
   `claude-desktop-debian` twice a week and opens a PR. Merging and switching
   stay manual. `nixpkgs`, the kernel and service inputs stay out of it.
+  *Cost of each bump:* `nixpkgs-apps` also carries things pegasus builds
+  itself. OrcaSlicer recompiles locally whenever a bump moves it, because
+  the Bambuddy CA append (#166) is an `overrideAttrs`. open-bamboo-networking
+  and HushMic build against it too. Budget that time at switch. A newer
+  Signal, Slack or Discord can also upgrade its profile on first run, so
+  rolling back past a bump may leave the app unable to open it.
   *Why not nixpkgs master:* it has no Hydra cache and no channel testing. It
   would be days faster at best, at the cost of local builds and untested
   revisions. For Electron apps the vendor picks the bundled Chromium anyway,
