@@ -29,8 +29,9 @@ let
         exit 0
       fi
 
-      captures() { # target → true if a 1 s recording returns any samples
-        [ "$(timeout 1 pw-record --target "$1" - 2>/dev/null | wc -c)" -gt 0 ]
+      captures() { # [target] → true if 1 s of recording delivers any audio
+        # --raw: the default container writes a header even when nothing flows.
+        [ "$( (timeout 1 pw-record --raw ''${1:+--target "$1"} - 2>/dev/null || true) | wc -c)" -gt 0 ]
       }
 
       has_node() { # jq condition on a node's props
@@ -45,14 +46,14 @@ let
         graph=$(pw-dump 2>/dev/null || echo '[]')
         wpctl inspect @DEFAULT_AUDIO_SINK@ >/dev/null 2>&1 || failures+=("no default audio output")
         wpctl inspect @DEFAULT_AUDIO_SOURCE@ >/dev/null 2>&1 || failures+=("no default microphone")
-        captures @DEFAULT_AUDIO_SOURCE@ || failures+=("default microphone records nothing")
+        captures || failures+=("no audio from the default microphone")
         ${lib.optionalString pw.pulse.enable ''
           pactl get-default-source >/dev/null 2>&1 || failures+=("PulseAudio (pipewire-pulse) not answering")
         ''}
         ${lib.optionalString hasHushmic ''
           # pw-record falls back to the default mic for a missing target, so check the node first.
           if has_node '."node.name" == "hushmic_source"'; then
-            captures hushmic_source || failures+=("HushMic source records nothing")
+            captures hushmic_source || failures+=("no audio from the HushMic source")
           else
             failures+=("HushMic source missing")
           fi

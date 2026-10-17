@@ -982,7 +982,8 @@ state, not Nix: HushMic keeps the strength per mic in
 `av-selftest.service` if audio or the webcam is broken. Rationale:
 DECISIONS.md, "Audio/webcam self-test on every switch".
 
-1. [ ] Switch with `nrs` while logged in to the desktop, then confirm the
+1. [ ] Switch with `nrs` from inside the desktop session (otherwise the test
+       logs "skipped" and passes without checking anything), then confirm the
        test ran and passed:
        ```sh
        journalctl -u av-selftest -n 5
@@ -997,3 +998,8 @@ DECISIONS.md, "Audio/webcam self-test on every switch".
        ```
        After about 20 s the unit should be `failed`, listing
        `hushmic.service is inactive` and `HushMic source missing`.
+3. [ ] Clear the failed state step 2 left behind (it would otherwise sit in
+       `systemctl --failed` until the next switch):
+       ```sh
+       sudo systemctl start av-selftest
+       ```

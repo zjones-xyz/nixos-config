@@ -1617,9 +1617,13 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   "HushMic" source existed and the app set to use it got no input. Every unit
   the switch did touch came back `active`, so it reported no problem.
   The self-test checks, as `z`: the PipeWire user units (plus `hushmic`)
-  are active, a default output and mic exist, the default mic and HushMic
-  each record samples, `pipewire-pulse` answers `pactl`, and there is a
-  `/dev/v4l/by-id/*-video-index0` webcam and a PipeWire `Video/Source` node.
+  are active, a default output and mic exist, audio actually flows from the
+  default mic and from HushMic, `pipewire-pulse` answers `pactl`, and there
+  is a `/dev/v4l/by-id/*-video-index0` webcam and a PipeWire `Video/Source`
+  node. "Flows" means a 1 s `pw-record --raw` returns any bytes. `--raw`
+  matters: the default container writes a header even when no audio is
+  linked. The check proves data moves, not that the room is loud, so
+  silence passes but a wedged node fails.
   It retries for about 20 s while the restarted units settle.
   *Hook:* a system oneshot `wantedBy` and `before`
   `sysinit-reactivation.target`. Every switch restarts that target, after
@@ -1629,6 +1633,18 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   with `systemctl status` showing the failure list. It also makes
   `nixos-rebuild` exit 4, NixOS's usual "switched, but a unit failed". The
   target never starts at boot, so the test does not run then.
+  *Blind spot:* "before the system units restart" includes Home Manager
+  (`home-manager-z.service`), plus udev and any system service. An audio
+  change made through `home.nix`, or one at the system level, takes effect
+  after the test has passed on the old state. The test catches it on the
+  next switch. The NixOS user units (`pipewire`, `hushmic`, …), which broke
+  here, are already current when the test runs.
+  *Webcam unplugged = failure, accepted:* the C920 is a USB camera, and a
+  switch with it unplugged ends in "units failed" and exit 4. On this desk it
+  stays plugged in, so a missing camera is worth flagging.
+  A failed run leaves `av-selftest.service` `failed` (in `systemctl
+  --failed` and any status widget) until the next switch, or until a manual
+  `sudo systemctl start av-selftest` passes.
   The test reads only the webcam's device node and the PipeWire graph. It
   never opens a video stream, so it can't collide with an app using the
   camera. Skipped when `z` has no graphical session.
