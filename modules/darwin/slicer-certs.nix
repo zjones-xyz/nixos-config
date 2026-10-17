@@ -9,7 +9,7 @@ in
   # The casks' printer.cer is the only store the slicers trust printers from,
   # and a cask upgrade replaces it, so every switch re-appends the CA if it's
   # missing. Runs after `brew bundle`. Failures (e.g. no App Management
-  # permission) only warn. Setup and caveats: hosts/serenity/MANUAL-STEPS.md §2.
+  # permission) only warn. Setup and caveats: hosts/serenity/MANUAL-STEPS.md §#166.
   system.activationScripts.postActivation.text = ''
     # The CA's first base64 line covers its random serial, so it identifies it.
     marker=$(sed -n 2p ${ca})

@@ -1452,6 +1452,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   newer glibc), but it is the first suspect if one of these apps stops
   rendering. The remaining Electron apps (discord, slack, signal-desktop,
   obsidian, …) stay on the shared nixpkgs; moving one is a one-word change.
+  **Superseded 2026-10-17:** discord, slack and signal-desktop moved to
+  `nixpkgs-apps` with the browsers and zoom-us — see "Exposed apps on the
+  fast lane" below.
   Validated by eval; real switch: MANUAL-STEPS §27.
   *Found on the hardware, 2026-10-11 (6.18.45):*
   - **OrcaSlicer 2.4.2's WebKit pages render black on NVIDIA** (Home page,
@@ -1475,10 +1478,179 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
     verification". Interim: keep `plugins/` out (MANUAL-STEPS §27 step 7).
     Follow-up: replace it with open-bamboo-networking, an open-source drop-in
     that is LAN-first and speaks the protocol Bambuddy's virtual printers
-    emulate. (The 2.3 data dir was reset along the way; that turned out to be
+    emulate. Done in the entry below. (The 2.3 data dir was reset along the way; that turned out to be
     unnecessary but harmless — kept as `OrcaSlicer.2.3-bak`.)
   - The old Orca 2.3.2 segfaulted on opening a file on this boot. Moot now; it
     was never confirmed on the hardware (see the 2.3.2 entry above).
   - Bambu Studio's toolbar/tooltip strobing is **not** from this entry: 02.05
     strobes too on the same boot, under `GDK_BACKEND=x11`, and on the 7.1.9
     generation. Deferred to #177.
+
+- **OrcaSlicer's network plugin → open-bamboo-networking 2.2.0, built from
+  source, 2026-10-12.** Replaces Bambu's stock plugin, which aborts Orca 2.4.2
+  at startup (entry above). OBN exports the same `dlsym` ABI. Orca loads it as
+  `plugins/libbambu_networking_02.03.00.99.so` (`.99` is upstream's
+  convention for "newer than any stock build" in the 02.03.00 series Orca has
+  asked for since 2.3.2), with OBN's own `libBambuSource.so`/`liblive555.so`
+  beside it. `pkgs/open-bamboo-networking.nix` builds it against `pkgsApps`,
+  the nixpkgs Orca comes from, and `home.nix` links the three libraries into
+  `~/.config/OrcaSlicer/plugins/` and sets four `OrcaSlicer.conf` keys
+  (`installed_networking`, `network_plugin_version`,
+  `network_plugin_remind_later`, `update_network_plugin`) the way upstream's
+  own installer does. Orca owns the rest of that file, so it is patched, not
+  managed.
+  *Alt rejected:* upstream's prebuilt release tarball plus
+  `autoPatchelfHook`. Less to maintain, but binaries built on another distro
+  against other OpenSSL/libstdc++ builds, loaded into a nixpkgs process. The
+  source build is small (one CMake project; mosquitto and cJSON, which it
+  vendors via FetchContent, are fetched by Nix and handed over).
+  *Alt rejected:* OBN for Bambu Studio too. Studio's stock plugin works on
+  this host, and OBN's Studio build tracks Studio's own version, so it would
+  need rebuilding on every Studio bump. Revisit if Studio's plugin breaks.
+  Cloud printing is not used, so OBN's own defaults stand: `block_cloud = 1`
+  keeps printing and telemetry on the LAN (only sign-in and preset sync may
+  reach Bambu), and `obn.conf` is left to the plugin, which writes it on first
+  launch.
+  Note that OBN verifies printer TLS against the slicer's own
+  `cert/printer.cer`, so the Bambuddy CA append (#166) still applies.
+  Validated here: the package builds, and upstream's `probe_plugin` loads it
+  (version `02.03.00.99`, all 108 + 21 ABI symbols present). Not yet run
+  inside Orca: MANUAL-STEPS §29.
+- **nix-daemon builds run at batch priority, bounded in memory; oomd watches
+  user slices only (2026-10-11).** Local builds (Bambu Studio, OrcaSlicer)
+  took over the desktop during `nixos-rebuild switch`. The config is in
+  `modules/nixos/performance.nix`.
+  *Why on the daemon:* `nixos-rebuild` only asks nix-daemon to build; every
+  compiler runs inside `nix-daemon.service`'s cgroup. `nice`/`systemd-run`
+  around `nixos-rebuild` changes nothing.
+  *CPU — `batch`, after `idle` turned out not to reach the desktop:*
+  `nix.daemonCPUSchedPolicy = "batch"`: a waking build task never preempts
+  the running task, but builds still get CPU under contention. The first draft used `idle` plus
+  `CPUWeight = "idle"` (cgroup `cpu.idle`), and review showed it does not do
+  what it was meant to. The cpu controller is already on (systemd's
+  `user@.service` delegates `cpu`), so at the root the scheduler compares
+  `system.slice` against `user.slice`, each at weight 100. A per-task
+  SCHED_IDLE, or `cpu.idle` set on a unit *inside* `system.slice`, only ranks
+  builds against other system services, and the build keeps roughly half of
+  every contested CPU either way. So `idle` would not have stopped builds
+  for the desktop. Its one real effect was builds losing to Ollama and
+  docker. `batch` gets about the same share against the desktop without
+  starving builds behind other services, and is the honest description.
+  *Alt kept in reserve:* if builds must truly yield to the desktop, move
+  nix-daemon to its own root-level slice with `CPUWeight = "idle"`
+  (`systemd.slices.nixbuild` + `Slice = "nixbuild.slice"`; no dash in the
+  name, or it nests). That puts `cpu.idle` level with `user.slice`, at the
+  cost of builds all but stopping while a game runs.
+  *I/O:* `daemonIOSchedClass = "idle"` is kept but is probably a no-op. The
+  NVMe uses the `none` scheduler, which ignores ioprio, and dm-crypt's
+  workqueues drop the submitter's priority anyway. It matters only if BFQ is
+  ever enabled.
+  ananicy-cpp was checked for a fight: its rule set (nefelim4ag/ananicy at
+  the pinned rev) types `gcc`/`g++`/`make`/`ninja`/`cargo`/`rustc` as
+  `compiler` = nice 1, with no `sched`, `ioclass` or `cgroup` key, and has
+  no rule for `cc1plus` or `nix-daemon`. Nothing is moved out of the
+  daemon's cgroup or re-policied.
+  *Memory:* `max-jobs × cores` is the real cap — each C++ compiler process
+  is ~1–2 GB. Was `auto × 0` = 16 jobs × 16 threads, up to 256 compilers.
+  Now `max-jobs = 4`, `cores = 8`: at most 32 compiler processes (2× the
+  thread count, so the CPU stays full), and a single big build still gets 8
+  threads. `MemoryHigh = 40G` backs that up by throttling and reclaiming,
+  never killing. `MemoryMax` was rejected because a kill fails the switch
+  partway. It is a soft bound, not a hard one. Pages reclaimed into zram
+  leave the build's `memory.current`, but zram's compressed store is not
+  charged to the cgroup, so a build past 40G still grows in system RAM via
+  zram. If a hard bound is ever needed, `MemorySwapMax=` on the daemon is
+  the lever.
+  *oomd:* it was enabled with every slice option false, so it watched
+  nothing despite the comment claiming otherwise. Now `enableUserSlices`
+  only: kill once memory pressure stays at 80% for 30 s, systemd's default.
+  It kills the descendant cgroup with the most reclaim activity. That is
+  usually an app scope, but `session.slice` (the compositor) is in scope
+  too, so in the worst case oomd ends the session rather than one app.
+  Under global pressure from a build, oomd's only targets are desktop apps,
+  never the build. That is the accepted cost of the next point.
+  `system.slice` was rejected on purpose. The throttling that `MemoryHigh`
+  applies shows up as memory pressure, so oomd there would kill exactly the
+  heavy build `MemoryHigh` is meant to slow down. The root slice was
+  rejected for the same reason. *Alt kept in reserve:* oomd on
+  `system.slice` with `ManagedOOMPreference = "omit"` on nix-daemon, if a
+  system service (Ollama, docker) ever runs away.
+  Validated by eval and an independent review; MANUAL-STEPS.md §30 carries
+  the on-hardware checks.
+
+- **HushMic as the noise-suppressed mic, 2026-10-14** —
+  `modules/nixos/hushmic.nix`. HushMic adds a PipeWire virtual source,
+  "HushMic", that runs the DPDFNet model over the real mic (80 ms added
+  latency, CPU only). Apps that should get the clean voice pick it as their
+  input. The system default input stays the raw mic unless the tray's "Set
+  as default microphone" is turned on.
+  *Packaging:* not in nixpkgs. The `hushmic-nix` input is the upstream
+  author's own flake. It builds from source, which NixOS needs because the
+  prebuilt binaries won't run there. Its nixpkgs follows `nixpkgs-apps`,
+  since it is a desktop app and its own CI builds against unstable. The flake
+  has a bot that bumps it daily; `flake.lock` pins the commit, so a bump only
+  lands through `nix flake update hushmic-nix`. Upstream's `package.nix` still
+  takes the `xorg` set, which unstable now deprecates. The module overrides
+  that argument with the renamed attributes (`libx11`, …) to silence the eval
+  warnings. The output path is unchanged. Drop the override once upstream
+  moves to the new names.
+  *Started as a NixOS user unit with `--tray`,* the same shape as `dcal`
+  (`dankcalendar.nix`). Upstream's shipped unit runs `--headless` on
+  `default.target`. Upstream offers the tray only through the
+  `~/.config/autostart` entry its "Start on login" writes. A declared unit
+  replaces that entry here, and the tray is HushMic's whole UI: mic choice,
+  suppress/bypass/mute, model, strength and the A/B test. A tray process
+  needs the display, so the unit binds to `graphical-session.target` and the
+  virtual mic stops at logout. That is fine on a desktop. The rest is
+  upstream's: `KillMode=mixed`, so the `pipewire -c` child can restore the
+  previous default mic; `Restart=on-failure`, because "already running"
+  exits 0; and `session.slice`, where session-critical services sit beside
+  the compositor rather than among the apps in `app.slice`.
+  *Left mutable:* `~/.config/hushmic/config.toml`. The tray writes it on
+  every change, so it is runtime state and Home Manager does not own it.
+  *Alt rejected:* EasyEffects with HushMic's LADSPA plugin. That is a full
+  effects suite to run just to get one filter.
+  Validated by eval and a local build of the package. On pegasus, keyboard
+  noise is gone on a Discord call (MANUAL-STEPS.md §#186).
+
+- **Exposed apps on the fast lane, 2026-10-16** — browsers and web-facing
+  Electron apps carry the most attack surface on this host, so they join
+  `pkgsApps`: vivaldi, google-chrome, discord, slack, signal-desktop and
+  zoom-us. Five are prebuilt upstream binaries; signal-desktop builds from
+  source, but Hydra caches it, so none of the six builds locally. Firefox
+  stays on `pkgs`, because stable backports its security releases.
+  *Speed comes from cadence, not channel.* An app is only as fresh as
+  `flake.lock`, which was bumped by hand. `.github/workflows/update-apps.yml`
+  now bumps `nixpkgs-apps`, `zen-browser`, `opera-flake` and
+  `claude-desktop-debian` twice a week and opens a PR. Merging and switching
+  stay manual. `nixpkgs`, the kernel and service inputs stay out of it.
+  *Cost of each bump:* `nixpkgs-apps` also carries things pegasus builds
+  itself. OrcaSlicer recompiles locally whenever a bump moves it, because
+  the Bambuddy CA append (#166) is an `overrideAttrs`. open-bamboo-networking
+  and HushMic build against it too. Budget that time at switch. A newer
+  Signal, Slack or Discord can also upgrade its profile on first run, so
+  rolling back past a bump may leave the app unable to open it.
+  *Why not nixpkgs master:* it has no Hydra cache and no channel testing. It
+  would be days faster at best, at the cost of local builds and untested
+  revisions. For Electron apps the vendor picks the bundled Chromium anyway,
+  so a faster channel only delivers the vendor's build sooner.
+  *ticktick* keeps its hand override: its fixed `src` hash can't follow an
+  automated bump. It is a first-party to-do client, so low exposure. Drop the
+  override once unstable passes it.
+  *Claude Desktop:* `claude-desktop-debian` tracks its default branch, so the
+  scheduled bump keeps it current. Replace it when a vendor-backed source for
+  the official Linux build appears (a verified Flathub listing, an official
+  repo or flake).
+  *Rules for later (nothing enabled now):*
+  - **Flatpak** only for a verified, vendor-published Flathub app that keeps
+    outpacing unstable, or that refuses to run once outdated. Never a
+    browser: Chromium's own sandbox degrades to zypak under Flatpak. Declare
+    it with `nix-flatpak`, never by hand. Flatpak's real advantage is the
+    sandbox, but apps often punch holes in it, it lives outside `flake.lock`,
+    and NVIDIA needs a GL extension that matches the driver exactly.
+  - **Snaps** are out: NixOS has no supported snapd module.
+  - **AppImage for trials.** To try an app before packaging it, run the
+    vendor's AppImage through `programs.appimage` (`enable` + `binfmt`,
+    added when the first trial happens). Trial only: no updates, no sandbox,
+    usually unsigned. An app that stays gets a Nix package, or
+    `appimageTools` wrapping the same file.

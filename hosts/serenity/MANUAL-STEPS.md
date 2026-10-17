@@ -29,10 +29,10 @@ If a workshop image turns out to be amd64-only, recreate the VM with Rosetta
 enabled: `colima delete`, then `colima start --vz-rosetta` with the flags above.
 `colima delete` wipes all images and volumes.
 
-## 2. Bambuddy's CA in the slicers' `printer.cer`
+## #166 Bambuddy's CA in OrcaSlicer's `printer.cer`
 
 `modules/darwin/slicer-certs.nix` appends `certs/bambuddy-vp-ca.crt` to the
-OrcaSlicer and Bambu Studio casks' `Contents/Resources/cert/printer.cer` on
+OrcaSlicer cask's `Contents/Resources/cert/printer.cer` on
 every switch, unless it's already there. Without it, connecting to a Bambuddy
 virtual printer fails with `code=-1`. A cask upgrade or in-app update undoes
 it until the next switch.
@@ -41,13 +41,27 @@ it until the next switch.
        terminal you run `darwin-rebuild` from. Without it macOS blocks edits
        inside `/Applications/*.app`, and the switch prints
        `warning: could not update …`.
-2. [ ] Switch, fully quit both slicers (Cmd+Q), then check the last entry is
+2. [ ] Switch, fully quit OrcaSlicer (Cmd+Q), then check the last entry is
        `CN=Virtual Printer CA …` with the fingerprint Bambuddy shows:
        ```sh
        while openssl x509 -noout -subject -sha256 -fingerprint; do :; done \
          < /Applications/OrcaSlicer.app/Contents/Resources/cert/printer.cer
        ```
-3. [ ] Launch both. The edit breaks the bundle's code-signature seal. A
+3. [ ] Launch it. The edit breaks the bundle's code-signature seal. A
        launched-before app normally doesn't care, but a freshly upgraded
        (quarantined) one may be refused as "damaged". If so,
-       `xattr -dr com.apple.quarantine /Applications/<App>.app`.
+       `xattr -dr com.apple.quarantine /Applications/OrcaSlicer.app`.
+
+## #176 Bambuddy's CA in Bambu Studio's `printer.cer`
+
+`modules/darwin/slicer-certs.nix` now also appends the CA to
+`/Applications/BambuStudio.app`, on the same terms as OrcaSlicer (§#166).
+
+1. [ ] Switch, fully quit Bambu Studio (Cmd+Q), then check the last entry is
+       `CN=Virtual Printer CA …` with the fingerprint Bambuddy shows:
+       ```sh
+       while openssl x509 -noout -subject -sha256 -fingerprint; do :; done \
+         < /Applications/BambuStudio.app/Contents/Resources/cert/printer.cer
+       ```
+2. [ ] Launch it. If a freshly upgraded (quarantined) app is refused as
+       "damaged": `xattr -dr com.apple.quarantine /Applications/BambuStudio.app`.

@@ -77,7 +77,8 @@ serial-derived and stable.
 |---|---|---|---|---|---|
 | `h-HJDH` | HGST HUH721212ALE601 12 TB | `*HJDH` | `ata-HUH721212ALE601_*HJDH` | `sdc` | `tank` RAIDZ1 member |
 | `h-NS3Y` | HGST HUH721212ALE601 12 TB | `*NS3Y` | `ata-HUH721212ALE601_*NS3Y` | `sde` | `tank` RAIDZ1 member |
-| `h-X4WE` | HGST HUH721212ALE601 12 TB | `*X4WE` | `ata-HUH721212ALE601_*X4WE` | `sdg` | `tank` RAIDZ1 member — ⚠ **failing, replacement pending** (below) |
+| `h-X4WE` | HGST HUH721212ALE601 12 TB | `*X4WE` | `ata-HUH721212ALE601_*X4WE` | `sdg` | ✖ **replaced by `h-YWAH` 2026-10-11** — failing (below); LUKS-erased, pulled, RMA to seller (`MANUAL-STEPS.md` §21) |
+| `h-YWAH` | HPE MB012000GWDFE (= HUH721212ALE604) 12 TB | `*YWAH` | `ata-MB012000GWDFE_*YWAH` | — | `tank` RAIDZ1 member since 2026-10-11, cage A bay `A4`. Used, SMART hours reset; HPE firmware has no 197, so its early warning is `smartctl -l devstat`, scrubs and self-tests |
 | `h-T97E` | HGST HUH721212ALE601 12 TB | `*T97E` | `ata-HUH721212ALE601_*T97E` | `sdi` | `tank` RAIDZ1 member |
 | `s-768C` | Crucial BX500 480 GB | `*768C` | `ata-CT480BX500SSD1_*768C` | `sdb` | `tank` special-vdev mirror member (on LSI) |
 | `s-8162` | Crucial BX500 480 GB | `*8162` | `ata-CT480BX500SSD1_*8162` | `sdf` | `tank` special-vdev mirror member (on LSI) |
@@ -117,6 +118,10 @@ Notes on the built pool:
 > where ZFS has not read; the drive's own offline scan found them. The other
 > three spinners read 0 on 5/197/198/199, so this is one disk wearing out, not
 > the batch.
+>
+> **Resolved 2026-10-11:** `zpool replace` onto `h-YWAH` resilvered 4.32T in
+> 18:53:42 with 0 errors; X4WE gave no READ errors throughout (5 = 14, 197 = 184,
+> 198 = 70 at the end). Cold boot afterwards imported `tank` with the new member.
 
 ### `sidepool` — a fifth pool, missing from the 2026-08-07 Main-tab reading above
 
@@ -205,7 +210,6 @@ has been wiped and handed to NixOS.
 
 | ID | Device | Size | Full serial | Notes |
 |---|---|---|---|---|
-| `h-YWAH` | **HPE MB012000GWDFE** = HGST HUH721212ALE604, firmware `HPG5` | 12 TB | `*YWAH` | X4WE's replacement (`MANUAL-STEPS.md` §21). Cabled on the LSI, burn-in in progress. ⚠ **Needs the power-disable adapter cable** — invisible to the HBA without it. ⚠ **Used, SMART hours reset:** devstat shows ≈ 255 TB written, 61 power-on resets; 0 reallocated/uncorrectable/CRC. ⚠ HPE firmware has no 197 (pending); 198/199/5 equivalents are in `smartctl -l devstat`. Scrub and self-tests are its early warning. Same byte capacity as the HUH721212ALE601s. |
 | `m2-140B` | **Silicon Power UD90**, M.2 **2230**, NVMe PCIe Gen 4 ×4, on a PCIe adapter | 1 TB | `*140B` | Intended root, replacing `s-5509`. **No physical label** — no cable to trace, unambiguous by location, and no room on the card. Identifier is for inventory only. |
 
 Read off the drive's own label 2026-08-07 and confirmed by the owner. **2230, not
@@ -567,7 +571,7 @@ mildly slower for ripping.
 
 ```
 h-HJDH
-h-X4WE
+h-YWAH
 h-T97E
 h-NS3Y
 s-3255
@@ -603,7 +607,8 @@ The other cages need enumerating before their cables can be labelled at all.
 ```csv
 id,form,recording,serial_suffix,serial_full,model,size,location,role,colour,physical_label
 h-HJDH,hdd35,cmr,HJDH,*HJDH,HUH721212ALE601,12TB,cage-A,array,,yes
-h-X4WE,hdd35,cmr,X4WE,*X4WE,HUH721212ALE601,12TB,cage-A,array,,yes
+h-X4WE,hdd35,cmr,X4WE,*X4WE,HUH721212ALE601,12TB,rma,retired,,yes
+h-YWAH,hdd35,cmr,YWAH,*YWAH,MB012000GWDFE,12TB,cage-A,array,,no
 h-T97E,hdd35,cmr,T97E,*T97E,HUH721212ALE601,12TB,cage-A,array,,yes
 h-NS3Y,hdd35,cmr,NS3Y,*NS3Y,HUH721212ALE601,12TB,cage-A,array,,yes
 s-3255,ssd25,,3255,*3255,WD Blue SA510,500GB,internal,cache,,yes

@@ -1,5 +1,10 @@
 { config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, pkgsApps, withBambuddyCa, ... }:
 
+let
+  # Built against pkgsApps, the nixpkgs Orca comes from, so the plugin's
+  # libstdc++/OpenSSL match the process that dlopens it.
+  openBambooNetworking = pkgsApps.callPackage ../../pkgs/open-bamboo-networking.nix { };
+in
 {
   imports = [
     ../../modules/home/common.nix
@@ -47,16 +52,18 @@
   # obsidian/operaBrowser are all unfree and need it; firefox/signal-desktop/
   # openscad/streamdeck-ui/floorp-bin/zenBrowser are free/open. `pkgsApps.*`
   # (the nixpkgs-apps input, see flake.nix) is a separate instance with its
-  # own allowUnfree — ticktick and bambu-studio there are unfree.
+  # own allowUnfree — ticktick and bambu-studio there are unfree. Browsers
+  # and web-facing Electron apps come from it too (DECISIONS.md: "Exposed
+  # apps on the fast lane").
   #
   # Brain.fm was left out — no nixpkgs package, no native Linux client
   # anywhere (subscription web app only); usable via firefox/chrome.
   home.packages = with pkgs; [
     sl # for the inevitable `sl` typo
     vscode
-    google-chrome
+    pkgsApps.google-chrome
     firefox
-    vivaldi
+    pkgsApps.vivaldi
     # nixpkgs' upstream `floorp` was replaced with this prebuilt variant —
     # building it from source became unfeasible starting with its 12.x line.
     floorp-bin
@@ -76,10 +83,10 @@
     # not worth the trust trade for a client that's also just a browser tab
     # away. Same call as Brain.fm below: web app via firefox/chrome.
 
-    discord
+    pkgsApps.discord
     pkgsApps.ferdium
-    signal-desktop
-    slack
+    pkgsApps.signal-desktop
+    pkgsApps.slack
     openscad
     obsidian
     spotify
@@ -220,7 +227,7 @@
     proton-vpn # renamed from protonvpn-gui upstream
     protonmail-desktop
     dropbox
-    zoom-us # NOT `zoom` — that's an unrelated Z-code/interactive-fiction player
+    pkgsApps.zoom-us # NOT `zoom` — that's an unrelated Z-code/interactive-fiction player
     prismlauncher # Minecraft — better-maintained than the bare official launcher on Linux
     zeal # offline API docs, the real Linux equivalent of Dash
     speedtest-cli
@@ -464,6 +471,40 @@
     if [ ! -e "$DMS_STATE_DIR/session.json" ] && [ -e "$CHECKPOINTS/dms-session.json" ]; then
       $DRY_RUN_CMD mkdir -p "$DMS_STATE_DIR"
       $DRY_RUN_CMD cp "$CHECKPOINTS/dms-session.json" "$DMS_STATE_DIR/session.json"
+    fi
+  '';
+
+  # ── OrcaSlicer: open-bamboo-networking instead of Bambu's plugin ──────────
+  # Bambu's stock network plugin aborts Orca 2.4.2 at startup (DECISIONS.md).
+  # Orca dlopens plugins/libbambu_networking_<network_plugin_version>.so from
+  # its data dir, so the open build is linked there and OrcaSlicer.conf is
+  # pointed at it. Orca owns that file, so only these keys are set, and only
+  # once it exists. Run book: MANUAL-STEPS.md §29.
+  xdg.configFile = lib.listToAttrs (map (so: {
+    name = "OrcaSlicer/plugins/${so}";
+    value.source = "${openBambooNetworking}/plugins/${so}";
+  }) [
+    "libbambu_networking_${openBambooNetworking.pluginVersion}.so"
+    "libBambuSource.so"
+    "liblive555.so"
+  ]);
+
+  home.activation.orcaNetworkPlugin = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    conf="${config.xdg.configHome}/OrcaSlicer/OrcaSlicer.conf"
+    if [ -f "$conf" ]; then
+      tmp=$(mktemp)
+      # network_plugin_skipped_versions is a ';'-joined string, not an array.
+      ${pkgs.jq}/bin/jq --arg v "${openBambooNetworking.pluginVersion}" '
+        .app.installed_networking = "true"
+        | .app.network_plugin_version = $v
+        | .app.network_plugin_remind_later = "true"
+        | .app.update_network_plugin = "false"
+        | if (.app.network_plugin_skipped_versions | type) == "string"
+          then .app.network_plugin_skipped_versions |=
+            (split(";") | map(select(. != "" and . != $v)) | join(";"))
+          else . end
+      ' "$conf" > "$tmp"
+      if cmp -s "$tmp" "$conf"; then rm -f "$tmp"; else $DRY_RUN_CMD mv "$tmp" "$conf"; fi
     fi
   '';
 
