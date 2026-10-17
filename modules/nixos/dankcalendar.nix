@@ -6,8 +6,8 @@ let
   # Local/Google/Microsoft/CalDAV/iCloud sync with a background daemon +
   # tray icon; NOT a backend for DMS's own calendar widget (that's still
   # khal, via programs.dank-material-shell.enableCalendarEvents) — this is
-  # a genuinely separate app, chosen 2026-08-11 over sticking with
-  # khal+vdirsyncer alone. See hosts/pegasus/DECISIONS.md.
+  # a genuinely separate app, chosen over sticking with khal+vdirsyncer
+  # alone. See hosts/pegasus/DECISIONS.md.
   #
   # No NixOS packaging exists upstream (no flake, no nixpkgs entry — only
   # Flatpak/AUR/from-source at time of writing), so this is packaged from
@@ -16,8 +16,7 @@ let
   # baked in, wrapped with the Qt/QML plugin paths dank-qml-common's
   # shared widgets need).
   #
-  # Pinned to master HEAD at authoring time (2026-08-11) — no tagged
-  # release exists yet to pin to instead.
+  # Pinned to a master commit — no tagged release exists yet to pin to.
   dankcalendarRev = "a57a879061cd482c416d5ece44cb529249c37b06";
   dankcalendarSrc = pkgs.fetchFromGitHub {
     owner = "AvengeMedia";

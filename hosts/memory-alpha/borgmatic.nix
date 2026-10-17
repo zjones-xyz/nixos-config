@@ -7,18 +7,8 @@
 # and `dashboard-auth` htpasswd, and Jellyfin's users DB — none of which existed
 # anywhere else. Same shape as hosts/pegasus/borgmatic.nix (path-driven, no ZFS
 # hook: this host is btrfs), not galactica's property-driven config.
-#
-# The `enabled` switch below gates the whole module: while false it contributes
-# nothing at all, so the sops secrets are not declared and a switch before their
-# values exist cannot fail activation.
 
 let
-  # ⚠ THE one switch. false = this module contributes nothing at all (important:
-  # the sops secrets below are only declared when enabled, so a switch before
-  # their values exist in secrets/memory-alpha.yaml cannot fail activation).
-  # Live since 2026-09-04.
-  enabled = true;
-
   repoLabel = "memory-alpha";
 
   # The borgmatic unit runs with a restricted PATH (the NixOS module only adds
@@ -27,7 +17,6 @@ let
   sqlite3 = "${pkgs.sqlite}/bin/sqlite3";
   db = path: { name = builtins.baseNameOf path; inherit path; sqlite_command = sqlite3; };
 in
-lib.optionalAttrs enabled
 {
   services.borgmatic = {
 
@@ -141,28 +130,15 @@ lib.optionalAttrs enabled
   systemd.services.borgmatic.serviceConfig = {
     LoadCredentialEncrypted = lib.mkForce [ "" ];
 
-    # CAP_DAC_OVERRIDE is REQUIRED for the SQLite hook, and its absence is not
-    # obvious: the packaged unit ships CapabilityBoundingSet=CAP_DAC_READ_SEARCH
-    # CAP_NET_RAW, and root's power to ignore file modes comes from
-    # CAP_DAC_OVERRIDE specifically. Without it borgmatic runs as a root that can
-    # READ anything but WRITE only what it owns by mode bits — and `sqlite3 .dump`
-    # is not read-only: opening a WAL-mode database creates -shm/-wal sidecars
-    # next to it. /var/lib/jellyfin/data is owned by jellyfin, so the dump failed
-    # with "attempt to write a readonly database (8)". It would have hit all
-    # seven DBs; jellyfin.db was simply first. Drop-in list directives union, so
-    # naming the upstream two alongside keeps all three.
+    # CAP_DAC_OVERRIDE is REQUIRED for the SQLite hook: root's power to ignore
+    # file modes comes from that capability specifically, and the packaged
+    # bounding set omits it — leaving a root that can READ anything but WRITE
+    # only what it owns. `sqlite3 .backup` on a WAL database writes -shm/-wal
+    # sidecars beside files owned by service users, so the dumps fail without
+    # it. Drop-in list directives union: naming the upstream two keeps all three.
     CapabilityBoundingSet = [ "CAP_DAC_READ_SEARCH" "CAP_NET_RAW" "CAP_DAC_OVERRIDE" ];
   };
 
-  # ── Bring-up checklist (owner) ───────────────────────────────────────────────
-  # 1. Create a BorgBase repo (repokey-blake2) + an append-only SSH key.
-  # 2. Set `repositories.path` above to the real URL.
-  # 3. `sops-hostkey secrets/memory-alpha.yaml` -> add borgmatic/passphrase and
-  #    borgmatic/ssh_key (the private half of the append-only key).
-  # 4. sudo mkdir -p /var/lib/borgmatic/ssh
-  #    sudo ssh-keyscan <host>.repo.borgbase.com | sudo tee /var/lib/borgmatic/ssh/known_hosts
-  # 5. Init the repo: temporarily flip the key to full access in BorgBase,
-  #    `sudo borgmatic repo-create --encryption repokey-blake2`, flip it back.
-  # 6. Flip `enable = true` above, nrs, then `sudo systemctl start borgmatic`.
-  # 7. Turn on BorgBase inactivity alerting for the repo.
+  # Bring-up is done and the backup is live; the one owner step possibly still
+  # open is BorgBase inactivity alerting for this repo (docs/BACKUP.md §3b).
 }

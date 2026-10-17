@@ -1,10 +1,9 @@
 # galactica — manual steps (gated on being physically at Tower, or on the ISO)
 
-`configuration.nix`, `disko.nix`, and `home.nix` exist now, but
-`nixosConfigurations.galactica` is deliberately not yet in `flake.nix` —
-`hardware-configuration.nix` doesn't exist and can't be evaluated blind. See
-the header comment in `configuration.nix` for why. Everything below closes
-that gap, roughly in order.
+galactica is installed and in the flake: `nixosConfigurations.galactica`
+evaluates with the real `hardware-configuration.nix`, and the host is live.
+The steps below record the bring-up, roughly in order — done ones are checked
+or ✅-marked; unchecked items are still pending.
 
 An opus review agent independently checked this whole plan on 2026-08-31 —
 several fixes below exist because of it, credited inline where they matter.
@@ -16,8 +15,8 @@ read-only discovery like this):
 
 | What | Confirmed value |
 |---|---|
-| NVMe root | `nvme-SPCC_M.2_PCIe_SSD_AA2300905N401KG00206` |
-| midden (formerly Unraid's `fastservices` pool) | `ata-SATA_SSD_19013024009545` |
+| NVMe root | `nvme-SPCC_M.2_PCIe_SSD_*0206` |
+| midden (formerly Unraid's `fastservices` pool) | `ata-SATA_SSD_*9545` |
 | Onboard NIC driver | `e1000e` |
 
 Both `disko.nix` and `configuration.nix` already have these baked in. Still
@@ -111,9 +110,9 @@ generator will NOT reproduce on its own, all caught by the opus review:
   set up (see §7) — the overprovisioning/endurance plan for those depends on
   discards actually reaching the physical disks, same mechanism as root.
 
-## 3. Wire the flake up — the mechanical last step
+## 3. ✅ Wire the flake up — done (galactica is in `flake.nix`, age key enrolled)
 
-Once `hardware-configuration.nix` is real:
+The steps as they were, for the record:
 
 - Add `galactica` to `nixosConfigurations` in `flake.nix`, matching
   `memory-alpha`'s shape (no extra inputs needed — it's a plain x86_64-linux
@@ -137,9 +136,9 @@ Once `hardware-configuration.nix` is real:
 step — see the crypttab fix already applied to configuration.nix, caught by
 the opus review before it could bite here.)
 
-## 4. midden's logs keyfile
+## 4. ✅ midden's logs keyfile — done (crypttab carries the real UUID, `luks/middenKeyFile` is in sops)
 
-Only `cryptlogs` needs this now — `/var/cache/nix-build` is unencrypted
+Only `cryptlogs` needed this — `/var/cache/nix-build` is unencrypted
 (reversed 2026-08-31, see disko.nix's `nixBuildScratch` comment for why).
 Once `disko.nix` has run and the LUKS partition exists:
 
@@ -264,13 +263,14 @@ if it turns out to matter.
 
 ### Doing the cutover
 
-1. [ ] **galactica first.** The mounts are `access denied` until the exports
+1. [x] **galactica first.** The mounts are `access denied` until the exports
    exist:
    ```bash
    sudo nixos-rebuild switch --flake .#galactica
    sudo exportfs -v          # expect the three paths above, with their fsids
    ```
-2. [ ] **Then memory-alpha:**
+2. [x] **Then memory-alpha** (both switched — the cutover is live, per the
+   NFS-mounts note in `hosts/memory-alpha/configuration.nix`):
    ```bash
    sudo nixos-rebuild switch --flake .#memory-alpha
    ls /mnt/media /mnt/unmanaged    # automount triggers on access
@@ -349,11 +349,12 @@ against the source, plus the Unraid flash+config insurance into
    ✅ 2026-09-02 — all seven (8.94 T) staged; `tank/media`/`tank/books` empty.
 2. [x] Retire sidepool *logically*: unmounted + all four LUKS mappers closed
    2026-09-02 — disks are inert (LUKS-closed, nothing references them).
-3. [ ] Pull sidepool's drives during the next in-case session (deliberately
+3. [x] Pull sidepool's drives during the next in-case session (deliberately
    deferred with other case cleanup: the dead MX100 wants pulling too, the
    WD Blue's cable label is stale post-recable, and HARDWARE-MAP §3/§7's
    cage/port enumeration needs eyes-in-the-case anyway). Disks return to
    the drawer after a cooling-off period.
+   ✅ 2026-10-06 — sidepool's four disks and the MX100 pulled.
    > **2026-09-03 — data-safety precondition met; the pull leaves nothing
    > behind.** sidepool was reopened one last time (read-only: `cryptsetup
    > open --readonly` ×4 + `mount -o ro,rescue=nologreplay`) and its `pools/`
@@ -364,7 +365,7 @@ against the source, plus the Unraid flash+config insurance into
    > (silent verify pass). `move_aside/` was confirmed to be only the already
    > migrated array shares. So only the physical case work remains; nothing on
    > sidepool is still needed. Mappers closed again afterward.
-4. [ ] **NFS re-exports** — written; §8 carries the export table, the two
+4. [x] **NFS re-exports** — live; §8 carries the export table, the two
    fsids held back and why, and the switch-galactica-first sequence.
 
 The original forward-looking notes below are now mostly satisfied; kept for
@@ -651,6 +652,20 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
    ```
    The second and third lines together are the kill-switch check: torrent
    traffic leaves via Proton while NFS/SSH/monitoring stay on the LAN.
+
+   **Inbound is its own check** — the port has to be *leased*, *listened on*
+   and *accepted*, and the first two can both be right while the third is
+   not. That reads as "downloads fine, tracker says unconnectable", because
+   outbound-initiated peers ride the namespace's `ESTABLISHED,RELATED` rule
+   and never touch the inbound path:
+   ```bash
+   sudo ip netns exec wg natpmpc -a 1 0 tcp 60 -g 10.2.0.1   # ← leased: "Mapped public port NNNNN"
+   sudo ip netns exec wg iptables -L natpmp -v -n            # ← accepted: the same NNNNN, tcp AND udp
+   ```
+   The `natpmp` chain is the sidecar's, rebuilt on every port change;
+   `vpnNamespaces.wg.openVPNPorts` is empty on purpose and must stay that
+   way — it takes a static port, and Proton has none. qBittorrent's own view
+   is Settings → Connection, and it must show the same number.
 
    ⚠ `ip netns exec` needs root — without `sudo` it fails with `setting the
    network namespace "wg" failed: Operation not permitted`, which reads like
@@ -1013,7 +1028,101 @@ SABnzbd is deliberately **outside** the VPN — usenet is already TLS to a paid
 provider, so the tunnel would only cap throughput; `nixflix.nix` says so at
 the option.
 
-## 13. AdGuard/Unbound DNS — declarative config, migrating off the router
+## 13. The homepages — tailnet + Pangolin (owner steps)
+
+`hosts/galactica/homepages.nix` declares both dashboards (Tower's old
+`homelab-stacks tower/homepage` and `tower/guesthome`, dead since the
+bare-metal cutover) as pinned Homepage containers on loopback ports —
+admin on `127.0.0.1:3010`, guest on `127.0.0.1:3011`. What each dashboard
+*shows* is plain YAML in `hosts/galactica/homepage/{common,admin,guest}/`,
+bind-mounted read-only; edit there and `nrs`, no Nix involved. CI lints
+those files and checks them against each other (`checks/homepage-config`),
+so a bad edit fails the PR rather than the dashboard. The switch itself
+reuses the existing `nixflix/*` sops entries for the widget keys. What the
+nix config cannot do is mint credentials and create Pangolin objects — that
+is this section.
+
+Both instances are already routed by the host's own Traefik —
+`home.internal` / `home.zjones.dev` for admin, `guest.internal` /
+`guest.zjones.dev` for guest — with matching AdGuard rewrites
+(§14) pointing all four at galactica's LAN IP, so LAN access to both
+works as soon as the switch lands. Steps below are for the tailnet
+(admin) and public (guest) halves.
+
+1. [x] **Tailnet auth key in sops — done.** A reusable, non-ephemeral key
+   (admin console → Settings → Keys) is in `secrets/galactica.yaml` as
+   `tailscale/authKey`, encrypted to all three recipients the `.sops.yaml`
+   rule names, galactica's own host key included. ⚠ This had to land *before*
+   the switch: `configuration.nix` references that key, and a sops entry whose
+   key is absent from the file fails **activation**, not eval.
+
+2. [x] **Switch — tailnet access confirmed.** Both halves happen on `nrs`
+   with no interactive step: `authKeyFile` joins galactica itself (`--ssh`),
+   and `homelab.tsdproxy` registers a *separate* node named `home` for the
+   admin dashboard, so `https://home.peacock-koi.ts.net` serves it while
+   galactica's own MagicDNS entry stays just the host's. Verified live.
+
+   Why a second node rather than `tailscale serve`: MagicDNS maps names to
+   devices and the `ts.net` zone has no alias, so serve can only ever answer
+   on the node's own name. `modules/nixos/tsdproxy.nix` has the details.
+
+   Two things this cost on the way in, both now fixed in-tree, recorded so
+   the next host does not repeat them:
+
+   - tsdproxy runs with host networking, so its dashboard shares the host's
+     port space. Upstream's default 8080 is SABnzbd's on any nixflix host —
+     the same collision `modules/nixos/adguardhome-sync.nix` documents. It
+     now defaults to 8091 via `homelab.tsdproxy.port`.
+   - `tsdproxy.port.1` takes the **published** host port, not the container's
+     internal one: `443/https:3010/http` against a container publishing
+     `127.0.0.1:3010:3000`. The stacks this replaced published `3000:3000`,
+     so they could not distinguish the two.
+
+3. [x] **Key expiry disabled — on `galactica` *and* on `home`.** Both done in
+   the admin console (Machines → … → Disable key expiry). Servers, not
+   laptops, and genuinely console-only: expiry is a control-plane property of
+   the machine, not something a node can set about itself. ⚠ Two devices, not
+   one — every name tsdproxy registers is its own Tailscale device with its
+   own expiry, so anything added to `homelab.tsdproxy` later needs the same
+   treatment or it silently drops off the tailnet in ~6 months.
+
+Steps 1-3 above are done: the admin dashboard is on the LAN and the tailnet,
+and the guest one is on the LAN. What remains — 4-8 below, the public
+`guest.zjones.xyz` door — is tracked as **issue #124**, which carries the same
+checklist plus the two traps worth knowing before starting: the sops entry in
+step 5 must exist *before* the switch that references it (a missing key fails
+activation, not eval), and `guest.zjones.xyz` has a LAN rewrite but no Traefik
+router, so step 6 should be tested from on-network as well as off.
+
+4. [ ] **Create the Pangolin Site.** Pangolin admin → Sites → create
+   `galactica` (Newt connector). Copy the issued **id** and **secret**.
+
+5. [ ] **Wire Newt up.** `sops secrets/galactica.yaml` → add the secret as
+   `newt/clientSecret`; put the id in the `homelab.newt` block in
+   `configuration.nix` and uncomment it; `nrs`. `systemctl status newt`
+   should show the tunnel registered.
+
+6. [ ] **Re-point the guest Resource.** Pangolin admin → Resources →
+   `guesthome.zjones.xyz` → rename to `guest.zjones.xyz` and move it onto
+   the `galactica` site with target `http://localhost:3011`
+   (host-resolvable — Newt runs on the host, so container names do NOT
+   resolve; `localhost:<published port>` does, same as memory-alpha's
+   Jellyfin resource). Keep whatever auth/SSO the old Tower resource had.
+   Verify from off-LAN (phone on cellular).
+
+7. [ ] **Verify the guest links actually work from outside.** The guest
+   dashboard currently lists only Jellyfin (`jellyfin.zjones.dev`) — confirm
+   that name resolves and routes publicly (it is also a Pangolin resource);
+   if the public name differs, fix the href in
+   `homepage/guest/services.yaml`. The other
+   Tower-era guest links (Audiobookshelf, Grimmory, Shelfmark, 13ft) return
+   as those services are re-homed.
+
+8. [ ] **Retire the Tower stacks.** In homelab-stacks, delete (or mark
+   migrated) `tower/homepage`, `tower/guesthome` and `tower/pangolin-newt`,
+   and delete the old `tower` Site in Pangolin once nothing references it.
+
+## 14. AdGuard/Unbound DNS — declarative config, migrating off the router
 
 `configuration.nix` now imports `modules/nixos/dns.nix` and declares the
 rewrites that previously lived only in the router's (GL.iNet, AdGuard bundled
@@ -1036,16 +1145,17 @@ rather than each instance being hand-edited.
    Newt tunnel — not Traefik, so the earlier "no Traefik router" framing here
    was checking the wrong layer. Resolved: `arr.zjones.xyz` is dropped
    entirely (the *arr stack doesn't need off-network access). `jellyfin` and
-   `guesthome` keep the split-horizon treatment — meant to work both on- and
+   the guest homepage (`guest.zjones.xyz` — renamed from `guesthome`, §13)
+   keep the split-horizon treatment — meant to work both on- and
    off-network without Tailscale, so the AdGuard rewrite is a LAN-side
    shortcut alongside Pangolin's tunnel, not a replacement for it.
-   `homeassistant` deliberately gets no `.xyz` name at all — stays
-   Tailscale/LAN-only. Still worth confirming in Pangolin's own admin config
-   (not this repo) that `jellyfin.zjones.xyz` and `guesthome.zjones.xyz`
-   actually have resources configured, pointing at the right targets
-   (memory-alpha for jellyfin, galactica for guesthome) — Newt itself only
-   runs on memory-alpha in this repo (`newt.nix`), which is fine since Newt's
-   targets aren't restricted to localhost.
+   `homeassistant` and the admin homepage (`home.*`, §13) deliberately get
+   no `.xyz` name at all — stay Tailscale/LAN-only. Still worth confirming
+   in Pangolin's own admin config (not this repo) that `jellyfin.zjones.xyz`
+   and `guest.zjones.xyz` actually have resources configured, pointing at
+   the right targets (memory-alpha for jellyfin, galactica for guest) — Newt
+   itself only runs on memory-alpha in this repo today (`newt.nix`), which
+   is fine since Newt's targets aren't restricted to localhost.
 3. [x] **Deploy and verify — done 2026-09-06.** Deployed, then two real bugs
    found live and fixed (see git history): every rewrite loaded
    `enabled: false` (an undocumented per-rewrite toggle, Go bool zero-value
@@ -1127,7 +1237,7 @@ rather than each instance being hand-edited.
    integration depends on `--glinet`).
 7. [x] **Fleet-wide inter-host DNS outage, root-caused and fixed —
    2026-09-08.** SSH to `memory-alpha.internal` started failing the
-   morning after §13 item 4 was confirmed working. Long diagnostic chain,
+   morning after §14 item 4 was confirmed working. Long diagnostic chain,
    in order, each one ruled out before finding the real cause: dnsmasq's
    forward-to-AdGuard config (`server=127.0.0.1#3053` — fine), AdGuard's
    own DNS cache (cleared it, still broken), the `--glinet` flag
@@ -1165,3 +1275,726 @@ rather than each instance being hand-edited.
    entirely and derive rewrites from leases, or whether reservations should
    just get declared in Nix alongside `clients.persistent` so a name only
    has to be typed once.
+
+## 15. Ferdium, Karakeep, Paperless-ngx, Syncthing — owner steps before first switch
+
+`hosts/galactica/{ferdium,karakeep,paperless,syncthing}.nix` declare all
+four as containers, routed by this host's Traefik (`*.internal`/`*.zjones.dev`,
+matching rewrites in §14/`configuration.nix`) and given their own tsdproxy
+tailnet node each (§13 has the "why a separate node per name" reasoning).
+
+**The inventory pass (2026-09-13) found the real Unraid appdata backup at
+`/tank/sort/unraid_appdata/<service>`, NOT `tank/backups/sidepool-pools`** —
+that path was the raw drive image; `unraid_appdata` is the already-extracted,
+organized copy. Sizes: `karakeep` 67M, `ferdium-server` 275M, `paperless` 9.0K
+(leftover container config only — see item 5), `syncthing` 126K
+(owner-confirmed junk, matches the earlier decision to leave it dropped).
+
+1. [x] **Secrets generated and `sops`-ed in.** `karakeep/nextAuthSecret`,
+   `karakeep/meiliMasterKey`, `paperless/secretKey`, and
+   `paperless/adminPassword` are in `secrets/galactica.yaml` (random,
+   `openssl rand`). ⚠ This had to land *before* the switch, same reasoning as
+   every other sops-backed secret on this host: a referenced key missing from
+   the file fails **activation**, not eval. Ferdium and Syncthing need no
+   secrets of their own.
+2. [x] **First switch — done and verified, 2026-09-13.** All seven
+   containers came up healthy; all eight routes (`*.internal` +
+   `*.zjones.dev` × four services) returned correct codes; all four LE
+   certs issued cleanly. Hit one real, unrelated incident along the way —
+   a stray, Nix-untracked `tailscale serve` config on galactica's own
+   tailnet identity blocked Traefik's port 443 rebind — fixed live and
+   the stray config since cleared.
+3. [x] **Confirm logins, then lock signups down — all done 2026-09-13.**
+   Restored data (item 4) meant the original Unraid-era accounts came back
+   with it — the plan changed from "create a new account" to "confirm the
+   old one still logs in," per the reasoning worked out live before the
+   restore. (Paperless-ngx's own admin-login confirmation is tracked
+   separately under item 5 — its data was never touched by a restore, so
+   it was never in scope here.)
+   - [x] **Ferdium — confirmed working, 2026-09-13.**
+     `IS_REGISTRATION_ENABLED` flipped to `"false"` in `ferdium.nix`.
+   - [x] **Karakeep — confirmed working, 2026-09-13.**
+     `DISABLE_SIGNUPS=true` set in `karakeep.nix`'s `karakeep-web`
+     environment.
+   - [x] **Syncthing GUI password set, 2026-09-13.** Was unauthenticated by
+     default; now has one, since its GUI is reachable over the tailnet.
+4. [x] **Ferdium + Karakeep restore — done 2026-09-13.** Both got their own
+   ZFS datasets (not directories in the shared `tank/appdata`), tagged
+   `homelab:tier=precious` + `org.torsion.borgmatic:backup=auto`
+   (`BACKUP-BORG.md`'s "First appdata subtrees promoted" section). The
+   ~10 minutes of fresh throwaway state each had generated since the first
+   switch (empty sqlite DBs, Ferdium's JWT keys) was discarded — nothing
+   in it was worth keeping — then the real Unraid backups were copied in
+   from `/tank/sort/unraid_appdata/{ferdium-server,karakeep}` and both
+   containers restarted.
+
+   Two wrinkles hit during the restore, recorded so they aren't a surprise
+   next time:
+   - Karakeep's backup folder turned out to have **two** copies of
+     `db.db`/`queue.db` — the real ones at the top level (1.68M, matches
+     Karakeep's documented `DATA_DIR/db.db` layout) and a second, smaller
+     (585K) pair nested one level down in the backup's own stray `data/`
+     subdirectory — almost certainly orphaned cruft from an earlier
+     Karakeep version's storage layout, not the live data. The top-level
+     pair is what `karakeep.nix`'s mount actually reads; the nested copy
+     landed alongside it harmlessly (Karakeep never looks there) and was
+     deleted for hygiene.
+   - Ferdium's backup `data/` subfolder also had its own leftover
+     `.tailscale_state` (an Unraid-side sidecar, unrelated to this host's
+     tsdproxy) — copied in by the broad `cp -a`, then deleted; harmless,
+     just clutter.
+
+   Verified live: Ferdium repackaged 441 real recipes from the restored
+   bundle on startup; Karakeep started clean against the restored DB and
+   Meilisearch index. Both containers healthy, both routes responding.
+5. [ ] **Paperless-ngx — not a restore, already repointed.** The Unraid
+   `appdata` share's paperless folder was only leftover container config
+   (9.0K); the real, live instance was already sitting at
+   `/tank/documents/paperless/{data,media,export}` (real `db.sqlite3`, real
+   archived documents) — likely mounted there directly on the old setup
+   rather than through the appdata share. `paperless.nix` now points its
+   bind mounts there instead of a fresh `tank/appdata/paperless` tree, so
+   there is nothing to copy for those three. **Before the first switch:**
+   - [x] **Pre-switch backup — done.** A fresh `borgmatic` offsite run plus
+     `zfs snapshot tank/documents@pre-paperless-nixos`, both against the
+     live data, before the container comes up.
+   - [ ] **Admin login — credentials retrieved from 1Password, login not
+     yet confirmed.** `PAPERLESS_ADMIN_USER=z` / the generated password in
+     `secrets/galactica.yaml` only ever *creates* a user; it will not touch
+     or reset the existing one, so it's a fallback only in case the
+     restored DB turns out to have no superuser.
+   - [x] **Chowned the existing tree to match `USERMAP_UID`/`GID` — done
+     2026-09-13.** Not previously set — the paperless-ngx image defaults to
+     a baked-in `1000:1000`, but `paperless.nix` now sets both to user
+     `z`'s uid/gid so the container can also write into the new
+     NFS-exported inbox (below).
+     `chown -R z:users /tank/documents/paperless/{data,media,export}`
+     before first switch, or the webserver may not be able to read/write
+     its own existing files.
+
+   **Scan inbox — new, resolved 2026-09-13:** owner's call, scans land in
+   `/inbox/paperless` on the NVMe root (`fileSystems."/"`, NOT `tank`) —
+   fast, and no redundancy/offsite needed since dropped files are consumed
+   into `tank/documents` (which IS backed up) within moments.
+   `paperless.nix` creates the directory, mounts it as the container's
+   `/usr/src/paperless/consume`, and NFS-exports it (`192.168.8.0/24`,
+   `async` — durability is deliberately traded for speed here, see the
+   file's header). SMB is planned but not built yet; add it when it
+   actually matters, in whatever module ends up owning Samba fleet-wide
+   (none does yet).
+6. [x] **Key expiry disabled on the four new tsdproxy nodes — done
+   2026-09-13.** Same trap §13 already hit: every `homelab.tsdproxy`-
+   registered name is its own Tailscale device with its own expiry.
+   `ferdium`, `karakeep`, `paperless`, and `syncthing` all set in the
+   admin console alongside `home`.
+7. [x] **Dashboard icons — confirmed rendering, 2026-09-13.**
+   `homepage/admin/services.yaml`'s new `Apps` group's four icons
+   (`ferdium.png`, `karakeep.png`, `paperless-ngx.png`, `syncthing.png`,
+   pulled from walkxcode/dashboard-icons at runtime) all render correctly.
+8. [x] **Three real bugs found by review, fixed and verified — done
+   2026-09-14.**
+   - **Syncthing was running as root.** `config.users.users.z.uid`
+     evaluates to `null` (normal users get their uid at activation, not
+     eval), so `PUID`/`USERMAP_UID`/every tmpfiles rule referencing it
+     were silently rendering an empty string. Paperless came out fine by
+     coincidence (its entrypoint falls back to a baked-in uid 1000, which
+     happens to equal `z`'s real one); Syncthing has no such fallback and
+     ran fully as root under `--network=host` — confirmed via `docker top`.
+     Fixed by pinning `users.users.z.uid = 1000` in `configuration.nix`
+     (matches the uid `z` already had — a no-op for the running system,
+     but now gives Nix eval a real value). One follow-up the fix itself
+     caused: `/tank/appdata/syncthing`'s config/certs/db had all been
+     created while it ran as root, so once it correctly started dropping
+     to uid 1000 it couldn't read its own files and crash-looped —
+     `chown -R z:users /tank/appdata/syncthing` once, live, resolved it.
+   - **Paperless login 403'd on two of its three hostnames.** Only
+     `PAPERLESS_URL` was set, so Django's `CSRF_TRUSTED_ORIGINS` held only
+     `paperless.zjones.dev` — confirmed live with a raw login POST:
+     `paperless.internal` (and by the same mechanism, the dashboard's own
+     `paperless.peacock-koi.ts.net` link) hit a hard `403 CSRF
+     verification failed`; `paperless.zjones.dev` passed clean. Fixed with
+     `PAPERLESS_CSRF_TRUSTED_ORIGINS` (all three names) and
+     `PAPERLESS_PROXY_SSL_HEADER` (Django couldn't otherwise tell the
+     Traefik-terminated request was HTTPS).
+   - **None of the four services declared a dependency on `tank` being
+     mounted**, unlike the established `nixflix.nix`/`bazarr.nix` pattern.
+     Every crypttab entry for `tank` is deliberately `nofail`, so a
+     degraded boot with the array unimported is a real, supported state on
+     this host — in it, these containers would start anyway and
+     Paperless would run its migrations into a fresh empty database over
+     the live document archive. Added `RequiresMountsFor` to every
+     container unit that touches a `/tank` path, matching the existing
+     pattern.
+
+   Also cleaned up stale comments in `ferdium.nix`/`karakeep.nix` that
+   still described the appdata as fresh/deferred after the restore landed,
+   and trimmed `paperless.nix`'s header, which had drifted well past this
+   repo's comment-budget convention.
+
+## 16. Part-DB, HomeBox, Spoolman — owner steps before first switch
+
+`hosts/galactica/{partdb,homebox,spoolman}.nix` declare all three as
+containers, same shape as §15's four: Traefik router pair, tsdproxy tailnet
+node, appdata restored from the Unraid backup. New this time: a real
+subdomain grouping, `*.maker.{internal,zjones.dev}` — confirmed live that
+tsdproxy rejects dotted node names (`partdb.maker` fails RFC 1123
+validation), so the tailnet name stays flat (`partdb.peacock-koi.ts.net`)
+while Traefik/DNS get the grouping. `configuration.nix` wildcard-rewrites
+`*.maker.{internal,zjones.dev}` rather than one entry per service, and all
+three `-dev` routers request the same `maker.zjones.dev` wildcard cert
+(dedup, same mechanism as `arr.zjones.dev`) instead of three single-name
+certs.
+
+⚠ **Deliberately NOT promoted off the default appdata tier this time** —
+unlike ferdium/karakeep, these three stay as plain directories in the
+shared `tank/appdata` dataset (parity only, no offsite). Part-DB already
+had this decided in `SHARES.md`'s tier table (🛡 Protected); HomeBox and
+Spoolman just default the same way since nothing this time asked for the
+opposite. Revisit per-service if that changes.
+
+⚠ **Spoolman has no authentication at all**, by upstream design — owner's
+call to leave it behind tsdproxy/Traefik only for now. A Traefik BasicAuth
+middleware is the natural fix if that's ever wanted; not built.
+
+1. [x] **Secrets generated and `sops`-ed in.** `partdb/appSecret` (random,
+   `openssl rand -hex 32`) and `homebox/apiKeyPepper` (random, `openssl
+   rand -base64 48`) are in `secrets/galactica.yaml`. The pepper wasn't
+   originally planned — HomeBox panics on startup without
+   `HBOX_AUTH_API_KEY_PEPPER` set to ≥32 bytes, confirmed live, undocumented
+   in any compose example checked beforehand. Spoolman needs no secret.
+2. [x] **First switch — done and verified, 2026-09-15/16.** All three
+   containers came up; `*.maker.internal`/`*.maker.zjones.dev` all
+   returned correct codes once the HomeBox pepper fix landed; the shared
+   `maker.zjones.dev` wildcard cert issued cleanly (one cert covering all
+   three, confirmed in the Traefik log — the dedup worked as designed).
+3. [x] **Appdata restored — done 2026-09-15/16.** Stopped all three,
+   copied in from `/tank/sort/unraid_appdata/{partdb,homebox,spoolman}`
+   (Part-DB: only `db/app.db` existed in the backup, no uploads/media were
+   ever populated; HomeBox: the whole backup folder was already shaped
+   like the container's `/data`, its `.tailscale_state` dropped; Spoolman:
+   same, then `chown -R z:users` since the image runs as a fixed uid 1000
+   — deliberately, matching `z` now, not a coincidence this time), restarted.
+   Part-DB went from a hard 500 (`no such table: users` — expected on an
+   empty fresh DB) to a clean 302 once restored.
+   - [ ] **Confirm Part-DB/HomeBox logins** with whatever credentials you
+     used on the old Unraid setup — not yet done, only the restore itself
+     was verified (the routes respond, not that a specific login works).
+     Spoolman has no login to confirm.
+4. [x] **Verified container UIDs, per the §15 lesson — done.** `docker top
+   <name> aux` for each: Part-DB runs as `www-data` (uid 33, the image's
+   own default, matches the backup's ownership via `cp -a`), HomeBox runs
+   as root (its own documented default — no privilege-drop mechanism
+   exists for it, unlike Syncthing), Spoolman runs as `z` (uid 1000,
+   deliberate). No mismatch found this time.
+5. [ ] **Key expiry disabled on the three new tsdproxy nodes** —
+   `partdb`, `homebox`, `spoolman` — same trap as every prior batch.
+6. [ ] **Dashboard icons.** New `Maker` group references `part-db.png`,
+   `homebox.png`, `spoolman.png` — confirm they render; walkxcode/
+   dashboard-icons naming doesn't always match the project's own name
+   exactly.
+
+---
+
+## 18. The reading stack — owner steps
+
+⚠ **§18, not §17**, and deliberately leaving a gap: PR #113 (galactica's idle
+power draw) has carried its own §17 since 2026-09-10, with five `PLATFORM.md`
+pointers into it. Renumbering here rather than there is the cheaper of the two,
+and a gap is harmless where a duplicate section number is not — that exact
+collision has already merged silently into this file twice, per #113's own notes.
+
+Written alongside `READING-STACK.md`; deployed in the order below.
+
+1. [x] ⚠ **Watch the first certificate issuance — all six services register in
+   one switch.** ⟨An earlier draft of this item said to land one service first.
+   That is not achievable as the change is shaped: both halves are imported
+   together and every service registers in `homelab.readUpstreams` at once. The
+   check below is the real safeguard.⟩
+
+   The `read.*` group requests **no certificate at all while it is empty**, so
+   the wildcard is issued the moment that switch lands — and
+   `homelab.letsencryptStaging = false` is already set here, so it goes straight
+   to **production**. There is no per-group staging dry-run: flipping the flag
+   would move the *media* stack's certs to staging storage too and warn on every
+   `*.arr.zjones.dev` name meanwhile.
+
+   The budget is shared: production allows 50 certificates per **registered
+   domain** per week, and `read.zjones.dev` and `arr.zjones.dev` are both
+   `zjones.dev` — the allowance §12 item 6 records spending **ten** of, when
+   `arr`'s un-deduped first switch issued per-subdomain certs ahead of the
+   wildcard. Watch it happen:
+
+   ```bash
+   journalctl -u traefik -f
+   ```
+
+   What good looks like: exactly one `Obtaining bundled SAN certificate` for
+   `read.zjones.dev` + `*.read.zjones.dev`, two DNS-01 challenges (the base name
+   and the wildcard each need their own TXT), and **no per-subdomain requests**.
+   All six `-dev` routers name an identical SAN set, so the dedup should hold —
+   the residual risk is the cold-start race, where routers start ACME orders
+   before the first covering cert is stored.
+
+   ⚠ **If it does race**, you spend up to six certificates rather than one and
+   the wildcard is stored regardless, so it is self-correcting rather than
+   fatal — but it eats shared budget, so check before doing anything else that
+   issues. Nothing to undo either way.
+
+   ✅ **Watched on the live host 2026-09-17: it did not race.** Exactly one
+   `Obtaining bundled SAN certificate` for `read.zjones.dev, *.read.zjones.dev`,
+   two DNS-01 challenges, no per-subdomain requests. One certificate spent, and
+   `acme.json` carries the wildcard.
+2. [ ] **Point the tailnet at AdGuard** — ⚠ possibly already done; check
+   before changing anything. A container on galactica resolved
+   `audiobookshelf.read.zjones.dev` to `192.168.8.190` through MagicDNS on
+   2026-09-17, and no public resolver can return a private address, so the
+   tailnet already reaches something that knows the rewrite.
+
+   If it turns out not to be set: Tailscale admin console → DNS → nameservers.
+   Without it none of the `.zjones.dev` names resolve off-LAN and the Tailscale
+   half of `READING-STACK.md` §7 does nothing. Not expressible in Nix, which is
+   why it is here.
+3. [x] **Create the datasets, before anything starts — including before the
+   first `nixos-rebuild switch`.** ⚠ Two things will occupy the mountpoint if the
+   dataset is not there first: Docker materialises a missing bind-mount source as
+   an empty root-owned directory, **and `systemd-tmpfiles` creates
+   `/tank/books/library/{ebooks,audiobooks,manga}` on every run** — those three
+   are declared in `reading-acquisition.nix`, so a switch is enough to do it.
+   ⚠ `tank/books` **already exists** — created 2026-09-02 during the array
+   build, empty, with `homelab:tier=protected` already set `local`. So its two
+   commands are no-ops; only the podcasts dataset and the subdirectories are new.
+   All of this needs `sudo`.
+   ```bash
+   sudo mkdir -p /tank/books/library /tank/books/bookdrop
+   # Podcasts are Re-acquirable, and tier is a dataset property — so NOT under
+   # tank/books, which would back up re-downloadable audio as Protected forever.
+   sudo zfs create tank/podcasts
+   sudo zfs set homelab:tier=re-acquirable tank/podcasts
+   ```
+   `/tank/books/staging` is deliberately absent here: `systemd-tmpfiles` creates
+   it at switch, owned by a user that does not exist yet.
+   `bookdrop` is a **sibling** of `library`, not inside it, so a half-imported
+   drop is never scanned as library content.
+
+   ✅ **Verified 2026-09-17**, after the switch: `tank/books` is `protected` and
+   `tank/podcasts` `re-acquirable`, and `library` carries its three
+   subdirectories with `staging` beside it as `shelfmark:media 0775`.
+4. [x] **Own the library tree, and check the two numbers first.** Group ownership
+   of what Grimmory writes comes from the **setgid bit**, not from a `GROUP_ID` —
+   there is no numeric `media` gid to hand it (`READING-STACK.md` §4.7).
+   ```bash
+   getent group media        # confirm it exists; note its number
+   id -u z                   # confirm 1000 before using it below
+   chown 1000:media /tank/books/library /tank/books/bookdrop
+   chmod 2775 /tank/books/library /tank/books/bookdrop
+   ```
+   ⚠⚠ **Read `READING-STACK.md` §4.7 before this step — it is blocking.** Two
+   nixflix modules `mkForce` the `media` group to an empty set, so it has **no
+   gid** and `z` is **not a member**, both of which affect the existing media
+   stack too. Until that is resolved the acquisition services cannot write to the
+   shared trees. Start by capturing the live state, which every option below
+   depends on:
+   ✅ **Read on the live host 2026-09-17:** `media:x:991:unpackerr` — gid **991**
+   (not nixflix's 169, which is why the resolver reads `getent` at unit-start
+   instead of trusting the constant), and `z` is **not a member**
+   (`uid=1000(z) gid=100(users)`). The uid is 1000 as assumed.
+   ```bash
+   sudo chown 1000:media /tank/books/library /tank/books/bookdrop
+   sudo chmod 2775 /tank/books/library /tank/books/bookdrop
+   ```
+   ✅ **Verified 2026-09-17:** both are `1000:991` and `drwxrwsr-x` — the setgid
+   bit is really set, which is the half that carries group ownership.
+
+   ⚠ Still outstanding, and it affects the *existing* media stack rather than
+   this one: `users.users.z.extraGroups = [ "media" ];` so you can write the
+   media trees as yourself. One line, worth doing on its own — and the reason
+   `/tank/appdata/suwayomi` reads as `Permission denied` to you today.
+5. [x] **Create the five sops secrets** in `secrets/galactica.yaml`. ⚠ All must
+   exist *before* the switch or sops-nix fails it — the nixflix precedent.
+   - `reading/grimmoryDbPassword` — one value, rendered into both Grimmory's
+     `DATABASE_PASSWORD` and MariaDB's `MARIADB_PASSWORD`.
+   - `reading/grimmoryDbRootPassword` — also the account a borgmatic dump uses.
+   - `reading/bookbridgeSecretKey` — the Fernet key (§4.5: it must not be
+     generated into `/data`, beside the ciphertext it protects).
+   - `reading/bookbridgeWebSecretKey` — so sessions survive a restore.
+   - `reading/chaptarrApiKey` — ⚠ also the value to paste into Chaptarr's UI. If
+     Chaptarr generates its own instead, Prowlarr's application entry mismatches.
+   ✅ **Done 2026-09-17**, all five — the switch reaching activation at all is
+   the proof, since sops-nix fails it otherwise.
+
+   ⚠ MariaDB reads its two values **only while initialising an empty datadir**;
+   rotating either afterwards is an `ALTER USER` inside the database, not a
+   switch. And no template carries `restartUnits` (matching `homepages.nix` and
+   `nixflix.nix`), so rotating any of these needs a manual container restart.
+6. [x] **Expect Grimmory to fail once on first boot**, and do not chase it.
+   `oci-containers` has no equivalent of compose's `depends_on: service_healthy`,
+   so its first start races MariaDB initialising its datadir. The restart *is*
+   the wait loop (`RestartSec = 15`, paced so the start limit cannot make a slow
+   first boot fatal).
+
+   ⚠ **That wait loop did not cover the case it was written for, and the code
+   changed 2026-09-17.** `dependsOn` renders `Requires=` as well as `After=`,
+   and Requires *propagates stops* — so a flapping MariaDB cycled Grimmory at
+   systemd's own ~2s pace, ignoring `RestartSec` entirely and burning its start
+   limit in 13 seconds. Grimmory's journal showed only `status=143` (SIGTERM)
+   and `Dependency failed`, which reads like Grimmory's problem and is not.
+   MariaDB is now ordered with `after` alone, so its restarts no longer touch
+   Grimmory and the 15-second loop does the waiting it was meant to.
+
+   ⚠ **If MariaDB itself will not start, read its journal before touching
+   anything.** Seen once, after a container stop during a switch left its
+   transaction-coordinator log corrupt:
+
+   ```
+   [ERROR] Bad magic header in tc log
+   [ERROR] Crash recovery failed. … delete tc log and …
+   [ERROR] Can't init tc log
+   ```
+
+   InnoDB recovered cleanly on its own (`End of log at LSN=…`, rollback
+   segments active), so only `tc.log` was damaged and deleting it is MariaDB's
+   documented remedy — it is recreated on start, and with no prepared
+   transactions there is nothing to lose. Stop both units, `rm` it,
+   `systemctl reset-failed` both, start MariaDB, wait for `ready for
+   connections`, then start Grimmory. ⚠ Do **not** wipe the datadir for this:
+   `mariadb_upgrade_info` and `mysql/` predating the failure prove the
+   initialisation and the secrets were fine.
+
+   ✅ **Recovered 2026-09-17** exactly that way — `tc.log` deleted, MariaDB up,
+   Grimmory serving. ⚠ Still unexplained: what killed the container hard enough
+   to corrupt that log. A switch stopping it is the likely cause, and if it
+   recurs the fix is MariaDB's stop timeout, not deleting the file again.
+
+   ⟨Unrelated but visible in that datadir: it is owned by `btrbk`. That is the
+   container's `mysql` (uid 999) landing on whichever host user holds 999 —
+   these containers share the host's uid namespace. Harmless to MariaDB.⟩
+7. [x] ⚠ **Verify BookBridge can actually reach Audiobookshelf** — it may not,
+   and it is the whole point of running it. `READING-STACK.md` §4.6 has the two
+   levers. Grimmory it reaches as `http://grimmory:6060` on the `proxy` network;
+   Audiobookshelf is native on loopback, and a container cannot dial that.
+
+   ✅ **It can — verified 2026-09-17, and neither lever was needed.** `/ping`
+   answers `200` from inside the container. §4.6 now records why: this host's
+   `resolv.conf` is Tailscale's rather than a loopback nameserver, so Docker's
+   resolver had a legitimate upstream to forward to.
+8. [x] **Own `/tank/podcasts` — AFTER the switch, not before.** `zfs create`
+   leaves it `root:root 0755` and Audiobookshelf cannot write there. ⚠ But the
+   `audiobookshelf` user does not exist until the switch that declares the
+   service has run, so `chown audiobookshelf:media` before it fails with
+   `invalid user`. Switch first, then:
+   ```bash
+   sudo chown -R audiobookshelf:media /tank/podcasts
+   sudo chmod 2775 /tank/podcasts
+   ```
+   ✅ **Owned 2026-09-17:** `audiobookshelf:media`, `drwxrwsr-x`. Creating the
+   libraries in the UI is still to do — the module has no option for them.
+9. [x] ⚠ **Pin the Docker bridge subnet.** `reading-acquisition.nix` hardcodes
+   `172.17.0.0/16` — Docker's default — and two things depend on it being true
+   (tinyproxy's allow-list and the namespace's return route). Read the live value
+   (`ip -4 addr show docker0`), then pin it with
+   `virtualisation.docker.daemon.settings.bip` so the literal is true by
+   construction rather than by luck.
+
+   ✅ **Read live 2026-09-17: `172.17.0.1/16`** — the hardcoded literal was
+   already true, so the pin in `configuration.nix` changes nothing at runtime.
+   ⚠ It does rewrite `daemon.json`, so the switch that lands it **restarts
+   dockerd and bounces every container on the host**, the media stack included.
+   Land it when a blip is acceptable, not mid-import.
+10. [x] ⚠ **The acceptance test for the whole egress design** (§5a/§5c/§5d):
+    ```bash
+    docker exec shelfmark curl -s https://ifconfig.me   # must be the Proton exit
+    ip netns exec wg curl -s https://ifconfig.me        # the same address
+    curl -s https://ifconfig.me                         # the house IP
+    ```
+    If the first shows the house IP, the proxy is not carrying it. The failure
+    mode is fail-closed (with `HTTP_PROXY` set and the proxy unreachable
+    `requests` raises rather than going direct), so a *broken* proxy shows as
+    errors, not as a silent leak.
+
+    ✅ **Passed 2026-09-17.** Namespace and container share one Proton exit —
+    `212.104.215.98` (v4) and `2a02:6ea0:510c:6110::22` (v6) — against a house
+    IP of `24.16.37.249`.
+
+    ⚠ **Comparing the two needs care, and `-4` will not do it.** The container
+    answered over IPv6 while the namespace curl picked IPv4, so the first
+    comparison was across address families and proved nothing on its own. With
+    `HTTPS_PROXY` set, `curl -4` constrains the hop *to tinyproxy*, not
+    tinyproxy's onward connection — the proxy still resolves and chooses for
+    itself. Force the family at the far end instead: an A-only endpoint
+    (`https://api.ipify.org`) out of the container, and `curl -6` inside the
+    namespace.
+11. [x] **Add Chaptarr's download clients by hand**, at
+    `http://192.168.8.190:8080` (SABnzbd) and `http://192.168.15.1:8282`
+    (qBittorrent). ⚠ **Not `localhost`** — inside the container that is the
+    container. These two addresses are the likeliest thing to get wrong.
+
+    ✅ **Added 2026-09-17.** Which also means Chaptarr's own login exists, so
+    that much of item 12 is done too.
+12. [x] **First-run accounts**, none of which can come from Nix: Chaptarr's login
+    (its `AuthOptions` has no username/password env path at all), Shelfmark's
+    builtin-auth admin, and Grimmory's, Audiobookshelf's and BookBridge's first
+    users. ⚠ Do **not** set `Chaptarr__Auth__Method` to force Forms first — env
+    wins on every start and would lock you out of creating the account.
+
+    ✅ **Created 2026-09-21**, alongside Audiobookshelf's two libraries —
+    audiobooks (Book type) on the tree Grimmory also indexes, and podcasts
+    (Podcast type) on its own dataset. ⚠ BookBridge's own login is the one that
+    matters most despite being the smallest service: it holds credentials for
+    both libraries (§4.5), so a weak password there compromises everything else
+    in this stack.
+13. [x] **Verify Suwayomi's extension repo loaded.** The repo itself is now
+    declared in Nix (Keiyoushi), so there is nothing to add by hand — ⚠ and it
+    had to be declared: the module re-renders `server.conf` from the Nix
+    settings on **every start**, so a repo added in the WebUI is reverted at the
+    next restart, silently. The same is true of any other server setting changed
+    there. After the switch, Browse should list sources.
+
+    ⚠ **Second finding, once 2.3.2243 was running: the Extension stores page
+    was empty even though the URL was declared.** 2.3 renamed the setting to
+    `extensionStores`, and the server **rewrites `server.conf` itself** into its
+    reference format at runtime — dropping the deprecated `extensionRepos`
+    rather than migrating its value, so the URL simply vanished. Renamed in the
+    config, with an assertion so it cannot silently regress.
+
+    ⟨`webUIChannel = "BUNDLED"` was set at the same time but was **not** the
+    cause — UI and server were both 2.3. It closes a separate hole: the default
+    downloads the interface into the data dir and re-checks every 23 hours, so
+    the UI drifts from the pinned jar on its own.⟩
+
+    ✅ **Loaded 2026-09-17 — and found two stubs, which is the real finding.**
+    Browse showed `Outdated App` and `Update to Mihon 0.20.1+` and nothing else.
+    Not a filter: that is all `index.min.json` contains now. It sent item 17
+    from a preference to a blocker, and the package is pinned ahead of the
+    channel as a result.
+
+    ✅ **Closed 2026-09-18: Browse lists real sources.** It took all three
+    changes together — the 2.3.2243 pin, the `extensionStores` rename, and the
+    URL itself. Any one of them missing gives an empty list and no error, which
+    is why this took three passes to corner.
+
+14. [x] ⚠ **Test the Prowlarr → Chaptarr sync early** — §5b calls it the single
+    biggest risk here, with two open upstream bugs on the path. When registering
+    the application, **widen the synced categories to include `3000` and `3030`**
+    or audiobook search issues zero queries and reports "no results",
+    indistinguishable from an empty shelf. Hand-entered Newznab/Torznab indexers
+    in Chaptarr are the fallback if the sync will not come up.
+
+    ✅ **It works — torrent and usenet both, 2026-09-21.** The single biggest
+    risk in the spec, retired: neither Chaptarr bug on the sync path (#84, #131)
+    blocks it in practice, and the fallback was not needed.
+
+    ⚠ **Worth knowing for the next app, because it cost a debugging cycle:**
+    usenet indexers appeared not to sync while torrents did, which looked like a
+    protocol-specific defect. It was not. Chaptarr was simply not finished being
+    set up — its own quickstart checklist and, in particular, **root folders**
+    were still missing, and it cannot act on a synced indexer with nowhere to
+    put the result. Finish the app's own setup before diagnosing its integrations.
+15. [x] **Confirm the dashboard icons render**, as §15 item 7 did for the
+    last batch. All six come from selfh.st and every name was confirmed `200`
+    on the CDN first, so a miss here means the `sh-` resolution rather than a
+    wrong name — ⚠ note BookBridge's and Chaptarr's `.svg` do **not** exist, so
+    those two must keep their explicit `.png`.
+
+    ✅ **All six render, 2026-09-18.**
+16. [ ] **`CopyUsingHardlinks` is not declarable** — it lives in Chaptarr's
+    SQLite `Config` table, and env only reaches `config.xml`-level settings.
+    Leave it at its default (`true`, harmless across datasets: one `link()` that
+    fails `EXDEV` per import) or change it in the UI.
+17. [x] **Suwayomi 2.3.2243 — decided by item 13, and taken.** The question was
+    whether the update the UI advertises was cosmetic. It is not: on 2.1.1867
+    Keiyoushi yields **zero** usable extensions, so manga acquisition does not
+    work at all. The bump is the fix, not an upgrade, and it is now in
+    `reading-acquisition.nix` as an `overrideAttrs` on the channel's package.
+
+    ⚠ **What this costs, since it is real debt:** the package is pinned ahead of
+    nixpkgs, so a later channel bump stops applying until the override is
+    removed, and it skips the `nixosTests` nixpkgs runs against the version it
+    ships. Revisit when nixpkgs catches up — `nix eval` the channel's
+    `suwayomi-server.version` and drop the override once it is ≥ 2.3.2243.
+
+    ⚠ 2.3 also renamed `extensionRepos` → `extensionStores`. An unknown key is
+    ignored rather than rejected, so an assertion in `reading-acquisition.nix`
+    ties the key to the package version — otherwise dropping this override once
+    nixpkgs catches up would silently return manga to zero extensions.
+
+    Pre-flight done before pushing: every `server.conf` key this host sets
+    (`extensionRepos`, `downloadAsCbz`, `downloadsPath`, `basicAuthEnabled`,
+    `initialOpenInBrowserEnabled`) exists identically in both jars, so the
+    settings carry over; the overridden package builds and its wrapper resolves
+    to the 2.3.2243 jar.
+
+---
+
+## 19. Memos — owner steps before first switch
+
+`hosts/galactica/memos.nix` declares it as a container, same shape as §15's
+four: Traefik router pair, tsdproxy tailnet node. New appdata (no Unraid
+backup to restore — this is a fresh install, not a migration). No secret
+needed: upstream has no signing-key env var.
+
+Unlike §16's PartDB/HomeBox/Spoolman batch, `tank/appdata/memos` is promoted
+straight to its own ZFS dataset rather than staying a directory in the
+shared `tank/appdata` — same exception as ferdium/karakeep
+(`SHARES.md`, `BACKUP-BORG.md`), on the grounds that notes are a real loss.
+Must happen **before** the first switch, since `zfs create` on a path that
+already exists as a plain directory needs the directory empty/absent first.
+
+1. [ ] **Create and tag the dataset** — `zfs create tank/appdata/memos`,
+   then `zfs set homelab:tier=precious tank/appdata/memos` and
+   `zfs set org.torsion.borgmatic:backup=auto tank/appdata/memos`
+   (`BACKUP-BORG.md`'s Memos section has the exact commands).
+2. [ ] **First switch.** Confirm the container starts, `memos.internal` and
+   `memos.zjones.dev` both return the setup wizard, and the LE cert issues
+   cleanly.
+3. [ ] **Create the first (admin) account** through the setup wizard —
+   Memos' own first-run flow, not a Nix-declared credential.
+4. [ ] **Key expiry disabled on the new `memos` tsdproxy node** — same trap
+   as every prior batch.
+5. [ ] **Dashboard icon.** `Apps` group now references `memos.png` —
+   confirm it renders (dashboard-icons carries it as of this writing).
+6. [ ] **Confirm the dataset is picked up by borgmatic** — after the next
+   nightly run, check the BorgBase archive contents (or `borgmatic list`)
+   for `tank/appdata/memos`; the property-driven autoscan (`BACKUP-BORG.md`)
+   needs no config change, but worth verifying once rather than assuming.
+
+---
+
+## 20. Part-DB — promote to offsite backup (Precious tier)
+
+`SHARES.md` §5 had Part-DB sitting on the default `appdata` tier deliberately
+(parity only, no offsite) — the owner's call at the time, per §16. Revisited:
+same reasoning as ferdium/karakeep/memos applies (a real, non-reacquirable
+loss), so `tank/appdata/partdb` gets the same promotion.
+
+Unlike memos, this is **not** a fresh install — real, live data already sits
+in `/tank/appdata/partdb` as a plain directory inside the shared `tank/appdata`
+dataset, and the container is actively serving from it. `zfs create` refuses a
+path that already exists, so the directory has to move out of the way and back
+in, not just get created fresh. Do this **after** the tmpfiles-ownership fix
+(#150) has been switched and the container confirmed healthy again — cp -a
+below relies on the on-disk ownership already being correct (`33:33`), and
+migrating a currently-500ing service first just compounds the state to sort out.
+
+1. [x] **Stop the container** — `systemctl stop docker-partdb`.
+2. [x] **Move the existing directory aside** —
+   `mv /tank/appdata/partdb /tank/appdata/partdb.pre-dataset`.
+3. [x] **Create and tag the dataset** (mounts empty at the same path the
+   container already expects — `dataDir` in `partdb.nix` does not change):
+   ```
+   zfs create tank/appdata/partdb
+   zfs set homelab:tier=precious tank/appdata/partdb
+   zfs set org.torsion.borgmatic:backup=auto tank/appdata/partdb
+   ```
+4. [x] **Copy the data back in, preserving ownership** —
+   `cp -a /tank/appdata/partdb.pre-dataset/. /tank/appdata/partdb/`.
+5. [x] **Verify before deleting anything** — `diff -rq /tank/appdata/partdb.pre-dataset /tank/appdata/partdb`
+   should report no differences.
+6. [x] **Restart and confirm — done 2026-09-26.** `partdb.maker.zjones.dev`,
+   `partdb.maker.internal`, and the direct container port all confirmed 302;
+   dashboard dot confirmed green after a refresh.
+
+   ⚠ **One real, unrelated wrinkle hit along the way — since generalized to a
+   known tsdproxy bug, not specific to Part-DB.** The tsdproxy-managed
+   `partdb` tailnet node came up in Tailscale's `NoState` (its stored session
+   was gone) and got stuck retrying rather than auto-using its authkey
+   (`TSNET_FORCE_LOGIN=1` would force it, per tsnet's own log message). At
+   the time this looked fully explained by a stale, offline device from the
+   decommissioned Unraid host squatting on the `partdb` name/IP — deleting
+   it and restarting `tsdproxy` did fix `partdb`. But the *same afternoon*,
+   `home` (long-lived, no duplicate device, nothing Unraid-related) hit the
+   identical `NoState` after an unrelated `docker restart tsdproxy`, and
+   needed a second `docker restart tsdproxy` to recover — no admin-console
+   cleanup involved that time. That rules out "stale duplicate" as the root
+   cause; it's `modules/nixos/tsdproxy.nix`'s header comment now documents
+   this as an open upstream bug
+   (https://github.com/almeidapaulopt/tsdproxy/issues/496). **Recovery, in
+   order:** `docker restart tsdproxy` (may need a second try) → check the
+   admin console for a stale duplicate device on that name and delete it if
+   present → `docker restart tsdproxy` again.
+7. [ ] **Remove the pre-dataset copy** — `rm -rf /tank/appdata/partdb.pre-dataset`,
+   once fully comfortable it's no longer needed as a fallback.
+8. [ ] **Confirm the dataset is picked up by borgmatic** — same check as
+   memos' item 6, after the next nightly run.
+9. [x] **`SHARES.md` and `BACKUP-BORG.md` updated — done 2026-09-26**, same
+   shape as the ferdium/karakeep and memos entries.
+
+## 21. Replace `h-X4WE` — a failing `tank` member (opened 2026-10-02)
+
+Scrutiny flagged `h-X4WE` (serial `*X4WE`, mapper `array-X4WE`, Unraid's old
+Parity 1) **Failed** on 2026-10-01. Read with `smartctl` on 2026-10-02: **197
+Current_Pending_Sector 184**, **198 Offline_Uncorrectable 46** (Scrutiny showed
+23 the day before), 5 Reallocated 7, 10 Spin_Retry 0, 199 UDMA_CRC 0, helium
+100, overall health PASSED, 34,745 power-on hours. The SMART error log holds a
+single UNC from hour 24,414, unrelated. No self-test had run since hour 29,132;
+the fix for that is a smartd self-test schedule
+(`homelab.smart.selfTests`).
+
+The pool has not noticed. `tank` is ONLINE with zero READ/WRITE/CKSUM on every
+member, `zpool events` has no I/O or checksum events, the kernel log has no ATA
+errors for the week, and the monthly scrub that finished 2026-10-01 16:56
+repaired 0 B with 0 errors. The bad sectors sit where ZFS has not read, which
+is why the drive's offline scan found them rather than the scrub. The other
+three spinners read 0 on 5/197/198/199. So `tank` is fully redundant, and this
+is a replace-within-weeks disk, not an emergency.
+
+**Escalate** if 197 or 198 keep climbing fast, `zpool status` shows any READ or
+CKSUM on `array-X4WE`, or another spinner's 5/197/198 leaves zero. Escalating
+means copying the `reacquirable` media onto sidepool's disks *before* anything
+else, per §9's degraded-disk contingency (a `zfs send` target, never a pool
+member).
+
+1. [x] **Order the replacement.** ≥ 12 TB, CMR, ideally not this batch; no drawer
+   spare qualifies (§9). ✅ `h-YWAH`, an HPE-branded HC520 (`HARDWARE-MAP.md`),
+   in the case 2026-10-06; used (hours reset, ≈ 255 TB written), same capacity as X4WE.
+2. [x] **Watch X4WE in Scrutiny every few days** until the new disk is in.
+   ✅ Held at 5 = 14, 197 = 184, 198 = 70 through the resilver, with 0 READ
+   errors in `zpool status`.
+3. [x] **Burn the new disk in before it touches `tank`.** On the bare disk,
+   destructive: `sudo badblocks -wsv -b 4096 -t 0 /dev/disk/by-id/<new>`
+   (one write + read pass, about 1.5 days at 12 TB), then
+   `sudo smartctl -t long`. 5/197/198 must all still read 0.
+   ✅ YWAH 2026-10-08/09: badblocks 0 bad blocks (1d20h), long test completed
+   without error at hour 65; 5/196 and every devstat error counter 0.
+4. [x] **Find X4WE's bay in cage A by serial.** Cage A's port-to-bay mapping is
+   still open (`HARDWARE-MAP.md` §7). Fill that table while doing this.
+   ✅ 2026-10-11: bay `A4` (onboard `ata4`); cage A table filled in `HARDWARE-MAP.md` §3.
+5. [x] **Swap bays, powered off: YWAH into X4WE's cage-A bay, X4WE onto YWAH's
+   loose LSI lead.** Both stay connected, so `tank` keeps full redundancy; ZFS
+   finds members by mapper name, not port. At the initrd unlock prompt, before
+   the passphrase, `ls /dev/disk/by-id/` must show both `…_*YWAH` and
+   `…_*X4WE`. YWAH missing = cage A's backplane feeds 3.3 V to the
+   power-disable pin: power off, Kapton pins 1–3, retry. Nothing is degraded.
+   ✅ 2026-10-11. YWAH came up in `A4` (the backplane carries no 3.3 V). X4WE was
+   the one missing at initrd: on the loose lead it needed the power-disable
+   adapter cable too, so ALE601s honour the pin.
+6. [x] **LUKS it like the other members** (§9: whole-disk LUKS,
+   `luks/arrayKeyFile` in slot 0, the fleet recovery passphrase in slot 1).
+   Copy cipher and sector size from an existing member's `cryptsetup luksDump`
+   rather than trusting defaults. Open it as `array-<last 4 of serial>`.
+   ✅ 2026-10-11: `array-YWAH`, parameters copied from T97E, UUID preset with
+   `luksFormat --uuid`; `luksDump` showed slots 0 and 1.
+7. [x] **`[galactica]` PR: add the new member** — its crypttab line (new LUKS
+   UUID) and its `zfs-import-tank` ordering entry in `configuration.nix`.
+   Switch *before* step 8, so a reboot mid-resilver reopens both disks.
+   ✅ #170, switched 2026-10-11.
+8. [x] **`sudo zpool replace tank array-X4WE array-<last4>`**, then watch
+   `zpool status` until the resilver completes. X4WE detaches by itself at the
+   end. ✅ Started 2026-10-10 21:41; resilvered 4.32T in 18:53:42 with 0 errors,
+   finished 2026-10-11 16:34. `array-YWAH` is a plain raidz1 member.
+9. [x] **Follow-up PR: remove `array-X4WE`'s crypttab line and ordering
+   entry.** Switch, then cold-boot once to prove `tank` imports with the new
+   member. ✅ #179, switched 2026-10-11; the cold boot imported `tank` ONLINE
+   with all seven members and no errors.
+10. [ ] **Pull X4WE off the loose LSI lead** (the new disk is already in its
+    bay, step 5). Update `HARDWARE-MAP.md` §1 with the new row and ID, and
+    print its caddy label (`docs/DISK-LABELLING.md`).
+    Pulled and `HARDWARE-MAP.md` updated 2026-10-11; **the `h-YWAH` caddy label
+    is still to print.**
+11. [ ] **RMA X4WE to the seller.** Warranty claim approved 2026-10-09; RMA
+    number, address and terms are in `fleet-inventory`. Only after step 8's
+    resilver: `cryptsetup luksErase` (destroys the keyslots, which is enough
+    since everything on it is ciphertext), photograph the drive and its pins,
+    pack it padded in an anti-static bag, keep the tracking number. It does not
+    go in the drawer; whatever comes back is a new disk with its own ID.
+    `luksErase` done 2026-10-11, before the cold boot; photos, packing and
+    shipping remain.

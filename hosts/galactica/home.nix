@@ -12,6 +12,8 @@
     nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#galactica";
     nrt = "sudo nixos-rebuild test --flake ~/nixos-config#galactica";
     npull = "~/nixos-config/scripts/npull.sh";
+    # A script, not "npull && nrs" — an alias would put the PR number on nrs.
+    npullnrs = "~/nixos-config/scripts/npull-rebuild.sh nixos-rebuild galactica";
   };
 
   home.stateVersion = "26.05";

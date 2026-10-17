@@ -107,12 +107,11 @@
         { name = "homeassistant"; ids = [ "192.168.8.142" ]; }
         { name = "galactica"; ids = [ "192.168.8.190" ]; }
         { name = "towerbmc"; ids = [ "192.168.8.191" ]; }
-        # hamilton: not yet deployed, no known IP — add once it exists.
+        # hamilton: not in service, no known IP — add once it exists.
       ];
 
-      # Note: hopper and hamilton also import this module (currently dead
-      # code — hosts/README-rpi-os.md) alongside galactica, so any clients
-      # defined here would appear on all instances that actually run it.
+      # Every importer of this module (galactica live; hopper/hamilton staged)
+      # gets the same client list — keep it host-agnostic.
     };
   };
 

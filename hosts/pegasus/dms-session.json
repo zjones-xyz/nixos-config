@@ -1,0 +1,162 @@
+{
+  "wallpaperPath": "/home/z/Wallpaper/alena-aenami-wallpaper/alena-aenami-7pm.png",
+  "perMonitorWallpaper": true,
+  "monitorWallpapers": {
+    "DP-1": "/home/z/Wallpaper/alena-aenami-wallpaper/alena-aenami-stardust.jpg"
+  },
+  "monitorWallpaperFillModes": {
+    "DP-1": "Fit"
+  },
+  "wallpaperCyclingEnabled": true,
+  "wallpaperCyclingRandom": true,
+  "wallpaperCyclingInterval": 43200,
+  "wallpaperCyclingFolderPath": "/home/z/Wallpaper/alena-aenami-wallpaper",
+  "monitorCyclingSettings": {
+    "HDMI-A-1": {
+      "enabled": true,
+      "random": true,
+      "mode": "interval",
+      "interval": 28800,
+      "time": "06:00",
+      "folderPath": ""
+    },
+    "DP-1": {
+      "enabled": true,
+      "random": true,
+      "mode": "interval",
+      "interval": 21600,
+      "time": "06:00",
+      "folderPath": ""
+    },
+    "DP-2": {
+      "enabled": true,
+      "random": true,
+      "mode": "interval",
+      "interval": 21600,
+      "time": "06:00",
+      "folderPath": ""
+    }
+  },
+  "nightModeAutoEnabled": true,
+  "nightModeAutoMode": "location",
+  "latitude": 47.6765073,
+  "longitude": -122.3862233,
+  "nightModeUseIPLocation": true,
+  "nightModeLocationName": "Ballard, Washington",
+  "themeModeAutoEnabled": true,
+  "themeModeAutoMode": "location",
+  "themeModeShareGammaSettings": false,
+  "weatherLocation": "",
+  "weatherCoordinates": "47.6,-122.3",
+  "hiddenTrayIds": [
+    "zoom::Zoom Workplace",
+    "nm-applet"
+  ],
+  "showThirdPartyPlugins": true,
+  "lastPlayerIdentity": "Vivaldi",
+  "niriOutputSettings": {
+    "DP-2": {
+      "focusAtStartup": true,
+      "layout": null
+    }
+  },
+  "activeDisplayProfile": {
+    "niri": "auto_8e10dbef"
+  },
+  "activeDisplayProfileModes": {
+    "niri": {
+      "DP-1": {
+        "mode": "3840x2160@59.997"
+      },
+      "DP-2": {
+        "mode": "3840x2160@59.997"
+      },
+      "HDMI-A-1": {
+        "mode": "3840x2160@60.000"
+      }
+    }
+  },
+  "desktopWidgetInstancePositions": {
+    "dw_1787522435324_cnmnve3wf": {
+      "DP-1": {
+        "width": 200,
+        "height": 200,
+        "x": 764,
+        "y": 1436
+      },
+      "DP-2": {
+        "width": 200,
+        "height": 200,
+        "x": 1436,
+        "y": 764
+      },
+      "HDMI-A-1": {
+        "width": 428.95703125,
+        "height": 188.24609375,
+        "x": 1928.265625,
+        "y": 102.04296875
+      }
+    }
+  },
+  "greeterSyncPending": true,
+  "greeterSyncBaseline": {
+    "showSeconds": false,
+    "clockFormat": "auto"
+  },
+  "launcherLastQuery": "viv",
+  "launcherQueryHistory": [
+    "viv",
+    "sett",
+    "claud",
+    "dis",
+    "settin",
+    "clau",
+    "prot",
+    "thund",
+    "cla",
+    "tick",
+    "stream",
+    "settings",
+    "libre",
+    "1pa",
+    "1p",
+    "lutr",
+    "bridg",
+    "vs code",
+    "stea",
+    "libr",
+    "7*12",
+    "file",
+    "vs",
+    "d",
+    "1",
+    "fi",
+    "spot",
+    "calen",
+    "setting",
+    "setup",
+    "vort",
+    "coo",
+    "thun",
+    "272/25.4",
+    "noise",
+    "chr",
+    "setti",
+    "disco",
+    "374/25",
+    "naut",
+    "vis",
+    "calc",
+    "ferd",
+    "dolp",
+    "set",
+    "bam",
+    "ste",
+    "steam",
+    "about",
+    "orca"
+  ],
+  "appDrawerLastMode": "all",
+  "settingsSidebarExpandedIds": ",power_security,applications,workspaces_widgets,displays,dock_launcher,dankbar,system,personalization,",
+  "configVersion": 4
+}

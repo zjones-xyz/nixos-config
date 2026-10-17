@@ -3,46 +3,14 @@
 Everything below requires real hardware or secrets and was deliberately NOT done
 by the authoring session. Roughly in order.
 
-## 0. Before Wednesday — gather from the running CachyOS system
+## 0. ✅ Pre-install survey of the running CachyOS system — moot
 
-Do this *now*, while CachyOS boots fine, to de-risk install day. The pegasus
-config was authored blind (placeholder UUIDs, generic module lists); running
-these on the live box and pasting the output back lets the real values get
-reconciled into the config ahead of time. Nothing here changes anything — all
-read-only.
+The install happened 2026-07-11 and the CachyOS drive was physically removed;
+the gathered hardware values were folded into the config (see §1 and
+`HARDWARE-MAP.md`). The read-only survey commands lived here and are in git
+history if a similar pre-install pass is ever wanted for another box.
 
-```bash
-# 1. Drive identity — MOST IMPORTANT. Records the CachyOS drive's model+serial
-#    so that, once the new blank NVMe is installed, you can positively identify
-#    which /dev/disk/by-id/ path is the NEW drive (by elimination) before disko
-#    ever touches it. Do NOT trust nvme0n1 vs nvme1n1 with two drives present.
-lsblk -o NAME,SIZE,MODEL,SERIAL,TYPE,MOUNTPOINTS
-ls -l /dev/disk/by-id/ | grep -i nvme
-
-# 2. GPU — confirm it's the RTX 4070 and see the in-use kernel driver.
-lspci -nnk | grep -iA3 -E 'vga|3d controller'
-
-# 3. CPU — confirm AMD (feeds kvm-amd + microcode in hardware-configuration.nix).
-lscpu | grep -iE 'model name|vendor'
-
-# 4. NIC — driver + interface name + MAC (feeds networking / later tailscale).
-lspci -nnk | grep -iA3 -E 'ethernet|network controller'
-ip -o link | grep -v 'lo:'
-
-# 5. RAM — sanity-check zram sizing (config uses memoryPercent = 90).
-free -h
-
-# 6. Board + BIOS — model informs the M.2-slot / SATA lane-sharing question
-#    (matters for the Windows SATA SSD) and whether a BIOS update is wanted.
-sudo dmidecode -t bios -t baseboard | grep -iE 'vendor|version|manufacturer|product name'
-
-# 7. TPM — confirm fTPM is exposable (needed for Windows 11 later).
-ls -l /sys/class/tpm/ 2>/dev/null || echo "no TPM device — enable fTPM in BIOS"
-```
-
-Paste the output back and it'll be folded into the config before install day.
-
-## 1. Bare-metal NixOS install (single NVMe — CachyOS drive removed 2026-07-11)
+## 1. ✅ Bare-metal NixOS install — done 2026-07-11 (single NVMe, CachyOS drive removed)
 
 **Superseded from the original dual-NVMe plan**: at install time, the CachyOS
 drive was physically pulled entirely rather than dual-booted, so pegasus is
@@ -67,7 +35,7 @@ blank" step.
    `nixos-generate-config --root /mnt` and replace
    `hosts/pegasus/hardware-configuration.nix` with the result. Commit it.
 
-## 2. First switch (Phase 1 only — have a TTY reachable)
+## 2. ✅ First switch — done (all phases have long since been switched and exercised)
 
 Bring up base + GPU + Plasma first, before gaming/perf/inference, so a bad GPU
 or display-manager state doesn't lock you out:
@@ -133,10 +101,10 @@ To bump Olla's version later: change `version`, re-run
   `rtcwake` the evening before or set a BIOS RTC wake — the timer alone won't wake
   the box, and global suspend behaviour was deliberately left unchanged.
 
-## 7. Secrets
+## 7. ✅ Secrets — done
 
-See `SECRETS-TODO.md` — create `secrets/pegasus.yaml`, add pegasus's age key to
-`.sops.yaml`, then the Tailscale auth key wiring activates automatically.
+`secrets/pegasus.yaml` exists and pegasus's age key is in `.sops.yaml`;
+`SECRETS-TODO.md` tracks the couple of BorgBase follow-ups still open.
 
 ## 8. Mac (serenity) — nix-darwin activation
 
@@ -682,6 +650,18 @@ own Xwayland and takes satellite out of the loop; `gaming.nix` already
 installs it. Interim workaround: keep a freshly launched game focused for
 its first minute or two.
 
+**Launch options now live in `docs/runbooks/steam-launch-options.md`** — go
+there when setting up any new Steam title. Both halves were verified against
+ACE COMBAT 8 on the hardware, 2026-10-08: `gamemoderun %command%` works and is
+what the `ollama-pause` GPU drain depends on, **per-game**, because Proton
+titles never request gamemode themselves — so the drain stays dead for any
+title whose launch options lack it. gamescope does *not* work here: it crashes
+on teardown in both backends, taking Electron/CEF windows with it, so it trades
+an occasional freeze for a reliable crash. The runbook carries the crash
+signatures and retry command, the Proton `winewayland.drv` finding, the polkit
+prompt that still gates the drain, and the VRAM ceiling that decides whether a
+game fits at all.
+
 To try, roughly cheapest-first:
 
 1. [ ] Stock Discord: toggle **off** hardware acceleration (User Settings →
@@ -694,23 +674,17 @@ To try, roughly cheapest-first:
    `vesktop` in `home.nix` (keep or drop `discord` — either works; note
    Discord's ToS technically frowns on modified clients, enforcement against
    plain client mods has historically been nil, judgement call).
-3. [ ] For each affected game (Steam → Properties → Launch Options):
-   `gamescope -f -w 2560 -h 1440 -W 2560 -H 1440 --force-grab-cursor --backend sdl -- %command%`
-   (swap in the monitor's real resolution), then confirm the unfocused
-   early-freeze stops. `--backend sdl` is currently load-bearing (gamescope's
-   Wayland backend doesn't lock the cursor properly, per the niri wiki).
-   Note: Lutris's own gamescope toggle is NOT a substitute for Steam titles —
-   Lutris's Steam runner hands launching off to the Steam client, so Lutris
-   system options never wrap the game process
-   (https://github.com/lutris/lutris/issues/3085). It only applies to games
-   Lutris itself execs (Wine/native/GOG/EGS).
-4. [ ] Proton titles only, alternative to gamescope:
-   `PROTON_ENABLE_WAYLAND=1 %command%` (recent Proton) — native Wayland
-   avoids the satellite bug entirely, per the issue reporter.
-5. [ ] Check https://github.com/Supreeeme/xwayland-satellite/issues/201
-   occasionally; once fixed and the nixpkgs package carries it, steps 3–4
-   become unnecessary for the unfocused-freeze (gamescope may still be nice
-   for other reasons).
+3. [ ] Native Wayland — `PROTON_ENABLE_WAYLAND=1 gamemoderun %command%`.
+   Avoids the satellite bug at its root rather than working around it, per
+   the issue reporter, and needs no nested compositor. **Blocked on the
+   Proton build:** none of the three installed here ship `winewayland.drv`,
+   so the flag is inert — install Proton Experimental first (Steam →
+   Properties → Compatibility), then re-check for the driver before trusting
+   it. Which builds were checked, and how to tell native Wayland from
+   Xwayland afterwards, are in `docs/runbooks/steam-launch-options.md`.
+4. [ ] Check https://github.com/Supreeeme/xwayland-satellite/issues/201
+   occasionally; once fixed and the nixpkgs package carries it, step 3
+   becomes unnecessary for the unfocused-freeze.
 
 ## 22. Stream privacy block-outs — verify app-ids on real hardware
 
@@ -738,3 +712,286 @@ real-hardware check:
    these windows, and a third-party screenshot tool's frozen fullscreen
    overlay could briefly leak them into an active cast — mid-stream, prefer
    niri's built-in screenshot (`Print` binds).
+
+## 23. Qt platform theme (qt5ct/qt6ct) — verify after the next switch
+
+`qt.platformTheme = "qt5ct"` in `configuration.nix` exists to make DMS's
+"apply colours to Qt" work; the trade-off it accepts is a Qt theming change
+in the other sessions. Both halves want confirming on real hardware — see
+`DECISIONS.md` for why each is expected.
+
+1. [x] In niri, press DMS's **apply colours to Qt** button again. It should
+   no longer report `failed to apply Qt colors`, and
+   `~/.config/qt6ct/qt6ct.conf` should gain `custom_palette=true` plus a
+   `color_scheme_path` pointing at `~/.config/qt6ct/colors/matugen.conf`
+   (see §24 — before the `qt.sh` patch this pointed at `DankMatugen.colors`,
+   which is why the palette never applied).
+2. [x] Open a Qt app under niri (`qt6ct` itself will do) and confirm it
+   picks up the matugen palette rather than the default grey.
+3. [ ] Log into the **Plasma** session once and look at a Qt dialog. The
+   expectation is that Breeze's palette is displaced by qt6ct's — that is
+   the accepted cost, not a bug. If it is worse than expected, deleting the
+   `qt` block in `configuration.nix` reverts it on the next rebuild.
+
+## 24. DMS `qt.sh` patch — confirm, then file upstream
+
+`modules/nixos/desktop-niri.nix` patches two bugs in DMS's
+`scripts/qt.sh` at build time (full reasoning in `DECISIONS.md`). Both are
+confirmed on the hardware: the palette renders in Qt apps, and it survives
+a full logout/login (2026-09-08) — DMS regenerates its matugen output at
+session start and leaves `color_scheme_path` alone. Neither bug is
+reported upstream; only the filing below is left.
+
+1. [x] After the next switch, press **apply colours to Qt** and check that
+   `~/.config/qt6ct/qt6ct.conf` and `~/.config/qt5ct/qt5ct.conf` each point
+   `color_scheme_path` at their *own* `colors/matugen.conf`.
+2. [x] Open a Qt app and confirm the matugen palette actually renders. This
+   is the step that has never once passed on this host.
+3. [ ] File the upstream issue against `AvengeMedia/DankMaterialShell` —
+   draft ready at `~/dms-qt-issue-draft.md`, unsent. Covers both bugs.
+4. [ ] Once upstream fixes it, delete the `package` override in
+   `desktop-niri.nix`. It is `--replace-fail`-anchored, so a rebuild will
+   fail loudly rather than silently no-op if upstream edits those lines
+   first — that failure is the signal to remove the shim, not to repair it.
+   Issue #110 records the exact failure text and the three cases it can be.
+
+## 25. Named workspace `Mail` + login placement — verify on real hardware
+
+`niri-settings.nix` now declares a named workspace `Mail` homed to the left
+monitor, spawns Thunderbird and TickTick at login, and routes both with window
+rules (Thunderbird → `Mail` always; TickTick → right monitor, at-startup only).
+The Mozilla/Electron app-ids could not be verified from source — same
+limitation as §22 — and TickTick's placement additionally assumes the right
+monitor has exactly one workspace at login, which stops being true the day a
+named workspace is homed there.
+
+1. [ ] With both apps open, run `niri msg windows` and confirm the app-ids
+   match `(?i)thunderbird$` and `(?i)ticktick$`. Fix any regex that misses in
+   `niri-settings.nix` and note it here.
+2. [ ] Log out and back in. Thunderbird should land on `Mail` (left monitor,
+   its first workspace) *without* taking focus; TickTick on the right
+   monitor's first workspace.
+3. [ ] Mid-session, launch Thunderbird by hand: it should still go to `Mail`,
+   focused this time. Launch TickTick by hand: it should open on the current
+   workspace, not jump to the right monitor.
+4. [ ] Unplug and replug the left monitor with `Mail` empty. It should come
+   back to the left monitor rather than staying on whichever monitor adopted
+   it — that is the named-workspace behaviour the whole design leans on.
+5. [ ] Optional, cosmetic: DMS shows workspace *names* only with Settings →
+   Workspaces → "Workspace Names" on (off in the checked-in
+   `dms-settings.json`), or by giving `Mail` an icon under "Named Workspace
+   Icons" — that card only appears once niri reports a named workspace. If
+   either is turned on, capture it with `dms-settings-snapshot`.
+
+## 26. Kali VM for class — first use
+
+Added `modules/nixos/virt-manager.nix` (libvirtd + qemu_kvm + virt-manager,
+imported in `configuration.nix`) so a Kali guest can run under KVM instead of
+needing a second machine. Nothing in it downloads or configures Kali itself —
+that's the interactive part below. OpenVPN is *not* set up on the host at
+all: the plan is to run the OpenVPN client inside the Kali guest (it ships
+with `openvpn` already), which only needs the guest to reach the internet —
+libvirt's default NAT network (created automatically once `libvirtd` is
+enabled) covers that with no extra host config.
+
+1. [ ] `nixos-rebuild switch --flake .#pegasus`, then log out/in (or reboot)
+       so the `libvirtd` group membership actually takes effect for `z` —
+       group changes need a fresh login session, same trap as `docker`.
+2. [ ] Confirm access without `sudo`: `virsh -c qemu:///system list --all`
+       should run cleanly (no polkit prompt/permission error), and
+       `virsh net-list --all` should show `default` as `active`/`autostart`
+       — a fresh libvirtd occasionally needs a one-time
+       `virsh net-start default && virsh net-autostart default` before the
+       guest has any network at all. Catching that here beats debugging it
+       from inside the Kali installer in step 4.
+3. [ ] Download the Kali ISO (installer or live) from kali.org and create the
+       VM in virt-manager: File → New Virtual Machine → point at the ISO. UEFI
+       vs. BIOS and the disk size are whatever the class asks for; nothing
+       here dictates it.
+4. [ ] Inside the installed guest, verify it has a normal internet route
+       (`ping -c1 1.1.1.1`), then bring in the class's `.ovpn` profile and
+       any auth files and run `sudo openvpn --config class.ovpn` (or import
+       it into NetworkManager's OpenVPN plugin, already present on Kali, for
+       a GUI toggle instead of a foreground terminal command).
+5. [ ] If the class's VPN concentrator instead requires the VM to appear as
+       its own device on the LAN (rather than NAT'd behind pegasus's IP),
+       that needs a bridged libvirt network instead of the default NAT
+       one — not set up here since it wasn't asked for; revisit only if the
+       NAT setup actually fails for that reason.
+
+## 27. LTS kernel + `nixpkgs-apps` — verify after the next switch
+
+The kernel moves from 7.1.9 to the 6.18 LTS, and four apps now come from
+`nixpkgs-apps` (see `DECISIONS.md`: "Kernel → the release LTS" and "Desktop
+apps from `nixpkgs-apps`"). Both were validated by eval only. The same switch
+is also the first build of Claude Desktop 2.31226.1 (#171): its `.deb` host
+was outside the authoring session's network, so nothing has fetched it yet.
+The 7.1.9 generation stays in the systemd-boot menu as the rollback until the
+next garbage collection.
+
+1. [x] Switch from another host or a TTY (decision 4 in `DECISIONS.md`), then
+   **reboot** — a kernel change only takes effect on boot.
+2. [x] `uname -r` shows `6.18.x`.
+3. [x] `nvidia-smi` shows the 4070 on driver 595.71.05, and the niri Wayland
+   session logs in.
+4. [x] Scheduler: `cat /sys/kernel/sched_ext/state` shows `disabled` and
+   `systemctl status scx` is inactive, i.e. EEVDF (same as §3).
+5. [x] One Proton title launches and plays for a few minutes.
+6. [x] Bambu Studio (now 02.08): the Prepare/Preview build plate renders
+   rather than going blank — that is the NVIDIA GL workaround still working.
+   Separately, the toolbar and tooltips strobe on hover. That predates this
+   change: it happens on 02.05 too, under `GDK_BACKEND=x11` too, and on the
+   7.1.9 generation too. Deferred to #177 (suspect: the workaround's zink path).
+7. [x] OrcaSlicer (now 2.4.2). The stock Bambu network plugin Orca downloads
+   into `~/.config/OrcaSlicer/plugins/` makes every later launch abort
+   (`free(): invalid size`), so keep it out until the open-source replacement
+   lands: `mv ~/.config/OrcaSlicer/plugins ~/.config/OrcaSlicer/plugins.stock-crashes`,
+   and dismiss the "Bambu Network Plug-in Required" dialog (✕) on each start
+   rather than letting it download again. Launched normally (the wrapper sets
+   `WEBKIT_DISABLE_DMABUF_RENDERER`), check: the Home page and Setup Wizard
+   render rather than black, the 3D viewport renders, the Device/Project pages
+   and preset dialogs open — and it **survives a second launch**. Without the
+   plugin, Orca can slice but cannot reach Bambu printers or Bambuddy.
+   Passed with `plugins/` moved aside, second launch included.
+8. [x] ferdium and ticktick open (same versions, rebuilt against unstable).
+9. [x] Claude Desktop (now 2.31226.1, up from 1.34493.1) launches, and its MCP
+   servers start — Settings → Developer lists them as running. A 1.x → 2.x
+   jump is where an MCP config-format change would show up. Pegasus had no MCP
+   servers configured; a throwaway `npx` filesystem server came up running,
+   which exercises the FHS wrapper's `npx` path.
+10. [ ] If anything above fails: boot the previous generation from the
+    systemd-boot menu, note here what broke, and leave the PR's fix to a
+    config session rather than patching on the host.
+
+## 29. OrcaSlicer on open-bamboo-networking — verify after the next switch
+
+`home.nix` links open-bamboo-networking (OBN) into `~/.config/OrcaSlicer/plugins/`
+and points `OrcaSlicer.conf` at it (`DECISIONS.md`: "OrcaSlicer's network
+plugin → open-bamboo-networking"). The activation step only edits an existing
+`OrcaSlicer.conf`, and Orca rewrites that file when it exits, so quit Orca
+before switching.
+
+1. [x] Quit OrcaSlicer. Move aside anything left in `plugins/` from the stock
+       plugin, or Home Manager refuses to replace `libBambuSource.so`:
+       `mv ~/.config/OrcaSlicer/plugins ~/.config/OrcaSlicer/plugins.stock-$(date +%F)`
+       (§27 step 7 may already have done this).
+2. [x] Switch. `ls -l ~/.config/OrcaSlicer/plugins/` shows three links into
+       the store, and
+       `jq '.app | {installed_networking, network_plugin_version, update_network_plugin}' ~/.config/OrcaSlicer/OrcaSlicer.conf`
+       shows `"true"`, `"02.03.00.99"`, `"false"`.
+3. [x] Launch Orca from a terminal. stderr shows
+       `[obn] Loaded Open Bamboo Networking plugin, version v2.2.0`, there is
+       no "Bambu Network Plug-in Required" dialog, and it **survives a second
+       launch**.
+4. [x] Device tab: add a printer by IP and access code and confirm it
+       connects. A Bambuddy virtual printer also needs Bambuddy's CA in
+       Orca's `printer.cer` (§#166).
+
+## 30. nix-daemon build limits + oomd — verify during a big build
+
+`modules/nixos/performance.nix` now runs nix-daemon builds at `batch` CPU
+priority with `MemoryHigh=40G`, `max-jobs = 4`, `cores = 8`, and turns oomd on
+for the user slices (it previously watched nothing). Evaluated only, never
+switched; reasoning in DECISIONS.md (nix-daemon build limits).
+
+Steps 1–3 verified after the switch (2026-10-12): values exactly as listed,
+and `oomctl` monitors `/user.slice` and its descendants (`app.slice`,
+`background.slice`, `session.slice`) at 80% / 30 s, with no system or root
+slice and no swap-monitored cgroups.
+
+1. [x] After the switch, confirm the unit picked it up:
+   `systemctl show nix-daemon -p MemoryHigh -p CPUSchedulingPolicy -p IOSchedulingClass`
+   → `MemoryHigh=42949672960`, `CPUSchedulingPolicy=3` (batch),
+   `IOSchedulingClass=3` (idle).
+2. [x] `nix config show | grep -E '^(max-jobs|cores) '` → `4` / `8`.
+3. [x] `oomctl` lists `user.slice` (and the user manager's slices) under
+   monitored memory-pressure cgroups, and does **not** list `system.slice`
+   or `-.slice`.
+4. [ ] Force a big local build (e.g. `nix build --rebuild` of Bambu Studio
+   or OrcaSlicer, or the next `nixos-rebuild switch` that compiles one). While
+   it runs: the desktop, video playback and a game stay responsive;
+   `pid=$(pgrep -n cc1plus) && chrt -p "$pid"` reports `SCHED_BATCH`;
+   `pgrep -c cc1plus` stays at or under ~32.
+5. [ ] During that build, watch `systemctl status nix-daemon` (the `Memory:`
+   line) and `cat /sys/fs/cgroup/system.slice/nix-daemon.service/memory.events`.
+   A rising `high` count is the throttle working; the build should finish,
+   just slower. If it crawls for long stretches, lower `cores` before
+   raising `MemoryHigh`.
+6. [ ] Run a game during a build. Check whether the build keeps moving at
+   about half speed and the game holds its frame rate. If the game stutters,
+   switch to the root-level idle slice described in the DECISIONS entry and
+   record the result here.
+
+## #166 Bambuddy's CA in OrcaSlicer's `printer.cer`
+
+`flake.nix`'s `withBambuddyCa` appends `certs/bambuddy-vp-ca.crt` to the
+`printer.cer` inside `pkgsApps.orca-slicer`. Without it, connecting to a
+Bambuddy virtual printer fails with `code=-1`. OrcaSlicer no longer comes from the
+binary cache: the next switch compiles it locally.
+
+1. [x] Switch, then check the last entry is `CN=Virtual Printer CA …` with the
+       fingerprint Bambuddy shows:
+       ```sh
+       cer=$(dirname "$(readlink -f "$(which orca-slicer)")")/../share/OrcaSlicer/cert/printer.cer
+       while openssl x509 -noout -subject -sha256 -fingerprint; do :; done < "$cer"
+       ```
+2. [x] Connect OrcaSlicer to a virtual printer and confirm it no longer fails
+       with `code=-1`. This goes through open-bamboo-networking (§29), which
+       checks the printer against this same `printer.cer`.
+
+Verified on pegasus with VP-queue (queue mode, .97): OBN logs `insecure=0`
+and `mqtt connect callback rc=0 (accepted)`. Test with a queue- or
+archive-mode VP: a proxy-mode VP announces the real printer's serial, so Orca
+treats the two as one device and connects to the printer directly.
+
+## #186 HushMic — verify after the next switch
+
+`modules/nixos/hushmic.nix` runs `hushmic --tray` as a user unit. It adds a
+"HushMic" PipeWire source, and apps that should get the cleaned voice pick it
+as their input. The first switch compiles HushMic locally (Rust, a few
+minutes). Rationale: DECISIONS.md, "HushMic as the noise-suppressed mic".
+
+1. [x] Start it, then check it is running and the tray icon shows up in
+       DMS. A switch does not start a new user unit; it starts by itself
+       from the next login on.
+       ```sh
+       systemctl --user start hushmic
+       systemctl --user status hushmic
+       hushmic status
+       ```
+2. [ ] Pick the real microphone in the tray menu. Then use **Test my mic** to
+       record a sample and compare the raw and cleaned playback.
+3. [x] Select **HushMic** as the input in Discord (or another app) and
+       confirm the other side hears the cleaned voice.
+4. [ ] Leave the tray's **Start on login** off. The unit already starts
+       HushMic at login, and a second instance would lose the
+       single-instance lock. If `~/.config/autostart/hushmic.desktop` exists,
+       run `hushmic config set autostart false`.
+
+Verified on pegasus, 2026-10-14: after a manual `start` the unit is active and
+the tray icon shows in DMS. On a Discord call with HushMic as the input, the
+other side could not hear the keyboard. At first the voice came through
+quiet: the mic's input volume was low, and the default strength (100 dB)
+damped speech too. Both were fixed from the tray. These settings are runtime
+state, not Nix: HushMic keeps the strength per mic in
+`~/.config/hushmic/config.toml`, and WirePlumber remembers the input volume.
+
+## #193 Exposed apps on the fast lane — owner steps and first switch
+
+Vivaldi, Chrome, Discord, Slack, Signal and Zoom now come from `nixpkgs-apps`,
+and `.github/workflows/update-apps.yml` bumps the app inputs twice a week.
+Rationale: DECISIONS.md, "Exposed apps on the fast lane".
+
+1. [ ] In the repo's Settings → Actions → General, turn on "Allow GitHub
+       Actions to create and approve pull requests". Without it the
+       workflow can't open its bump PR.
+2. [ ] Optional: add a fine-grained PAT (contents + pull requests, this repo
+       only) as the `APP_BUMP_TOKEN` secret. Bump PRs opened with the default
+       token don't trigger `nix-check.yml`. The workflow runs the same evals
+       itself, but `flake-check` never reports on the PR.
+3. [ ] Start one run by hand (Actions → "Bump app inputs" → Run workflow) and
+       confirm it opens a `[pegasus] Bump app inputs` PR, or none if nothing
+       moved.
+4. [ ] Switch pegasus (`npullnrs`), then open Vivaldi, Chrome, Discord,
+       Slack, Signal and Zoom. A newer app over the system's NVIDIA userspace
+       is the first suspect if one fails to render.

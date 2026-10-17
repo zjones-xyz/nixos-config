@@ -1,0 +1,33 @@
+From 11774fcba6cf3533756891e86df3a9c414951e21 Mon Sep 17 00:00:00 2001
+From: emzbtw <307707176+emzbtw@users.noreply.github.com>
+Date: Fri, 25 Sep 2026 15:38:30 +0100
+Subject: [PATCH] send allowedHosts in the arr host config payload (#356)
+
+Co-authored-by: Kiri Carlson <kiri@walawren.com>
+---
+ modules/arr-common/hostConfig.nix | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/modules/arr-common/hostConfig.nix b/modules/arr-common/hostConfig.nix
+index 8a0ac3c..539001a 100644
+--- a/modules/arr-common/hostConfig.nix
++++ b/modules/arr-common/hostConfig.nix
+@@ -326,6 +326,7 @@ in
+             NEW_CONFIG=$(${pkgs.jq}/bin/jq -n \
+               ${jqSecrets.flagsString} \
+               --argjson id "$CONFIG_ID" \
++              --arg allowedHosts "$(echo "$HOST_CONFIG" | ${pkgs.jq}/bin/jq -r '.allowedHosts // ""')" \
+               --arg bindAddress ${escapeShellArg hc.bindAddress} \
+               --arg authenticationMethod ${escapeShellArg hc.authenticationMethod} \
+               --arg authenticationRequired ${escapeShellArg hc.authenticationRequired} \
+@@ -345,6 +346,7 @@ in
+               --arg backupFolder ${escapeShellArg hc.backupFolder} \
+               '{
+                 id: $id,
++                allowedHosts: $allowedHosts,
+                 bindAddress: $bindAddress,
+                 port: ${builtins.toString hc.port},
+                 sslPort: ${builtins.toString hc.sslPort},
+-- 
+2.54.0
+

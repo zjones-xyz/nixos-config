@@ -1,57 +1,40 @@
 { config, pkgs, ... }:
 
+let
+  # ── Monitor identities ──────────────────────────────────────────────────
+  # niri has no output-alias concept: `outputs`, `open-on-output` and window
+  # rules each take a raw connector name or make/model/serial string. These
+  # bindings are that alias layer, so a replaced panel is one edit. Identity
+  # strings, not DP-1/HDMI-A-1 — connector names shuffle between reboots.
+  # Verify with `niri msg outputs`.
+  monLeft = "Dell Inc. DELL S2722QC 1NC1J24";
+  monCentre = "LG Electronics LG HDR 4K 111NTEP7X460";
+  monRight = "Dell Inc. DELL S2721QS 44B9513";
+in
 {
   # ── Declarative niri config (niri-flake's homeModules.config) ──────────────
-  # Migrated 2026-08-11 from a hand-edited ~/.config/niri/config.kdl (niri's
-  # own auto-generated first-run template, with `natural-scroll` disabled by
-  # hand) — see DECISIONS.md for why niri-flake was adopted this way
-  # (homeModules.config only, NOT the full nixosModules.niri, which would
-  # replace nixpkgs' niri package entirely).
+  # homeModules.config only, NOT the full nixosModules.niri (which would
+  # replace nixpkgs' niri package entirely) — see DECISIONS.md.
   #
-  # ⚠ DIVERGENCE RISK, flagged per Zoe's request: niri-flake's own README
-  # states `programs.niri.settings`' schema is "not guaranteed to be
-  # compatible with niri versions other than the two [niri-flake] provides"
-  # and that nixpkgs' niri "will not have an issue... unless running old
-  # versions 2+ releases behind." We deliberately run nixpkgs' niri (not
-  # niri-flake's own build — see `package` below), so if nixpkgs' niri drifts
-  # far enough behind niri-flake's schema, `nix flake check`/eval could start
-  # failing (a new/renamed niri action, a KDL schema change) until niri-flake
-  # is bumped, or (worse, if it happens silently) generate a config.kdl that
-  # builds but doesn't do what's declared here. Symptom to watch for: an eval
-  # error mentioning an unknown niri action name, or a real behavioral
-  # mismatch between what's declared here and what actually happens on
-  # pegasus. If that happens, check niri-flake's CHANGELOG/issues before
-  # assuming it's a mistake in this file.
-  # Validate against the niri actually installed (nixpkgs', via
-  # programs.niri.enable in modules/nixos/desktop-niri.nix), not
-  # niri-flake's own niri-stable build — see DECISIONS.md. Sibling of
-  # `settings` below, not nested under it.
+  # ⚠ DIVERGENCE RISK: we run nixpkgs' niri against niri-flake's settings
+  # schema, which niri-flake only guarantees for its own two niri versions.
+  # If an eval error here names an unknown niri action, or declared behavior
+  # stops matching the live session, check niri-flake's CHANGELOG/issues
+  # before assuming a mistake in this file.
+  # Validates against the installed nixpkgs niri, not niri-flake's build.
+  # Sibling of `settings` below, not nested under it.
   programs.niri.package = pkgs.niri;
 
   programs.niri.settings = {
     # ── Session environment ────────────────────────────────────────────────
-    # Recommended directly by DMS's own niri setup docs. Only the variables
-    # that are safe or beneficial even if they leak into other sessions —
-    # see the note below, this host's systemd --user manager is shared and
-    # persistent across session switches (same root cause as the
-    # XDG_CURRENT_DESKTOP bug in DECISIONS.md), and niri-session's own
-    # script (`systemctl --user import-environment`) confirms it injects
-    # into that shared manager, only explicitly cleaning up 5 unrelated
-    # vars (WAYLAND_DISPLAY etc.) on exit — nothing we set here.
-    #
-    # QT_QPA_PLATFORM=wayland and the Electron Ozone hints are harmless (at
-    # worst) or actively beneficial (at best) if they leak into Plasma/
-    # COSMIC/Dragonized, since every session on this host is already
-    # Wayland — matters for the Electron apps already installed (Discord,
-    # VSCode, Obsidian, Ferdium, TickTick, Claude Desktop, ProtonMail
-    # Desktop, Teams-for-linux — see home.nix), which otherwise fall back
-    # to XWayland under niri.
-    #
-    # Deliberately NOT setting QT_QPA_PLATFORMTHEME=gtk3 (also in DMS's
-    # docs) — that one is a real regression risk if it leaks: it would
-    # override Plasma's native Qt/Breeze theming with GTK-styled dialogs
-    # in the Plasma/Dragonized sessions, unlike the platform/Ozone vars
-    # above which are session-agnostic.
+    # From DMS's niri setup docs — but ONLY the variables that are safe if
+    # they leak into other sessions, because niri injects these into the
+    # shared, session-surviving systemd --user manager (DECISIONS.md).
+    # Wayland/Ozone hints are harmless-to-beneficial everywhere here.
+    # QT_QPA_PLATFORMTHEME is deliberately NOT here even though DMS's docs
+    # put it in this block — it cannot be session-scoped given the leak
+    # above, so it is set once, system-wide and honestly, in
+    # configuration.nix (as "qt5ct", not the docs' "gtk3"). See DECISIONS.md.
     environment = {
       QT_QPA_PLATFORM = "wayland";
       # nixpkgs' own Electron wrapper checks for this specifically —
@@ -80,23 +63,26 @@
     };
 
     # ── Outputs ────────────────────────────────────────────────────────────
-    # Keyed on EDID identity ("Make Model Serial"), not connector name — a
-    # cable's connector can migrate across recabling, the panel's identity
-    # doesn't. The 27" Dells run scale 1.5 against the 31.5" LG's 1.25: that
-    # puts all three within 3% on effective PPI, where a shared scale leaves
-    # them 17% apart. `position.x` is in *logical* pixels (native / scale),
-    # so changing a scale moves every panel right of it. DMS also drives
-    # outputs via wlr-output-management and keeps its own profile; this block
-    # is meant to be authoritative. The three panels are *centre*-aligned, not
-    # top-aligned: `y` is (2560 - own logical height) / 2, putting every
-    # midline on y = 1280. The offsets look arbitrary and are not — flattening
-    # them to 0 re-aligns the tops. See DECISIONS.md for the rest.
+    # Matched on EDID identity ("Make Model Serial") via `name`, not connector
+    # name — a cable's connector can migrate across recabling, the panel's
+    # identity doesn't. The keys are local aliases (see the `let` above);
+    # niri only ever sees `name`. The 27" Dells run scale 1.5 against the
+    # 31.5" LG's 1.25: that puts all three within 3% on effective PPI, where
+    # a shared scale leaves them 17% apart. `position.x` is in *logical*
+    # pixels (native / scale), so changing a scale moves every panel right of
+    # it. DMS also drives outputs via wlr-output-management and keeps its own
+    # profile; this block is meant to be authoritative. Vertical alignment is per-panel and
+    # matches how they physically sit, so the `y` values are derived rather
+    # than arbitrary: the QC's bottom edge meets the LG's (both 2144), and
+    # the portrait QS is centred on the LG (both midlines 1280). Flattening
+    # them to 0 aligns the tops instead. See DECISIONS.md for the rest.
     outputs = {
       # Left, 2560x1440 logical. On HDMI, where the preferred mode is 60.000
       # — not the 59.997 the two DisplayPort panels report. Don't "normalise"
       # these: an unavailable refresh makes niri discard the mode entirely
       # and pick its own.
-      "Dell Inc. DELL S2722QC 1NC1J24" = {
+      mon-left = {
+        name = monLeft;
         mode = {
           width = 3840;
           height = 2160;
@@ -105,12 +91,13 @@
         scale = 1.5;
         position = {
           x = 0;
-          y = 560;
+          y = 704;
         };
       };
 
       # Centre, 3072x1728 logical.
-      "LG Electronics LG HDR 4K 111NTEP7X460" = {
+      mon-centre = {
+        name = monCentre;
         mode = {
           width = 3840;
           height = 2160;
@@ -125,9 +112,10 @@
 
       # Right, in portrait — rotation is deliberate, dropping it silently
       # relandscapes the panel. Rotated and at 1.5 it is 1440x2560 logical:
-      # the tallest of the three, so it is the one the other two centre
-      # against and the only one at y = 0.
-      "Dell Inc. DELL S2721QS 44B9513" = {
+      # the tallest of the three, so it is what the LG centres against and
+      # the only one at y = 0.
+      mon-right = {
+        name = monRight;
         mode = {
           width = 3840;
           height = 2160;
@@ -142,13 +130,19 @@
       };
     };
 
-    # layout {}, animations {}, hotkey-overlay {}, and screenshot-path were
-    # all left at niri-flake's schema defaults — cross-checked against the
-    # original auto-generated config.kdl and, as far as could be confirmed
-    # without a real niri build here, they matched niri's actual compiled-in
-    # defaults rather than being template-only opinions (unlike the binds
-    # and spawn-at-startup below, which were NOT left as defaults — see
-    # those sections for why).
+    # animations {}, hotkey-overlay {}, and screenshot-path were all left at
+    # niri-flake's schema defaults — cross-checked against the original
+    # auto-generated config.kdl and, as far as could be confirmed without a
+    # real niri build here, they matched niri's actual compiled-in defaults
+    # rather than being template-only opinions (unlike the binds and
+    # spawn-at-startup below, which were NOT left as defaults — see those
+    # sections for why). layout {} was too, until the focus ring below.
+
+    layout = {
+      # Thinner than niri's default 4. Everything else in layout {} stays at
+      # the schema default — naming one attribute doesn't disturb the rest.
+      focus-ring.width = 2;
+    };
 
     # waybar dropped entirely (was the auto-generated template's suggested
     # bar) — DMS is the bar/shell now, started via its own systemd --user
@@ -163,9 +157,43 @@
     # the tray instead of opening its window on every login.
     spawn-at-startup = [
       { argv = [ "protonmail-bridge-gui" "--no-window" ]; }
+      # Placement for these two is not here — niri decides it from the
+      # window rules below, which is the only place a workspace or output
+      # can be named for an opening window.
+      { argv = [ "thunderbird" ]; }
+      { argv = [ "ticktick" ]; }
     ];
 
+    # ── Named workspaces ──────────────────────────────────────────────────
+    # Persistent: they exist even when empty, and (since niri 25.02) a new
+    # window no longer resets a *named* workspace's home output the way it
+    # does for unnamed ones. So open-on-output is a monitor it returns to on
+    # replug, not a pin — moving it by hand still wins until the next start.
+    workspaces = {
+      Mail.open-on-output = monLeft;
+    };
+
     window-rules = [
+      # Claude Desktop is a frameless Electron window whose surface carries a
+      # ~15px transparent margin for its own shadow. niri draws focus rings
+      # for CSD windows as a filled rectangle *behind* the window, so that
+      # margin lights up accent-coloured and the 2px ring reads as ~15px.
+      # Upstream documents this exact case on the option.
+      {
+        matches = [ { app-id = "^com\\.anthropic\\.Claude$"; } ];
+        draw-border-with-background = false;
+      }
+
+      # Same niri behaviour as above, opposite symptom. kitty runs with
+      # background_opacity < 1 (modules/home/common.nix), so the filled ring
+      # shows through it: a focused kitty reads as opaque and an unfocused
+      # one as transparent — the inverse of the point. niri's FAQ carries
+      # this as "why are transparent windows tinted".
+      {
+        matches = [ { app-id = "^kitty$"; } ];
+        draw-border-with-background = false;
+      }
+
       # Kept from the original config: open Firefox's picture-in-picture
       # player as floating. Firefox is actually installed on this host
       # (unlike the original's other window-rule, for WezTerm, which isn't
@@ -196,7 +224,7 @@
         };
       }
 
-      # ── Stream privacy (Zoe, 2026-09-06) ──────────────────────────────
+      # ── Stream privacy ────────────────────────────────────────────────
       # These windows are blocked out of the screencast portal (OBS,
       # Discord shares, …) but stay normally screenshot-able. Deliberately
       # "screencast", not the stricter "screen-capture" — the one known
@@ -217,6 +245,57 @@
           { app-id = "(?i)gcr.*prompt"; } # gnome-keyring unlock dialogs
         ];
         block-out-from = "screencast";
+      }
+
+      # ── Login placement ───────────────────────────────────────────────
+      # Thunderbird always lands on "Mail" — that workspace exists for it,
+      # so this rule is deliberately not scoped to at-startup. The second
+      # rule only keeps the login instance from taking focus while the
+      # session is still coming up; a manual launch focuses as normal.
+      # app-ids are unverified suffix regexes — MANUAL-STEPS.md §25.
+      {
+        matches = [ { app-id = "(?i)thunderbird$"; } ];
+        open-on-workspace = "Mail";
+      }
+      {
+        matches = [
+          {
+            app-id = "(?i)thunderbird$";
+            at-startup = true;
+          }
+        ];
+        open-focused = false;
+      }
+
+      # TickTick opens on the right monitor's active workspace, which at
+      # login is its only (and therefore first) one. at-startup keeps that
+      # to the login instance — a later launch opens where you already are,
+      # rather than throwing the window onto another monitor — and, like
+      # Thunderbird above, it must not take focus during login.
+      {
+        matches = [
+          {
+            app-id = "(?i)ticktick$";
+            at-startup = true;
+          }
+        ];
+        open-on-output = monRight;
+        open-focused = false;
+      }
+
+      # Steam titles open on the centre panel — the only one of the three in
+      # landscape at a game-shaped size; the right-hand Dell is rotated to
+      # portrait, which is where AC8 kept landing. Steam gives every title an
+      # app-id of `steam_app_<appid>` (AC8 is `steam_app_2288340`, verified
+      # via `niri msg windows`), through Xwayland or native Wayland alike, so
+      # one match covers the library. Lutris/native/GOG launches do NOT carry
+      # this id and are unaffected.
+      # ⚠ No `open-focused = false` here, unlike the rules above, and it must
+      # stay that way: X11 games under xwayland-satellite freeze permanently
+      # if they start unfocused (MANUAL-STEPS §21).
+      {
+        matches = [ { app-id = "^steam_app_[0-9]+$"; } ];
+        open-on-output = monCentre;
       }
     ];
 
@@ -241,10 +320,17 @@
       "Mod+Shift+Slash".action = show-hotkey-overlay;
 
       # Terminal: kitty, not the original template's suggested alacritty
-      # (not installed here) — per Zoe, 2026-08-11.
+      # (not installed here).
       "Mod+T" = {
         hotkey-overlay.title = "Open a Terminal: kitty";
         action = spawn "kitty";
+      };
+      # Browser: vivaldi, picked from the several installed on this host.
+      # --new-window because a bare `vivaldi` raises the running instance
+      # rather than opening a second window.
+      "Mod+B" = {
+        hotkey-overlay.title = "Open a Browser: Vivaldi";
+        action = spawn "vivaldi" "--new-window";
       };
       # Mod+D (launcher) and the original Super+Alt+L->swaylock dropped/
       # replaced — DMS owns both roles now (Mod+Space spotlight below,
@@ -469,12 +555,6 @@
       # niri-flake's config.lib.niri.actions cache either (they take
       # optional properties, e.g. show-pointer) — same documented
       # action.<name>=value form as above.
-      #
-      # This host's keyboard (RDR Alice, a compact Alice-layout board) has no
-      # dedicated PrtSc key — confirmed by Zoe 2026-08-20, physically sends
-      # Print Screen via Fn+K. Firmware-level mapping, not something this
-      # config (or niri) controls; recorded here since it's the non-obvious
-      # half of "how do I actually trigger these binds".
       "Print".action.screenshot = { };
       "Ctrl+Print".action.screenshot-screen = { };
       "Alt+Print".action.screenshot-window = { };

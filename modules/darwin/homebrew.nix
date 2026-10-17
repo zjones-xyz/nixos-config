@@ -69,6 +69,14 @@
       "steam"
       "ticktick"
       "visual-studio-code"
+      # Borg GUI client — serenity's offsite backup manager
+      # (hosts/serenity/BACKUP.md), chosen over borgmatic specifically for
+      # its native per-network scheduling (Wi-Fi allow-list + skip-on-metered,
+      # both backed by real platform code via macOS's CoreWLAN framework).
+      # Bundles its own borg binary, so no separate borgbackup formula is
+      # needed for the GUI. nixpkgs only builds vorta for Linux, hence cask
+      # rather than nixpkgs.
+      "vorta"
       "warp"
       "windows-app"
     ];

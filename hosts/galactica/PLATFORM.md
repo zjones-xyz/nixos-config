@@ -19,7 +19,7 @@ should not be rewritten with it. Several of them cost hours.
 |---|---|
 | **`PLATFORM.md`** (this) | *What the machine does.* BIOS quirks, BMC access, controller firmware, bus speeds, and how to tell which of them is the limit. |
 | **`HARDWARE-MAP.md`** | *What is plugged into what.* Disks, cages, controllers, ports, and the label strings for each. |
-| **`DESIGN.md`** | *What is being built and why.* SnapRAID + mergerfs on bare metal, the case against staying on Unraid, and the storage layout. |
+| **`DESIGN.md`** | *What was built and why.* The case against staying on Unraid. Its SnapRAID/mergerfs storage half is superseded (the array is ZFS RAIDZ1) and archived in `ARCHIVE-DESIGN-snapraid.md`. |
 | **`DECISIONS.md`** | *Why it is this way.* Decision → alternatives → rationale, plus what is still open. |
 
 Fleet-wide disk naming and labelling conventions live in `docs/DISK-LABELLING.md`;
@@ -363,8 +363,8 @@ Two consequences, and the second is the useful one:
 ⚠ **Replacing the battery clears CMOS**, so everything below has to be set again
 afterwards:
 
-- [ ] `PCI Express Port - Gen X` = **Gen2** (explicitly, not Auto) — or run §6e's
-      test and find out you no longer need it
+- [ ] `PCI Express Port - Gen X` = **Gen3** (explicitly, not Auto — §6e's test
+      answered this: Gen3 strictly dominates Gen2 on this board)
 - [ ] `Detect Non-Compliance Device` = **Enabled**
 - [ ] Boot order — the Unraid flash ahead of, or trivially selectable against,
       the NixOS root disk
@@ -1441,7 +1441,7 @@ onboard SATA at the time. Full capture in
 | `storcli show` | `Number of Controllers = 0` — the negative test now passes live, not just on the bench ✅ |
 | `MegaCli64` | not run this time — `capture-hardware-profile` invoked it as `megacli`, which isn't the binary nixpkgs' `megacli` package installs (it's `MegaCli64`); fixed in the script for next time |
 | All 8 disks | enumerate individually, `smartctl -a` returns full data with no `-d megaraid,N`, no RAID abstraction anywhere ✅ |
-| SMART health | all 8 disks report `PASSED`. One data point worth a watch, not urgent: the Parity disk (`8CJZX4WE`) now shows `Reallocated_Sector_Ct` = 1, where the 2026-08-07 Unraid-side reading (`HARDWARE-MAP.md` §1) had it at 0 |
+| SMART health | all 8 disks report `PASSED`. One data point worth a watch, not urgent: the Parity disk (`*X4WE`) now shows `Reallocated_Sector_Ct` = 1, where the 2026-08-07 Unraid-side reading (`HARDWARE-MAP.md` §1) had it at 0 |
 
 **Still open from Step 4's plan:** this was incidental to an array/`sidepool`
 mount test, not a dedicated burn-in — no sustained-load run, no thermal
