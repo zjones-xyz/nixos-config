@@ -37,8 +37,10 @@ jobs:
       # there: they build galactica's IFD input, which `flake check` can't.
       - name: Evaluate
         run: |
-          for attr in $(nix eval --json .#nixosConfigurations --apply builtins.attrNames | jq -r '.[]'); do
-            nix eval ".#nixosConfigurations.$attr.config.system.build.toplevel.drvPath"
+          for kind in nixosConfigurations darwinConfigurations; do
+            for attr in $(nix eval --json ".#$kind" --apply builtins.attrNames | jq -r '.[]'); do
+              nix eval ".#$kind.$attr.config.system.build.toplevel.drvPath"
+            done
           done
           nix flake check --no-build
 
