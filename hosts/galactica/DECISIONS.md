@@ -508,12 +508,12 @@ against nixos-26.05, plus one fork-only directory, `galactica/`, holding host
 data that must not be public. The canary and the deployed module are now the
 same commit.**
 
-*Why the fork is now the input:* until #NNN the input was upstream, pinned to
+*Why the fork is now the input:* until #197 the input was upstream, pinned to
 the revision the fork had proven, because CI could not fetch a private repo.
 Two things changed that. Prowlarr's indexer list had to become declarative:
 `prowlarr-indexers` deletes every indexer not in
 `nixflix.prowlarr.config.indexers`, so an empty list wiped the hand-added
-indexers on the next run (MANUAL-STEPS.md §#NNN). That list names private
+indexers on the next run (MANUAL-STEPS.md §#197). That list names private
 trackers, and this repo is public. Fetching the fork cures both: the list
 lives in the fork, and the deployed revision is the one CI proved, with
 nothing in between.

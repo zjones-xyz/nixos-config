@@ -1998,3 +1998,39 @@ member).
     go in the drawer; whatever comes back is a new disk with its own ID.
     `luksErase` done 2026-10-11, before the cold boot; photos, packing and
     shipping remain.
+
+## #197 nixflix from the private fork — token, indexer secrets, first switch
+
+Background: `DECISIONS.md` §10. `prowlarr-indexers` deletes every indexer not
+declared, so the list now lives in `zjones-xyz/nixflix-exp`'s
+`galactica/indexers.nix`, and fetching that private input needs a token.
+Order matters: CI on #197 stays red until step 2, and the switch fails at
+sops activation until step 3.
+
+1. [ ] **Create a fine-grained PAT.** Resource owner `zjones-xyz`, only
+   `nixflix-exp`, Repository permissions → Contents: read-only. Take the
+   longest expiry allowed and set a renewal reminder: when it lapses, every
+   eval fails to fetch the input with a 404 that looks like a bad pin.
+2. [ ] **Add it to nixos-config as the Actions secret `NIXFLIX_EXP_TOKEN`**
+   (Settings → Secrets and variables → Actions), then re-run #197's CI.
+3. [ ] **`sops secrets/galactica.yaml`:** add `nixflix/indexer1Key`,
+   `indexer2Key` and `indexer3Key` (which indexer each one is: the fork's
+   `galactica/indexers.nix`, deliberately not here), and
+   `nix/githubAccessToken` = the PAT from step 1.
+4. [ ] **Merge the fork PR (zjones-xyz/nixflix-exp#2) once its CI is green,**
+   and repin `flake.nix` to the merge commit if it differs from the pin.
+5. [ ] **First switch, with the token passed by hand.** The `nix.conf`
+   include only exists after this switch renders it:
+   ```sh
+   read -rs T; sudo nixos-rebuild switch --flake .#galactica \
+     --option access-tokens "github.com=$T"; unset T
+   ```
+   Every later switch is a plain `nrs`.
+6. [ ] **Verify.** `journalctl -u prowlarr-indexers -b` shows each indexer
+   processed and no failure. Prowlarr lists all four, and Test All passes.
+   Each *arr's Settings → Indexers shows them again; if not, use Prowlarr's
+   Settings → Apps → Sync App Indexers.
+7. [ ] **Anything you had tuned per indexer is back at schema defaults**
+   (seed ratio, limits, categories). Declare those as extra attributes in
+   `indexers.nix`, not in the UI: the unit re-applies the declared config on
+   every run, so UI edits last until the next boot or switch.

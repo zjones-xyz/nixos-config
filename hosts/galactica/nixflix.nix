@@ -491,7 +491,7 @@ in
   # ── Fetching the private nixflix input ────────────────────────────────────
   # `!include` tolerates the missing file, so a host without the secret still
   # evaluates — and then fails only on fetching the fork. The first switch has
-  # to pass the token by hand: MANUAL-STEPS.md §#NNN.
+  # to pass the token by hand: MANUAL-STEPS.md §#197.
   sops.templates."nix-access-tokens".content = ''
     access-tokens = github.com=${config.sops.placeholder."nix/githubAccessToken"}
   '';
