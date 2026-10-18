@@ -371,7 +371,7 @@ Consequences, in order of how much they matter:
    `users.users.z.extraGroups = [ "media" ]`, not `members`. ⚠ Still read
    `getent group media` first: if the live number differs from what you pin, plan
    a recursive `chgrp` over `/tank/nixflix_media`.
-3. **Another hand-carried nixflix patch** (`DECISIONS.md` §10 tracks four)
+3. **Another hand-carried nixflix patch** (`DECISIONS.md` §10 tracks three)
    removing the two `mkForce`es. Fixes the cause, restores `z`'s membership at
    normal priority, and adds to the carried debt.
 4. ~~**A dedicated `reading` group.**~~ ⚠ **Dead, not merely imperfect.**

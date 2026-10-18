@@ -229,7 +229,8 @@ in
   };
 
   # ── FlareSolverr: two corrections to upstream's wiring ────────────────────
-  # Local because we track upstream nixflix; delete when upstream adopts them.
+  # Local because the nixflix-exp fork does not carry them yet; delete as it
+  # adopts them.
   # MANUAL-STEPS.md §12 "FlareSolverr" carries the full argument.
   # (1) Upstream's 30s readiness probe dies inside the cold Chromium launch
   #     (43s on fast hardware) and an ExecStartPost failure kills the unit —
@@ -311,16 +312,6 @@ in
           config.nixflix.usenetClients.sabnzbd.settings.categories
       )
   );
-
-  # ── qBittorrent's umask ───────────────────────────────────────────────────
-  # nixflix sets this for every *arr and SABnzbd defaults `permissions = 775`,
-  # but its qBittorrent module sets neither and nor does nixpkgs' — so release
-  # directories land 0755 and nothing else in `media` can write inside one.
-  # ⚠ A umask covers new files only; MANUAL-STEPS §12 step 10 repairs the rest.
-  systemd.services.qbittorrent = lib.mkIf config.nixflix.torrentClients.qbittorrent.enable {
-    serviceConfig.UMask = "0002";
-  };
-
 
   # ── ProtonVPN NAT-PMP → qBittorrent listen port ───────────────────────────
   # nixflix's vpn.openVPNPorts does two jobs — publish a STATIC forwarded port
@@ -485,5 +476,26 @@ in
     # WebUI API key, for homepages.nix's widget only — nothing in this file
     # authenticates with it.
     "nixflix/qbittorrentApiKey" = { };
+
+    # Prowlarr indexer credentials. ⚠ Key names are plaintext in the sops
+    # file and this repo is public, so they stay neutral; which indexer each
+    # one belongs to is in nixflix-exp's galactica/indexers.nix.
+    "nixflix/indexer1Key" = { };
+    "nixflix/indexer2Key" = { };
+    "nixflix/indexer3Key" = { };
+
+    # Read-only token for the private nixflix-exp flake input.
+    "nix/githubAccessToken" = { };
   };
+
+  # ── Fetching the private nixflix input ────────────────────────────────────
+  # `!include` tolerates the missing file, so a host without the secret still
+  # evaluates — and then fails only on fetching the fork. The first switch has
+  # to pass the token by hand: MANUAL-STEPS.md §#NNN.
+  sops.templates."nix-access-tokens".content = ''
+    access-tokens = github.com=${config.sops.placeholder."nix/githubAccessToken"}
+  '';
+  nix.extraOptions = ''
+    !include ${config.sops.templates."nix-access-tokens".path}
+  '';
 }

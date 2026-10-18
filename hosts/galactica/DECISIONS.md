@@ -500,51 +500,64 @@ plus `UMask = "0002"`. Anything not group-writable is left behind by the next
 *arr rename. The qBittorrent umask bug in `MANUAL-STEPS.md` §12 step 10 is the
 same lesson from the other end of the pipeline.
 
-## 10. nixflix rides upstream; the private fork is the canary — at the cost of four hand-carried fixes
+## 10. nixflix comes from the private fork, which also holds what this repo can't
 
-**The flake input points at upstream `kiriwalawren/nixflix`, pinned to the
-exact revision the `zjones-xyz/nixflix-exp` fork's CI has proven against
-nixos-26.05. The fork validates; upstream deploys.**
+**The flake input is `zjones-xyz/nixflix-exp`, pinned to an exact revision.
+The fork is upstream `kiriwalawren/nixflix` merged in and proven by its own CI
+against nixos-26.05, plus one fork-only directory, `galactica/`, holding host
+data that must not be public. The canary and the deployed module are now the
+same commit.**
 
-*Why not the fork directly:* it is a private repo, and CI — a bare
-`actions/checkout` runner whose token is scoped to this repository — cannot
-fetch it. (Older Nix reports the inaccessible remote as "Cannot find Git
-revision … in ref …", which reads like a stale pin and is not; `allRefs=1`
-does not help either.) Of the seven robustness fixes the fork carries, all
-but three are confined to its `tests/` tree or gated behind services this
-host disables.
+*Why the fork is now the input:* until #NNN the input was upstream, pinned to
+the revision the fork had proven, because CI could not fetch a private repo.
+Two things changed that. Prowlarr's indexer list had to become declarative:
+`prowlarr-indexers` deletes every indexer not in
+`nixflix.prowlarr.config.indexers`, so an empty list wiped the hand-added
+indexers on the next run (MANUAL-STEPS.md §#NNN). That list names private
+trackers, and this repo is public. Fetching the fork cures both: the list
+lives in the fork, and the deployed revision is the one CI proved, with
+nothing in between.
 
-*The cost, and it is real:* FlareSolverr and Navidrome are enabled, so three
-fork fixes matter to what runs, and all three are re-applied by hand in
-`hosts/galactica/nixflix.nix` — the readiness probe (with the TimeoutStartSec
-that makes it effective), the `requires`→`wants` relaxation on
-prowlarr-indexer-proxies, and a bounded Restart on navidrome-create-admin.
-`lib.mkForce` on an upstream unit is silent on drift, and these are precisely
-the corrections the canary's CI does not rehearse — the phantom
-`navidrome-setup` unit (MANUAL-STEPS.md §12) is what that costs, concretely.
+*The cost: a credential, everywhere galactica is evaluated.*
+- **CI:** the `NIXFLIX_EXP_TOKEN` Actions secret, a read-only fine-grained
+  PAT, passed to Nix as `github_access_token` in both workflows. Fine-grained
+  PATs expire. The symptom is every eval failing to fetch the input, a 404
+  that looks like a bad pin. Renew it, don't repin.
+- **galactica:** the same token in sops, written into an `access-tokens` line
+  that `nix.conf` `!include`s. That makes it circular the first time, so the
+  first switch passes it by hand.
+- **Anywhere else** galactica gets evaluated or the input gets updated (the
+  Mac, a sandboxed session). Hosts that never evaluate galactica never fetch
+  the input, because flake inputs are fetched lazily.
+- **`github:`, not `git+https`:** `access-tokens` reaches the tarball API.
+  `.claude/hooks/flake-check-sandboxed.sh` rewrites it to git for sandboxed
+  sessions, as it does every other `github:` input.
 
-*A fourth, of a different kind:* the pin fixes the module, not the packages
-— modules evaluate against galactica's nixpkgs, so a nixpkgs bump moves the
-*arrs underneath it. #188 took Radarr to 6.4 and Prowlarr to 2.6, which reject
-a host-config PUT without `allowedHosts`; upstream fixed it in `11774fc`
-(#356), past the pin. That sits inside a generated script, out of `mkForce`'s
-reach, so `flake.nix` imports nixflix's modules from an `applyPatches` copy
-carrying `hosts/galactica/nixflix-allowedhosts.patch`. Unlike the overrides it
-is loud on drift: once the pin includes `11774fc` the patch stops applying —
-delete it then. Its costs: import-from-derivation, so evaluating galactica on
-the Mac needs a Linux builder; and `flake.nix` restates
-`nixosModules.default`'s import list (the modules plus vpn-confinement), so a
-bump that changes that list must be mirrored.
+*What stays public:* credentials stay in `secrets/galactica.yaml`. sops leaves
+**key names in plaintext**, so indexer keys are numbered (`nixflix/indexer1Key`),
+and the number-to-indexer mapping is only in the fork. The `/nix/store` copy
+of the generated script names the indexers, but that is local to galactica.
 
-*The exit:* make the fork fetchable from CI (publish it, or give the workflow
-a credential) and point the input back at it — or upstream the three fixes.
-Either deletes the overrides; the patch leaves by itself once the pin passes
-`11774fc`. Until then this is carried debt, not a settled design.
+*Still carried by hand:* the fork does not (yet) carry three fixes galactica
+needs, so `hosts/galactica/nixflix.nix` re-applies them with `lib.mkForce`.
+They are the FlareSolverr readiness probe with the `TimeoutStartSec` that
+makes it effective (the fork's 120s probe still dies under systemd's 90s
+default), the `requires`→`wants` relaxation on prowlarr-indexer-proxies, and
+a bounded Restart on navidrome-create-admin. These overrides are silent on
+drift. Moving each one into the fork's modules, where its CI rehearses it,
+deletes the override. The old `allowedHosts` patch is gone: the merge brought
+upstream `11774fc`, and with it the import-from-derivation it cost.
 
-*Why never a branch URL:* upstream commits most days, and `follows` on
-nixpkgs already governs packages (modules evaluate against the consuming
-host's pkgs) — the pin exists so a routine `nix flake update` cannot pull an
-unrehearsed module revision into the fleet.
+*Bump procedure:* merge `upstream/main` into the fork and keep `galactica/`.
+Never send changes upstream from the fork's `main`, because it carries that
+directory; cut upstream PR branches from `upstream/main`. Let the fork's CI go
+green against 26.05, then move this repo's pinned rev to the merge. Never a
+branch URL: upstream commits most days, and the pin is what stops a routine
+`nix flake update` deploying an unrehearsed module.
+
+*Exit, if the credential becomes the bigger cost:* go back to upstream as the
+input and move the indexer list behind a runtime file (an `indexersFile`-style
+option sent upstream). That would make the fork a pure canary again.
 
 ## Carried forward from the VFIO plan
 
