@@ -548,6 +548,12 @@ drift. Moving each one into the fork's modules, where its CI rehearses it,
 deletes the override. The old `allowedHosts` patch is gone: the merge brought
 upstream `11774fc`, and with it the import-from-derivation it cost.
 
+*Watch the merge for new reconcilers.* Most nixflix units delete or reset
+whatever they don't declare, which is how the indexers were lost. The #197
+merge added `lidarr-notifications` and the `*-metadata` units
+(MANUAL-STEPS.md §#197 step 5). Every bump should be checked for new ones
+before the switch.
+
 *Bump procedure:* merge `upstream/main` into the fork and keep `galactica/`.
 Never send changes upstream from the fork's `main`, because it carries that
 directory; cut upstream PR branches from `upstream/main`. Let the fork's CI go

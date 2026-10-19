@@ -2020,7 +2020,14 @@ evaluates, so it goes green without them.
    `nix/githubAccessToken` = the PAT from step 1.
 4. [ ] **Merge the fork PR (zjones-xyz/nixflix-exp#2) once its CI is green,**
    and repin `flake.nix` to the merge commit if it differs from the pin.
-5. [ ] **First switch, with the token passed by hand.** The `nix.conf`
+5. [ ] **Before the switch: record each *arr's Settings → Connect and
+   Settings → Metadata.** The nixflix merge brings two more reconcilers.
+   `lidarr-notifications` (on because Navidrome is) deletes every Lidarr
+   Connect entry except its own Subsonic one. The `*-metadata` units set
+   every metadata consumer nixflix doesn't declare to off, on every run. If
+   either screen has anything in use, declare it first (`nixflix.notif`,
+   `nixflix.<arr>.config.metadata`), or it is gone after the switch.
+6. [ ] **First switch, with the token passed by hand.** The `nix.conf`
    include only exists after this switch renders it. Pass the token in the
    environment of a root shell, not as `--option`: argv is readable by every
    local user via `ps`, the environment only by its owner.
@@ -2031,11 +2038,11 @@ evaluates, so it goes green without them.
    exit
    ```
    Every later switch is a plain `nrs`.
-6. [ ] **Verify.** `journalctl -u prowlarr-indexers -b` shows each indexer
+7. [ ] **Verify.** `journalctl -u prowlarr-indexers -b` shows each indexer
    processed and no failure. Prowlarr lists all four, and Test All passes.
    Each *arr's Settings → Indexers shows them again; if not, use Prowlarr's
    Settings → Apps → Sync App Indexers.
-7. [ ] **Anything you had tuned per indexer is back at schema defaults**
+8. [ ] **Anything you had tuned per indexer is back at schema defaults**
    (seed ratio, limits, categories, tags, including `flaresolverr`). Declare
    those as extra attributes in `indexers.nix`, not in the UI. The unit
    re-applies the declared config each time it runs, so a UI edit lasts until
