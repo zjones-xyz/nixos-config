@@ -2089,3 +2089,24 @@ conf after each install. The full reasoning is in that PR.
    `nixflix/qbittorrentPassword` value, which survives restarts.
 3. [ ] ⚠ **Never rotate the key in the WebUI without updating sops.** The
    next restart puts the sops value back.
+
+## #206 Radarr min score, *arr ntfy, fork bump — owner steps
+
+1. [ ] **Before merging: merge zjones-xyz/nixflix-exp#5** with a merge commit
+   or fast-forward, never a squash, so the pinned commit stays on the fork's
+   `main`.
+2. [ ] **After the switch, ntfy.** Each `*-notifications` unit should show the
+   ntfy entry created:
+   ```sh
+   journalctl -b --since -15min -u sonarr-notifications -u sonarr-anime-notifications -u radarr-notifications -u lidarr-notifications | grep -i -E 'ntfy|error'
+   ```
+   ⚠ The *arrs send a test message before saving. If the server refuses
+   anonymous publishing to `nixflix`, these units fail: give the topic a
+   token, put it in sops and set `notif.ntfy.accessToken`.
+3. [ ] **Seed limits.** In Prowlarr → Indexers, the torrent indexer shows the
+   new seed ratio and seed time; each *arr's copy matches after the next app
+   sync. Torrents already in qBittorrent keep what they had, which was no
+   limit.
+4. [ ] **Recyclarr.** After its next sync, Radarr's SQP-1 profile has a minimum
+   custom-format score of 180. Too much junk getting through → set it to 1000
+   in `nixflix.nix`.
