@@ -26,6 +26,10 @@ jobs:
 
       - uses: cachix/install-nix-action@v27
         with:
+          # galactica's nixflix input is the private zjones-xyz/nixflix-exp.
+          # Read-only fine-grained PAT; when it expires, every eval fails to
+          # fetch that input. hosts/galactica/DECISIONS.md §10.
+          github_access_token: ${{ secrets.NIXFLIX_EXP_TOKEN }}
           extra_nix_config: |
             experimental-features = nix-command flakes
 
@@ -33,8 +37,7 @@ jobs:
         run: nix flake update nixpkgs-apps zen-browser opera-flake claude-desktop-debian
 
       # A PR opened with the default GITHUB_TOKEN does not trigger nix-check.yml,
-      # so the same evaluation runs here before the PR exists. Evals first, as
-      # there: they build galactica's IFD input, which `flake check` can't.
+      # so the same evaluation runs here before the PR exists.
       - name: Evaluate
         run: |
           for kind in nixosConfigurations darwinConfigurations; do

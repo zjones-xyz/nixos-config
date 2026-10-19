@@ -93,18 +93,13 @@
       inputs.nixpkgs-stable.follows = "nixpkgs";
     };
 
-    # nixflix (galactica) — the declarative *arr media stack. Points at
-    # UPSTREAM, pinned to the exact rev the zjones-xyz/nixflix-exp canary has
-    # proven against 26.05 — never a branch URL, or a routine `nix flake
-    # update` pulls an unrehearsed revision. Bump = merge upstream into the
-    # fork, let its CI go green against 26.05, then move this rev to match.
-    #
-    # ⚠ Carried debt: the fork is private, CI cannot fetch it, and three of
-    # its fixes this host needs are therefore re-applied by hand in
-    # hosts/galactica/nixflix.nix. DECISIONS.md §10 has the full argument and
-    # the exit. git+https rather than github: — see claude-desktop-debian.
+    # nixflix (galactica) — the *arr stack, from the private nixflix-exp fork:
+    # upstream merged in, CI-proven on 26.05, plus galactica's private indexer
+    # list. Pinned to an exact rev, never a branch. ⚠ Private: fetching needs
+    # a token (CI's NIXFLIX_EXP_TOKEN; on galactica a sops nix.conf include),
+    # hence github: rather than git+https. DECISIONS.md §10.
     nixflix = {
-      url = "git+https://github.com/kiriwalawren/nixflix.git?rev=c5b5944791ecbc2a434fbf6d8d95859aee47b3b9&shallow=1";
+      url = "github:zjones-xyz/nixflix-exp/7e440457e6c4a788dd420abadfc582be25d20030";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -289,20 +284,9 @@
           # option that hosts/galactica/nixflix.nix uses for the NAT-PMP
           # sidecar. The stack's own configuration lives in that file, which
           # configuration.nix imports.
-          #
-          # Imported from a patched source rather than nixosModules.default:
-          # upstream 11774fc (allowedHosts), carried until the pin reaches it.
-          # The patch then fails to apply — delete it. DECISIONS.md §10.
-          {
-            imports = [
-              (import "${nixpkgs.legacyPackages.x86_64-linux.applyPatches {
-                name = "nixflix-patched";
-                src = nixflix;
-                patches = [ ./hosts/galactica/nixflix-allowedhosts.patch ];
-              }}/modules")
-              nixflix.inputs.vpn-confinement.nixosModules.default
-            ];
-          }
+          nixflix.nixosModules.default
+          # Fork-only: the indexer list kept out of this public repo.
+          nixflix.nixosModules.galactica-indexers
         ];
       };
 

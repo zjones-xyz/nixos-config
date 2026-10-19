@@ -888,7 +888,7 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
 
 10. [ ] **One-time repair of the download tree's permissions.** Needed once,
    alongside the switch that carries the qBittorrent `UMask = "0002"` fix in
-   `nixflix.nix`. A umask only applies to newly created files, so the fix
+   `nixflix.nix` (since #197, upstream nixflix's own). A umask only applies to newly created files, so the fix
    covers new downloads and nothing already on disk.
 
    What went wrong: qBittorrent ran at the default 0022 and created every
@@ -939,12 +939,12 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
       Manual Import screen, not here.
 
 11. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
-   `nix flake update`. The input is pinned to an exact upstream revision that
-   the fork's CI has cleared against 26.05. To move it: merge upstream into
-   `zjones-xyz/nixflix-exp`, let its CI go green against the 26.05 pin, then
-   set that same upstream rev here. A bare branch URL would let a routine
-   update pull an unrehearsed revision into the fleet, which is precisely
-   what the canary exists to prevent.
+   `nix flake update`. Since #197 the input is the `zjones-xyz/nixflix-exp`
+   fork itself, pinned to an exact revision its CI has cleared against 26.05.
+   To move it: merge upstream into the fork, let its CI go green, then set the
+   fork's merge commit here. `DECISIONS.md` §10 has the procedure. A bare
+   branch URL would let a routine update pull an unrehearsed revision into
+   the fleet, which is precisely what the canary exists to prevent.
 
 ### Anime
 
@@ -1998,3 +1998,73 @@ member).
     go in the drawer; whatever comes back is a new disk with its own ID.
     `luksErase` done 2026-10-11, before the cold boot; photos, packing and
     shipping remain.
+
+## #197 nixflix from the private fork — token, indexer secrets, first switch
+
+Background: `DECISIONS.md` §10. `prowlarr-indexers` deletes every indexer not
+declared, so the list now lives in `zjones-xyz/nixflix-exp`'s
+`galactica/indexers.nix`, and fetching that private input needs a token.
+Order matters: CI on #198 stays red until step 2. galactica cannot even build
+until step 3, because sops-nix checks the keys at build time. CI only
+evaluates, so it goes green without them.
+
+1. [x] **Create a fine-grained PAT.** Resource owner `zjones-xyz`, only
+   `nixflix-exp`, Repository permissions → Contents: read-only. Take the
+   longest expiry allowed and set a renewal reminder: when it lapses, every
+   eval fails to fetch the input with a 404 that looks like a bad pin.
+2. [x] **Add it to nixos-config as the Actions secret `NIXFLIX_EXP_TOKEN`**
+   (Settings → Secrets and variables → Actions), then re-run #198's CI.
+3. [x] **`sops secrets/galactica.yaml`:** add `nixflix/indexer1Key`,
+   `indexer2Key` and `indexer3Key` (which indexer each one is: the fork's
+   `galactica/indexers.nix`, deliberately not here), and
+   `nixflix/githubAccessToken` = the PAT from step 1.
+4. [x] **Merge the fork PR (zjones-xyz/nixflix-exp#3) once its CI is green,**
+   and repin `flake.nix` to the merge commit if it differs from the pin.
+5. [x] **Before the switch: record each *arr's Settings → Connect and
+   Settings → Metadata.** The nixflix merge brings two more reconcilers.
+   `lidarr-notifications` (on because Navidrome is) deletes every Lidarr
+   Connect entry except its own Subsonic one. The `*-metadata` units set
+   every metadata consumer nixflix doesn't declare to off, on every run. If
+   either screen has anything in use, declare it first (`nixflix.notif`,
+   `nixflix.<arr>.config.metadata`), or it is gone after the switch.
+   ✅ Checked before the first switch: none of Sonarr, Sonarr-anime, Radarr
+   or Lidarr had Connect or Metadata entries, so nothing to declare. (The
+   Bazarrs do, but they are `bazarr.nix`'s, not nixflix's, and untouched.)
+6. [x] **First switch, with the token passed by hand.** The `nix.conf`
+   include only exists after this switch renders it. Pass the token in the
+   environment of a root shell, not as `--option`: argv is readable by every
+   local user via `ps`, the environment only by its owner. ⚠ Type the lines
+   one at a time: pasted as a block, `sudo -i` swallows everything after it.
+   ```sh
+   sudo -i
+   read -rs T
+   NIX_CONFIG="access-tokens = github.com=$T" nixos-rebuild switch --flake /home/z/nixos-config#galactica; unset T
+   exit
+   ```
+   Every later switch is a plain `nrs`.
+
+   ✅ **Switched 2026-10-18**, with a short-lived read-only PAT standing in for
+   the sops one, which could not be decrypted elsewhere that night. Three
+   indexers were created; the fourth failed because Prowlarr refuses to save an
+   indexer it cannot reach, and the site timed out. Nothing was wrong with the
+   config: `systemctl restart prowlarr-indexers` a few minutes later created it.
+7. [ ] **Verify.** `journalctl -u prowlarr-indexers -b` shows each indexer
+   processed and no failure. Prowlarr lists all four in the declared priority
+   order, and Test All passes. Each *arr's Settings → Indexers shows them
+   again; if not, use Prowlarr's Settings → Apps → Sync App Indexers.
+
+   ✅ **Unit clean on the retry, 2026-10-18.** The UI half is still open.
+8. [ ] **Anything you had tuned per indexer is back at schema defaults**
+   (seed ratio, limits, categories, tags, including `flaresolverr`). Declare
+   those as extra attributes in `indexers.nix`, not in the UI. The unit
+   re-applies the declared config each time it runs, so a UI edit lasts until
+   the next boot, or the next switch that changes the unit.
+9. [ ] **Chaptarr's Prowlarr app is declared now** (`reading-acquisition.nix`).
+   It was hand-added in the UI (§18 step 14), so `prowlarr-applications` would
+   have deleted it at the next boot, as `prowlarr-indexers` did the indexers.
+   After the switch that lands it: `journalctl -u prowlarr-applications -b`
+   shows Chaptarr processed and no failure, and Settings → Apps lists five
+   apps, Chaptarr once. If the hand-made entry had another name, the unit
+   deletes it and creates `Chaptarr`; that is expected. Then check Chaptarr
+   still shows its indexers, and that audiobook search returns results (the
+   3000/3030 categories).
