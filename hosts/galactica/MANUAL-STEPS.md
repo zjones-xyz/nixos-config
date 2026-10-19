@@ -1280,7 +1280,7 @@ rather than each instance being hand-edited.
 
 `hosts/galactica/{ferdium,karakeep,paperless,syncthing}.nix` declare all
 four as containers, routed by this host's Traefik (`*.internal`/`*.zjones.dev`,
-matching rewrites in §14/`configuration.nix`) and given their own tsdproxy
+matching rewrites generated from `fleet/services.nix`) and given their own tsdproxy
 tailnet node each (§13 has the "why a separate node per name" reasoning).
 
 **The inventory pass (2026-09-13) found the real Unraid appdata backup at

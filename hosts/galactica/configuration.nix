@@ -15,6 +15,9 @@
 # the NVMe or anything behind the HBA; hardware-configuration.nix's header has
 # the story and is why canTouchEfiVariables is false below.
 
+let
+  fleetLib = import ../../fleet/lib.nix { inherit lib; };
+in
 {
   imports = [
     ./hardware-configuration.nix
@@ -119,12 +122,14 @@
   # alphabetically — several boxes answer to more than one name: galactica is
   # also `tower`/`arr` (legacy identities it absorbed, DECISIONS.md §2).
   #
-  # Host identities and wildcard groups only: single-host services with flat
-  # names are declared in fleet/services.nix, and dns.nix appends their rows.
+  # Host identities and wildcard groups are hand-written here; single-host
+  # services with flat names come from fleet/services.nix, appended below.
+  # Generated here, not in dns.nix: galactica is the rewrite origin and the
+  # Pis get rewrites only by sync (hosts/hopper/DECISIONS.md §5).
   # ⚠ `enabled = true` is mapped over every entry, not written per-line —
   # AdGuard has a per-rewrite enable toggle whose omitted bool renders as Go's
   # zero-value (false), silently disabling every rewrite.
-  services.adguardhome.settings.filtering.rewrites = map (r: r // { enabled = true; }) [
+  services.adguardhome.settings.filtering.rewrites = (map (r: r // { enabled = true; }) [
     # router (GL.iNet)
     {
       domain = "router.internal";
@@ -260,7 +265,11 @@
       domain = "*.maker.zjones.dev";
       answer = "192.168.8.190";
     }
-  ];
+  ])
+  ++ fleetLib.rewritesFor {
+    inherit (config.homelab.fleet) hosts services;
+    splitHorizonGlobal = config.homelab.dns.splitHorizon;
+  };
 
   # ── AdGuardHome-Sync — galactica (origin) → router (first replica) ─────────
   # runOnStart is hardcoded true in the module, so a sync fires on every

@@ -1,8 +1,9 @@
 # ── Fleet singleton-service registry ─────────────────────────────────────────
 # One entry per service that lives on exactly one host. fleet/lib.nix turns
-# each into AdGuard rewrites; modules/nixos/fleet.nix types it and fills the
-# defaults: scope "host" (name.<host>.internal), planes internal+dev on, xyz
-# off, splitHorizon on. `.xyz` is Pangolin-terminated — a LAN rewrite only.
+# each into AdGuard rewrites on galactica, the rewrite origin.
+# modules/nixos/fleet.nix types it and fills the defaults: scope "host"
+# (name.<host>.internal), planes internal+dev on, xyz off, splitHorizon on.
+# `.xyz` is Pangolin-terminated — a LAN rewrite only.
 # Wildcard groups (*.maker, read.*, *.3dp) can't be expressed here yet.
 let
   flatOnGalactica = {

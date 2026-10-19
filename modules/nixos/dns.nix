@@ -1,8 +1,6 @@
 { config, pkgs, lib, ... }:
 
 let
-  fleetLib = import ../../fleet/lib.nix { inherit lib; };
-
   # IPs come from fleet/hosts.nix; the order is spelled out because attrsets
   # enumerate alphabetically and this list renders into AdGuardHome.yaml.
   # hamilton: not in service, no known IP — add it there once it exists.
@@ -123,13 +121,6 @@ in
 
       # Every importer of this module (galactica live; hopper/hamilton staged)
       # gets the same client list — keep it host-agnostic.
-
-      # Rows generated from fleet/services.nix. List definitions concatenate,
-      # so these join galactica's hand-written list; AdGuard is order-blind.
-      filtering.rewrites = fleetLib.rewritesFor {
-        inherit (config.homelab.fleet) hosts services;
-        splitHorizonGlobal = config.homelab.dns.splitHorizon;
-      };
     };
   };
 
