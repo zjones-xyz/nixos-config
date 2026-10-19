@@ -2017,7 +2017,7 @@ evaluates, so it goes green without them.
 3. [ ] **`sops secrets/galactica.yaml`:** add `nixflix/indexer1Key`,
    `indexer2Key` and `indexer3Key` (which indexer each one is: the fork's
    `galactica/indexers.nix`, deliberately not here), and
-   `nix/githubAccessToken` = the PAT from step 1.
+   `nixflix/githubAccessToken` = the PAT from step 1.
 4. [ ] **Merge the fork PR (zjones-xyz/nixflix-exp#2) once its CI is green,**
    and repin `flake.nix` to the merge commit if it differs from the pin.
 5. [ ] **Before the switch: record each *arr's Settings → Connect and

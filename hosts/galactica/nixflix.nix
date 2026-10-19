@@ -485,7 +485,7 @@ in
     "nixflix/indexer3Key" = { };
 
     # Read-only token for the private nixflix-exp flake input.
-    "nix/githubAccessToken" = { };
+    "nixflix/githubAccessToken" = { };
   };
 
   # ── Fetching the private nixflix input ────────────────────────────────────
@@ -493,7 +493,7 @@ in
   # evaluates — and then fails only on fetching the fork. The first switch has
   # to pass the token by hand: MANUAL-STEPS.md §#197.
   sops.templates."nix-access-tokens".content = ''
-    access-tokens = github.com=${config.sops.placeholder."nix/githubAccessToken"}
+    access-tokens = github.com=${config.sops.placeholder."nixflix/githubAccessToken"}
   '';
   nix.extraOptions = ''
     !include ${config.sops.templates."nix-access-tokens".path}
