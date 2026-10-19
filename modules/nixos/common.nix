@@ -26,6 +26,10 @@
     };
   };
 
+  # The 1 GB ESPs can't hold 30 days of generations on a busy host, and a full
+  # /boot fails `switch`. Inert on hosts without systemd-boot (the Pis).
+  boot.loader.systemd-boot.configurationLimit = lib.mkDefault 10;
+
   nixpkgs.config.allowUnfree = lib.mkDefault true;
 
   # ── Persistent journald ─────────────────────────────────────────────────────
@@ -149,11 +153,20 @@
     '')
   ];
 
+  # ── SSH: public keys only ───────────────────────────────────────────────────
+  # Belt-and-braces: with PasswordAuthentication off, nixpkgs' sshd PAM stack has
+  # no pam_unix, but kbd-interactive is still offered and runs whatever other PAM
+  # modules land on sshd. Pinning publickey stops a future PAM change reopening a
+  # non-key path. Initrd unlock SSH (luks-remote-unlock.nix) has its own config;
+  # Tailscale SSH (`--ssh`) bypasses sshd entirely, under the tailnet ACL.
   services.openssh = {
     enable = true;
     settings = {
       PasswordAuthentication = false;
+      KbdInteractiveAuthentication = false;
+      AuthenticationMethods = "publickey";
       PermitRootLogin = "no";
+      AllowUsers = [ "z" ];
     };
   };
 
