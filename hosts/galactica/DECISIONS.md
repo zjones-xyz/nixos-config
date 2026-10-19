@@ -552,7 +552,10 @@ upstream `11774fc`, and with it the import-from-derivation it cost.
 whatever they don't declare, which is how the indexers were lost. The #197
 merge added `lidarr-notifications` and the `*-metadata` units
 (MANUAL-STEPS.md §#197 step 5). Every bump should be checked for new ones
-before the switch.
+before the switch. What they own is Nix's now, and a UI edit there lasts only
+until the unit next runs: Prowlarr's indexers and apps, and on each *arr
+Settings → Connect (`nixflix.notif`) and Settings → Metadata
+(`nixflix.<arr>.config.metadata`). Declare those, don't click them.
 
 *Bump procedure:* merge `upstream/main` into the fork and keep `galactica/`.
 Never send changes upstream from the fork's `main`, because it carries that

@@ -2089,3 +2089,48 @@ conf after each install. The full reasoning is in that PR.
    `nixflix/qbittorrentPassword` value, which survives restarts.
 3. [ ] ⚠ **Never rotate the key in the WebUI without updating sops.** The
    next restart puts the sops value back.
+
+## #206 Radarr min score, *arr ntfy, seed limits, fork bump — owner steps
+
+qBittorrent now has default share limits (ratio 3.0 or 14 days, whichever is
+first). They apply to every torrent without limits of its own, **including
+torrents already in the client**. One torrent indexer gets per-torrent "never"
+limits from Prowlarr, but only on grabs after this change: its existing torrents
+have no limits of their own, so the defaults would stop them too, and the *arrs
+would then remove them. Step 2 exempts them first.
+
+1. [ ] **Before merging: merge zjones-xyz/nixflix-exp#5** with a merge commit
+   or fast-forward, never a squash, so the pinned commit stays on the fork's
+   `main`.
+2. [ ] **Before the switch: exempt the seed-forever indexer's existing
+   torrents.** On galactica, with `HOST` set to part of that tracker's
+   announce hostname (which tracker it is: the fork's `galactica/indexers.nix`):
+   ```sh
+   HOST=…   # part of the tracker's announce hostname
+   Q=http://192.168.15.1:8282; C=$(mktemp)
+   sudo cat /run/secrets/nixflix/qbittorrentPassword | curl -sS -c "$C" --data-urlencode username=admin --data-urlencode password@- $Q/api/v2/auth/login; echo
+   H=$(curl -sS -b "$C" $Q/api/v2/torrents/info | jq -r --arg h "$HOST" '[.[] | select(.tracker | contains($h)) | .hash] | join("|")')
+   echo "$H" | tr '|' '\n' | grep -c .   # how many matched
+   curl -sS -b "$C" --data "hashes=$H&ratioLimit=-1&seedingTimeLimit=-1&inactiveSeedingTimeLimit=-1&shareLimitAction=Default" $Q/api/v2/torrents/setShareLimits; echo
+   rm -f "$C"
+   ```
+   ⚠ `tracker` is empty for a torrent that has not reached its tracker yet;
+   check the count against the client's tracker filter.
+3. [ ] **Expect a cleanup on the first switch.** Every other torrent already
+   past ratio 3.0 or 14 days stops at once, and the *arrs remove it and its
+   download copy. Library copies are hardlinks and stay.
+4. [ ] **After the switch, ntfy.** Each `*-notifications` unit should show the
+   ntfy entry created:
+   ```sh
+   journalctl -b --since -15min -u sonarr-notifications -u sonarr-anime-notifications -u radarr-notifications -u lidarr-notifications | grep -i -E 'ntfy|error'
+   ```
+   ⚠ The *arrs send a test message before saving. If the server refuses
+   anonymous publishing to `nixflix`, these units fail: give the topic a
+   token, put it in sops and set `notif.ntfy.accessToken`.
+5. [ ] **Seed limits.** In Prowlarr → Indexers, the torrent indexer shows the
+   new seed ratio and seed time; each *arr's copy matches after the next app
+   sync. In qBittorrent, Options → BitTorrent → Seeding Limits shows 3.0 and
+   20160 minutes.
+6. [ ] **Recyclarr.** After its next sync, Radarr's SQP-1 profile has a minimum
+   custom-format score of 180. Too much junk getting through → set it to 1000
+   in `nixflix.nix`.

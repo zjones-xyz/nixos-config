@@ -117,8 +117,43 @@ in
       sonarrQuality = "1080p";
       radarrQuality = "1080p";
 
+      # Radarr's minimum custom-format score, pinned for the same reason. 180
+      # is upstream's value, lowered from 1000 to grab more; back to 1000 if
+      # the grabs get worse. Assigning replaces upstream's whole list, so the
+      # profile is restated, its trash_id following radarrQuality as upstream's does.
+      config.radarr.radarr.quality_profiles = [
+        {
+          trash_id =
+            if config.nixflix.recyclarr.radarrQuality == "4K" then
+              "5128baeb2b081b72126bc8482b2a86a0" # [SQP] SQP-1 (2160p)
+            else
+              "0896c29d74de619df168d23b98104b22"; # [SQP] SQP-1 (1080p)
+          reset_unmatched_scores.enabled = true;
+          min_format_score = 180;
+        }
+      ];
+
       # ⚠ `cleanupUnmanagedProfiles` stays OFF: on, it deletes every profile
       # the managed list does not name, stock and hand-made included.
+    };
+
+    # ── *arr Connect: ntfy ──────────────────────────────────────────────────
+    # ⚠ The notif units own Settings → Connect on every *arr: anything not
+    # declared here is deleted on their next run (DECISIONS.md §10). The
+    # Lidarr → Navidrome rescan is the other entry, on by default.
+    notif.ntfy = {
+      enable = true;
+      serverUrl = "https://ntfy.monitor.zjones.dev";
+      topics = [ "nixflix" ];
+      # Events are off in each *arr's schema until set. Imports, upgrades
+      # and anything needing a hand; not grabs. Keys each *arr lacks are ignored.
+      onDownload = true;
+      onReleaseImport = true;
+      onUpgrade = true;
+      onHealthIssue = true;
+      onManualInteractionRequired = true;
+      onDownloadFailure = true;
+      onImportFailure = true;
     };
 
     # ── Music: acquisition ──────────────────────────────────────────────────
@@ -223,6 +258,13 @@ in
           QueueingSystemEnabled = false;
           MaxActiveDownloads = 2000;
           MaxActiveTorrents = 200;
+
+          # Default share limits: stop at ratio 3.0 or 14 days, whichever is
+          # first; the *arrs then remove the stopped torrent (the library copy
+          # is a hardlink and stays). Only torrents with no limit of their own
+          # get this, so an indexer's Prowlarr seed limits override it.
+          GlobalMaxRatio = 3;
+          GlobalMaxSeedingMinutes = 20160;
         };
       };
     };

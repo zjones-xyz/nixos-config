@@ -99,7 +99,7 @@
     # a token (CI's NIXFLIX_EXP_TOKEN; on galactica a sops nix.conf include),
     # hence github: rather than git+https. DECISIONS.md §10.
     nixflix = {
-      url = "github:zjones-xyz/nixflix-exp/7e440457e6c4a788dd420abadfc582be25d20030";
+      url = "github:zjones-xyz/nixflix-exp/9c6c80d2a2cd368ce4c0e6d69946be0e59f9fd02";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
