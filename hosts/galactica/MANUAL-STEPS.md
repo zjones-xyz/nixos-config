@@ -2020,13 +2020,16 @@ evaluates, so it goes green without them.
    `nixflix/githubAccessToken` = the PAT from step 1.
 4. [ ] **Merge the fork PR (zjones-xyz/nixflix-exp#3) once its CI is green,**
    and repin `flake.nix` to the merge commit if it differs from the pin.
-5. [ ] **Before the switch: record each *arr's Settings → Connect and
+5. [x] **Before the switch: record each *arr's Settings → Connect and
    Settings → Metadata.** The nixflix merge brings two more reconcilers.
    `lidarr-notifications` (on because Navidrome is) deletes every Lidarr
    Connect entry except its own Subsonic one. The `*-metadata` units set
    every metadata consumer nixflix doesn't declare to off, on every run. If
    either screen has anything in use, declare it first (`nixflix.notif`,
    `nixflix.<arr>.config.metadata`), or it is gone after the switch.
+   ✅ Checked before the first switch: none of Sonarr, Sonarr-anime, Radarr
+   or Lidarr had Connect or Metadata entries, so nothing to declare. (The
+   Bazarrs do, but they are `bazarr.nix`'s, not nixflix's, and untouched.)
 6. [ ] **First switch, with the token passed by hand.** The `nix.conf`
    include only exists after this switch renders it. Pass the token in the
    environment of a root shell, not as `--option`: argv is readable by every
