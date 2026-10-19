@@ -888,7 +888,7 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
 
 10. [ ] **One-time repair of the download tree's permissions.** Needed once,
    alongside the switch that carries the qBittorrent `UMask = "0002"` fix in
-   `nixflix.nix`. A umask only applies to newly created files, so the fix
+   `nixflix.nix` (since #197, upstream nixflix's own). A umask only applies to newly created files, so the fix
    covers new downloads and nothing already on disk.
 
    What went wrong: qBittorrent ran at the default 0022 and created every
@@ -939,12 +939,12 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
       Manual Import screen, not here.
 
 11. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
-   `nix flake update`. The input is pinned to an exact upstream revision that
-   the fork's CI has cleared against 26.05. To move it: merge upstream into
-   `zjones-xyz/nixflix-exp`, let its CI go green against the 26.05 pin, then
-   set that same upstream rev here. A bare branch URL would let a routine
-   update pull an unrehearsed revision into the fleet, which is precisely
-   what the canary exists to prevent.
+   `nix flake update`. Since #197 the input is the `zjones-xyz/nixflix-exp`
+   fork itself, pinned to an exact revision its CI has cleared against 26.05.
+   To move it: merge upstream into the fork, let its CI go green, then set the
+   fork's merge commit here. `DECISIONS.md` §10 has the procedure. A bare
+   branch URL would let a routine update pull an unrehearsed revision into
+   the fleet, which is precisely what the canary exists to prevent.
 
 ### Anime
 
@@ -2134,3 +2134,139 @@ member).
     go in the drawer; whatever comes back is a new disk with its own ID.
     `luksErase` done 2026-10-11, before the cold boot; photos, packing and
     shipping remain.
+
+## #197 nixflix from the private fork — token, indexer secrets, first switch
+
+Background: `DECISIONS.md` §10. `prowlarr-indexers` deletes every indexer not
+declared, so the list now lives in `zjones-xyz/nixflix-exp`'s
+`galactica/indexers.nix`, and fetching that private input needs a token.
+Order matters: CI on #198 stays red until step 2. galactica cannot even build
+until step 3, because sops-nix checks the keys at build time. CI only
+evaluates, so it goes green without them.
+
+1. [x] **Create a fine-grained PAT.** Resource owner `zjones-xyz`, only
+   `nixflix-exp`, Repository permissions → Contents: read-only. Take the
+   longest expiry allowed and set a renewal reminder: when it lapses, every
+   eval fails to fetch the input with a 404 that looks like a bad pin.
+2. [x] **Add it to nixos-config as the Actions secret `NIXFLIX_EXP_TOKEN`**
+   (Settings → Secrets and variables → Actions), then re-run #198's CI.
+3. [x] **`sops secrets/galactica.yaml`:** add `nixflix/indexer1Key`,
+   `indexer2Key` and `indexer3Key` (which indexer each one is: the fork's
+   `galactica/indexers.nix`, deliberately not here), and
+   `nixflix/githubAccessToken` = the PAT from step 1.
+4. [x] **Merge the fork PR (zjones-xyz/nixflix-exp#3) once its CI is green,**
+   and repin `flake.nix` to the merge commit if it differs from the pin.
+5. [x] **Before the switch: record each *arr's Settings → Connect and
+   Settings → Metadata.** The nixflix merge brings two more reconcilers.
+   `lidarr-notifications` (on because Navidrome is) deletes every Lidarr
+   Connect entry except its own Subsonic one. The `*-metadata` units set
+   every metadata consumer nixflix doesn't declare to off, on every run. If
+   either screen has anything in use, declare it first (`nixflix.notif`,
+   `nixflix.<arr>.config.metadata`), or it is gone after the switch.
+   ✅ Checked before the first switch: none of Sonarr, Sonarr-anime, Radarr
+   or Lidarr had Connect or Metadata entries, so nothing to declare. (The
+   Bazarrs do, but they are `bazarr.nix`'s, not nixflix's, and untouched.)
+6. [x] **First switch, with the token passed by hand.** The `nix.conf`
+   include only exists after this switch renders it. Pass the token in the
+   environment of a root shell, not as `--option`: argv is readable by every
+   local user via `ps`, the environment only by its owner. ⚠ Type the lines
+   one at a time: pasted as a block, `sudo -i` swallows everything after it.
+   ```sh
+   sudo -i
+   read -rs T
+   NIX_CONFIG="access-tokens = github.com=$T" nixos-rebuild switch --flake /home/z/nixos-config#galactica; unset T
+   exit
+   ```
+   Every later switch is a plain `nrs`.
+
+   ✅ **Switched 2026-10-18**, with a short-lived read-only PAT standing in for
+   the sops one, which could not be decrypted elsewhere that night. Three
+   indexers were created; the fourth failed because Prowlarr refuses to save an
+   indexer it cannot reach, and the site timed out. Nothing was wrong with the
+   config: `systemctl restart prowlarr-indexers` a few minutes later created it.
+7. [ ] **Verify.** `journalctl -u prowlarr-indexers -b` shows each indexer
+   processed and no failure. Prowlarr lists all four in the declared priority
+   order, and Test All passes. Each *arr's Settings → Indexers shows them
+   again; if not, use Prowlarr's Settings → Apps → Sync App Indexers.
+
+   ✅ **Unit clean on the retry, 2026-10-18.** The UI half is still open.
+8. [ ] **Anything you had tuned per indexer is back at schema defaults**
+   (seed ratio, limits, categories, tags, including `flaresolverr`). Declare
+   those as extra attributes in `indexers.nix`, not in the UI. The unit
+   re-applies the declared config each time it runs, so a UI edit lasts until
+   the next boot, or the next switch that changes the unit.
+9. [ ] **Chaptarr's Prowlarr app is declared now** (`reading-acquisition.nix`).
+   It was hand-added in the UI (§18 step 14), so `prowlarr-applications` would
+   have deleted it at the next boot, as `prowlarr-indexers` did the indexers.
+   After the switch that lands it: `journalctl -u prowlarr-applications -b`
+   shows Chaptarr processed and no failure, and Settings → Apps lists five
+   apps, Chaptarr once. If the hand-made entry had another name, the unit
+   deletes it and creates `Chaptarr`; that is expected. Then check Chaptarr
+   still shows its indexers, and that audiobook search returns results (the
+   3000/3030 categories).
+
+## #200 qBittorrent's WebUI API key from sops — owner steps after the switch
+
+qBittorrent's conf is reinstalled from the store on every start, so the key
+generated in the WebUI was wiped by the #198 switch, and homepage's widget
+went to `403`. `nixflix.nix` now writes `nixflix/qbittorrentApiKey` into the
+conf after each install. The full reasoning is in that PR.
+
+1. [ ] **Switch, then test the key**, keeping the secret out of argv:
+   ```sh
+   { printf 'Authorization: Bearer '; sudo cat /run/secrets/nixflix/qbittorrentApiKey; } | curl -sS -m5 -H @- -o /dev/null -w '%{http_code}\n' http://192.168.15.1:8282/api/v2/app/version
+   ```
+   `200` and a working homepage widget mean done. A `403` means the stored
+   value is not `qbt_` + 28 characters, which qBittorrent silently ignores:
+   rotate the key in the WebUI, put the new value in sops, and switch again.
+2. [ ] **Chaptarr's qBittorrent client** (entered by hand, §18 step 11) also
+   failed after that switch. If it still fails once step 1 passes, it is not
+   using the key: set it to username `admin` and the
+   `nixflix/qbittorrentPassword` value, which survives restarts.
+3. [ ] ⚠ **Never rotate the key in the WebUI without updating sops.** The
+   next restart puts the sops value back.
+
+## #206 Radarr min score, *arr ntfy, seed limits, fork bump — owner steps
+
+qBittorrent now has default share limits (ratio 3.0 or 14 days, whichever is
+first). They apply to every torrent without limits of its own, **including
+torrents already in the client**. One torrent indexer gets per-torrent "never"
+limits from Prowlarr, but only on grabs after this change: its existing torrents
+have no limits of their own, so the defaults would stop them too, and the *arrs
+would then remove them. Step 2 exempts them first.
+
+1. [ ] **Before merging: merge zjones-xyz/nixflix-exp#5** with a merge commit
+   or fast-forward, never a squash, so the pinned commit stays on the fork's
+   `main`.
+2. [ ] **Before the switch: exempt the seed-forever indexer's existing
+   torrents.** On galactica, with `HOST` set to part of that tracker's
+   announce hostname (which tracker it is: the fork's `galactica/indexers.nix`):
+   ```sh
+   HOST=…   # part of the tracker's announce hostname
+   Q=http://192.168.15.1:8282; C=$(mktemp)
+   sudo cat /run/secrets/nixflix/qbittorrentPassword | curl -sS -c "$C" --data-urlencode username=admin --data-urlencode password@- $Q/api/v2/auth/login; echo
+   H=$(curl -sS -b "$C" $Q/api/v2/torrents/info | jq -r --arg h "$HOST" '[.[] | select(.tracker | contains($h)) | .hash] | join("|")')
+   echo "$H" | tr '|' '\n' | grep -c .   # how many matched
+   curl -sS -b "$C" --data "hashes=$H&ratioLimit=-1&seedingTimeLimit=-1&inactiveSeedingTimeLimit=-1&shareLimitAction=Default" $Q/api/v2/torrents/setShareLimits; echo
+   rm -f "$C"
+   ```
+   ⚠ `tracker` is empty for a torrent that has not reached its tracker yet;
+   check the count against the client's tracker filter.
+3. [ ] **Expect a cleanup on the first switch.** Every other torrent already
+   past ratio 3.0 or 14 days stops at once, and the *arrs remove it and its
+   download copy. Library copies are hardlinks and stay.
+4. [ ] **After the switch, ntfy.** Each `*-notifications` unit should show the
+   ntfy entry created:
+   ```sh
+   journalctl -b --since -15min -u sonarr-notifications -u sonarr-anime-notifications -u radarr-notifications -u lidarr-notifications | grep -i -E 'ntfy|error'
+   ```
+   ⚠ The *arrs send a test message before saving. If the server refuses
+   anonymous publishing to `nixflix`, these units fail: give the topic a
+   token, put it in sops and set `notif.ntfy.accessToken`.
+5. [ ] **Seed limits.** In Prowlarr → Indexers, the torrent indexer shows the
+   new seed ratio and seed time; each *arr's copy matches after the next app
+   sync. In qBittorrent, Options → BitTorrent → Seeding Limits shows 3.0 and
+   20160 minutes.
+6. [ ] **Recyclarr.** After its next sync, Radarr's SQP-1 profile has a minimum
+   custom-format score of 180. Too much junk getting through → set it to 1000
+   in `nixflix.nix`.

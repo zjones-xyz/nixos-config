@@ -267,7 +267,11 @@ in
     # claude-desktop-debian flake input via home-manager.extraSpecialArgs in
     # flake.nix — the FHS-wrapped variant, needed for MCP servers to work
     # (they shell out to npx/uvx/etc. expecting a standard FHS layout).
-    claudeDesktop
+    # Upstream's env has no python3 and no hook to add packages, so it rides
+    # in on the `uv` argument — the env's /usr/bin gets both.
+    (claudeDesktop.override {
+      uv = pkgs.symlinkJoin { name = "uv-with-python3"; paths = [ pkgs.uv pkgs.python3 ]; };
+    })
     # Askimo — multi-LLM desktop chat client (ChatGPT/Claude/Gemini/Ollama),
     # not in nixpkgs. askimoDesktop comes from pkgs/askimo.nix via
     # home-manager.extraSpecialArgs in flake.nix — see that file's comment

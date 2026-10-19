@@ -56,6 +56,10 @@ jobs:
 
       - uses: cachix/install-nix-action@v27
         with:
+          # galactica's nixflix input is the private zjones-xyz/nixflix-exp.
+          # Read-only fine-grained PAT; when it expires, every eval fails to
+          # fetch that input. hosts/galactica/DECISIONS.md §10.
+          github_access_token: ${{ secrets.NIXFLIX_EXP_TOKEN }}
           extra_nix_config: |
             experimental-features = nix-command flakes
 
@@ -70,9 +74,6 @@ jobs:
             nix eval ".#darwinConfigurations.$attr.config.system.build.toplevel.drvPath"
           done
 
-      # After the evals, not before: they build import-from-derivation inputs
-      # (galactica's patched nixflix), which this Nix's `flake check --no-build`
-      # can't, failing with "….drv is not valid".
       - name: nix flake check
         run: nix flake check --no-build
 
