@@ -2004,21 +2004,21 @@ member).
 Background: `DECISIONS.md` §10. `prowlarr-indexers` deletes every indexer not
 declared, so the list now lives in `zjones-xyz/nixflix-exp`'s
 `galactica/indexers.nix`, and fetching that private input needs a token.
-Order matters: CI on #197 stays red until step 2. galactica cannot even build
+Order matters: CI on #198 stays red until step 2. galactica cannot even build
 until step 3, because sops-nix checks the keys at build time. CI only
 evaluates, so it goes green without them.
 
-1. [ ] **Create a fine-grained PAT.** Resource owner `zjones-xyz`, only
+1. [x] **Create a fine-grained PAT.** Resource owner `zjones-xyz`, only
    `nixflix-exp`, Repository permissions → Contents: read-only. Take the
    longest expiry allowed and set a renewal reminder: when it lapses, every
    eval fails to fetch the input with a 404 that looks like a bad pin.
-2. [ ] **Add it to nixos-config as the Actions secret `NIXFLIX_EXP_TOKEN`**
-   (Settings → Secrets and variables → Actions), then re-run #197's CI.
-3. [ ] **`sops secrets/galactica.yaml`:** add `nixflix/indexer1Key`,
+2. [x] **Add it to nixos-config as the Actions secret `NIXFLIX_EXP_TOKEN`**
+   (Settings → Secrets and variables → Actions), then re-run #198's CI.
+3. [x] **`sops secrets/galactica.yaml`:** add `nixflix/indexer1Key`,
    `indexer2Key` and `indexer3Key` (which indexer each one is: the fork's
    `galactica/indexers.nix`, deliberately not here), and
    `nixflix/githubAccessToken` = the PAT from step 1.
-4. [ ] **Merge the fork PR (zjones-xyz/nixflix-exp#2) once its CI is green,**
+4. [ ] **Merge the fork PR (zjones-xyz/nixflix-exp#3) once its CI is green,**
    and repin `flake.nix` to the merge commit if it differs from the pin.
 5. [ ] **Before the switch: record each *arr's Settings → Connect and
    Settings → Metadata.** The nixflix merge brings two more reconcilers.
