@@ -17,9 +17,10 @@ let
   # matching what memory-alpha runs.
   #
   # Same compose-file-in-systemd shape the rest of the fleet uses
-  # (arcane-agent.nix, dockge.nix). Socket is the rootful daemon
-  # (`/run/docker.sock`), mounted read-only — the agent only reads container
-  # stats. The data volume persists the agent's identity across restarts.
+  # (arcane-agent.nix, dockge.nix). Docker is reached through the read-only
+  # socket proxy (cfg.dockerHost), never /run/docker.sock: `:ro` on a socket
+  # mount doesn't restrict the API, so a mounted socket is root on the host.
+  # The data volume persists the agent's identity across restarts.
   composeFile = pkgs.writeText "beszel-agent-compose.yml" ''
     services:
       beszel-agent:
@@ -32,10 +33,10 @@ let
         # view) and the agent listens on cfg.port over the LAN for the hub.
         network_mode: host
         volumes:
-          - /run/docker.sock:/var/run/docker.sock:ro
           - ${cfg.dataDir}:/var/lib/beszel-agent
         environment:
           - LISTEN=${toString cfg.port}
+          - DOCKER_HOST=${cfg.dockerHost}
           # KEY = the hub's shared public key; TOKEN = this host's per-agent
           # registration token. Both injected from their sops secret files at
           # runtime (see the script) so neither lands in a world-readable store
@@ -99,12 +100,24 @@ in
       description = "Open cfg.port so the hub can reach the agent. Off by default, like every other openFirewall; hosts opt in.";
     };
 
+    dockerHost = lib.mkOption {
+      type = lib.types.str;
+      default = "tcp://127.0.0.1:2375";
+      description = ''
+        Docker API the agent reads container stats from. Defaults to the
+        read-only socket proxy from traefik-galactica.nix (reachable on
+        loopback because the agent uses host networking). The agent needs
+        CONTAINERS, INFO, IMAGES and VERSION there, and no writes.
+      '';
+    };
+
     image = lib.mkOption {
       type = lib.types.str;
-      default = "henrygd/beszel-agent:latest";
+      default = "henrygd/beszel-agent:0.21.0";
       description = ''
-        Beszel agent OCI image. `:latest` matches the memory-alpha hub+agent so
-        both ends of the fleet track the same release rather than drifting apart.
+        Beszel agent OCI image, pinned: with compose's default pull policy a
+        floating tag is resolved once and then never moves. Bump it alongside
+        the hub's stack on memory-alpha so agent and hub stay on one release.
       '';
     };
   };
