@@ -101,7 +101,7 @@
     # on galactica a sops-managed nix.conf include. github: rather than
     # git+https because `access-tokens` reaches the former. DECISIONS.md §10.
     nixflix = {
-      url = "github:zjones-xyz/nixflix-exp/b54843d492d5f1daf5b6d727f901e466fa9a0294";
+      url = "github:zjones-xyz/nixflix-exp/9aa73c7ebf0f7897905ba8177a46ffc603ca2e06";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
