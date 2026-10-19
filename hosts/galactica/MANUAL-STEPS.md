@@ -888,7 +888,7 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
 
 10. [ ] **One-time repair of the download tree's permissions.** Needed once,
    alongside the switch that carries the qBittorrent `UMask = "0002"` fix in
-   `nixflix.nix`. A umask only applies to newly created files, so the fix
+   `nixflix.nix` (since #197, upstream nixflix's own). A umask only applies to newly created files, so the fix
    covers new downloads and nothing already on disk.
 
    What went wrong: qBittorrent ran at the default 0022 and created every
@@ -939,12 +939,12 @@ disk for anything seeding, and slow). Do not "tidy up" by creating
       Manual Import screen, not here.
 
 11. [ ] **Bumping nixflix later is a deliberate, two-step move**, not a
-   `nix flake update`. The input is pinned to an exact upstream revision that
-   the fork's CI has cleared against 26.05. To move it: merge upstream into
-   `zjones-xyz/nixflix-exp`, let its CI go green against the 26.05 pin, then
-   set that same upstream rev here. A bare branch URL would let a routine
-   update pull an unrehearsed revision into the fleet, which is precisely
-   what the canary exists to prevent.
+   `nix flake update`. Since #197 the input is the `zjones-xyz/nixflix-exp`
+   fork itself, pinned to an exact revision its CI has cleared against 26.05.
+   To move it: merge upstream into the fork, let its CI go green, then set the
+   fork's merge commit here. `DECISIONS.md` §10 has the procedure. A bare
+   branch URL would let a routine update pull an unrehearsed revision into
+   the fleet, which is precisely what the canary exists to prevent.
 
 ### Anime
 
@@ -2004,8 +2004,9 @@ member).
 Background: `DECISIONS.md` §10. `prowlarr-indexers` deletes every indexer not
 declared, so the list now lives in `zjones-xyz/nixflix-exp`'s
 `galactica/indexers.nix`, and fetching that private input needs a token.
-Order matters: CI on #197 stays red until step 2, and the switch fails at
-sops activation until step 3.
+Order matters: CI on #197 stays red until step 2. galactica cannot even build
+until step 3, because sops-nix checks the keys at build time. CI only
+evaluates, so it goes green without them.
 
 1. [ ] **Create a fine-grained PAT.** Resource owner `zjones-xyz`, only
    `nixflix-exp`, Repository permissions → Contents: read-only. Take the
@@ -2020,10 +2021,14 @@ sops activation until step 3.
 4. [ ] **Merge the fork PR (zjones-xyz/nixflix-exp#2) once its CI is green,**
    and repin `flake.nix` to the merge commit if it differs from the pin.
 5. [ ] **First switch, with the token passed by hand.** The `nix.conf`
-   include only exists after this switch renders it:
+   include only exists after this switch renders it. Pass the token in the
+   environment of a root shell, not as `--option`: argv is readable by every
+   local user via `ps`, the environment only by its owner.
    ```sh
-   read -rs T; sudo nixos-rebuild switch --flake .#galactica \
-     --option access-tokens "github.com=$T"; unset T
+   sudo -i
+   read -rs T; NIX_CONFIG="access-tokens = github.com=$T" \
+     nixos-rebuild switch --flake /home/z/nixos-config#galactica; unset T
+   exit
    ```
    Every later switch is a plain `nrs`.
 6. [ ] **Verify.** `journalctl -u prowlarr-indexers -b` shows each indexer
@@ -2031,6 +2036,7 @@ sops activation until step 3.
    Each *arr's Settings → Indexers shows them again; if not, use Prowlarr's
    Settings → Apps → Sync App Indexers.
 7. [ ] **Anything you had tuned per indexer is back at schema defaults**
-   (seed ratio, limits, categories). Declare those as extra attributes in
-   `indexers.nix`, not in the UI: the unit re-applies the declared config on
-   every run, so UI edits last until the next boot or switch.
+   (seed ratio, limits, categories, tags, including `flaresolverr`). Declare
+   those as extra attributes in `indexers.nix`, not in the UI. The unit
+   re-applies the declared config each time it runs, so a UI edit lasts until
+   the next boot, or the next switch that changes the unit.

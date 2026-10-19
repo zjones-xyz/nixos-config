@@ -439,7 +439,7 @@ Read out of Chaptarr's own source (`develop`), not inferred from the fork:
   the dataset's ownership or every import lands unreadable.
 - ⚠ **`UMASK`** is honoured by the entrypoint, and upstream recommends `002` when
   other containers share the media group. Same fix, same reason as the
-  `UMask = "0002"` override `nixflix.nix` already applies to qBittorrent.
+  `UMask = "0002"` that nixflix's qBittorrent module sets.
 - ⚠ **`CopyUsingHardlinks` is not declarable.** It lives in the `Config` table of
   `chaptarr.db`; env vars only reach `config.xml`-level settings (port, API key,
   log level). So it is UI state or a one-shot

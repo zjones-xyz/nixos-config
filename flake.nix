@@ -93,13 +93,11 @@
       inputs.nixpkgs-stable.follows = "nixpkgs";
     };
 
-    # nixflix (galactica) — the declarative *arr media stack, from the private
-    # zjones-xyz/nixflix-exp fork: upstream merged in, CI-proven against
-    # 26.05, plus galactica's private indexer list. Pinned to an exact rev,
-    # never a branch, so `nix flake update` cannot pull an unrehearsed one.
-    # ⚠ Private: fetching needs a GitHub token — CI's NIXFLIX_EXP_TOKEN, and
-    # on galactica a sops-managed nix.conf include. github: rather than
-    # git+https because `access-tokens` reaches the former. DECISIONS.md §10.
+    # nixflix (galactica) — the *arr stack, from the private nixflix-exp fork:
+    # upstream merged in, CI-proven on 26.05, plus galactica's private indexer
+    # list. Pinned to an exact rev, never a branch. ⚠ Private: fetching needs
+    # a token (CI's NIXFLIX_EXP_TOKEN; on galactica a sops nix.conf include),
+    # hence github: rather than git+https. DECISIONS.md §10.
     nixflix = {
       url = "github:zjones-xyz/nixflix-exp/9aa73c7ebf0f7897905ba8177a46ffc603ca2e06";
       inputs.nixpkgs.follows = "nixpkgs";

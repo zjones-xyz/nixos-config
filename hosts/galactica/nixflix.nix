@@ -229,8 +229,8 @@ in
   };
 
   # ── FlareSolverr: two corrections to upstream's wiring ────────────────────
-  # Local because the nixflix-exp fork does not carry them yet; delete as it
-  # adopts them.
+  # Local because the nixflix-exp fork does not carry them correctly yet;
+  # delete as it adopts them.
   # MANUAL-STEPS.md §12 "FlareSolverr" carries the full argument.
   # (1) Upstream's 30s readiness probe dies inside the cold Chromium launch
   #     (43s on fast hardware) and an ExecStartPost failure kills the unit —
