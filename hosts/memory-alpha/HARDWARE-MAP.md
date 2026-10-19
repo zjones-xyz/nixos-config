@@ -80,11 +80,14 @@ survived to generation 36 unnoticed.
 
 ### Why it matters here specifically
 
-This is not a cosmetic 8.8 GB. **memory-alpha is the fleet's aarch64 build host** —
-`flake.nix` routes hopper and hamilton deploys through it via binfmt QEMU
-emulation, and building an SD image under emulation is memory-hungry and bursty.
-That is precisely the workload where a missing swap turns into an OOM kill rather
-than a slow build. It is also the borgmatic pilot's restore target (§1).
+This is not a cosmetic 8.8 GB. **At the time this was written, memory-alpha was
+the fleet's aarch64 build host** — `flake.nix` routed hopper and hamilton
+deploys through it via binfmt QEMU emulation, and building an SD image under
+emulation is memory-hungry and bursty. That is precisely the workload where a
+missing swap turns into an OOM kill rather than a slow build. (That build-host
+role has since moved to pegasus — see `colmena.nix` and
+`hosts/pegasus/configuration.nix` — but the swap fix below stands regardless;
+it's also the borgmatic pilot's restore target, §1.)
 
 ### Fixing it — three options, and the middle one is probably right
 

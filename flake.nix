@@ -330,6 +330,21 @@
       };
     };
 
+    # ── Colmena ─────────────────────────────────────────────────────────────
+    # Deployment layer on top of the `nixosConfigurations` above — see
+    # colmena.nix for the hive itself (per-host `deployment.targetHost` and
+    # the aarch64-via-pegasus distributed-build wiring, and galactica's
+    # LUKS-locked exclusion tag) and colmena-builders.machines for the build delegation. `nix flake check`
+    # does not evaluate this output (colmena isn't a recognized flake output
+    # type to Nix itself, just a convention the `colmena` CLI looks for) —
+    # validate hive changes with `colmena build --on <host>` instead.
+    colmena = import ./colmena.nix {
+      inherit self nixpkgs home-manager sops-nix nixos-hardware
+        dank-material-shell plasma-manager niri-flake claude-desktop-debian
+        nixpkgs-apps zen-browser opera-flake nixflix dr460nized-src
+        window-title-applet-src withBambuddyCa;
+    };
+
     # ── Darwin (macOS) ──────────────────────────────────────────────────────
     # Serenity — Zoe's Mac. Shares modules/home/common.nix with the Linux hosts
     # via Home Manager. Build/activate on the Mac with:
