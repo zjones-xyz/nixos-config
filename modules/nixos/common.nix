@@ -154,9 +154,11 @@
   ];
 
   # ── SSH: public keys only ───────────────────────────────────────────────────
-  # PasswordAuthentication alone leaves PAM's keyboard-interactive path open, so
-  # z's local password (pegasus) would still log in over SSH. Initrd unlock SSH
-  # (luks-remote-unlock.nix) has its own config and is unaffected.
+  # Belt-and-braces: with PasswordAuthentication off, nixpkgs' sshd PAM stack has
+  # no pam_unix, but kbd-interactive is still offered and runs whatever other PAM
+  # modules land on sshd. Pinning publickey stops a future PAM change reopening a
+  # non-key path. Initrd unlock SSH (luks-remote-unlock.nix) has its own config;
+  # Tailscale SSH (`--ssh`) bypasses sshd entirely, under the tailnet ACL.
   services.openssh = {
     enable = true;
     settings = {
