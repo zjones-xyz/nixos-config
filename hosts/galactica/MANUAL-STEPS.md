@@ -2018,7 +2018,7 @@ evaluates, so it goes green without them.
    `indexer2Key` and `indexer3Key` (which indexer each one is: the fork's
    `galactica/indexers.nix`, deliberately not here), and
    `nixflix/githubAccessToken` = the PAT from step 1.
-4. [ ] **Merge the fork PR (zjones-xyz/nixflix-exp#3) once its CI is green,**
+4. [x] **Merge the fork PR (zjones-xyz/nixflix-exp#3) once its CI is green,**
    and repin `flake.nix` to the merge commit if it differs from the pin.
 5. [x] **Before the switch: record each *arr's Settings → Connect and
    Settings → Metadata.** The nixflix merge brings two more reconcilers.
