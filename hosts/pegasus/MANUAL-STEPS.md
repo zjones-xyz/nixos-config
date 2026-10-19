@@ -301,7 +301,8 @@ the three deferred compiled plasmoids next, or reconsider.
 
 ## 13. YubiKey enrollment (after switching to modules/nixos/yubikey.nix)
 
-The module (udev rules + pam-u2f on sudo/polkit-1) is declarative, but
+The module (udev rules + pam-u2f on sudo/polkit-1/run0 only, never on
+session login or unlock) is declarative, but
 registering the actual physical key is not — `pamu2fcfg` needs the key
 plugged in and touched interactively. With the key connected:
 
@@ -314,8 +315,8 @@ Touch the key when it flashes. That's the whole enrollment — no rebuild
 needed afterward, `pam_u2f` reads the file live. `sudo` and any KDE
 polkit prompt ("Authentication is required to...") will then accept a
 touch as an alternative to typing the password. Password alone still
-works if the file is missing or the key isn't present — `security.pam.u2f`
-is left at its default `control = "sufficient"` on purpose, so this can
+works if the file is missing or the key isn't present — pam-u2f is left
+at its default `control = "sufficient"` on purpose, so this can
 never turn into a lockout the way the earlier no-password bug did.
 
 To add a second key (backup, or a work/personal split), re-run
