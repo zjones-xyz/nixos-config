@@ -301,7 +301,8 @@ the three deferred compiled plasmoids next, or reconsider.
 
 ## 13. YubiKey enrollment (after switching to modules/nixos/yubikey.nix)
 
-The module (udev rules + pam-u2f on sudo/polkit-1) is declarative, but
+The module (udev rules + pam-u2f on sudo/polkit-1 only, never on session
+login or unlock) is declarative, but
 registering the actual physical key is not — `pamu2fcfg` needs the key
 plugged in and touched interactively. With the key connected:
 
@@ -314,9 +315,11 @@ Touch the key when it flashes. That's the whole enrollment — no rebuild
 needed afterward, `pam_u2f` reads the file live. `sudo` and any KDE
 polkit prompt ("Authentication is required to...") will then accept a
 touch as an alternative to typing the password. Password alone still
-works if the file is missing or the key isn't present — `security.pam.u2f`
-is left at its default `control = "sufficient"` on purpose, so this can
+works if the file is missing or the key isn't present — pam-u2f is left
+at its default `control = "sufficient"` on purpose, so this can
 never turn into a lockout the way the earlier no-password bug did.
+With the key plugged in, `sudo` from an SSH or xrdp session waits for a
+touch nobody can give before falling back to the password; Ctrl-C skips it.
 
 To add a second key (backup, or a work/personal split), re-run
 `pamu2fcfg -n` and append its output line to the same file rather than
@@ -995,3 +998,18 @@ Rationale: DECISIONS.md, "Exposed apps on the fast lane".
 4. [ ] Switch pegasus (`npullnrs`), then open Vivaldi, Chrome, Discord,
        Slack, Signal and Zoom. A newer app over the system's NVIDIA userspace
        is the first suspect if one fails to render.
+
+## #204 YubiKey scoped to sudo/polkit — verify after the switch
+
+sudo on pegasus stops being passwordless with this switch. Rationale:
+DECISIONS.md, "YubiKey → sudo and polkit only".
+
+1. [ ] Switch (`npullnrs`). The rebuild's own sudo now asks for a touch or
+       the password.
+2. [ ] `sudo true` with the key in: it cues, and a touch is enough. Unplug
+       the key and repeat: the password works.
+3. [ ] A KDE polkit dialog (System Settings → a page that needs admin) and
+       `run0 true` both accept a touch.
+4. [ ] Lock the session (DMS, and Plasma's locker if used) and log out to
+       SDDM with the key plugged in: a touch must not unlock or log in; only
+       the password does.
