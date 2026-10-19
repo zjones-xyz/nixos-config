@@ -1,10 +1,10 @@
 { config, pkgs, lib, ... }:
 
 let
-  # Elevation prompts only. Session login/unlock (greeters, screen lockers,
-  # login, su, sshd) stays password-only: a key left plugged in must not
-  # unlock a locked session.
-  u2fServices = [ "sudo" "polkit-1" "systemd-run0" ];
+  # Elevation prompts only (run0 authenticates through polkit-1). Session
+  # login/unlock (greeters, screen lockers, login, su, sshd) stays
+  # password-only: a key left plugged in must not unlock a locked session.
+  u2fServices = [ "sudo" "polkit-1" ];
 in
 {
   # ── YubiKey: sudo/polkit touch + browser WebAuthn ───────────────────────────
@@ -23,16 +23,26 @@ in
   security.pam.services = lib.genAttrs u2fServices (_: { u2f.enable = true; });
   environment.systemPackages = [ pkgs.pam_u2f ]; # pamu2fcfg, for enrollment
 
+  # polkit authenticates in this sandboxed unit; nixpkgs opens it to the key
+  # and ~/.config/Yubico only under the global switch above, so do it here.
+  systemd.services."polkit-agent-helper@".serviceConfig = {
+    PrivateDevices = false;
+    DeviceAllow = [ "/dev/urandom r" "char-hidraw rw" ];
+    ProtectHome = "read-only";
+  };
+
   # Without a sudo password prompt, PAM auth never runs and the key is never asked for.
   security.sudo.wheelNeedsPassword = true;
 
+  # Checks the rendered stacks, not `u2f.enable`: raw-`text` services (e.g.
+  # DMS's lockscreen.securityKey → `dankshell-u2f`) bypass the option.
   assertions =
     let
-      enabled = lib.attrNames (lib.filterAttrs (_: s: s.u2f.enable) config.security.pam.services);
+      withU2f = lib.attrNames (lib.filterAttrs (_: s: lib.hasInfix "pam_u2f.so" s.text) config.security.pam.services);
     in
     [{
-      assertion = lib.sort lib.lessThan enabled == lib.sort lib.lessThan u2fServices;
-      message = "yubikey.nix: pam-u2f is enabled on [${toString enabled}], expected only [${toString u2fServices}].";
+      assertion = lib.sort lib.lessThan withU2f == lib.sort lib.lessThan u2fServices;
+      message = "yubikey.nix: pam_u2f is in the PAM stacks of [${toString withU2f}], expected only [${toString u2fServices}].";
     }];
 
   # Enrollment is a manual, physical-key-present step z runs after rebuild:

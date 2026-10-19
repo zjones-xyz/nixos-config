@@ -1657,8 +1657,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
     usually unsigned. An app that stays gets a Nix package, or
     `appimageTools` wrapping the same file.
 
-- **YubiKey → sudo, polkit and run0 only; session login and unlock stay
-  password-only (2026-10-19).** *alt:* `security.pam.u2f.enable = true`, which
+- **YubiKey → sudo and polkit only (run0 via polkit); session login and
+  unlock stay password-only, 2026-10-19** — *alt:* `security.pam.u2f.enable = true`, which
   is what `yubikey.nix` had. *Why the alt was wrong:* in nixpkgs every PAM
   service's `u2f.enable` defaults to that global switch, so it put a
   `sufficient` key touch on all 33 of pegasus's PAM stacks: `login`, `sddm`,
@@ -1668,7 +1668,13 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   can't stand in for the knowledge factor that unlocking a session should
   ask for. Once the session is unlocked, a touch for elevation is the
   convenience worth having. The module opts in per service, and an
-  assertion fails the build if any other service ends up with u2f. sudo now
+  assertion fails the build if pam_u2f appears in any other rendered stack
+  (that also catches DMS's `lockscreen.securityKey`, a raw-text PAM service
+  the `u2f.enable` option never sees). polkit's helper runs sandboxed, and
+  nixpkgs only opens it to the key under the global switch, so the module
+  re-applies that. Out of Nix's reach: DMS's settings UI accepts a custom
+  lock-screen PAM path, and pointing it at `/etc/pam.d/sudo` would make the
+  key unlock again. Don't. sudo now
   asks for authentication on pegasus (`wheelNeedsPassword = true`), since
   NOPASSWD sudo never runs PAM auth and the key was never consulted.
   *If a fingerprint reader is added:* `fprintAuth` has the same trap, since it
