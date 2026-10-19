@@ -2068,3 +2068,24 @@ evaluates, so it goes green without them.
    deletes it and creates `Chaptarr`; that is expected. Then check Chaptarr
    still shows its indexers, and that audiobook search returns results (the
    3000/3030 categories).
+
+## #200 qBittorrent's WebUI API key from sops — owner steps after the switch
+
+qBittorrent's conf is reinstalled from the store on every start, so the key
+generated in the WebUI was wiped by the #198 switch, and homepage's widget
+went to `403`. `nixflix.nix` now writes `nixflix/qbittorrentApiKey` into the
+conf after each install. The full reasoning is in that PR.
+
+1. [ ] **Switch, then test the key**, keeping the secret out of argv:
+   ```sh
+   { printf 'Authorization: Bearer '; sudo cat /run/secrets/nixflix/qbittorrentApiKey; } | curl -sS -m5 -H @- -o /dev/null -w '%{http_code}\n' http://192.168.15.1:8282/api/v2/app/version
+   ```
+   `200` and a working homepage widget mean done. A `403` means the stored
+   value is not `qbt_` + 28 characters, which qBittorrent silently ignores:
+   rotate the key in the WebUI, put the new value in sops, and switch again.
+2. [ ] **Chaptarr's qBittorrent client** (entered by hand, §18 step 11) also
+   failed after that switch. If it still fails once step 1 passes, it is not
+   using the key: set it to username `admin` and the
+   `nixflix/qbittorrentPassword` value, which survives restarts.
+3. [ ] ⚠ **Never rotate the key in the WebUI without updating sops.** The
+   next restart puts the sops value back.
