@@ -280,17 +280,17 @@
         "vpn-confinement": "vpn-confinement"
       },
       "locked": {
-        "lastModified": 1792366940,
-        "narHash": "sha256-A0la3R3voYEVZC0jVU3ca2mhNt7QmqYIv67zzDf78Bk=",
+        "lastModified": 1792368108,
+        "narHash": "sha256-9GPa/U0LKwK2oItJc4tMHoKhS2DG5DGVJSa2LtXlgxo=",
         "owner": "zjones-xyz",
         "repo": "nixflix-exp",
-        "rev": "8c72ea9f2fb3510adf232d8a05817279f38b71ee",
+        "rev": "b54843d492d5f1daf5b6d727f901e466fa9a0294",
         "type": "github"
       },
       "original": {
         "owner": "zjones-xyz",
         "repo": "nixflix-exp",
-        "rev": "8c72ea9f2fb3510adf232d8a05817279f38b71ee",
+        "rev": "b54843d492d5f1daf5b6d727f901e466fa9a0294",
         "type": "github"
       }
     },
