@@ -3,8 +3,8 @@
 # ── memory-alpha — borgmatic: service data offsite to BorgBase ────────────────
 #
 # memory-alpha's first backup of any kind. It holds the Arcane manager DB, the
-# Beszel hub's history, Scrutiny's InfluxDB, dockge's stacks, Traefik's certs
-# and `dashboard-auth` htpasswd, and Jellyfin's users DB — none of which existed
+# Beszel hub's history, Scrutiny's InfluxDB, Traefik's certs and
+# `dashboard-auth` htpasswd, and Jellyfin's users DB — none of which existed
 # anywhere else. Same shape as hosts/pegasus/borgmatic.nix (path-driven, no ZFS
 # hook: this host is btrfs), not galactica's property-driven config.
 
@@ -77,7 +77,6 @@ in
         (db "/home/z/beszel/data.db")
         (db "/home/z/beszel/auxiliary.db")
         (db "/home/z/open-webui/webui.db")
-        (db "/home/z/dockge/data/dockge.db")
       ];
 
       repositories = [
