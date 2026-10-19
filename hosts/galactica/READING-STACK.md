@@ -550,16 +550,19 @@ quiet behaviour: an empty intersection makes Prowlarr skip the indexer with only
 `Debug` log, and a FullSync *deletes* a previously-synced indexer that stops
 matching.
 
-**Two nixflix gotchas for whoever implements this:**
+**Two nixflix gotchas, both handled in `reading-acquisition.nix` since #198:**
 
 1. ⚠ `prowlarr.config.applications` is `mkDefault`, and the `prowlarr-applications`
-   unit **deletes every Prowlarr application not in the configured list**. Adding
-   Chaptarr by assigning the option replaces the whole list — **Sonarr, Radarr and
-   Lidarr must be re-listed** or they are wiped.
+   unit **deletes every Prowlarr application not in the configured list**. Plain
+   assignment replaces the whole list, wiping Sonarr, Radarr and Lidarr. The
+   Chaptarr entry is therefore itself `mkDefault`: two definitions at the same
+   priority concatenate, so nixflix's defaults stay without being re-listed.
+   Until #198 the entry was UI-only and survived only because the unit had not
+   re-run since.
 2. ⚠ `prowlarr-applications.service` orders itself after radarr/sonarr/
    sonarr-anime/lidarr only, and the script runs `set -eu` and exits 1 on a failed
-   PUT. Nothing orders it after a Chaptarr unit, so a cold boot can fail before
-   Chaptarr is listening — add Chaptarr to its `after`/`requires`.
+   save, which Prowlarr returns for an app it cannot reach. So the unit is
+   ordered after `docker-chaptarr` and waits in `preStart` for Chaptarr's port.
 
 ⟨Undetermined and worth a diagnostic: Chaptarr exposes media-type-scoped roots
 (`/ebook/api/v1/…`, `/audiobook/api/v1/…`). Pointing Prowlarr at the plain root

@@ -2030,23 +2030,41 @@ evaluates, so it goes green without them.
    ✅ Checked before the first switch: none of Sonarr, Sonarr-anime, Radarr
    or Lidarr had Connect or Metadata entries, so nothing to declare. (The
    Bazarrs do, but they are `bazarr.nix`'s, not nixflix's, and untouched.)
-6. [ ] **First switch, with the token passed by hand.** The `nix.conf`
+6. [x] **First switch, with the token passed by hand.** The `nix.conf`
    include only exists after this switch renders it. Pass the token in the
    environment of a root shell, not as `--option`: argv is readable by every
-   local user via `ps`, the environment only by its owner.
+   local user via `ps`, the environment only by its owner. ⚠ Type the lines
+   one at a time: pasted as a block, `sudo -i` swallows everything after it.
    ```sh
    sudo -i
-   read -rs T; NIX_CONFIG="access-tokens = github.com=$T" \
-     nixos-rebuild switch --flake /home/z/nixos-config#galactica; unset T
+   read -rs T
+   NIX_CONFIG="access-tokens = github.com=$T" nixos-rebuild switch --flake /home/z/nixos-config#galactica; unset T
    exit
    ```
    Every later switch is a plain `nrs`.
+
+   ✅ **Switched 2026-10-18**, with a short-lived read-only PAT standing in for
+   the sops one, which could not be decrypted elsewhere that night. Three
+   indexers were created; the fourth failed because Prowlarr refuses to save an
+   indexer it cannot reach, and the site timed out. Nothing was wrong with the
+   config: `systemctl restart prowlarr-indexers` a few minutes later created it.
 7. [ ] **Verify.** `journalctl -u prowlarr-indexers -b` shows each indexer
-   processed and no failure. Prowlarr lists all four, and Test All passes.
-   Each *arr's Settings → Indexers shows them again; if not, use Prowlarr's
-   Settings → Apps → Sync App Indexers.
+   processed and no failure. Prowlarr lists all four in the declared priority
+   order, and Test All passes. Each *arr's Settings → Indexers shows them
+   again; if not, use Prowlarr's Settings → Apps → Sync App Indexers.
+
+   ✅ **Unit clean on the retry, 2026-10-18.** The UI half is still open.
 8. [ ] **Anything you had tuned per indexer is back at schema defaults**
    (seed ratio, limits, categories, tags, including `flaresolverr`). Declare
    those as extra attributes in `indexers.nix`, not in the UI. The unit
    re-applies the declared config each time it runs, so a UI edit lasts until
    the next boot, or the next switch that changes the unit.
+9. [ ] **Chaptarr's Prowlarr app is declared now** (`reading-acquisition.nix`).
+   It was hand-added in the UI (§18 step 14), so `prowlarr-applications` would
+   have deleted it at the next boot, as `prowlarr-indexers` did the indexers.
+   After the switch that lands it: `journalctl -u prowlarr-applications -b`
+   shows Chaptarr processed and no failure, and Settings → Apps lists five
+   apps, Chaptarr once. If the hand-made entry had another name, the unit
+   deletes it and creates `Chaptarr`; that is expected. Then check Chaptarr
+   still shows its indexers, and that audiobook search returns results (the
+   3000/3030 categories).
