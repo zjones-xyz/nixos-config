@@ -1,13 +1,9 @@
 { config, pkgs, lib, ... }:
 
 let
-  # Let's Encrypt CA + storage, switched by config.homelab.letsencryptStaging.
-  # Staging and production certs live in separate files so flipping the flag
-  # never requires deleting cached certs.
-  acmeCaServer =
-    if config.homelab.letsencryptStaging
-    then "https://acme-staging-v02.api.letsencrypt.org/directory"
-    else "https://acme-v02.api.letsencrypt.org/directory";
+  # Staging and production certs live in separate files so flipping
+  # homelab.letsencryptStaging never requires deleting cached certs. The CA
+  # URL and ACME email come from the shared options in letsencrypt.nix.
   acmeStorage =
     if config.homelab.letsencryptStaging
     then "/letsencrypt/acme-staging.json"
@@ -105,9 +101,9 @@ let
           - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
           - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
           - "--entrypoints.websecure.address=:443"
-          - "--certificatesresolvers.letsencrypt.acme.email=zoejonestx91@gmail.com"
+          - "--certificatesresolvers.letsencrypt.acme.email=${config.homelab.letsencryptEmail}"
           - "--certificatesresolvers.letsencrypt.acme.storage=${acmeStorage}"
-          - "--certificatesresolvers.letsencrypt.acme.caserver=${acmeCaServer}"
+          - "--certificatesresolvers.letsencrypt.acme.caserver=${config.homelab.letsencryptCaServer}"
           - "--certificatesresolvers.letsencrypt.acme.dnschallenge=true"
           - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare"
           - "--certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,1.0.0.1:53"
