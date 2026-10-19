@@ -2111,7 +2111,7 @@ would then remove them. Step 2 exempts them first.
    sudo cat /run/secrets/nixflix/qbittorrentPassword | curl -sS -c "$C" --data-urlencode username=admin --data-urlencode password@- $Q/api/v2/auth/login; echo
    H=$(curl -sS -b "$C" $Q/api/v2/torrents/info | jq -r --arg h "$HOST" '[.[] | select(.tracker | contains($h)) | .hash] | join("|")')
    echo "$H" | tr '|' '\n' | grep -c .   # how many matched
-   curl -sS -b "$C" --data "hashes=$H&ratioLimit=-1&seedingTimeLimit=-1&inactiveSeedingTimeLimit=-1" $Q/api/v2/torrents/setShareLimits
+   curl -sS -b "$C" --data "hashes=$H&ratioLimit=-1&seedingTimeLimit=-1&inactiveSeedingTimeLimit=-1&shareLimitAction=Default" $Q/api/v2/torrents/setShareLimits; echo
    rm -f "$C"
    ```
    ⚠ `tracker` is empty for a torrent that has not reached its tracker yet;
