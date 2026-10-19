@@ -1,5 +1,22 @@
 { config, pkgs, lib, ... }:
 
+let
+  fleetLib = import ../../fleet/lib.nix { inherit lib; };
+
+  # IPs come from fleet/hosts.nix; the order is spelled out because attrsets
+  # enumerate alphabetically and this list renders into AdGuardHome.yaml.
+  # hamilton: not in service, no known IP — add it there once it exists.
+  clientOrder = [
+    "router"
+    "hopper"
+    "pegasus"
+    "memory-alpha-2"
+    "memory-alpha"
+    "homeassistant"
+    "galactica"
+    "towerbmc"
+  ];
+in
 {
   # DNS stack: AdGuard Home (LAN-facing filter) → Unbound (recursive resolver).
   #
@@ -98,20 +115,21 @@
       # (confirmed live, 2026-09-08 — the router replica inherited the same
       # bug via AdGuardHome-Sync, since it just mirrors whatever origin
       # reports).
-      clients.persistent = map (c: c // { use_global_settings = true; }) [
-        { name = "router"; ids = [ "192.168.8.1" ]; }
-        { name = "hopper"; ids = [ "192.168.8.10" ]; }
-        { name = "pegasus"; ids = [ "192.168.8.72" ]; }
-        { name = "memory-alpha-2"; ids = [ "192.168.8.98" ]; }
-        { name = "memory-alpha"; ids = [ "192.168.8.99" ]; }
-        { name = "homeassistant"; ids = [ "192.168.8.142" ]; }
-        { name = "galactica"; ids = [ "192.168.8.190" ]; }
-        { name = "towerbmc"; ids = [ "192.168.8.191" ]; }
-        # hamilton: not in service, no known IP — add once it exists.
-      ];
+      clients.persistent = map (name: {
+        inherit name;
+        ids = [ config.homelab.fleet.hosts.${name}.ip ];
+        use_global_settings = true;
+      }) clientOrder;
 
       # Every importer of this module (galactica live; hopper/hamilton staged)
       # gets the same client list — keep it host-agnostic.
+
+      # Rows generated from fleet/services.nix. List definitions concatenate,
+      # so these join galactica's hand-written list; AdGuard is order-blind.
+      filtering.rewrites = fleetLib.rewritesFor {
+        inherit (config.homelab.fleet) hosts services;
+        splitHorizonGlobal = config.homelab.dns.splitHorizon;
+      };
     };
   };
 

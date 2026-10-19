@@ -119,10 +119,8 @@
   # alphabetically — several boxes answer to more than one name: galactica is
   # also `tower`/`arr` (legacy identities it absorbed, DECISIONS.md §2).
   #
-  # `.xyz` names are externally-routable, terminated by Pangolin (not Traefik),
-  # so no local router or cert is expected for them; jellyfin/guest get
-  # split-horizon rewrites so LAN clients skip the tunnel, while homeassistant
-  # and the `home` admin dashboard stay Tailscale/LAN-only with no `.xyz` name.
+  # Host identities and wildcard groups only: single-host services with flat
+  # names are declared in fleet/services.nix, and dns.nix appends their rows.
   # ⚠ `enabled = true` is mapped over every entry, not written per-line —
   # AdGuard has a per-rewrite enable toggle whose omitted bool renders as Go's
   # zero-value (false), silently disabling every rewrite.
@@ -177,21 +175,6 @@
       domain = "*.3dp.zjones.dev";
       answer = "192.168.8.99";
     }
-    # jellyfin.zjones.dev: flat name, not *.memory-alpha.zjones.dev — Traefik
-    # (modules/nixos/traefik.nix, on memory-alpha) already routes it with its
-    # own single-name LE cert; this rewrite was the only missing piece.
-    {
-      domain = "jellyfin.zjones.dev";
-      answer = "192.168.8.99";
-    }
-    # jellyfin.zjones.xyz: split-horizon shortcut for the Pangolin-tunneled
-    # public name — Newt runs on memory-alpha (jellyfin.nix), so this is a
-    # LAN clients-only bypass, not a second route.
-    {
-      domain = "jellyfin.zjones.xyz";
-      answer = "192.168.8.99";
-    }
-
     # homeassistant
     {
       domain = "homeassistant.internal";
@@ -267,76 +250,8 @@
       domain = "*.read.zjones.dev";
       answer = "192.168.8.190";
     }
-    # The two dashboards (hosts/galactica/homepages.nix) — flat names, own
-    # Traefik router pair each, not under arr.* or galactica.*.
-    {
-      domain = "home.internal";
-      answer = "192.168.8.190";
-    }
-    {
-      domain = "home.zjones.dev";
-      answer = "192.168.8.190";
-    }
-    {
-      domain = "guest.internal";
-      answer = "192.168.8.190";
-    }
-    {
-      domain = "guest.zjones.dev";
-      answer = "192.168.8.190";
-    }
-    {
-      domain = "guest.zjones.xyz";
-      answer = "192.168.8.190";
-    }
-
-    # Ferdium/Karakeep/Paperless-ngx/Syncthing/Memos — same flat-name shape as
-    # the dashboards above, own Traefik router pair each (ferdium.nix,
-    # karakeep.nix, paperless.nix, syncthing.nix, memos.nix).
-    {
-      domain = "ferdium.internal";
-      answer = "192.168.8.190";
-    }
-    {
-      domain = "ferdium.zjones.dev";
-      answer = "192.168.8.190";
-    }
-    {
-      domain = "karakeep.internal";
-      answer = "192.168.8.190";
-    }
-    {
-      domain = "karakeep.zjones.dev";
-      answer = "192.168.8.190";
-    }
-    {
-      domain = "paperless.internal";
-      answer = "192.168.8.190";
-    }
-    {
-      domain = "paperless.zjones.dev";
-      answer = "192.168.8.190";
-    }
-    {
-      domain = "syncthing.internal";
-      answer = "192.168.8.190";
-    }
-    {
-      domain = "syncthing.zjones.dev";
-      answer = "192.168.8.190";
-    }
-    {
-      domain = "memos.internal";
-      answer = "192.168.8.190";
-    }
-    {
-      domain = "memos.zjones.dev";
-      answer = "192.168.8.190";
-    }
-
     # PartDB/HomeBox/Spoolman (partdb.nix, homebox.nix, spoolman.nix) — a
-    # real subdomain group, not flat names like everything else above, so
-    # wildcards here rather than one rewrite per service.
+    # real subdomain group, so wildcards rather than one rewrite per service.
     {
       domain = "*.maker.internal";
       answer = "192.168.8.190";
