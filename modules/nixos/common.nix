@@ -26,6 +26,10 @@
     };
   };
 
+  # The 1 GB ESPs can't hold 30 days of generations on a busy host, and a full
+  # /boot fails `switch`. Inert on hosts without systemd-boot (the Pis).
+  boot.loader.systemd-boot.configurationLimit = lib.mkDefault 10;
+
   nixpkgs.config.allowUnfree = lib.mkDefault true;
 
   # ── Persistent journald ─────────────────────────────────────────────────────
@@ -149,11 +153,18 @@
     '')
   ];
 
+  # ── SSH: public keys only ───────────────────────────────────────────────────
+  # PasswordAuthentication alone leaves PAM's keyboard-interactive path open, so
+  # z's local password (pegasus) would still log in over SSH. Initrd unlock SSH
+  # (luks-remote-unlock.nix) has its own config and is unaffected.
   services.openssh = {
     enable = true;
     settings = {
       PasswordAuthentication = false;
+      KbdInteractiveAuthentication = false;
+      AuthenticationMethods = "publickey";
       PermitRootLogin = "no";
+      AllowUsers = [ "z" ];
     };
   };
 
