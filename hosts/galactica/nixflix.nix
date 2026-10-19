@@ -258,6 +258,13 @@ in
           QueueingSystemEnabled = false;
           MaxActiveDownloads = 2000;
           MaxActiveTorrents = 200;
+
+          # Default share limits: stop at ratio 3.0 or 14 days, whichever is
+          # first; the *arrs then remove the stopped torrent (the library copy
+          # is a hardlink and stays). Only torrents with no limit of their own
+          # get this, so an indexer's Prowlarr seed limits override it.
+          GlobalMaxRatio = 3;
+          GlobalMaxSeedingMinutes = 20160;
         };
       };
     };
