@@ -228,6 +228,27 @@ in
     };
   };
 
+  # ── qBittorrent's WebUI API key, from sops ────────────────────────────────
+  # The conf is reinstalled from the store on every start, so a key made in
+  # the UI dies with the next restart. qBittorrent keeps it in plaintext, so
+  # write the sops value in after the install (mkAfter orders this behind it)
+  # rather than declaring it, which would put it in the world-readable store.
+  systemd.services.qbittorrent.serviceConfig.ExecStartPre = lib.mkAfter [
+    (pkgs.writeShellScript "qbittorrent-apikey" ''
+      set -eu
+      umask 077
+      conf="${config.services.qbittorrent.profileDir}/qBittorrent/config/qBittorrent.conf"
+      ${pkgs.gawk}/bin/awk -v keyfile=${config.sops.secrets."nixflix/qbittorrentApiKey".path} '
+        BEGIN { getline key < keyfile }
+        /^WebUI\\APIKey=/ { next }
+        { print }
+        $0 == "[Preferences]" { print "WebUI\\APIKey=" key; done = 1 }
+        END { if (!done) print "[Preferences]\nWebUI\\APIKey=" key }
+      ' "$conf" > "$conf.tmp"
+      mv "$conf.tmp" "$conf"
+    '')
+  ];
+
   # ── FlareSolverr: two corrections to upstream's wiring ────────────────────
   # Local because the nixflix-exp fork does not carry them correctly yet;
   # delete as it adopts them.
@@ -473,9 +494,10 @@ in
     # *arr grab fails to authenticate.
     "nixflix/qbittorrentPassword" = { };
 
-    # WebUI API key, for homepages.nix's widget only — nothing in this file
-    # authenticates with it.
-    "nixflix/qbittorrentApiKey" = { };
+    # WebUI API key, for homepages.nix's widget; qBittorrent's ExecStartPre
+    # writes it into the conf, hence the owner. Must be `qbt_` + 28 chars, or
+    # qBittorrent ignores it.
+    "nixflix/qbittorrentApiKey".owner = config.services.qbittorrent.user;
 
     # Prowlarr indexer credentials. ⚠ Key names are plaintext in the sops
     # file and this repo is public, so they stay neutral; which indexer each
