@@ -136,6 +136,13 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
   you get when nobody passes one. A session already holding such a branch renames
   it before opening the PR, via GitHub's branches page so an open PR follows —
   pushing the new name and deleting the old one closes that PR instead.
+- **No branch name given? Settle one before the first push.** A session
+  started without one inherits a generated `claude/<words>-<id>` branch. Before
+  pushing anything, propose a name for the work (`nfs-cutover`) and push there
+  once the user confirms. A name in the request itself (`work on branch …`)
+  counts as that confirmation. `.claude/hooks/no-agent-branch.sh` enforces it:
+  it blocks creating or first-pushing a `claude/…` branch, and lets pushes to
+  ones that already exist on origin through.
 - Validate with `nix flake check` / `nix eval`. On the Mac (aarch64-darwin) the
   Linux closures can be *evaluated* but not *built* (no Linux builder); building
   and every `switch` happen on the target host.
