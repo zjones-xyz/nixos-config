@@ -1571,7 +1571,17 @@ survive a power cycle.
    # WebUI → Statistics, or sum "total_size" over the torrents list
    ```
    Under ~1.5 TB and a 2 TB tier is comfortable; near or over 2 TB and the whole
-   option needs a bigger device or a seeding-retention policy first.
+   option needs a bigger device.
+   ⭐ **The seeding-retention policy this item used to ask for exists**, as of
+   #206: ratio 3.0 or 14 days, whichever is first, then the \*arrs remove the
+   torrent. ⚠ Which gives the measurement a *date*. Taken before the switch that
+   carries #206, the `du` counts the unbounded regime and reads high; taken just
+   after it, it catches §#206 step 3's one-off cleanup but not yet the steady
+   state. Take it **at least 14 days after that switch**. What it should then
+   show is 14 days of everything plus the all-time set of the one indexer that
+   seeds indefinitely — and only if §#206 step 2 exempted that indexer's
+   existing torrents before the switch, since otherwise they were removed with
+   the rest and the number reads low instead.
    ⚠ Since the reading stack landed (§18), Chaptarr and Shelfmark drive
    nixflix's qBittorrent through the same `downloadsDir`, so book and manga
    torrents are in this total as well. The `du` already counts them — just
@@ -1581,6 +1591,9 @@ survive a power cycle.
    a bought SSD, not the power figures — a single 5400-class spinner is
    ~75–100 IOPS and a large swarm is seek-bound. A few dozen: the spinner is
    fine. Several hundred: buy the SSD. `PLATFORM.md` §13f has the table.
+   ⚠ Same timing caveat as item 6: #206's window bounds this count too, so a
+   count taken before the window has turned over is of the old regime and
+   overstates it.
 8. [ ] **Burn `h-SDCP` in before trusting it, and read its hours first.** Drawer
    stock is untested by convention (`docs/DISK-DRAWER.md`, `PLATFORM.md` §12).
    `smartctl -a` for `Power_On_Hours` — a 2017 Blue at 45k hours is a different

@@ -2109,6 +2109,15 @@ hour and then quietly stops:
    > work around, alongside item 2's 01:00 and item 3's 01:30.
 8. **The rest of the workload**, for `tank` — §13d, and §13f for the part of it
    that can be moved.
+   > ⭐ **#206 bounded the seeding part of it without removing it.** qBittorrent
+   > now stops a torrent at ratio 3.0 or 14 days, whichever comes first, and the
+   > \*arrs remove it once stopped, so the swarm is a rolling window rather than
+   > an ever-growing set. But a *bounded* continuous load is still a continuous
+   > load: the window is always occupied, per-indexer Prowlarr limits override
+   > the default, and one indexer seeds indefinitely by design. Nothing here
+   > ages down to an idle pool on its own — which is why §13f is still the
+   > change that would let `tank` sleep, and why the limits are a retention
+   > policy rather than a spin-down.
 
 ⚠ **The ATA standby timer is volatile.** `hdparm -S` does not survive a power
 cycle or a controller reset. That was the second reason the durable answer for
@@ -2153,6 +2162,26 @@ The same merge also widens what a seed tier would cover: the reading services
 share nixflix's qBittorrent *and* its `downloadsDir`, so book and manga torrents
 seed out of `/tank/nixflix_media/downloads` alongside the media ones. Moving
 that directory moves all of it.
+
+⭐ **#206 bounded the seed set, which changes this section's arithmetic rather
+than its conclusion.** The default share limits stop a torrent at ratio 3.0 or
+14 days, whichever is first, and the \*arrs then remove it. Two consequences,
+pulling opposite ways:
+
+- It does **not** remove the need for a seed tier. A rolling 14-day window is
+  permanently occupied, per-indexer limits override the default, and one indexer
+  seeds indefinitely — so the continuous trickle of random reads off the
+  spinners persists.
+- It does make the device easier to pick. Both tables below were sized against
+  an unbounded seed set; against a bounded one the total converges and the
+  concurrent count stops growing, which pushes §17 item 7 toward its "a few
+  dozen" end and so toward `h-SDCP` over a bought SSD. ⚠ Only once the window
+  has turned over, though — §17 items 6–7 carry the timing.
+
+It also makes the import-is-a-copy price easier to pay. With the downloads on
+their own device, the \*arrs' removal of a stopped torrent is what reclaims that
+device's space; against an unbounded seed set a 2 TB tier fills and stays full,
+so the retention policy is part of what makes 2 TB plausible at all.
 
 #### What it does and does not buy
 
