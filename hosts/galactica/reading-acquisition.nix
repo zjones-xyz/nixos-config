@@ -565,15 +565,39 @@ in
       serviceConfig.UMask = "0002";
     };
 
-    # Chaptarr is not in Prowlarr's application list yet (§5b leaves the sync
-    # unproven and the list is nixflix's to own), but the ordering edge is
-    # cheap now and easy to forget later: prowlarr-applications orders itself
-    # after the four *arrs only, runs `set -eu`, and exits 1 on a failed PUT.
+    # prowlarr-applications orders itself after the four *arrs only, runs
+    # `set -eu`, and exits 1 on a failed save — which Prowlarr returns when it
+    # cannot reach the app. docker-chaptarr counts as started when the
+    # container does, not when it listens, so wait for the port as well.
     prowlarr-applications = lib.mkIf nixflix.prowlarr.enable {
       after = [ "docker-chaptarr.service" ];
       wants = [ "docker-chaptarr.service" ];
+      preStart = ''
+        for _ in $(seq 120); do
+          ${pkgs.curl}/bin/curl -s -o /dev/null --max-time 2 \
+            http://127.0.0.1:${toString chaptarrPort}/ && exit 0
+          sleep 1
+        done
+        echo "Chaptarr is not answering on ${toString chaptarrPort}" >&2
+      '';
     };
   };
+
+  # ── Prowlarr → Chaptarr sync ──────────────────────────────────────────────
+  # ⚠ mkDefault on purpose: nixflix's own default list is mkDefault too, so the
+  # two concatenate. Plain assignment would replace it and the reconciler would
+  # delete Sonarr/Radarr/Lidarr. No Chaptarr type upstream, hence Readarr;
+  # 3000/3030 or audiobook search issues zero queries. READING-STACK.md §5b.
+  nixflix.prowlarr.config.applications = lib.mkDefault [
+    {
+      name = "Chaptarr";
+      implementationName = "Readarr";
+      apiKey._secret = config.sops.secrets."reading/chaptarrApiKey".path;
+      baseUrl = "http://127.0.0.1:${toString chaptarrPort}";
+      prowlarrUrl = "http://${hostAddress}:${toString prowlarrPort}";
+      syncCategories = [ 3000 3030 7000 7010 7020 7030 7040 7050 7060 ];
+    }
+  ];
 
   # ── Routes ────────────────────────────────────────────────────────────────
   # The `read.*` domain group's own contract (traefik-galactica.nix); nothing

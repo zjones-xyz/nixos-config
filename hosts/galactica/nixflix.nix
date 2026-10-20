@@ -117,8 +117,43 @@ in
       sonarrQuality = "1080p";
       radarrQuality = "1080p";
 
+      # Radarr's minimum custom-format score, pinned for the same reason. 180
+      # is upstream's value, lowered from 1000 to grab more; back to 1000 if
+      # the grabs get worse. Assigning replaces upstream's whole list, so the
+      # profile is restated, its trash_id following radarrQuality as upstream's does.
+      config.radarr.radarr.quality_profiles = [
+        {
+          trash_id =
+            if config.nixflix.recyclarr.radarrQuality == "4K" then
+              "5128baeb2b081b72126bc8482b2a86a0" # [SQP] SQP-1 (2160p)
+            else
+              "0896c29d74de619df168d23b98104b22"; # [SQP] SQP-1 (1080p)
+          reset_unmatched_scores.enabled = true;
+          min_format_score = 180;
+        }
+      ];
+
       # ⚠ `cleanupUnmanagedProfiles` stays OFF: on, it deletes every profile
       # the managed list does not name, stock and hand-made included.
+    };
+
+    # ── *arr Connect: ntfy ──────────────────────────────────────────────────
+    # ⚠ The notif units own Settings → Connect on every *arr: anything not
+    # declared here is deleted on their next run (DECISIONS.md §10). The
+    # Lidarr → Navidrome rescan is the other entry, on by default.
+    notif.ntfy = {
+      enable = true;
+      serverUrl = "https://ntfy.monitor.zjones.dev";
+      topics = [ "nixflix" ];
+      # Events are off in each *arr's schema until set. Imports, upgrades
+      # and anything needing a hand; not grabs. Keys each *arr lacks are ignored.
+      onDownload = true;
+      onReleaseImport = true;
+      onUpgrade = true;
+      onHealthIssue = true;
+      onManualInteractionRequired = true;
+      onDownloadFailure = true;
+      onImportFailure = true;
     };
 
     # ── Music: acquisition ──────────────────────────────────────────────────
@@ -223,13 +258,42 @@ in
           QueueingSystemEnabled = false;
           MaxActiveDownloads = 2000;
           MaxActiveTorrents = 200;
+
+          # Default share limits: stop at ratio 3.0 or 14 days, whichever is
+          # first; the *arrs then remove the stopped torrent (the library copy
+          # is a hardlink and stays). Only torrents with no limit of their own
+          # get this, so an indexer's Prowlarr seed limits override it.
+          GlobalMaxRatio = 3;
+          GlobalMaxSeedingMinutes = 20160;
         };
       };
     };
   };
 
+  # ── qBittorrent's WebUI API key, from sops ────────────────────────────────
+  # The conf is reinstalled from the store on every start, so a key made in
+  # the UI dies with the next restart. qBittorrent keeps it in plaintext, so
+  # write the sops value in after the install (mkAfter orders this behind it)
+  # rather than declaring it, which would put it in the world-readable store.
+  systemd.services.qbittorrent.serviceConfig.ExecStartPre = lib.mkAfter [
+    (pkgs.writeShellScript "qbittorrent-apikey" ''
+      set -eu
+      umask 077
+      conf="${config.services.qbittorrent.profileDir}/qBittorrent/config/qBittorrent.conf"
+      ${pkgs.gawk}/bin/awk -v keyfile=${config.sops.secrets."nixflix/qbittorrentApiKey".path} '
+        BEGIN { getline key < keyfile }
+        /^WebUI\\APIKey=/ { next }
+        { print }
+        $0 == "[Preferences]" { print "WebUI\\APIKey=" key; done = 1 }
+        END { if (!done) print "[Preferences]\nWebUI\\APIKey=" key }
+      ' "$conf" > "$conf.tmp"
+      mv "$conf.tmp" "$conf"
+    '')
+  ];
+
   # ── FlareSolverr: two corrections to upstream's wiring ────────────────────
-  # Local because we track upstream nixflix; delete when upstream adopts them.
+  # Local because the nixflix-exp fork does not carry them correctly yet;
+  # delete as it adopts them.
   # MANUAL-STEPS.md §12 "FlareSolverr" carries the full argument.
   # (1) Upstream's 30s readiness probe dies inside the cold Chromium launch
   #     (43s on fast hardware) and an ExecStartPost failure kills the unit —
@@ -311,16 +375,6 @@ in
           config.nixflix.usenetClients.sabnzbd.settings.categories
       )
   );
-
-  # ── qBittorrent's umask ───────────────────────────────────────────────────
-  # nixflix sets this for every *arr and SABnzbd defaults `permissions = 775`,
-  # but its qBittorrent module sets neither and nor does nixpkgs' — so release
-  # directories land 0755 and nothing else in `media` can write inside one.
-  # ⚠ A umask covers new files only; MANUAL-STEPS §12 step 10 repairs the rest.
-  systemd.services.qbittorrent = lib.mkIf config.nixflix.torrentClients.qbittorrent.enable {
-    serviceConfig.UMask = "0002";
-  };
-
 
   # ── ProtonVPN NAT-PMP → qBittorrent listen port ───────────────────────────
   # nixflix's vpn.openVPNPorts does two jobs — publish a STATIC forwarded port
@@ -482,8 +536,30 @@ in
     # *arr grab fails to authenticate.
     "nixflix/qbittorrentPassword" = { };
 
-    # WebUI API key, for homepages.nix's widget only — nothing in this file
-    # authenticates with it.
-    "nixflix/qbittorrentApiKey" = { };
+    # WebUI API key, for homepages.nix's widget; qBittorrent's ExecStartPre
+    # writes it into the conf, hence the owner. Must be `qbt_` + 28 chars, or
+    # qBittorrent ignores it.
+    "nixflix/qbittorrentApiKey".owner = config.services.qbittorrent.user;
+
+    # Prowlarr indexer credentials. ⚠ Key names are plaintext in the sops
+    # file and this repo is public, so they stay neutral; which indexer each
+    # one belongs to is in nixflix-exp's galactica/indexers.nix.
+    "nixflix/indexer1Key" = { };
+    "nixflix/indexer2Key" = { };
+    "nixflix/indexer3Key" = { };
+
+    # Read-only token for the private nixflix-exp flake input.
+    "nixflix/githubAccessToken" = { };
   };
+
+  # ── Fetching the private nixflix input ────────────────────────────────────
+  # `!include` tolerates the missing file, so a host without the secret still
+  # evaluates — and then fails only on fetching the fork. The first switch has
+  # to pass the token by hand: MANUAL-STEPS.md §#197.
+  sops.templates."nix-access-tokens".content = ''
+    access-tokens = github.com=${config.sops.placeholder."nixflix/githubAccessToken"}
+  '';
+  nix.extraOptions = ''
+    !include ${config.sops.templates."nix-access-tokens".path}
+  '';
 }

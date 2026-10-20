@@ -25,6 +25,12 @@ in
   # Sibling of `settings` below, not nested under it.
   programs.niri.package = pkgs.niri;
 
+  # ── No minimize button ────────────────────────────────────────────────
+  # niri has no minimize, so GTK/libadwaita titlebars (which the client
+  # draws itself) shouldn't offer one. Close only; apps with their own
+  # frame (Electron etc.) are unaffected.
+  dconf.settings."org/gnome/desktop/wm/preferences".button-layout = "appmenu:close";
+
   programs.niri.settings = {
     # ── Session environment ────────────────────────────────────────────────
     # From DMS's niri setup docs — but ONLY the variables that are safe if
