@@ -250,9 +250,10 @@ in
     };
 
     # ── Docker socket proxy ───────────────────────────────────────────────────
-    # Inert until galactica actually runs containers — it exists so that when it
-    # does, they are label-configurable on day one rather than needing this
-    # module reopened.
+    # The read-only Docker API for everything that watches containers: native
+    # Traefik, tsdproxy and the Beszel agent, all over loopback. Deliberately on
+    # no shared network: CONTAINERS=1 includes `inspect`, which returns every
+    # container's environment (sops-templated secrets included).
     virtualisation.oci-containers = {
       # ⚠ NixOS defaults this to podman, against a host running rootful Docker
       # (and a Beszel agent watching a Docker socket). Set explicitly;
@@ -268,14 +269,16 @@ in
           CONTAINERS = "1"; # Traefik reads container labels/state
           NETWORKS = "1"; # …and resolves the `proxy` network
           EVENTS = "1"; # …and watches for container start/stop
+          INFO = "1"; # Beszel agent: host info
+          IMAGES = "1"; # Beszel agent: image update checks
           POST = "0"; # deny all write endpoints
           PING = "1";
           VERSION = "1";
         };
         volumes = [ "/run/docker.sock:/var/run/docker.sock:ro" ];
-        # Loopback only — nothing off-box should reach even the read-only API.
+        # Loopback only — nothing off-box should reach even the read-only API,
+        # and bridge-networked containers can't reach host loopback either.
         ports = [ "127.0.0.1:2375:2375" ];
-        extraOptions = [ "--network=proxy" ];
       };
     };
 
