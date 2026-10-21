@@ -39,7 +39,7 @@
     ./karakeep.nix
     ./paperless.nix
     ./syncthing.nix
-    ./partdb.nix
+    # ./partdb.nix # off until a PHP-patched image ships: CVE-2026-109618/-109619
     ./homebox.nix
     ./spoolman.nix
     ./memos.nix
