@@ -495,8 +495,8 @@ in
       );
     };
 
-    # ⟨Follow-up: route to ntfy⟩ — same reasoning and answer as the identical
-    # note in modules/nixos/smart.nix. Until then the alarm is a failed unit.
+    # The failed unit is the alarm; homelab.alerts posts it to ntfy.
+    onFailure = [ "notify-failure@%n.service" ];
   };
 
   systemd.timers.protonvpn-healthcheck = {

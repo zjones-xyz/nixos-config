@@ -2134,3 +2134,25 @@ would then remove them. Step 2 exempts them first.
 6. [ ] **Recyclarr.** After its next sync, Radarr's SQP-1 profile has a minimum
    custom-format score of 180. Too much junk getting through → set it to 1000
    in `nixflix.nix`.
+
+## #209 Alerts to ntfy — owner steps before and after the first switch
+
+ZED, smartd and failed `zfs-import-tank`/`borgmatic`/`protonvpn-healthcheck`
+runs now post to `homelab-alerts` on `ntfy.monitor.zjones.dev`
+(`modules/nixos/alerts.nix`).
+
+1. [ ] Check the topic accepts anonymous posts:
+   `curl -d test https://ntfy.monitor.zjones.dev/homelab-alerts`.
+   A 403 means the server enforces auth. On memory-alpha's ntfy container:
+   ```sh
+   ntfy user add galactica-alerts
+   ntfy access galactica-alerts homelab-alerts wo
+   ntfy token add --label=galactica galactica-alerts
+   ```
+   Put the `tk_…` in `secrets/galactica.yaml` as `ntfy/alertsToken`, declare
+   it in sops, and set `homelab.alerts.tokenFile` to its path.
+2. [ ] Subscribe to `homelab-alerts` in the ntfy app.
+3. [ ] After the switch: `printf 'Subject: test\n\nhello\n' | ntfy-alert`
+   arrives, titled "test" and tagged `galactica`.
+4. [ ] `sudo systemctl start notify-failure@borgmatic.service.service` posts
+   "borgmatic.service failed on galactica" with its journal tail.
