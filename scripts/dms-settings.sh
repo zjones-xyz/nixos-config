@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Snapshot/restore/diff DankMaterialShell's live JSON config against
-# per-host checkpoints committed in this repo.
+# Snapshot/restore/diff Dux Shell's (DMS, formerly DankMaterialShell) live
+# JSON config against per-host checkpoints committed in this repo.
 #
 # Deliberately NOT a Home-Manager symlink (neither `home.file`'s in-store
 # form nor `mkOutOfStoreSymlink`): DMS saves every file below with an
@@ -14,9 +14,11 @@
 #
 # So this is a manual checkpoint, not a live link. Three independent
 # targets, all DMS-managed the same way:
-#   settings   ~/.config/DankMaterialShell/settings.json          bar/dock/theme/etc
-#   plugins    ~/.config/DankMaterialShell/plugin_settings.json   per-plugin enabled + config
-#   session    ~/.local/state/DankMaterialShell/session.json      wallpaper, light/dark, pinned apps
+#   settings   ~/.config/dms/settings.json          bar/dock/theme/etc
+#   plugins    ~/.config/dms/plugin_settings.json   per-plugin enabled + config
+#   session    ~/.local/state/dms/session.json      wallpaper, light/dark, pinned apps
+# (DankMaterialShell/ before Dux 2.0, which migrates it on first launch —
+# dms_dir below falls back to it until then.)
 #
 # ⚠ `session` is under $XDG_STATE_HOME, not $XDG_CONFIG_HOME like the other
 # two, and its name undersells it: despite living in the state directory it
@@ -86,6 +88,17 @@ HOST="$(hostname -s 2>/dev/null || hostname)"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
 
+# Same rule as home.nix's seedDmsSettings: dms/, unless only the pre-2.0
+# DankMaterialShell/ exists yet (writing dms/ beside it would turn Dux's
+# migration into a merge).
+dms_dir() {
+  if [ -e "$1/dms" ] || [ ! -e "$1/DankMaterialShell" ]; then
+    echo "$1/dms"
+  else
+    echo "$1/DankMaterialShell"
+  fi
+}
+
 if [ ! -d "$REPO/hosts/$HOST" ]; then
   echo "dms-settings.sh: no hosts/$HOST/ in $REPO — is this the right host/checkout?" >&2
   exit 2
@@ -128,15 +141,15 @@ warn_if_location() {
 target_paths() {
   case "$1" in
     settings)
-      LIVE="$CONFIG_HOME/DankMaterialShell/settings.json"
+      LIVE="$(dms_dir "$CONFIG_HOME")/settings.json"
       CHECKPOINT="$REPO/hosts/$HOST/dms-settings.json"
       ;;
     plugins)
-      LIVE="$CONFIG_HOME/DankMaterialShell/plugin_settings.json"
+      LIVE="$(dms_dir "$CONFIG_HOME")/plugin_settings.json"
       CHECKPOINT="$REPO/hosts/$HOST/dms-plugin-settings.json"
       ;;
     session)
-      LIVE="$STATE_HOME/DankMaterialShell/session.json"
+      LIVE="$(dms_dir "$STATE_HOME")/session.json"
       CHECKPOINT="$REPO/hosts/$HOST/dms-session.json"
       ;;
   esac

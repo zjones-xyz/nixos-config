@@ -747,8 +747,10 @@ reported upstream; only the filing below is left.
    `color_scheme_path` at their *own* `colors/matugen.conf`.
 2. [x] Open a Qt app and confirm the matugen palette actually renders. This
    is the step that has never once passed on this host.
-3. [ ] File the upstream issue against `AvengeMedia/DankMaterialShell` —
-   draft ready at `~/dms-qt-issue-draft.md`, unsent. Covers both bugs.
+3. [ ] File the upstream issue against `duxlabs-dev/dux-shell` (formerly
+   `AvengeMedia/DankMaterialShell`) — draft at `~/dms-qt-issue-draft.md`,
+   unsent. Trim it to the `color_scheme_path` bug first: upstream fixed the
+   literal-`\n` one itself in 2.0 (its issue #3457).
 4. [ ] Once upstream fixes it, delete the `package` override in
    `desktop-niri.nix`. It is `--replace-fail`-anchored, so a rebuild will
    fail loudly rather than silently no-op if upstream edits those lines

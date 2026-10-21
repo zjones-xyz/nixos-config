@@ -439,7 +439,7 @@ in
     $DRY_RUN_CMD ${pkgs.kdePackages.kservice}/bin/kbuildsycoca6 $VERBOSE_ARG
   '';
 
-  # ── DankMaterialShell settings: seed-only-if-missing ────────────────────────
+  # ── Dux Shell (DMS) settings: seed-only-if-missing ──────────────────────────
   # DMS's own settings.json and plugin_settings.json are deliberately NOT
   # Home-Manager-managed (no home.file/xdg.configFile, in-store or
   # mkOutOfStoreSymlink alike) — DMS saves both via an atomic
@@ -456,10 +456,14 @@ in
   # that traffic only ever flows explicitly, via dms-settings-snapshot/
   # -restore/-diff above.
   home.activation.seedDmsSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    DMS_DIR="$HOME/.config/DankMaterialShell"
+    # Dux 2.0 renamed DankMaterialShell/ to dms/ and migrates on first launch.
+    # Until it has, keep writing to the legacy dir: seeding dms/ alongside it
+    # would make that migration a merge with conflicting settings.json files.
+    dms_dir() { if [ -e "$1/dms" ] || [ ! -e "$1/DankMaterialShell" ]; then echo "$1/dms"; else echo "$1/DankMaterialShell"; fi; }
+    DMS_DIR="$(dms_dir "''${XDG_CONFIG_HOME:-$HOME/.config}")"
     # session.json lives under XDG_STATE_HOME, not XDG_CONFIG_HOME — see
     # scripts/dms-settings.sh for what it holds and why it is checkpointed.
-    DMS_STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/DankMaterialShell"
+    DMS_STATE_DIR="$(dms_dir "''${XDG_STATE_HOME:-$HOME/.local/state}")"
     CHECKPOINTS="$HOME/nixos-config/hosts/pegasus"
 
     if [ ! -e "$DMS_DIR/settings.json" ] && [ -e "$CHECKPOINTS/dms-settings.json" ]; then

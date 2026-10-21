@@ -1263,6 +1263,12 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   renders in a Qt app was then confirmed too: qt6ct shows the matugen
   palette instead of stock Fusion grey. The feature has never worked on this
   host until now.
+  *Update 2026-10-21, Dux 2.0:* upstream fixed bug 2 on its own
+  (`49a639a3`, "qt: write real newlines…", upstream issue #3457, shipped in
+  v2.0.0), so its substitution stopped matching and was dropped — issue
+  #110's case 1, for that half only. Bug 1 is unchanged in 2.0: `qt.sh` still
+  hardcodes `DankMatugen.colors`, while matugen still writes the correct
+  `qt{5,6}ct/colors/matugen.conf`. That substitution stays.
 - **Plasma and COSMIC to be removed, deferred 2026-09-09 — and `desktop-plasma.nix`
   is not the file to delete when that happens.** Neither session is in daily use
   since niri became `defaultSession` (2026-09-01) and both had degraded; the
@@ -1656,3 +1662,22 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
     added when the first trial happens). Trial only: no updates, no sandbox,
     usually unsigned. An app that stays gets a Nix package, or
     `appimageTools` wrapping the same file.
+- **DankMaterialShell → Dux Shell 2.0, 2026-10-21 (same project, renamed).**
+  Upstream rebranded to Dux Labs and moved to `duxlabs-dev/dux-shell`; the
+  flake input follows it. Nothing Nix-facing was renamed: the flake still
+  exports `nixosModules.dank-material-shell`, the option is still
+  `programs.dank-material-shell`, and the binary is still `dms`.
+  *Config dir:* `~/.config/DankMaterialShell` becomes `~/.config/dms` (and
+  likewise under state, cache and data). Dux does the move itself on first
+  launch (`core/internal/utils/dirs.go`, `MigrateLegacyDirs`): a rename plus
+  a symlink at the old path. If *both* dirs already exist, it merges them,
+  and on a file that differs in both it refuses and leaves the legacy dir in
+  place. So `seedDmsSettings` and `dms-settings.sh` pick `dms/` unless only
+  the legacy dir exists yet. Seeding `dms/` on the first switch, before Dux
+  has run, would create exactly that conflicting pair.
+  *Why not nixpkgs' `dms-shell`:* still 1.6.3 on nixpkgs master, and its
+  module is a different one (`programs.dms-shell`, whose own option set is
+  changing in 26.11 — see issue #213).
+  *Aqueous:* Dux 2.0 supports the Aqueous compositor in full. Trialling it
+  on this host waits for 26.11 (it needs wayland-protocols ≥ 1.49), tracked
+  in issue #213.

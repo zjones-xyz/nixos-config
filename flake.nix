@@ -52,12 +52,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # DankMaterialShell (used on pegasus, layered on Niri) — a Quickshell-based
-    # desktop shell, not in nixpkgs. Quickshell itself IS in nixpkgs 26.05
+    # Dux Shell (DMS; DankMaterialShell until 2.0, used on pegasus, layered on
+    # Niri) — a Quickshell-based desktop shell. nixpkgs' dms-shell lags (1.6.x)
+    # so it comes from its own flake. Quickshell itself IS in nixpkgs 26.05
     # (0.3.0, meets DMS's stated minimum) so no separate quickshell input is
     # needed — only DMS's own flake, for its NixOS module and package build.
     dank-material-shell = {
-      url = "git+https://github.com/AvengeMedia/DankMaterialShell.git";
+      url = "git+https://github.com/duxlabs-dev/dux-shell.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
