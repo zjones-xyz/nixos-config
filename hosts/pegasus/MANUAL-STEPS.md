@@ -735,23 +735,27 @@ in the other sessions. Both halves want confirming on real hardware — see
 
 ## 24. DMS `qt.sh` patch — confirm, then file upstream
 
-`modules/nixos/desktop-niri.nix` patches two bugs in DMS's
-`scripts/qt.sh` at build time (full reasoning in `DECISIONS.md`). Both are
+`modules/nixos/desktop-niri.nix` patched two bugs in DMS's
+`scripts/qt.sh` at build time (full reasoning in `DECISIONS.md`). Both were
 confirmed on the hardware: the palette renders in Qt apps, and it survives
 a full logout/login (2026-09-08) — DMS regenerates its matugen output at
-session start and leaves `color_scheme_path` alone. Neither bug is
-reported upstream; only the filing below is left.
+session start and leaves `color_scheme_path` alone. Upstream fixed the
+literal-`\n` bug itself in Dux 2.0 (its #3457), so since #214 only the
+`color_scheme_path` substitution remains. That one is still unreported
+upstream; only the filing below is left.
 
 1. [x] After the next switch, press **apply colours to Qt** and check that
    `~/.config/qt6ct/qt6ct.conf` and `~/.config/qt5ct/qt5ct.conf` each point
    `color_scheme_path` at their *own* `colors/matugen.conf`.
 2. [x] Open a Qt app and confirm the matugen palette actually renders. This
    is the step that has never once passed on this host.
-3. [ ] File the upstream issue against `AvengeMedia/DankMaterialShell` —
-   draft ready at `~/dms-qt-issue-draft.md`, unsent. Covers both bugs.
+3. [ ] File the upstream issue against `duxlabs-dev/dux-shell` (formerly
+   `AvengeMedia/DankMaterialShell`) — draft at `~/dms-qt-issue-draft.md`,
+   unsent. Trim it to the `color_scheme_path` bug first: upstream fixed the
+   literal-`\n` one itself in 2.0 (its issue #3457).
 4. [ ] Once upstream fixes it, delete the `package` override in
    `desktop-niri.nix`. It is `--replace-fail`-anchored, so a rebuild will
-   fail loudly rather than silently no-op if upstream edits those lines
+   fail loudly rather than silently no-op if upstream edits that line
    first — that failure is the signal to remove the shim, not to repair it.
    Issue #110 records the exact failure text and the three cases it can be.
 
@@ -995,3 +999,67 @@ Rationale: DECISIONS.md, "Exposed apps on the fast lane".
 4. [ ] Switch pegasus (`npullnrs`), then open Vivaldi, Chrome, Discord,
        Slack, Signal and Zoom. A newer app over the system's NVIDIA userspace
        is the first suspect if one fails to render.
+
+## #214 Dux Shell 2.0 — verify after the first switch
+
+The first launch of Dux 2.0 moves `DankMaterialShell/` to `dms/` under
+config, state, cache and data. If a file differs between the two, the merge
+is only partial and nothing but the journal says so. The `dms` unit also
+becomes `Type=notify`. Reasoning in `DECISIONS.md` (DankMaterialShell → Dux
+Shell entry).
+
+1. [x] Switch, then log out and back into niri. Bar, wallpaper (per monitor,
+   light/dark) and pinned apps should look as they did before.
+2. [x] `ls -la ~/.config ~/.local/state ~/.cache ~/.local/share | grep -i -e dms -e DankMaterialShell`.
+   Each `DankMaterialShell` should be a symlink to `dms`. A real
+   `DankMaterialShell` dir next to `dms/` means the merge stopped partway.
+   Compare the two, keep the right files in `dms/`, then remove the legacy
+   dir and run `dms` once so it can create the symlink.
+3. [x] `journalctl --user -u dms -b | grep -i -e migrat -e 'dms dir'` shows no
+   migration warnings, and `systemctl --user status dms` shows it active
+   (it should not be stuck in "activating" now that it is `Type=notify`).
+4. [x] The four plugins still load: `dankLauncherKeys`, `dcalUpcoming`,
+   `dmsThemeSync`, `qcalCalendar`. Dux 2.0 keeps compatibility shims for
+   the old `Dank*` widget names but logs a deprecation error for each, so
+   `journalctl --user -u dms -b | grep -i deprecat` shows which plugins
+   are on borrowed time.
+5. [x] `dms-settings-diff all` shows no unexpected drift against the
+   checkpoints.
+6. [x] Press **apply colours to Qt** and confirm a Qt app still renders the
+   matugen palette (§24.1–2).
+
+Dux Files arrives in the same switch (`modules/nixos/dux-files.nix`):
+
+7. [x] `systemctl --user status dfiles` is active, and `dfiles show` brings
+   up a window at once. `dfiles ipc devices.list` lists the drives (udisks2)
+   and `dfiles ipc network.mounts` answers without an error (gvfs).
+8. [x] From a Dux Files window, double-click a text file and a PDF, and use
+   "Open terminal here". All three must launch. This is the check for the
+   daemon's PATH (DECISIONS.md, Dux Files entry).
+9. [x] `xdg-mime query default inode/directory` prints
+   `dev.duxlabs.files.desktop`, and `xdg-mime query default application/zip`
+   prints `org.kde.ark.desktop`.
+10. [x] "Show in folder" goes to Dux Files: from Vivaldi's downloads list, or
+    `dfiles ipc system.fileManager.get` reports it owns the name. If it
+    reports queued behind Nautilus, check for a leftover Nautilus process
+    from before the switch and log out and back in.
+11. [x] An open/save dialog (Ctrl+O in any GTK app) is still Nautilus's and
+    still works. The portal was deliberately left alone.
+
+All eleven verified on pegasus after the first switch (2026-10-21): both
+dirs migrated cleanly to symlinks, no migration warnings, `dms.service`
+active as `Type=notify`. For step 4, `dcalUpcoming` and `dmsThemeSync`
+still use `DankIcon`/`DankListView` in their bar widgets, and
+`dankLauncherKeys` only in its settings page; `qcalCalendar` is clean.
+They work through the shims for now. The step 5 diff was 2.0's settings
+rewrite (`configVersion` 16 → 42) plus checkpoint drift from before the
+upgrade; nothing was lost.
+
+12. [x] `dms-settings-snapshot all` and commit the refreshed
+    `hosts/pegasus/dms-*.json`, so a rebuilt host is seeded with 2.0-format
+    settings.
+13. [ ] Move `dcalUpcoming` and `dmsThemeSync` (and `dankLauncherKeys`'s
+    settings page) to `qs.DCommon.Widgets` and the `D*` names
+    (`DankIcon` → `DIcon`, `DankListView` → `DListView`) before upstream
+    removes the shims.
+
