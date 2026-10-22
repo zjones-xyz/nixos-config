@@ -1055,7 +1055,7 @@ They work through the shims for now. The step 5 diff was 2.0's settings
 rewrite (`configVersion` 16 → 42) plus checkpoint drift from before the
 upgrade; nothing was lost.
 
-12. [ ] `dms-settings-snapshot all` and commit the refreshed
+12. [x] `dms-settings-snapshot all` and commit the refreshed
     `hosts/pegasus/dms-*.json`, so a rebuilt host is seeded with 2.0-format
     settings.
 13. [ ] Move `dcalUpcoming` and `dmsThemeSync` (and `dankLauncherKeys`'s
