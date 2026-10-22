@@ -1008,40 +1008,58 @@ is only partial and nothing but the journal says so. The `dms` unit also
 becomes `Type=notify`. Reasoning in `DECISIONS.md` (DankMaterialShell → Dux
 Shell entry).
 
-1. [ ] Switch, then log out and back into niri. Bar, wallpaper (per monitor,
+1. [x] Switch, then log out and back into niri. Bar, wallpaper (per monitor,
    light/dark) and pinned apps should look as they did before.
-2. [ ] `ls -la ~/.config ~/.local/state ~/.cache ~/.local/share | grep -i -e dms -e DankMaterialShell`.
+2. [x] `ls -la ~/.config ~/.local/state ~/.cache ~/.local/share | grep -i -e dms -e DankMaterialShell`.
    Each `DankMaterialShell` should be a symlink to `dms`. A real
    `DankMaterialShell` dir next to `dms/` means the merge stopped partway.
    Compare the two, keep the right files in `dms/`, then remove the legacy
    dir and run `dms` once so it can create the symlink.
-3. [ ] `journalctl --user -u dms -b | grep -i -e migrat -e 'dms dir'` shows no
+3. [x] `journalctl --user -u dms -b | grep -i -e migrat -e 'dms dir'` shows no
    migration warnings, and `systemctl --user status dms` shows it active
    (it should not be stuck in "activating" now that it is `Type=notify`).
-4. [ ] The four plugins still load: `dankLauncherKeys`, `dcalUpcoming`,
+4. [x] The four plugins still load: `dankLauncherKeys`, `dcalUpcoming`,
    `dmsThemeSync`, `qcalCalendar`. Dux 2.0 keeps compatibility shims for
    the old `Dank*` widget names but logs a deprecation error for each, so
    `journalctl --user -u dms -b | grep -i deprecat` shows which plugins
    are on borrowed time.
-5. [ ] `dms-settings-diff all` shows no unexpected drift against the
+5. [x] `dms-settings-diff all` shows no unexpected drift against the
    checkpoints.
-6. [ ] Press **apply colours to Qt** and confirm a Qt app still renders the
+6. [x] Press **apply colours to Qt** and confirm a Qt app still renders the
    matugen palette (§24.1–2).
 
 Dux Files arrives in the same switch (`modules/nixos/dux-files.nix`):
 
-7. [ ] `systemctl --user status dfiles` is active, and `dfiles show` brings
+7. [x] `systemctl --user status dfiles` is active, and `dfiles show` brings
    up a window at once. `dfiles ipc devices.list` lists the drives (udisks2)
    and `dfiles ipc network.mounts` answers without an error (gvfs).
-8. [ ] From a Dux Files window, double-click a text file and a PDF, and use
+8. [x] From a Dux Files window, double-click a text file and a PDF, and use
    "Open terminal here". All three must launch. This is the check for the
    daemon's PATH (DECISIONS.md, Dux Files entry).
-9. [ ] `xdg-mime query default inode/directory` prints
+9. [x] `xdg-mime query default inode/directory` prints
    `dev.duxlabs.files.desktop`, and `xdg-mime query default application/zip`
    prints `org.kde.ark.desktop`.
-10. [ ] "Show in folder" goes to Dux Files: from Vivaldi's downloads list, or
+10. [x] "Show in folder" goes to Dux Files: from Vivaldi's downloads list, or
     `dfiles ipc system.fileManager.get` reports it owns the name. If it
     reports queued behind Nautilus, check for a leftover Nautilus process
     from before the switch and log out and back in.
-11. [ ] An open/save dialog (Ctrl+O in any GTK app) is still Nautilus's and
+11. [x] An open/save dialog (Ctrl+O in any GTK app) is still Nautilus's and
     still works. The portal was deliberately left alone.
+
+All eleven verified on pegasus after the first switch (2026-10-21): both
+dirs migrated cleanly to symlinks, no migration warnings, `dms.service`
+active as `Type=notify`. For step 4, `dcalUpcoming` and `dmsThemeSync`
+still use `DankIcon`/`DankListView` in their bar widgets, and
+`dankLauncherKeys` only in its settings page; `qcalCalendar` is clean.
+They work through the shims for now. The step 5 diff was 2.0's settings
+rewrite (`configVersion` 16 → 42) plus checkpoint drift from before the
+upgrade; nothing was lost.
+
+12. [ ] `dms-settings-snapshot all` and commit the refreshed
+    `hosts/pegasus/dms-*.json`, so a rebuilt host is seeded with 2.0-format
+    settings.
+13. [ ] Move `dcalUpcoming` and `dmsThemeSync` (and `dankLauncherKeys`'s
+    settings page) to `qs.DCommon.Widgets` and the `D*` names
+    (`DankIcon` → `DIcon`, `DankListView` → `DListView`) before upstream
+    removes the shims.
+
