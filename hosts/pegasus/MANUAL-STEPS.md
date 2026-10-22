@@ -1031,13 +1031,17 @@ Shell entry).
 Dux Files arrives in the same switch (`modules/nixos/dux-files.nix`):
 
 7. [ ] `systemctl --user status dfiles` is active, and `dfiles show` brings
-   up a window at once. `dfiles ipc system.capabilities` lists thumbnails,
-   gvfs and udisks2 as found.
-8. [ ] `xdg-mime query default inode/directory` prints
-   `dev.duxlabs.files.desktop`.
-9. [ ] "Show in folder" goes to Dux Files: from Vivaldi's downloads list, or
-   `busctl --user status org.freedesktop.FileManager1 | grep -i -e comm -e exe`
-   names `dfiles`. If it names Nautilus, check for a leftover Nautilus
-   process from before the switch and log out and back in.
-10. [ ] An open/save dialog (Ctrl+O in any GTK app) is still Nautilus's and
+   up a window at once. `dfiles ipc devices.list` lists the drives (udisks2)
+   and `dfiles ipc network.mounts` answers without an error (gvfs).
+8. [ ] From a Dux Files window, double-click a text file and a PDF, and use
+   "Open terminal here". All three must launch. This is the check for the
+   daemon's PATH (DECISIONS.md, Dux Files entry).
+9. [ ] `xdg-mime query default inode/directory` prints
+   `dev.duxlabs.files.desktop`, and `xdg-mime query default application/zip`
+   prints `org.kde.ark.desktop`.
+10. [ ] "Show in folder" goes to Dux Files: from Vivaldi's downloads list, or
+    `dfiles ipc system.fileManager.get` reports it owns the name. If it
+    reports queued behind Nautilus, check for a leftover Nautilus process
+    from before the switch and log out and back in.
+11. [ ] An open/save dialog (Ctrl+O in any GTK app) is still Nautilus's and
     still works. The portal was deliberately left alone.

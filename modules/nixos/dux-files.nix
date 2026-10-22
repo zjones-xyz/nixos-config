@@ -10,4 +10,11 @@
     enable = true;
     systemd.enable = true;
   };
+
+  # The daemon serves every window and launches apps from bare desktop-entry
+  # Execs; upstream's path = [ quickshell ] replaces the session PATH with a
+  # minimal one. Inherit the user manager's PATH instead, as Dux Shell does.
+  systemd.user.services.dfiles = {
+    path = lib.mkForce [ ];
+  };
 }

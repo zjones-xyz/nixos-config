@@ -407,6 +407,17 @@ in
   xdg.mimeApps =
     let
       vivaldi = [ "vivaldi-stable.desktop" ];
+      # Dux Files claims these too and sorts ahead of Ark in mimeinfo.cache,
+      # where it would extract on open instead of showing the archive.
+      archives = lib.genAttrs [
+        "application/zip" "application/x-tar" "application/gzip"
+        "application/x-compressed-tar" "application/x-bzip2"
+        "application/x-bzip2-compressed-tar" "application/x-xz"
+        "application/x-xz-compressed-tar" "application/zstd"
+        "application/x-zstd-compressed-tar" "application/x-lzma"
+        "application/x-lzma-compressed-tar" "application/x-7z-compressed"
+        "application/vnd.rar" "application/x-cpio"
+      ] (_: [ "org.kde.ark.desktop" ]);
     in
     {
       enable = true;
@@ -418,14 +429,14 @@ in
         "x-scheme-handler/unknown" = vivaldi;
         # Dux Files (modules/nixos/dux-files.nix) opens folders.
         "inode/directory" = [ "dev.duxlabs.files.desktop" ];
-      };
+      } // archives;
     };
 
   # ── "Show in folder" → Dux Files, not Nautilus ─────────────────────────────
-  # Both ship a D-Bus activation file for org.freedesktop.FileManager1 and the
-  # bus picks one arbitrarily. $XDG_DATA_HOME's dbus-1/services is searched
-  # before every system dir, so this copy always wins. Nautilus stays
-  # installed: niri's GNOME portal uses it for open/save dialogs.
+  # Both ship a D-Bus activation file for org.freedesktop.FileManager1, and
+  # Nautilus's in the profile dirs would be read first and win. dbus-broker
+  # reads $XDG_DATA_HOME before those, so this copy wins instead. Nautilus
+  # stays installed: niri's GNOME portal uses it for open/save dialogs.
   xdg.dataFile."dbus-1/services/org.freedesktop.FileManager1.service".source =
     "${osConfig.programs.dux-files.package}/share/dbus-1/services/dev.duxlabs.files.FileManager1.service";
 

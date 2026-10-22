@@ -1689,15 +1689,27 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   "show in folder" (`org.freedesktop.FileManager1`), and runs as a
   session-long user service (`dfiles.service`) so windows open instantly.
   Nemo, Nautilus and Thunar stay installed.
-  *FileManager1 is pinned per user, not left to the bus.* Nautilus is in
-  `services.dbus.packages` (niri's portal setup needs it), and both it and
-  Dux Files ship an activation file for that name; dbus-broker keeps
-  whichever it reads first. `$XDG_DATA_HOME/dbus-1/services` comes before
-  every system service dir (`standard_session_servicedirs`, which NixOS's
+  *FileManager1 is pinned per user, not left to the bus.* Nautilus and Dux
+  Files both ship an activation file for that name. dbus-broker keeps the
+  first one it reads, and the per-user profile (which holds Nautilus) is
+  read before the system service dirs. `$XDG_DATA_HOME/dbus-1/services` is
+  read before both (`standard_session_servicedirs`, which NixOS's
   session.conf keeps), so home.nix places Dux Files' file there. A running
-  Nautilus that already owns the name still beats activation; the
-  session-start `dfiles.service` normally gets there first.
-  *Open/save dialogs stay with Nautilus.* Dux Files can serve the
-  FileChooser portal (`programs.dux-files.portal`), but switching it on
-  changes every app's dialog at once. Left off until the file manager
-  itself has proven out on this host.
+  Nautilus that already owns the name still beats activation (dfiles queues
+  behind it); the session-start `dfiles.service` normally gets there first.
+  *Archives stay with Ark.* The Dux Files desktop entry also claims zip/tar/
+  7z/rar and friends, sorts ahead of Ark in `mimeinfo.cache`, and extracts
+  on open by default. home.nix pins those types to Ark.
+  *PATH:* upstream's module sets `path = [ quickshell ]`, which writes a PATH
+  that replaces the session's. The daemon launches every "open with" from
+  bare desktop-entry Execs, so dux-files.nix forces `path = [ ]`, as Dux
+  Shell's own module does for `dms.service`.
+  *Every session, not just niri.* The mime default, the FileManager1
+  override and `dfiles.service` (wanted by `graphical-session.target`) are
+  per-user, so Plasma and COSMIC get Dux Files for folders too, ahead of
+  Dolphin and cosmic-files. Accepted, since both sessions are slated for
+  removal (entry above).
+  *Open/save dialogs stay with Nautilus.* Dux Files' FileChooser portal is
+  installed with the package but not preferred: niri's `portals.conf`
+  picks gnome/gtk. Preferring it (`programs.dux-files.portal`) changes every
+  app's dialog at once, so it waits until the file manager has proven out.
