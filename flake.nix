@@ -62,6 +62,12 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Dux Files (pegasus) — Dux Shell's sibling file manager, own flake.
+    dux-files = {
+      url = "git+https://github.com/duxlabs-dev/dux-files.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # zen-browser (used on pegasus) — Zen has no nixpkgs package at all (not
     # even a removed/replaced stub, unlike opera-flake below). This is the
     # community flake nixpkgs' own PR discussions point to; `beta` is its
@@ -131,7 +137,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, niri-flake, nixflix, nixpkgs-apps, dr460nized-src, window-title-applet-src, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, dux-files, niri-flake, nixflix, nixpkgs-apps, dr460nized-src, window-title-applet-src, ... }:
   let
     # The HOMEPAGE_VAR_* names one Homepage instance actually receives, read
     # back out of the rendered sops template rather than restated here — so
@@ -210,6 +216,7 @@
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
           dank-material-shell.nixosModules.dank-material-shell
+          dux-files.nixosModules.dux-files
           {
             # Make plasma-manager's and niri-flake's HM options available to
             # hosts/pegasus/home.nix (niri-flake's homeModules.config is

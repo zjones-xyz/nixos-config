@@ -1682,3 +1682,22 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   *Aqueous:* Dux 2.0 supports the Aqueous compositor in full. Trialling it
   on this host waits for 26.11 (it needs wayland-protocols ≥ 1.49), tracked
   in issue #213.
+- **Dux Files as the default file manager, 2026-10-22.** The Dux suite's
+  own file manager (`duxlabs-dev/dux-files`, `dfiles`), from its flake's
+  `nixosModules.dux-files` — the same pattern as Dux Shell. It builds with
+  `go_1_27`, which 26.05 already has. It handles `inode/directory` and
+  "show in folder" (`org.freedesktop.FileManager1`), and runs as a
+  session-long user service (`dfiles.service`) so windows open instantly.
+  Nemo, Nautilus and Thunar stay installed.
+  *FileManager1 is pinned per user, not left to the bus.* Nautilus is in
+  `services.dbus.packages` (niri's portal setup needs it), and both it and
+  Dux Files ship an activation file for that name; dbus-broker keeps
+  whichever it reads first. `$XDG_DATA_HOME/dbus-1/services` comes before
+  every system service dir (`standard_session_servicedirs`, which NixOS's
+  session.conf keeps), so home.nix places Dux Files' file there. A running
+  Nautilus that already owns the name still beats activation; the
+  session-start `dfiles.service` normally gets there first.
+  *Open/save dialogs stay with Nautilus.* Dux Files can serve the
+  FileChooser portal (`programs.dux-files.portal`), but switching it on
+  changes every app's dialog at once. Left off until the file manager
+  itself has proven out on this host.

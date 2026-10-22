@@ -1,4 +1,4 @@
-{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, pkgsApps, withBambuddyCa, ... }:
+{ config, osConfig, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, pkgsApps, withBambuddyCa, ... }:
 
 let
   # Built against pkgsApps, the nixpkgs Orca comes from, so the plugin's
@@ -416,8 +416,18 @@ in
         "x-scheme-handler/https" = vivaldi;
         "x-scheme-handler/about" = vivaldi;
         "x-scheme-handler/unknown" = vivaldi;
+        # Dux Files (modules/nixos/dux-files.nix) opens folders.
+        "inode/directory" = [ "dev.duxlabs.files.desktop" ];
       };
     };
+
+  # ── "Show in folder" → Dux Files, not Nautilus ─────────────────────────────
+  # Both ship a D-Bus activation file for org.freedesktop.FileManager1 and the
+  # bus picks one arbitrarily. $XDG_DATA_HOME's dbus-1/services is searched
+  # before every system dir, so this copy always wins. Nautilus stays
+  # installed: niri's GNOME portal uses it for open/save dialogs.
+  xdg.dataFile."dbus-1/services/org.freedesktop.FileManager1.service".source =
+    "${osConfig.programs.dux-files.package}/share/dbus-1/services/dev.duxlabs.files.FileManager1.service";
 
   # Vicinae has no built-in global-shortcut support by design — the DE's own
   # shortcut mechanism binds its CLI toggle. A plain single-Exec desktop

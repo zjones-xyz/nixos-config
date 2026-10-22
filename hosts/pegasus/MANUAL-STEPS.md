@@ -1027,3 +1027,17 @@ Shell entry).
    checkpoints.
 6. [ ] Press **apply colours to Qt** and confirm a Qt app still renders the
    matugen palette (§24.1–2).
+
+Dux Files arrives in the same switch (`modules/nixos/dux-files.nix`):
+
+7. [ ] `systemctl --user status dfiles` is active, and `dfiles show` brings
+   up a window at once. `dfiles ipc system.capabilities` lists thumbnails,
+   gvfs and udisks2 as found.
+8. [ ] `xdg-mime query default inode/directory` prints
+   `dev.duxlabs.files.desktop`.
+9. [ ] "Show in folder" goes to Dux Files: from Vivaldi's downloads list, or
+   `busctl --user status org.freedesktop.FileManager1 | grep -i -e comm -e exe`
+   names `dfiles`. If it names Nautilus, check for a leftover Nautilus
+   process from before the switch and log out and back in.
+10. [ ] An open/save dialog (Ctrl+O in any GTK app) is still Nautilus's and
+    still works. The portal was deliberately left alone.
