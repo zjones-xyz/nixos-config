@@ -106,17 +106,19 @@ fi
 
 # Two of these files can carry a real-world location: session.json's
 # latitude/longitude (written by night mode's location automation) and
-# settings.json's weatherLocation/weatherCoordinates. This repo is public,
-# so a snapshot is a permanent, world-readable commit — but city-level
-# disclosure is already an accepted trade-off here, so this is not a "don't".
+# weatherLocation/weatherCoordinates. This repo is public, so a snapshot is
+# a permanent, world-readable commit. City-level disclosure is an accepted
+# trade-off; anything finer is not.
 #
-# It prints the *values*, not just the field names, because the accepted
-# trade-off is about granularity: "47.6, -122.3" is the region, and
-# "47.62109, -122.34918" is a street. DMS does not round — its
-# LocationService.qml stores whatever its daemon hands back verbatim — so
-# which of those two lands in the file is not knowable from the config, only
-# from looking. That is the whole job here: put the number in front of you
-# while the diff is still under review. Checkpoints stay faithful copies.
+# DMS does not round — its LocationService stores whatever geolocation hands
+# back, which can be address-precise — so snapshot rounds latitude/longitude
+# and weatherCoordinates to one decimal (~11 km) on the way into the repo
+# (round_location). The live file keeps full precision; the sunset schedule
+# doesn't need more. `diff` compares against the rounded live file, so the
+# rounding itself never shows up as drift.
+#
+# warn_if_location still prints the *values* that landed in the checkpoint,
+# so the granularity is in front of you while the diff is under review.
 #
 # jq comes from modules/home/common.nix on every host, but degrade to
 # silence rather than failing a snapshot if it is somehow missing.
@@ -134,6 +136,23 @@ warn_if_location() {
   [ -n "$found" ] || return 0
   echo "  ⚠ carries a location — check the granularity before committing:" >&2
   echo "$found" | sed 's/^/      /' >&2
+}
+
+# Writes $1 to $2 with any location rounded to one decimal. No jq means no
+# rounding, so refuse rather than copy an address-precise location verbatim.
+round_location() {
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "dms-settings.sh: jq not found — refusing to copy $1 without rounding its location." >&2
+    return 1
+  fi
+  jq '
+    def r1: (. * 10 | round) / 10;
+    (if has("latitude") and (.latitude | type) == "number" then .latitude |= r1 else . end)
+    | (if has("longitude") and (.longitude | type) == "number" then .longitude |= r1 else . end)
+    | (if (.weatherCoordinates | type) == "string" and (.weatherCoordinates | test(","))
+       then .weatherCoordinates |= (split(",") | map(tonumber | r1 | tostring) | join(","))
+       else . end)
+  ' "$1" > "$2"
 }
 
 # Sets LIVE/CHECKPOINT for one target. A plain case rather than an
@@ -175,7 +194,14 @@ for t in $TARGETS; do
         STATUS=1
         continue
       fi
-      cp "$LIVE" "$CHECKPOINT"
+      tmp="$(mktemp)"
+      if ! round_location "$LIVE" "$tmp"; then
+        rm -f "$tmp"
+        STATUS=1
+        continue
+      fi
+      cat "$tmp" > "$CHECKPOINT"   # keeps the checkpoint's mode, unlike mv
+      rm -f "$tmp"
       echo "[$t] Snapshotted $LIVE -> $CHECKPOINT"
       warn_if_location "$CHECKPOINT"
       TOUCHED+=("hosts/$HOST/$(basename "$CHECKPOINT")")
@@ -208,8 +234,15 @@ for t in $TARGETS; do
         echo "  no checkpoint yet (run 'snapshot' first)."
       elif [ ! -f "$LIVE" ]; then
         echo "  no live file — nothing has written $LIVE yet."
-      elif diff -u --label checkpoint --label live "$CHECKPOINT" "$LIVE"; then
-        echo "  no differences."
+      else
+        tmp="$(mktemp)"
+        if ! round_location "$LIVE" "$tmp"; then
+          rm -f "$tmp"
+          STATUS=1
+        elif diff -u --label checkpoint --label live "$CHECKPOINT" "$tmp"; then
+          echo "  no differences."
+        fi
+        rm -f "$tmp"
       fi
       ;;
   esac
