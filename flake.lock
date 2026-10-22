@@ -8,11 +8,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1792199566,
-        "narHash": "sha256-mOsxURVw80lOVRUsJ53Sf5FUd43/Geszbg06O16XSMU=",
+        "lastModified": 1792632084,
+        "narHash": "sha256-/A5w6OebFSe9TWwvZxnU/2gRdaFTXlmHAc5JOvONn/M=",
         "ref": "refs/heads/main",
-        "rev": "64055949808cbdae6040d56d8db17ee252fd3b2e",
-        "revCount": 1404,
+        "rev": "c6d15da9f8332b416695ebb819125745db0c25f9",
+        "revCount": 1432,
         "type": "git",
         "url": "https://github.com/aaddrick/claude-desktop-debian.git"
       },
@@ -369,10 +369,10 @@
     },
     "nixpkgs-apps": {
       "locked": {
-        "lastModified": 1791956154,
-        "narHash": "sha256-jBYGPi4udQ9uo4KQp9m2J0546nJVQitG15gvZSaVVAs=",
+        "lastModified": 1792502884,
+        "narHash": "sha256-IoNisKcGbUjdd45qCqywGMCYmZ5EnkxezvLII0FWwNA=",
         "ref": "nixos-unstable",
-        "rev": "55bfb4d7437bd4e09ab7cba58a43bd68eb310044",
+        "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
         "shallow": true,
         "type": "git",
         "url": "https://github.com/NixOS/nixpkgs.git"
@@ -578,11 +578,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1792192561,
-        "narHash": "sha256-XNE80BcOYerOY/+2bfmVk1Sik7FYq7ID9mbtXTeqDN0=",
+        "lastModified": 1792595242,
+        "narHash": "sha256-kH/E0uJDslOgYcnmU+c0cm6HrUjsEtvZQKZtuQ1+uvo=",
         "ref": "refs/heads/main",
-        "rev": "733154388e22e459c7e6dd14e6522069bbf25971",
-        "revCount": 1337,
+        "rev": "f19490ac889eabb05bdb7e8dcb85225ee75bd87b",
+        "revCount": 1341,
         "type": "git",
         "url": "https://github.com/0xc000022070/zen-browser-flake.git"
       },
