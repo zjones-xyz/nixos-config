@@ -459,11 +459,11 @@ in
     # Dux 2.0 renamed DankMaterialShell/ to dms/ and migrates on first launch.
     # Until it has, keep writing to the legacy dir: seeding dms/ alongside it
     # would make that migration a merge with conflicting settings.json files.
-    dms_dir() { if [ -e "$1/dms" ] || [ ! -e "$1/DankMaterialShell" ]; then echo "$1/dms"; else echo "$1/DankMaterialShell"; fi; }
-    DMS_DIR="$(dms_dir "''${XDG_CONFIG_HOME:-$HOME/.config}")"
+    seed_dms_dir() { if [ -e "$1/dms" ] || [ ! -e "$1/DankMaterialShell" ]; then echo "$1/dms"; else echo "$1/DankMaterialShell"; fi; }
+    DMS_DIR="$(seed_dms_dir "''${XDG_CONFIG_HOME:-$HOME/.config}")"
     # session.json lives under XDG_STATE_HOME, not XDG_CONFIG_HOME — see
     # scripts/dms-settings.sh for what it holds and why it is checkpointed.
-    DMS_STATE_DIR="$(dms_dir "''${XDG_STATE_HOME:-$HOME/.local/state}")"
+    DMS_STATE_DIR="$(seed_dms_dir "''${XDG_STATE_HOME:-$HOME/.local/state}")"
     CHECKPOINTS="$HOME/nixos-config/hosts/pegasus"
 
     if [ ! -e "$DMS_DIR/settings.json" ] && [ -e "$CHECKPOINTS/dms-settings.json" ]; then

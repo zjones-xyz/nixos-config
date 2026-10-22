@@ -1670,9 +1670,10 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   *Config dir:* `~/.config/DankMaterialShell` becomes `~/.config/dms` (and
   likewise under state, cache and data). Dux does the move itself on first
   launch (`core/internal/utils/dirs.go`, `MigrateLegacyDirs`): a rename plus
-  a symlink at the old path. If *both* dirs already exist, it merges them,
-  and on a file that differs in both it refuses and leaves the legacy dir in
-  place. So `seedDmsSettings` and `dms-settings.sh` pick `dms/` unless only
+  a symlink at the old path. If *both* dirs already exist, it merges what
+  doesn't collide into `dms/`. On a file that differs, the `dms/` copy wins,
+  the legacy copy is left behind, and the old path never becomes a symlink
+  (only a journal warning says so). So `seedDmsSettings` and `dms-settings.sh` pick `dms/` unless only
   the legacy dir exists yet. Seeding `dms/` on the first switch, before Dux
   has run, would create exactly that conflicting pair.
   *Why not nixpkgs' `dms-shell`:* still 1.6.3 on nixpkgs master, and its
