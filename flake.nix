@@ -118,10 +118,10 @@
       inputs.nixpkgs.follows = "nixpkgs-apps";
     };
 
-    # Desktop apps that should move faster than the 26.05 system (used on
-    # pegasus) — deliberately NOT inputs.nixpkgs.follows. Instantiated once
-    # below as `pkgsApps`; kernel, services and everything else stay on
-    # `nixpkgs`. hosts/pegasus/DECISIONS.md has the policy for what goes here.
+    # Apps that should move faster than the 26.05 system — deliberately NOT
+    # inputs.nixpkgs.follows. Handed to every host's Home Manager as
+    # `pkgsApps` (appsForHm below); kernel, services and everything else stay
+    # on `nixpkgs`. hosts/pegasus/DECISIONS.md has the policy for what goes here.
     nixpkgs-apps.url = "git+https://github.com/NixOS/nixpkgs.git?ref=nixos-unstable&shallow=1";
 
     # Non-flake theme sources for pegasus's Dragonized session, pinned here so
@@ -167,6 +167,17 @@
           cat ${bambuddyCa} >> "$cer"
         '';
       });
+
+    # ── nixpkgs-apps for every host's Home Manager ──
+    # Passed to each home.nix as `pkgsApps` (policy: hosts/pegasus/DECISIONS.md).
+    # A separate nixpkgs instance, so it needs its own allowUnfree:
+    # modules/nixos/common.nix only configures the system's.
+    appsForHm = system: {
+      home-manager.extraSpecialArgs.pkgsApps = import nixpkgs-apps {
+        inherit system;
+        config.allowUnfree = true;
+      };
+    };
   in
   {
     formatter = {
@@ -201,6 +212,7 @@
         modules = [
           ./hosts/memory-alpha/configuration.nix
           home-manager.nixosModules.home-manager
+          (appsForHm "x86_64-linux")
           sops-nix.nixosModules.sops
         ];
       };
@@ -214,6 +226,7 @@
         modules = [
           ./hosts/pegasus/configuration.nix
           home-manager.nixosModules.home-manager
+          (appsForHm "x86_64-linux")
           sops-nix.nixosModules.sops
           dank-material-shell.nixosModules.dank-material-shell
           dux-files.nixosModules.dux-files
@@ -230,12 +243,6 @@
             # through directly rather than adding it as a NixOS-level overlay.
             home-manager.extraSpecialArgs = {
               claudeDesktop = claude-desktop-debian.packages.x86_64-linux.claude-desktop-fhs;
-              # A separate nixpkgs instance, so it needs its own allowUnfree:
-              # modules/nixos/common.nix only configures the system's.
-              pkgsApps = import nixpkgs-apps {
-                system = "x86_64-linux";
-                config.allowUnfree = true;
-              };
               # Askimo (multi-LLM desktop chat client) — not in nixpkgs at
               # all, unlike claudeDesktop above (an upstream package nixpkgs
               # just hasn't caught up to yet). pkgs/askimo.nix unpacks
@@ -285,6 +292,7 @@
         modules = [
           ./hosts/galactica/configuration.nix
           home-manager.nixosModules.home-manager
+          (appsForHm "x86_64-linux")
           sops-nix.nixosModules.sops
           # Brings in nixflix's own modules AND vpn-confinement (nixflix's
           # nixosModules.default imports it), which is what provides the
@@ -308,6 +316,7 @@
           "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
           ./hosts/hopper/configuration.nix
           home-manager.nixosModules.home-manager
+          (appsForHm "aarch64-linux")
           sops-nix.nixosModules.sops
         ];
       };
@@ -322,6 +331,7 @@
           "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
           ./hosts/hamilton/configuration.nix
           home-manager.nixosModules.home-manager
+          (appsForHm "aarch64-linux")
           sops-nix.nixosModules.sops
         ];
       };
@@ -348,6 +358,7 @@
       modules = [
         ./hosts/serenity/configuration.nix
         home-manager.darwinModules.home-manager
+        (appsForHm "aarch64-darwin")
         {
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;

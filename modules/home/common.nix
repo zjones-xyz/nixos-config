@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, pkgsApps, ... }:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared Home Manager layer — portable across platforms.
@@ -24,6 +24,9 @@
     # hosts, this reaches the Mac too. `jq` above is the same story, predating
     # the split.
     openssl
+
+    # herdr (terminal agent multiplexer) isn't in 26.05 — nixpkgs-apps only.
+    pkgsApps.herdr
   ];
 
   # ── Terminal theme: Catppuccin Macchiato ────────────────────────────────────
