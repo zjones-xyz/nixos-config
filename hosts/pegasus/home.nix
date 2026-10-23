@@ -1,4 +1,4 @@
-{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, pkgsApps, withBambuddyCa, ... }:
+{ config, osConfig, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, pkgsApps, withBambuddyCa, ... }:
 
 let
   # Built against pkgsApps, the nixpkgs Orca comes from, so the plugin's
@@ -407,6 +407,17 @@ in
   xdg.mimeApps =
     let
       vivaldi = [ "vivaldi-stable.desktop" ];
+      # Dux Files claims these too and sorts ahead of Ark in mimeinfo.cache,
+      # where it would extract on open instead of showing the archive.
+      archives = lib.genAttrs [
+        "application/zip" "application/x-tar" "application/gzip"
+        "application/x-compressed-tar" "application/x-bzip2"
+        "application/x-bzip2-compressed-tar" "application/x-xz"
+        "application/x-xz-compressed-tar" "application/zstd"
+        "application/x-zstd-compressed-tar" "application/x-lzma"
+        "application/x-lzma-compressed-tar" "application/x-7z-compressed"
+        "application/vnd.rar" "application/x-cpio"
+      ] (_: [ "org.kde.ark.desktop" ]);
     in
     {
       enable = true;
@@ -416,8 +427,18 @@ in
         "x-scheme-handler/https" = vivaldi;
         "x-scheme-handler/about" = vivaldi;
         "x-scheme-handler/unknown" = vivaldi;
-      };
+        # Dux Files (modules/nixos/dux-files.nix) opens folders.
+        "inode/directory" = [ "dev.duxlabs.files.desktop" ];
+      } // archives;
     };
+
+  # ── "Show in folder" → Dux Files, not Nautilus ─────────────────────────────
+  # Both ship a D-Bus activation file for org.freedesktop.FileManager1, and
+  # Nautilus's in the profile dirs would be read first and win. dbus-broker
+  # reads $XDG_DATA_HOME before those, so this copy wins instead. Nautilus
+  # stays installed: niri's GNOME portal uses it for open/save dialogs.
+  xdg.dataFile."dbus-1/services/org.freedesktop.FileManager1.service".source =
+    "${osConfig.programs.dux-files.package}/share/dbus-1/services/dev.duxlabs.files.FileManager1.service";
 
   # Vicinae has no built-in global-shortcut support by design — the DE's own
   # shortcut mechanism binds its CLI toggle. A plain single-Exec desktop
@@ -439,7 +460,7 @@ in
     $DRY_RUN_CMD ${pkgs.kdePackages.kservice}/bin/kbuildsycoca6 $VERBOSE_ARG
   '';
 
-  # ── DankMaterialShell settings: seed-only-if-missing ────────────────────────
+  # ── Dux Shell (DMS) settings: seed-only-if-missing ──────────────────────────
   # DMS's own settings.json and plugin_settings.json are deliberately NOT
   # Home-Manager-managed (no home.file/xdg.configFile, in-store or
   # mkOutOfStoreSymlink alike) — DMS saves both via an atomic
@@ -456,10 +477,14 @@ in
   # that traffic only ever flows explicitly, via dms-settings-snapshot/
   # -restore/-diff above.
   home.activation.seedDmsSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    DMS_DIR="$HOME/.config/DankMaterialShell"
+    # Dux 2.0 renamed DankMaterialShell/ to dms/ and migrates on first launch.
+    # Until it has, keep writing to the legacy dir: seeding dms/ alongside it
+    # would make that migration a merge with conflicting settings.json files.
+    seed_dms_dir() { if [ -e "$1/dms" ] || [ ! -e "$1/DankMaterialShell" ]; then echo "$1/dms"; else echo "$1/DankMaterialShell"; fi; }
+    DMS_DIR="$(seed_dms_dir "''${XDG_CONFIG_HOME:-$HOME/.config}")"
     # session.json lives under XDG_STATE_HOME, not XDG_CONFIG_HOME — see
     # scripts/dms-settings.sh for what it holds and why it is checkpointed.
-    DMS_STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/DankMaterialShell"
+    DMS_STATE_DIR="$(seed_dms_dir "''${XDG_STATE_HOME:-$HOME/.local/state}")"
     CHECKPOINTS="$HOME/nixos-config/hosts/pegasus"
 
     if [ ! -e "$DMS_DIR/settings.json" ] && [ -e "$CHECKPOINTS/dms-settings.json" ]; then

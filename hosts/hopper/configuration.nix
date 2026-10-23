@@ -11,7 +11,7 @@
     ../../modules/nixos/uptime-kuma.nix
     ../../modules/nixos/ntfy.nix
     ../../modules/nixos/homepage.nix
-    ../../modules/nixos/speedtest-tracker.nix
+    # ../../modules/nixos/speedtest-tracker.nix # off until a PHP-patched image ships: CVE-2026-109618/-109619
     ../../modules/nixos/traefik-local.nix
   ];
 

@@ -52,12 +52,19 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # DankMaterialShell (used on pegasus, layered on Niri) — a Quickshell-based
-    # desktop shell, not in nixpkgs. Quickshell itself IS in nixpkgs 26.05
+    # Dux Shell (DMS; DankMaterialShell until 2.0, used on pegasus, layered on
+    # Niri) — a Quickshell-based desktop shell. nixpkgs' dms-shell lags (1.6.x)
+    # so it comes from its own flake. Quickshell itself IS in nixpkgs 26.05
     # (0.3.0, meets DMS's stated minimum) so no separate quickshell input is
     # needed — only DMS's own flake, for its NixOS module and package build.
     dank-material-shell = {
-      url = "git+https://github.com/AvengeMedia/DankMaterialShell.git";
+      url = "git+https://github.com/duxlabs-dev/dux-shell.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Dux Files (pegasus) — Dux Shell's sibling file manager, own flake.
+    dux-files = {
+      url = "git+https://github.com/duxlabs-dev/dux-files.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -130,7 +137,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, niri-flake, nixflix, nixpkgs-apps, dr460nized-src, window-title-applet-src, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, dux-files, niri-flake, nixflix, nixpkgs-apps, dr460nized-src, window-title-applet-src, ... }:
   let
     # The HOMEPAGE_VAR_* names one Homepage instance actually receives, read
     # back out of the rendered sops template rather than restated here — so
@@ -209,6 +216,7 @@
           home-manager.nixosModules.home-manager
           sops-nix.nixosModules.sops
           dank-material-shell.nixosModules.dank-material-shell
+          dux-files.nixosModules.dux-files
           {
             # Make plasma-manager's and niri-flake's HM options available to
             # hosts/pegasus/home.nix (niri-flake's homeModules.config is
