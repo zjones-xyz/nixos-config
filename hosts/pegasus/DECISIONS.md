@@ -1443,6 +1443,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   collide on option definitions; for a newer service binary use
   `services.<x>.package` instead. This is the common community layering
   (stable system, second nixpkgs for apps) rather than a pin per app.
+  **Widened 2026-10-23:** terminal apps too, on every host. The policy now
+  lives in `docs/NIXPKGS-APPS.md`; see also the herdr entry below.
   *What moved:* ferdium 7.2.3 (unchanged); bambu-studio 02.05.00.67 →
   02.08.00.50, `withNvidiaGLWorkaround` kept (verified: the installed
   derivation is the override's, not plain); orca-slicer 2.3.2 → 2.4.2 —
@@ -1716,9 +1718,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   picks gnome/gtk. Preferring it (`programs.dux-files.portal`) changes every
   app's dialog at once, so it waits until the file manager has proven out.
 
-- **`pkgsApps` fleet-wide, for herdr, 2026-10-23.** herdr (terminal agent
-  multiplexer) is not in 26.05 at all, only unstable (0.9.5), and belongs on
-  every host — so `pkgsApps` is now handed to every host's Home Manager
+- **`pkgsApps` fleet-wide, for herdr, 2026-10-23** (policy now in
+  `docs/NIXPKGS-APPS.md`). herdr (terminal agent multiplexer) is not in
+  26.05 at all, only unstable (0.9.5), and belongs on every host — so `pkgsApps` is now handed to every host's Home Manager
   (`appsForHm` in `flake.nix`), not just pegasus's, and `modules/home/common.nix`
   installs `pkgsApps.herdr`. The policy above is unchanged apart from scope:
   apps only, never modules or services; a terminal app counts as an app.

@@ -21,9 +21,9 @@
     hyfetch
 
     # Here as well as modules/nixos/common.nix because this module is the only
-    # one serenity (darwin) shares — nixos/common.nix reaches the six NixOS
-    # hosts, this reaches the Mac too. `jq` above is the same story, predating
-    # the split.
+    # one serenity (darwin) shares — nixos/common.nix reaches the five NixOS
+    # hosts (and the live ISO), this reaches the Mac too. `jq` above is the
+    # same story, predating the split.
     openssl
 
     # herdr (terminal agent multiplexer) isn't in 26.05 — nixpkgs-apps only.
