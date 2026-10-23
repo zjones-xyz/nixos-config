@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, pkgsApps, ... }:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared Home Manager layer — portable across platforms.
@@ -8,6 +8,7 @@
 # prefs that make sense on Linux *and* macOS. Anything host- or
 # platform-specific (username, homeDirectory, stateVersion, the `nrs`/`nrt`/
 # `npull` rebuild aliases, extra packages) stays in the per-host home.nix.
+# Needs `pkgsApps` from extraSpecialArgs: add `appsForHm` (flake.nix) per host.
 {
   # Core CLI tooling.
   home.packages = with pkgs; [
@@ -24,6 +25,9 @@
     # hosts, this reaches the Mac too. `jq` above is the same story, predating
     # the split.
     openssl
+
+    # herdr (terminal agent multiplexer) isn't in 26.05 — nixpkgs-apps only.
+    pkgsApps.herdr
   ];
 
   # ── Terminal theme: Catppuccin Macchiato ────────────────────────────────────

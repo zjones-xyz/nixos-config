@@ -7,9 +7,10 @@ stay consistent. This file documents the repo's structure and patterns.
 
 - **`flake.nix`** — one `nixosConfigurations.<host>` per machine (+
   `darwinConfigurations.<host>` for Macs). nixpkgs pinned to `nixos-26.05`;
-  home-manager and sops-nix follow it. Desktop apps that must move faster
-  than the release come from `nixpkgs-apps` (nixos-unstable), handed to Home
-  Manager as `pkgsApps` — apps only, never the kernel, services or modules.
+  home-manager and sops-nix follow it. Apps (desktop or terminal) that must
+  move faster than the release come from `nixpkgs-apps` (nixos-unstable),
+  handed to every host's Home Manager as `pkgsApps` (`appsForHm`) — apps
+  only, never the kernel, services or modules.
   Hosts run the release's LTS kernel: nixpkgs deletes non-LTS kernels at EOL
   even on stable, so pinning one freezes the shared nixpkgs for the whole
   fleet. Both policies: `hosts/pegasus/DECISIONS.md`.

@@ -1638,6 +1638,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   and HushMic build against the same input. Budget that time at switch. A newer
   Signal, Slack or Discord can also upgrade its profile on first run, so
   rolling back past a bump may leave the app unable to open it.
+  Since herdr (entry below), each bump also changes every host's Home
+  Manager profile, so the bump PR is scoped `[all]`.
   *Why not nixpkgs master:* it has no Hydra cache and no channel testing. It
   would be days faster at best, at the cost of local builds and untested
   revisions. For Electron apps the vendor picks the bundled Chromium anyway,
@@ -1713,3 +1715,17 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   installed with the package but not preferred: niri's `portals.conf`
   picks gnome/gtk. Preferring it (`programs.dux-files.portal`) changes every
   app's dialog at once, so it waits until the file manager has proven out.
+
+- **`pkgsApps` fleet-wide, for herdr, 2026-10-23.** herdr (terminal agent
+  multiplexer) is not in 26.05 at all, only unstable (0.9.5), and belongs on
+  every host — so `pkgsApps` is now handed to every host's Home Manager
+  (`appsForHm` in `flake.nix`), not just pegasus's, and `modules/home/common.nix`
+  installs `pkgsApps.herdr`. The policy above is unchanged apart from scope:
+  apps only, never modules or services; a terminal app counts as an app.
+  *Cost:* every host now evaluates a second nixpkgs, and herdr's closure pulls
+  unstable's glibc and friends (~87 MiB on aarch64, more than the binary
+  itself) — paid even on the Pis. Cached on cache.nixos.org for
+  x86_64-linux, aarch64-linux and aarch64-darwin, so nothing builds locally.
+  The scheduled bump PR (`update-apps.yml`) is now `[all]` and says to switch
+  the whole fleet. Every `home.nix` importing `common.nix` needs `appsForHm`.
+  Once a release ships herdr, move it to plain `pkgs.herdr`.
