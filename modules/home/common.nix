@@ -8,6 +8,7 @@
 # prefs that make sense on Linux *and* macOS. Anything host- or
 # platform-specific (username, homeDirectory, stateVersion, the `nrs`/`nrt`/
 # `npull` rebuild aliases, extra packages) stays in the per-host home.nix.
+# Needs `pkgsApps` from extraSpecialArgs: add `appsForHm` (flake.nix) per host.
 {
   # Core CLI tooling.
   home.packages = with pkgs; [

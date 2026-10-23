@@ -52,11 +52,13 @@ jobs:
           token: ${{ secrets.APP_BUMP_TOKEN || github.token }}
           branch: bump-app-inputs
           delete-branch: true
-          commit-message: "[pegasus] Bump app inputs"
-          title: "[pegasus] Bump app inputs"
+          commit-message: "[all] Bump app inputs"
+          title: "[all] Bump app inputs"
           body: |
             Scheduled bump of `nixpkgs-apps`, `zen-browser`, `opera-flake` and
             `claude-desktop-debian`. Every host's eval and
             `nix flake check --no-build` passed in the run that opened this PR.
 
             After merging: switch pegasus and open the browsers and chat apps.
+            `nixpkgs-apps` also carries herdr for every host, so switch the
+            rest of the fleet too (the Pis per their DEPLOY.md).
