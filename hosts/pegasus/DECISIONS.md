@@ -1725,6 +1725,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   `flake.nix`), not just pegasus's, and `modules/home/common.nix` installs
   `pkgsApps.herdr`. The policy above is unchanged apart from scope:
   apps only, never modules or services; a terminal app counts as an app.
+  The one exception is HushMic (entry above), whose lane-built package is
+  a system package run as a user service defined here.
   *Cost:* every host now evaluates a second nixpkgs, and herdr's closure pulls
   unstable's glibc and friends (~87 MiB on aarch64, more than the binary
   itself) — paid even on the Pis. Cached on cache.nixos.org for
