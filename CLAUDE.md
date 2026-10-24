@@ -7,12 +7,13 @@ stay consistent. This file documents the repo's structure and patterns.
 
 - **`flake.nix`** — one `nixosConfigurations.<host>` per machine (+
   `darwinConfigurations.<host>` for Macs). nixpkgs pinned to `nixos-26.05`;
-  home-manager and sops-nix follow it. Desktop apps that must move faster
-  than the release come from `nixpkgs-apps` (nixos-unstable), handed to Home
-  Manager as `pkgsApps` — apps only, never the kernel, services or modules.
-  Hosts run the release's LTS kernel: nixpkgs deletes non-LTS kernels at EOL
-  even on stable, so pinning one freezes the shared nixpkgs for the whole
-  fleet. Both policies: `hosts/pegasus/DECISIONS.md`.
+  home-manager and sops-nix follow it. Apps (desktop or terminal) that must
+  move faster than the release come from `nixpkgs-apps` (nixos-unstable),
+  handed to every host's Home Manager as `pkgsApps` (`appsForHm`) — apps
+  only, never the kernel, services or modules (policy:
+  `docs/NIXPKGS-APPS.md`). Hosts run the release's LTS kernel: nixpkgs
+  deletes non-LTS kernels at EOL even on stable, so pinning one freezes the
+  shared nixpkgs for the whole fleet (`hosts/pegasus/DECISIONS.md`).
 - **`hosts/<host>/`** — `configuration.nix` (host wiring), `hardware-configuration.nix`,
   `home.nix` (per-host Home Manager). Pi hosts also have `DEPLOY.md`/`bootstrap.sh`.
   A host directory may exist as **documentation only**, before any config is written
@@ -36,8 +37,9 @@ stay consistent. This file documents the repo's structure and patterns.
 - **`docs/<topic>.md`** — fleet-wide documentation that belongs to no single host
   (e.g. `DISK-LABELLING.md`, the physical disk naming and cable-labelling
   convention; `DISK-DRAWER.md`, unassigned spare disks; `BACKUP.md`, which host
-  owes what an offsite copy). Per-host hardware inventories stay in
-  `hosts/<host>/HARDWARE-MAP.md` and reference these.
+  owes what an offsite copy; `NIXPKGS-APPS.md`, the unstable app lane).
+  Per-host hardware inventories stay in `hosts/<host>/HARDWARE-MAP.md` and
+  reference these.
 
 ## Style
 

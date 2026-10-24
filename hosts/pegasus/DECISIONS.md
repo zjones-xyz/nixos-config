@@ -1263,6 +1263,12 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   renders in a Qt app was then confirmed too: qt6ct shows the matugen
   palette instead of stock Fusion grey. The feature has never worked on this
   host until now.
+  *Update 2026-10-21, Dux 2.0:* upstream fixed bug 2 on its own
+  (`49a639a3`, "qt: write real newlines…", upstream issue #3457, shipped in
+  v2.0.0), so its substitution stopped matching and was dropped — issue
+  #110's case 1, for that half only. Bug 1 is unchanged in 2.0: `qt.sh` still
+  hardcodes `DankMatugen.colors`, while matugen still writes the correct
+  `qt{5,6}ct/colors/matugen.conf`. That substitution stays.
 - **Plasma and COSMIC to be removed, deferred 2026-09-09 — and `desktop-plasma.nix`
   is not the file to delete when that happens.** Neither session is in daily use
   since niri became `defaultSession` (2026-09-01) and both had degraded; the
@@ -1437,6 +1443,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   collide on option definitions; for a newer service binary use
   `services.<x>.package` instead. This is the common community layering
   (stable system, second nixpkgs for apps) rather than a pin per app.
+  **Widened 2026-10-23:** terminal apps too, on every host. The policy now
+  lives in `docs/NIXPKGS-APPS.md`; see also the herdr entry below.
   *What moved:* ferdium 7.2.3 (unchanged); bambu-studio 02.05.00.67 →
   02.08.00.50, `withNvidiaGLWorkaround` kept (verified: the installed
   derivation is the override's, not plain); orca-slicer 2.3.2 → 2.4.2 —
@@ -1587,9 +1595,11 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   *Packaging:* not in nixpkgs. The `hushmic-nix` input is the upstream
   author's own flake. It builds from source, which NixOS needs because the
   prebuilt binaries won't run there. Its nixpkgs follows `nixpkgs-apps`,
-  since it is a desktop app and its own CI builds against unstable. The flake
-  has a bot that bumps it daily; `flake.lock` pins the commit, so a bump only
-  lands through `nix flake update hushmic-nix`. Upstream's `package.nix` still
+  since it is a desktop app and its own CI builds against unstable. (This
+  makes it the lane's one exception: a system package and user service, not
+  Home Manager. See `docs/NIXPKGS-APPS.md`, Wiring.) The flake has a bot
+  that bumps it daily; `flake.lock` pins the commit, so a bump only lands
+  through `nix flake update hushmic-nix`. Upstream's `package.nix` still
   takes the `xorg` set, which unstable now deprecates. The module overrides
   that argument with the renamed attributes (`libx11`, …) to silence the eval
   warnings. The output path is unchanged. Drop the override once upstream
@@ -1632,6 +1642,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   and HushMic build against the same input. Budget that time at switch. A newer
   Signal, Slack or Discord can also upgrade its profile on first run, so
   rolling back past a bump may leave the app unable to open it.
+  Since herdr (entry below), each bump also changes every host's Home
+  Manager profile, so the bump PR is scoped `[all]`.
   *Why not nixpkgs master:* it has no Hydra cache and no channel testing. It
   would be days faster at best, at the cost of local builds and untested
   revisions. For Electron apps the vendor picks the bundled Chromium anyway,
@@ -1656,3 +1668,71 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
     added when the first trial happens). Trial only: no updates, no sandbox,
     usually unsigned. An app that stays gets a Nix package, or
     `appimageTools` wrapping the same file.
+- **DankMaterialShell → Dux Shell 2.0, 2026-10-21 (same project, renamed).**
+  Upstream rebranded to Dux Labs and moved to `duxlabs-dev/dux-shell`; the
+  flake input follows it. Nothing Nix-facing was renamed: the flake still
+  exports `nixosModules.dank-material-shell`, the option is still
+  `programs.dank-material-shell`, and the binary is still `dms`.
+  *Config dir:* `~/.config/DankMaterialShell` becomes `~/.config/dms` (and
+  likewise under state, cache and data). Dux does the move itself on first
+  launch (`core/internal/utils/dirs.go`, `MigrateLegacyDirs`): a rename plus
+  a symlink at the old path. If *both* dirs already exist, it merges what
+  doesn't collide into `dms/`. On a file that differs, the `dms/` copy wins,
+  the legacy copy is left behind, and the old path never becomes a symlink
+  (only a journal warning says so). So `seedDmsSettings` and `dms-settings.sh` pick `dms/` unless only
+  the legacy dir exists yet. Seeding `dms/` on the first switch, before Dux
+  has run, would create exactly that conflicting pair.
+  *Why not nixpkgs' `dms-shell`:* still 1.6.3 on nixpkgs master, and its
+  module is a different one (`programs.dms-shell`, whose own option set is
+  changing in 26.11 — see issue #213).
+  *Aqueous:* Dux 2.0 supports the Aqueous compositor in full. Trialling it
+  on this host waits for 26.11 (it needs wayland-protocols ≥ 1.49), tracked
+  in issue #213.
+- **Dux Files as the default file manager, 2026-10-22.** The Dux suite's
+  own file manager (`duxlabs-dev/dux-files`, `dfiles`), from its flake's
+  `nixosModules.dux-files` — the same pattern as Dux Shell. It builds with
+  `go_1_27`, which 26.05 already has. It handles `inode/directory` and
+  "show in folder" (`org.freedesktop.FileManager1`), and runs as a
+  session-long user service (`dfiles.service`) so windows open instantly.
+  Nemo, Nautilus and Thunar stay installed.
+  *FileManager1 is pinned per user, not left to the bus.* Nautilus and Dux
+  Files both ship an activation file for that name. dbus-broker keeps the
+  first one it reads, and the per-user profile (which holds Nautilus) is
+  read before the system service dirs. `$XDG_DATA_HOME/dbus-1/services` is
+  read before both (`standard_session_servicedirs`, which NixOS's
+  session.conf keeps), so home.nix places Dux Files' file there. A running
+  Nautilus that already owns the name still beats activation (dfiles queues
+  behind it); the session-start `dfiles.service` normally gets there first.
+  *Archives stay with Ark.* The Dux Files desktop entry also claims zip/tar/
+  7z/rar and friends, sorts ahead of Ark in `mimeinfo.cache`, and extracts
+  on open by default. home.nix pins those types to Ark.
+  *PATH:* upstream's module sets `path = [ quickshell ]`, which writes a PATH
+  that replaces the session's. The daemon launches every "open with" from
+  bare desktop-entry Execs, so dux-files.nix forces `path = [ ]`, as Dux
+  Shell's own module does for `dms.service`.
+  *Every session, not just niri.* The mime default, the FileManager1
+  override and `dfiles.service` (wanted by `graphical-session.target`) are
+  per-user, so Plasma and COSMIC get Dux Files for folders too, ahead of
+  Dolphin and cosmic-files. Accepted, since both sessions are slated for
+  removal (entry above).
+  *Open/save dialogs stay with Nautilus.* Dux Files' FileChooser portal is
+  installed with the package but not preferred: niri's `portals.conf`
+  picks gnome/gtk. Preferring it (`programs.dux-files.portal`) changes every
+  app's dialog at once, so it waits until the file manager has proven out.
+
+- **`pkgsApps` fleet-wide, for herdr, 2026-10-23** (policy now in
+  `docs/NIXPKGS-APPS.md`). herdr (terminal agent multiplexer) is not in
+  26.05 at all, only unstable (0.9.5), and belongs on every host — so
+  `pkgsApps` is now handed to every host's Home Manager (`appsForHm` in
+  `flake.nix`), not just pegasus's, and `modules/home/common.nix` installs
+  `pkgsApps.herdr`. The policy above is unchanged apart from scope:
+  apps only, never modules or services; a terminal app counts as an app.
+  The one exception is HushMic (entry above), whose lane-built package is
+  a system package run as a user service defined here.
+  *Cost:* every host now evaluates a second nixpkgs, and herdr's closure pulls
+  unstable's glibc and friends (~87 MiB on aarch64, more than the binary
+  itself) — paid even on the Pis. Cached on cache.nixos.org for
+  x86_64-linux, aarch64-linux and aarch64-darwin, so nothing builds locally.
+  The scheduled bump PR (`update-apps.yml`) is now `[all]` and says to switch
+  the whole fleet. Every `home.nix` importing `common.nix` needs `appsForHm`.
+  Once a release ships herdr, move it to plain `pkgs.herdr`.

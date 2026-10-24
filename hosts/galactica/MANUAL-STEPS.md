@@ -1810,13 +1810,24 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    initialisation and the secrets were fine.
 
    ✅ **Recovered 2026-09-17** exactly that way — `tc.log` deleted, MariaDB up,
-   Grimmory serving. ⚠ Still unexplained: what killed the container hard enough
-   to corrupt that log. A switch stopping it is the likely cause, and if it
-   recurs the fix is MariaDB's stop timeout, not deleting the file again.
+   Grimmory serving. **Recurred 2026-10-22** on the flake-update switch (#216),
+   recovered the same way 2026-10-23.
 
-   ⟨Unrelated but visible in that datadir: it is owned by `btrbk`. That is the
-   container's `mysql` (uid 999) landing on whichever host user holds 999 —
-   these containers share the host's uid namespace. Harmless to MariaDB.⟩
+   **Cause, found on the recurrence (#221):** nothing killed it. The shutdown
+   was clean and took under a second, but logged `Permission denied` on
+   `ib_buffer_pool.incomplete` and `Error on delete of './tc.log'`. tmpfiles
+   declared the datadir `root:root 0700`, and a `d` entry re-applies its owner
+   to an existing directory on every switch — so each switch locked the running
+   MariaDB (uid 999) out of its datadir, and the entrypoint's chown on the next
+   start hid it unless a stop came first. #221 declares it `999:999` instead; a
+   longer stop timeout would not have helped. If it recurs anyway, check
+   `stat -c '%u:%g %a' /tank/appdata/grimmory-mariadb` (expect `999:999 700`)
+   before anything else.
+
+   ⟨The datadir listing as owned by `btrbk` is that same uid: the container's
+   `mysql` (999) landing on whichever host user holds 999 — these containers
+   share the host's uid namespace. Expected, and since #221 also what tmpfiles
+   declares.⟩
 7. [x] ⚠ **Verify BookBridge can actually reach Audiobookshelf** — it may not,
    and it is the whole point of running it. `READING-STACK.md` §4.6 has the two
    levers. Grimmory it reaches as `http://grimmory:6060` on the `proxy` network;

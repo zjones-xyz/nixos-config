@@ -11,6 +11,7 @@
     ../../modules/nixos/desktop-dragonized.nix
     ../../modules/nixos/desktop-niri.nix
     ../../modules/nixos/dankcalendar.nix
+    ../../modules/nixos/dux-files.nix
     ../../modules/nixos/hushmic.nix
     ../../modules/nixos/scrutiny-collector.nix
     # Settles which of the two Secret Service providers the desktop modules
@@ -25,6 +26,7 @@
     ../../modules/nixos/nzxt-kraken.nix
     ../../modules/nixos/keyboards.nix
     ../../modules/nixos/mouse-tools.nix
+    ../../modules/nixos/printing.nix
     ../../modules/nixos/luks-remote-unlock.nix
     # olla-router.nix is deliberately parked: its build runs olla's own Go
     # test suite, which has a wall-clock assertion that fails under the Nix

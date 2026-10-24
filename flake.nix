@@ -52,12 +52,19 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # DankMaterialShell (used on pegasus, layered on Niri) — a Quickshell-based
-    # desktop shell, not in nixpkgs. Quickshell itself IS in nixpkgs 26.05
+    # Dux Shell (DMS; DankMaterialShell until 2.0, used on pegasus, layered on
+    # Niri) — a Quickshell-based desktop shell. nixpkgs' dms-shell lags (1.6.x)
+    # so it comes from its own flake. Quickshell itself IS in nixpkgs 26.05
     # (0.3.0, meets DMS's stated minimum) so no separate quickshell input is
     # needed — only DMS's own flake, for its NixOS module and package build.
     dank-material-shell = {
-      url = "git+https://github.com/AvengeMedia/DankMaterialShell.git";
+      url = "git+https://github.com/duxlabs-dev/dux-shell.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Dux Files (pegasus) — Dux Shell's sibling file manager, own flake.
+    dux-files = {
+      url = "git+https://github.com/duxlabs-dev/dux-files.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -111,10 +118,24 @@
       inputs.nixpkgs.follows = "nixpkgs-apps";
     };
 
-    # Desktop apps that should move faster than the 26.05 system (used on
-    # pegasus) — deliberately NOT inputs.nixpkgs.follows. Instantiated once
-    # below as `pkgsApps`; kernel, services and everything else stay on
-    # `nixpkgs`. hosts/pegasus/DECISIONS.md has the policy for what goes here.
+    # Kimi Code CLI and Hermes Agent (pegasus) — terminal coding agents not in
+    # nixpkgs; each is its upstream's own uv2nix flake. Follow nixpkgs-apps
+    # like hushmic-nix above. Hermes's home-manager input only feeds its own
+    # checks, so it follows ours rather than locking a second copy.
+    kimi-cli = {
+      url = "git+https://github.com/MoonshotAI/kimi-cli.git";
+      inputs.nixpkgs.follows = "nixpkgs-apps";
+    };
+    hermes-agent = {
+      url = "git+https://github.com/NousResearch/hermes-agent.git";
+      inputs.nixpkgs.follows = "nixpkgs-apps";
+      inputs.home-manager.follows = "home-manager";
+    };
+
+    # Apps that should move faster than the 26.05 system — deliberately NOT
+    # inputs.nixpkgs.follows. Handed to every host's Home Manager as
+    # `pkgsApps` (appsForHm below); kernel, services and everything else stay
+    # on `nixpkgs`. Policy for what goes here: docs/NIXPKGS-APPS.md.
     nixpkgs-apps.url = "git+https://github.com/NixOS/nixpkgs.git?ref=nixos-unstable&shallow=1";
 
     # Non-flake theme sources for pegasus's Dragonized session, pinned here so
@@ -130,7 +151,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, niri-flake, nixflix, nixpkgs-apps, dr460nized-src, window-title-applet-src, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, dux-files, niri-flake, nixflix, nixpkgs-apps, kimi-cli, hermes-agent, dr460nized-src, window-title-applet-src, ... }:
   let
     # The HOMEPAGE_VAR_* names one Homepage instance actually receives, read
     # back out of the rendered sops template rather than restated here — so
@@ -160,6 +181,17 @@
           cat ${bambuddyCa} >> "$cer"
         '';
       });
+
+    # ── nixpkgs-apps for every host's Home Manager ──
+    # Passed to each home.nix as `pkgsApps` (policy: docs/NIXPKGS-APPS.md).
+    # A separate nixpkgs instance, so it needs its own allowUnfree:
+    # modules/nixos/common.nix only configures the system's.
+    appsForHm = system: {
+      home-manager.extraSpecialArgs.pkgsApps = import nixpkgs-apps {
+        inherit system;
+        config.allowUnfree = true;
+      };
+    };
   in
   {
     formatter = {
@@ -194,6 +226,7 @@
         modules = [
           ./hosts/memory-alpha/configuration.nix
           home-manager.nixosModules.home-manager
+          (appsForHm "x86_64-linux")
           sops-nix.nixosModules.sops
         ];
       };
@@ -207,8 +240,10 @@
         modules = [
           ./hosts/pegasus/configuration.nix
           home-manager.nixosModules.home-manager
+          (appsForHm "x86_64-linux")
           sops-nix.nixosModules.sops
           dank-material-shell.nixosModules.dank-material-shell
+          dux-files.nixosModules.dux-files
           {
             # Make plasma-manager's and niri-flake's HM options available to
             # hosts/pegasus/home.nix (niri-flake's homeModules.config is
@@ -222,12 +257,6 @@
             # through directly rather than adding it as a NixOS-level overlay.
             home-manager.extraSpecialArgs = {
               claudeDesktop = claude-desktop-debian.packages.x86_64-linux.claude-desktop-fhs;
-              # A separate nixpkgs instance, so it needs its own allowUnfree:
-              # modules/nixos/common.nix only configures the system's.
-              pkgsApps = import nixpkgs-apps {
-                system = "x86_64-linux";
-                config.allowUnfree = true;
-              };
               # Askimo (multi-LLM desktop chat client) — not in nixpkgs at
               # all, unlike claudeDesktop above (an upstream package nixpkgs
               # just hasn't caught up to yet). pkgs/askimo.nix unpacks
@@ -239,6 +268,8 @@
               # Zen and Opera: same "no HM module, just a package" shape as
               # claudeDesktop/askimoDesktop above — neither flake ships one.
               zenBrowser = zen-browser.packages.x86_64-linux.default;
+              kimiCli = kimi-cli.packages.x86_64-linux.default;
+              hermesAgent = hermes-agent.packages.x86_64-linux.default;
               # opera-flake's pinned deb (129.0.5823.65) 404s — Opera's CDN
               # only serves a handful of recent stable builds and the flake
               # hasn't re-run its own update.sh since that commit. Override
@@ -277,6 +308,7 @@
         modules = [
           ./hosts/galactica/configuration.nix
           home-manager.nixosModules.home-manager
+          (appsForHm "x86_64-linux")
           sops-nix.nixosModules.sops
           # Brings in nixflix's own modules AND vpn-confinement (nixflix's
           # nixosModules.default imports it), which is what provides the
@@ -300,6 +332,7 @@
           "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
           ./hosts/hopper/configuration.nix
           home-manager.nixosModules.home-manager
+          (appsForHm "aarch64-linux")
           sops-nix.nixosModules.sops
         ];
       };
@@ -314,6 +347,7 @@
           "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
           ./hosts/hamilton/configuration.nix
           home-manager.nixosModules.home-manager
+          (appsForHm "aarch64-linux")
           sops-nix.nixosModules.sops
         ];
       };
@@ -340,6 +374,7 @@
       modules = [
         ./hosts/serenity/configuration.nix
         home-manager.darwinModules.home-manager
+        (appsForHm "aarch64-darwin")
         {
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;

@@ -54,6 +54,9 @@ let
   # GROUP_ID in the resolver's env file, plus the setgid bit on the library
   # tree — see mediaGroup.
   grimmoryUid = 1000;
+  # The official MariaDB image's `mysql` account, which its entrypoint chowns
+  # the datadir to on every start.
+  mariadbUid = 999;
 in
 {
   # ── Secrets ───────────────────────────────────────────────────────────────
@@ -267,9 +270,10 @@ in
   ];
 
   # Created here because the alternative is Docker making them root-owned.
-  # Grimmory's belongs to the uid inside its image; MariaDB's and BookBridge's
-  # stay root-only — one holds every linked account's credentials (§4.5), the
-  # other the database they sit in. ⚠ Nothing under /tank/books: that is a
+  # Grimmory's and MariaDB's belong to the uid inside each image, BookBridge's
+  # stays root-only (§4.5). ⚠ tmpfiles re-chowns an existing `d` on every
+  # switch, so the owner must be what the container runs as: root here locked a
+  # running MariaDB out of its datadir. ⚠ Nothing under /tank/books: that is a
   # dataset the owner creates, and a directory made first blocks the mount.
   systemd.tmpfiles.settings."11-reading-library" = {
     ${stateDir "grimmory"}.d = {
@@ -278,8 +282,8 @@ in
       mode = "0750";
     };
     ${stateDir "grimmory-mariadb"}.d = {
-      user = "root";
-      group = "root";
+      user = toString mariadbUid;
+      group = toString mariadbUid;
       mode = "0700";
     };
     ${stateDir "bookbridge"}.d = {
