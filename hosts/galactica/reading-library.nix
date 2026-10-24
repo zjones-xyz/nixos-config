@@ -10,8 +10,8 @@
 
 let
   # The library's group — shared with the *arr trees so what one stack writes
-  # the other can read. ⚠ Name only: `users.groups.media.gid` evaluates to null
-  # here, so the number arrives at unit-start time instead, from the resolver in
+  # the other can read. Name only: the number is pinned in nixflix.nix, but the
+  # containers still take it at unit-start time from the resolver in
   # reading-acquisition.nix (READING-STACK.md §4.7).
   mediaGroup = config.nixflix.globals.libraryOwner.group;
 
@@ -112,8 +112,8 @@ in
         # OIDC is left merely unconfigured rather than FORCE_DISABLE_OIDC'd:
         # §7 defers a provider, and a forced disable is a second thing to undo.
       };
-      # ⚠ The second file carries GROUP_ID, resolved at unit-start time because
-      # the `media` gid does not exist at evaluation (READING-STACK.md §4.7).
+      # ⚠ The second file carries GROUP_ID, resolved at unit-start time
+      # (READING-STACK.md §4.7).
       # Grimmory needs it to write the bookdrop: Shelfmark's entrypoint chowns
       # that directory to `shelfmark:media` on every start, so uid ownership
       # alone would leave Grimmory able to read but not ingest out of it.
