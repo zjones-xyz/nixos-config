@@ -121,7 +121,7 @@
     # Apps that should move faster than the 26.05 system — deliberately NOT
     # inputs.nixpkgs.follows. Handed to every host's Home Manager as
     # `pkgsApps` (appsForHm below); kernel, services and everything else stay
-    # on `nixpkgs`. hosts/pegasus/DECISIONS.md has the policy for what goes here.
+    # on `nixpkgs`. Policy for what goes here: docs/NIXPKGS-APPS.md.
     nixpkgs-apps.url = "git+https://github.com/NixOS/nixpkgs.git?ref=nixos-unstable&shallow=1";
 
     # Non-flake theme sources for pegasus's Dragonized session, pinned here so
@@ -169,7 +169,7 @@
       });
 
     # ── nixpkgs-apps for every host's Home Manager ──
-    # Passed to each home.nix as `pkgsApps` (policy: hosts/pegasus/DECISIONS.md).
+    # Passed to each home.nix as `pkgsApps` (policy: docs/NIXPKGS-APPS.md).
     # A separate nixpkgs instance, so it needs its own allowUnfree:
     # modules/nixos/common.nix only configures the system's.
     appsForHm = system: {
