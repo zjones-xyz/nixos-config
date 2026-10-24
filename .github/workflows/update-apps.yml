@@ -34,7 +34,7 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Update app inputs
-        run: nix flake update nixpkgs-apps zen-browser opera-flake claude-desktop-debian
+        run: nix flake update nixpkgs-apps zen-browser opera-flake claude-desktop-debian kimi-cli hermes-agent
 
       # A PR opened with the default GITHUB_TOKEN does not trigger nix-check.yml,
       # so the same evaluation runs here before the PR exists.
@@ -55,10 +55,10 @@ jobs:
           commit-message: "[all] Bump app inputs"
           title: "[all] Bump app inputs"
           body: |
-            Scheduled bump of `nixpkgs-apps`, `zen-browser`, `opera-flake` and
-            `claude-desktop-debian`. Every host's eval and
+            Scheduled bump of `nixpkgs-apps`, `zen-browser`, `opera-flake`,
+            `claude-desktop-debian`, `kimi-cli` and `hermes-agent`. Every host's eval and
             `nix flake check --no-build` passed in the run that opened this PR.
 
-            After merging: switch pegasus and open the browsers and chat apps.
+            After merging: switch pegasus and open the browsers, chat apps and coding agents.
             `nixpkgs-apps` also carries herdr for every host, so switch the
             rest of the fleet too (the Pis per their DEPLOY.md).

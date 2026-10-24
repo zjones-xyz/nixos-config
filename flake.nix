@@ -118,6 +118,20 @@
       inputs.nixpkgs.follows = "nixpkgs-apps";
     };
 
+    # Kimi Code CLI and Hermes Agent (pegasus) — terminal coding agents not in
+    # nixpkgs; each is its upstream's own uv2nix flake. Follow nixpkgs-apps
+    # like hushmic-nix above. Hermes's home-manager input only feeds its own
+    # checks, so it follows ours rather than locking a second copy.
+    kimi-cli = {
+      url = "git+https://github.com/MoonshotAI/kimi-cli.git";
+      inputs.nixpkgs.follows = "nixpkgs-apps";
+    };
+    hermes-agent = {
+      url = "git+https://github.com/NousResearch/hermes-agent.git";
+      inputs.nixpkgs.follows = "nixpkgs-apps";
+      inputs.home-manager.follows = "home-manager";
+    };
+
     # Apps that should move faster than the 26.05 system — deliberately NOT
     # inputs.nixpkgs.follows. Handed to every host's Home Manager as
     # `pkgsApps` (appsForHm below); kernel, services and everything else stay
@@ -137,7 +151,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, dux-files, niri-flake, nixflix, nixpkgs-apps, dr460nized-src, window-title-applet-src, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, dux-files, niri-flake, nixflix, nixpkgs-apps, kimi-cli, hermes-agent, dr460nized-src, window-title-applet-src, ... }:
   let
     # The HOMEPAGE_VAR_* names one Homepage instance actually receives, read
     # back out of the rendered sops template rather than restated here — so
@@ -254,6 +268,8 @@
               # Zen and Opera: same "no HM module, just a package" shape as
               # claudeDesktop/askimoDesktop above — neither flake ships one.
               zenBrowser = zen-browser.packages.x86_64-linux.default;
+              kimiCli = kimi-cli.packages.x86_64-linux.default;
+              hermesAgent = hermes-agent.packages.x86_64-linux.default;
               # opera-flake's pinned deb (129.0.5823.65) 404s — Opera's CDN
               # only serves a handful of recent stable builds and the flake
               # hasn't re-run its own update.sh since that commit. Override

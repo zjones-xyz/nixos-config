@@ -1,4 +1,4 @@
-{ config, osConfig, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, pkgsApps, withBambuddyCa, ... }:
+{ config, osConfig, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, kimiCli, hermesAgent, pkgsApps, withBambuddyCa, ... }:
 
 let
   # Built against pkgsApps, the nixpkgs Orca comes from, so the plugin's
@@ -75,6 +75,16 @@ in
     # build-from-source-when-available reason claude-code isn't the -bin
     # variant either).
     gemini-cli
+    # More terminal coding agents. On the app lane: they ship weekly and the
+    # release's copies are months behind. Kimi and Hermes aren't in nixpkgs
+    # and come from their upstream flakes (flake.nix).
+    pkgsApps.codex
+    pkgsApps.github-copilot-cli
+    pkgsApps.opencode
+    pkgsApps.pi-coding-agent
+    pkgsApps.qwen-code
+    kimiCli
+    hermesAgent
     # ChatGPT desktop: nixpkgs' `chatgpt` package unpacks a .dmg and is
     # darwin-only (see hosts/serenity, via modules/darwin/homebrew.nix) —
     # OpenAI ships no official Linux client. The only Linux option is a
