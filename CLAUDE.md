@@ -37,8 +37,9 @@ stay consistent. This file documents the repo's structure and patterns.
 - **`docs/<topic>.md`** — fleet-wide documentation that belongs to no single host
   (e.g. `DISK-LABELLING.md`, the physical disk naming and cable-labelling
   convention; `DISK-DRAWER.md`, unassigned spare disks; `BACKUP.md`, which host
-  owes what an offsite copy; `NIXPKGS-APPS.md`, the unstable app lane). Per-host hardware inventories stay in
-  `hosts/<host>/HARDWARE-MAP.md` and reference these.
+  owes what an offsite copy; `NIXPKGS-APPS.md`, the unstable app lane).
+  Per-host hardware inventories stay in `hosts/<host>/HARDWARE-MAP.md` and
+  reference these.
 
 ## Style
 

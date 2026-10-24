@@ -1720,9 +1720,10 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
 
 - **`pkgsApps` fleet-wide, for herdr, 2026-10-23** (policy now in
   `docs/NIXPKGS-APPS.md`). herdr (terminal agent multiplexer) is not in
-  26.05 at all, only unstable (0.9.5), and belongs on every host — so `pkgsApps` is now handed to every host's Home Manager
-  (`appsForHm` in `flake.nix`), not just pegasus's, and `modules/home/common.nix`
-  installs `pkgsApps.herdr`. The policy above is unchanged apart from scope:
+  26.05 at all, only unstable (0.9.5), and belongs on every host — so
+  `pkgsApps` is now handed to every host's Home Manager (`appsForHm` in
+  `flake.nix`), not just pegasus's, and `modules/home/common.nix` installs
+  `pkgsApps.herdr`. The policy above is unchanged apart from scope:
   apps only, never modules or services; a terminal app counts as an app.
   *Cost:* every host now evaluates a second nixpkgs, and herdr's closure pulls
   unstable's glibc and friends (~87 MiB on aarch64, more than the binary
