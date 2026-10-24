@@ -1595,9 +1595,11 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   *Packaging:* not in nixpkgs. The `hushmic-nix` input is the upstream
   author's own flake. It builds from source, which NixOS needs because the
   prebuilt binaries won't run there. Its nixpkgs follows `nixpkgs-apps`,
-  since it is a desktop app and its own CI builds against unstable. The flake
-  has a bot that bumps it daily; `flake.lock` pins the commit, so a bump only
-  lands through `nix flake update hushmic-nix`. Upstream's `package.nix` still
+  since it is a desktop app and its own CI builds against unstable. (This
+  makes it the lane's one exception: a system package and user service, not
+  Home Manager. See `docs/NIXPKGS-APPS.md`, Wiring.) The flake has a bot
+  that bumps it daily; `flake.lock` pins the commit, so a bump only lands
+  through `nix flake update hushmic-nix`. Upstream's `package.nix` still
   takes the `xorg` set, which unstable now deprecates. The module overrides
   that argument with the renamed attributes (`libx11`, …) to silence the eval
   warnings. The output path is unchanged. Drop the override once upstream
