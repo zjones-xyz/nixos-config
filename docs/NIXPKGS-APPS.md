@@ -46,6 +46,8 @@ service defined in this repo. It takes no modules from the lane.
 |---|---|---|
 | Every host (`modules/home/common.nix`) | herdr | 2026-10-23, #218 |
 | pegasus (`hosts/pegasus/home.nix`) | slicers, browsers, chat apps, ticktick | 2026-10-11/16 |
+| pegasus (`hosts/pegasus/home.nix`) | coding agents: codex, copilot, opencode, pi, qwen | 2026-10-24 |
+| pegasus (`kimi-cli`, `hermes-agent` flakes, following the lane) | Kimi Code, Hermes Agent | 2026-10-24 |
 | pegasus (`modules/nixos/hushmic.nix`) | HushMic | 2026-10-14 |
 
 On pegasus, "slicers" includes open-bamboo-networking (OrcaSlicer's network
