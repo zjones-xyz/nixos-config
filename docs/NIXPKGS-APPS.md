@@ -26,8 +26,8 @@ There are two ways in.
 **Home Manager (the usual one).** `flake.nix` defines `appsForHm system`. It
 instantiates `nixpkgs-apps` for that system, with its own `allowUnfree`,
 since a separate instance does not inherit `modules/nixos/common.nix`'s. It
-passes the result to Home Manager as `pkgsApps`. Every host's module list
-includes it. `modules/home/common.nix` takes `pkgsApps` as an argument, so a
+passes the result to Home Manager as `pkgsApps`. Every host config with
+Home Manager includes it (all but the live ISO). `modules/home/common.nix` takes `pkgsApps` as an argument, so a
 new host or standalone Home Manager config that imports it needs `appsForHm`
 too, or evaluation fails with a missing argument.
 
@@ -35,14 +35,16 @@ too, or evaluation fails with a missing argument.
 `self.inputs.nixpkgs-apps.legacyPackages` directly, for a system package and
 a user service, and the `hushmic-nix` input follows `nixpkgs-apps`. So a bump
 also rebuilds a NixOS-level package on pegasus, not only its Home Manager
-profile.
+profile. This is the one exception to "apps only": HushMic is an
+app whose package runs as a user service. It still takes no modules from
+the lane.
 
 ## Who uses it
 
 | Scope | Apps | Since |
 |---|---|---|
 | Every host (`modules/home/common.nix`) | herdr | 2026-10-23, #218 |
-| pegasus (`hosts/pegasus/home.nix`) | slicers, browsers, chat and meeting apps | 2026-10-11 and 2026-10-16 |
+| pegasus (`hosts/pegasus/home.nix`) | slicers, browsers, chat and meeting apps, ticktick | 2026-10-11 and 2026-10-16 |
 | pegasus (`modules/nixos/hushmic.nix`) | HushMic | 2026-10-14 |
 
 The pegasus entries in its `DECISIONS.md` ("Desktop apps from
