@@ -141,7 +141,14 @@ in
       # the host — Grimmory itself reaches it over the container network. No
       # port is opened in the firewall, so loopback is all it is.
       ports = [ "127.0.0.1:${toString mariadbPort}:${toString mariadbPort}" ];
-      extraOptions = [ "--network=proxy" ];
+      # ⚠ The unit's ExecStop is a bare `docker stop`, which SIGKILLs after
+      # Docker's 10 s default — short of a clean InnoDB shutdown, and a killed
+      # MariaDB can leave a tc.log that blocks the next start. Kept under the
+      # unit's TimeoutStopSec (120) so systemd never kills first.
+      extraOptions = [
+        "--network=proxy"
+        "--stop-timeout=90"
+      ];
     };
 
     bookbridge = {
