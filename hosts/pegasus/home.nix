@@ -471,21 +471,10 @@ in
   '';
 
   # ── Dux Shell (DMS) settings: seed-only-if-missing ──────────────────────────
-  # DMS's own settings.json and plugin_settings.json are deliberately NOT
-  # Home-Manager-managed (no home.file/xdg.configFile, in-store or
-  # mkOutOfStoreSymlink alike) — DMS saves both via an atomic
-  # write-temp-then-rename, which severs any symlink at that path on the
-  # very first GUI change instead of writing through it. See
-  # scripts/dms-settings.sh and DECISIONS.md for the full reasoning.
-  #
-  # This just seeds a fresh host — one with no live file yet — from the
-  # checkpoints in the PRIVATE zjones-xyz/dux-state repo, cloned at
-  # ~/dux-state (written by `dms-settings-snapshot`), so a rebuild-from-
-  # scratch starts from the last-known-good config instead of DMS's own
-  # defaults; no clone, no seed. Each check is independent and never touches
-  # an existing live file, so it can't clobber an in-progress GUI experiment —
-  # that traffic only ever flows explicitly, via dms-settings-snapshot/
-  # -restore/-diff above.
+  # Not Home-Manager-managed: Dux's atomic rename-writes sever symlinks. Seeds
+  # each missing live file from the PRIVATE dux-state checkpoints at
+  # ~/dux-state (no clone, no seed); never touches an existing file. Changes
+  # flow only via dms-settings-snapshot/-restore/-diff. See DECISIONS.md.
   home.activation.seedDmsSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     # Dux 2.0 renamed DankMaterialShell/ to dms/ and migrates on first launch.
     # Until it has, keep writing to the legacy dir: seeding dms/ alongside it

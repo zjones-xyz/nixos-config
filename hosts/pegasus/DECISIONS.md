@@ -1739,7 +1739,7 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
 
 - **Dux checkpoints moved to the private `dux-state` repo, 2026-10-25** —
   supersedes where the checkpoints live in the `dms-settings.sh` entries
-  above, not how they work. `hosts/pegasus/dms-*.json` are gone from this
+  above (their `hosts/pegasus/dms-*.json` paths are history now). `hosts/pegasus/dms-*.json` are gone from this
   public repo. `scripts/dms-settings.sh` now writes
   `~/dux-state/hosts/<host>/{settings,plugin-settings,session}.json`, a
   clone of private `zjones-xyz/dux-state` (`DMS_CHECKPOINT_REPO`
@@ -1754,11 +1754,21 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   *No flake input.* Nothing in Nix reads the checkpoints. The script and
   the activation seed both read them at runtime from `$HOME`, so the
   private repo never enters evaluation, CI or other hosts.
-  *Scrubbing kept as defence in depth:* snapshot still rounds location and
-  now also drops `builtInPluginState`. Restore keeps the live copy of that
-  key. Earlier public commits of the three files remain in history. They
-  hold only config and a rounded location; the Notepad text was never
-  committed.
+  *Scrubbing kept as defence in depth:* snapshot rounds latitude/longitude
+  and `weatherCoordinates` to one decimal (since #214; the earlier
+  surface-only approach is gone). It now also drops `builtInPluginState`,
+  and restore keeps the live copy of that key.
+  *Amends "session.json checkpointed too, wholesale rather than filtered"*
+  (2026-09-09): that entry rejected filtering because a faithful copy can't
+  drift. Dropping `builtInPluginState` is a filter. The cost is that Dux
+  merges that key into its built-in plugins' settings, so if a built-in
+  plugin ever keeps settings there, a rebuilt host won't get them back.
+  Today it holds only the Notepad's content.
+  *Public history is not clean.* Older commits of the three files remain
+  in this repo's history. Three from 2026-09-08 (`843d171`, `adf48eb`,
+  `854c3af`) predate rounding and carry a full-precision
+  latitude/longitude. Whether to rewrite history is an open call for the
+  owner. The Notepad text was never committed.
   *Cost:* a rebuilt pegasus needs `~/dux-state` cloned before its first
   switch to be seeded (MANUAL-STEPS.md §#226). Without it, Dux starts on its
   defaults, and nothing fails.

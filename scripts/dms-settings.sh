@@ -242,8 +242,13 @@ for t in $TARGETS; do
       if [ -f "$LIVE" ] && command -v jq >/dev/null 2>&1 \
         && jq -e 'has("builtInPluginState")' "$LIVE" >/dev/null 2>&1; then
         tmp="$(mktemp)"
-        jq -s '.[0] + {builtInPluginState: .[1].builtInPluginState}' \
-          "$CHECKPOINT" "$LIVE" > "$tmp"
+        if ! jq -s '.[0] + {builtInPluginState: .[1].builtInPluginState}' \
+          "$CHECKPOINT" "$LIVE" > "$tmp"; then
+          rm -f "$tmp"
+          echo "dms-settings.sh: [$t] merging $CHECKPOINT with $LIVE failed — live file untouched." >&2
+          STATUS=1
+          continue
+        fi
         cat "$tmp" > "$LIVE"
         rm -f "$tmp"
       else

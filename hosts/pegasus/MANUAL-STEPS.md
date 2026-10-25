@@ -1063,7 +1063,6 @@ upgrade; nothing was lost.
     (`DankIcon` → `DIcon`, `DankListView` → `DListView`) before upstream
     removes the shims.
 
-
 ## #226 Dux checkpoints in private `dux-state` — fresh-host bootstrap
 
 The current pegasus needs nothing: `~/dux-state` is cloned, and its first
@@ -1071,8 +1070,10 @@ commit is the live state as of 2026-10-25. These steps are for a
 rebuild-from-scratch.
 
 1. [ ] Before the first `nixos-rebuild switch` on the new install, clone
-   the private repo (`gh auth login` first):
-   `gh repo clone zjones-xyz/dux-state ~/dux-state`
+   the private repo. `gh` may not be installed yet, so either use
+   `nix shell nixpkgs#gh -c sh -c 'gh auth login && gh repo clone zjones-xyz/dux-state ~/dux-state'`
+   or, with an SSH key GitHub knows,
+   `git clone git@github.com:zjones-xyz/dux-state.git ~/dux-state`.
 2. [ ] After the switch, Dux comes up with the checkpointed bar, theme,
    wallpaper and pinned apps rather than its defaults. If it doesn't, check
    that `~/dux-state/hosts/pegasus/*.json` exist. The seed only fills in
