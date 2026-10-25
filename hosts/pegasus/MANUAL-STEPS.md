@@ -782,8 +782,8 @@ named workspace is homed there.
    back to the left monitor rather than staying on whichever monitor adopted
    it — that is the named-workspace behaviour the whole design leans on.
 5. [ ] Optional, cosmetic: DMS shows workspace *names* only with Settings →
-   Workspaces → "Workspace Names" on (off in the checked-in
-   `dms-settings.json`), or by giving `Mail` an icon under "Named Workspace
+   Workspaces → "Workspace Names" on (off in the `dux-state`
+   checkpoint), or by giving `Mail` an icon under "Named Workspace
    Icons" — that card only appears once niri reports a named workspace. If
    either is turned on, capture it with `dms-settings-snapshot`.
 
@@ -1063,3 +1063,19 @@ upgrade; nothing was lost.
     (`DankIcon` → `DIcon`, `DankListView` → `DListView`) before upstream
     removes the shims.
 
+
+## #226 Dux checkpoints in private `dux-state` — fresh-host bootstrap
+
+The current pegasus needs nothing: `~/dux-state` is cloned, and its first
+commit is the live state as of 2026-10-25. These steps are for a
+rebuild-from-scratch.
+
+1. [ ] Before the first `nixos-rebuild switch` on the new install, clone
+   the private repo (`gh auth login` first):
+   `gh repo clone zjones-xyz/dux-state ~/dux-state`
+2. [ ] After the switch, Dux comes up with the checkpointed bar, theme,
+   wallpaper and pinned apps rather than its defaults. If it doesn't, check
+   that `~/dux-state/hosts/pegasus/*.json` exist. The seed only fills in
+   files that are missing, so remove the live ones (or use
+   `FORCE=1 dms-settings-restore all`) and then
+   `systemctl --user restart dms.service`.

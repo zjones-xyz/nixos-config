@@ -1736,3 +1736,29 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   The scheduled bump PR (`update-apps.yml`) is now `[all]` and says to switch
   the whole fleet. Every `home.nix` importing `common.nix` needs `appsForHm`.
   Once a release ships herdr, move it to plain `pkgs.herdr`.
+
+- **Dux checkpoints moved to the private `dux-state` repo, 2026-10-25** —
+  supersedes where the checkpoints live in the `dms-settings.sh` entries
+  above, not how they work. `hosts/pegasus/dms-*.json` are gone from this
+  public repo. `scripts/dms-settings.sh` now writes
+  `~/dux-state/hosts/<host>/{settings,plugin-settings,session}.json`, a
+  clone of private `zjones-xyz/dux-state` (`DMS_CHECKPOINT_REPO`
+  overrides). `seedDmsSettings` reads from the same place.
+  *Why:* these files are whatever Dux's GUI chooses to write, and they
+  carry more than config. The near-miss that settled it was a
+  `session.json` snapshot carrying `builtInPluginState`, the Notepad's
+  full text, which was caught before commit. Location had already needed
+  rounding. Reviewing every snapshot for leaks is a control that fails the
+  one time it's skipped. A private repo means a miss stays under the
+  owner's control.
+  *No flake input.* Nothing in Nix reads the checkpoints. The script and
+  the activation seed both read them at runtime from `$HOME`, so the
+  private repo never enters evaluation, CI or other hosts.
+  *Scrubbing kept as defence in depth:* snapshot still rounds location and
+  now also drops `builtInPluginState`. Restore keeps the live copy of that
+  key. Earlier public commits of the three files remain in history. They
+  hold only config and a rounded location; the Notepad text was never
+  committed.
+  *Cost:* a rebuilt pegasus needs `~/dux-state` cloned before its first
+  switch to be seeded (MANUAL-STEPS.md §#226). Without it, Dux starts on its
+  defaults, and nothing fails.

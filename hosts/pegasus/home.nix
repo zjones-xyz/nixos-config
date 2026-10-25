@@ -479,11 +479,11 @@ in
   # scripts/dms-settings.sh and DECISIONS.md for the full reasoning.
   #
   # This just seeds a fresh host — one with no live file yet — from the
-  # repo's checkpoints (hosts/pegasus/dms-settings.json and
-  # dms-plugin-settings.json, created by `dms-settings-snapshot`), so a
-  # rebuild-from-scratch starts from the last-known-good config instead of
-  # DMS's own defaults. Each check is independent and never touches an
-  # existing live file, so it can't clobber an in-progress GUI experiment —
+  # checkpoints in the PRIVATE zjones-xyz/dux-state repo, cloned at
+  # ~/dux-state (written by `dms-settings-snapshot`), so a rebuild-from-
+  # scratch starts from the last-known-good config instead of DMS's own
+  # defaults; no clone, no seed. Each check is independent and never touches
+  # an existing live file, so it can't clobber an in-progress GUI experiment —
   # that traffic only ever flows explicitly, via dms-settings-snapshot/
   # -restore/-diff above.
   home.activation.seedDmsSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
@@ -495,21 +495,21 @@ in
     # session.json lives under XDG_STATE_HOME, not XDG_CONFIG_HOME — see
     # scripts/dms-settings.sh for what it holds and why it is checkpointed.
     DMS_STATE_DIR="$(seed_dms_dir "''${XDG_STATE_HOME:-$HOME/.local/state}")"
-    CHECKPOINTS="$HOME/nixos-config/hosts/pegasus"
+    CHECKPOINTS="$HOME/dux-state/hosts/pegasus"
 
-    if [ ! -e "$DMS_DIR/settings.json" ] && [ -e "$CHECKPOINTS/dms-settings.json" ]; then
+    if [ ! -e "$DMS_DIR/settings.json" ] && [ -e "$CHECKPOINTS/settings.json" ]; then
       $DRY_RUN_CMD mkdir -p "$DMS_DIR"
-      $DRY_RUN_CMD cp "$CHECKPOINTS/dms-settings.json" "$DMS_DIR/settings.json"
+      $DRY_RUN_CMD cp "$CHECKPOINTS/settings.json" "$DMS_DIR/settings.json"
     fi
 
-    if [ ! -e "$DMS_DIR/plugin_settings.json" ] && [ -e "$CHECKPOINTS/dms-plugin-settings.json" ]; then
+    if [ ! -e "$DMS_DIR/plugin_settings.json" ] && [ -e "$CHECKPOINTS/plugin-settings.json" ]; then
       $DRY_RUN_CMD mkdir -p "$DMS_DIR"
-      $DRY_RUN_CMD cp "$CHECKPOINTS/dms-plugin-settings.json" "$DMS_DIR/plugin_settings.json"
+      $DRY_RUN_CMD cp "$CHECKPOINTS/plugin-settings.json" "$DMS_DIR/plugin_settings.json"
     fi
 
-    if [ ! -e "$DMS_STATE_DIR/session.json" ] && [ -e "$CHECKPOINTS/dms-session.json" ]; then
+    if [ ! -e "$DMS_STATE_DIR/session.json" ] && [ -e "$CHECKPOINTS/session.json" ]; then
       $DRY_RUN_CMD mkdir -p "$DMS_STATE_DIR"
-      $DRY_RUN_CMD cp "$CHECKPOINTS/dms-session.json" "$DMS_STATE_DIR/session.json"
+      $DRY_RUN_CMD cp "$CHECKPOINTS/session.json" "$DMS_STATE_DIR/session.json"
     fi
   '';
 
