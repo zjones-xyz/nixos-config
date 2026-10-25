@@ -1752,8 +1752,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   (Plasma's sound settings, pavucontrol) is saved in
   `~/.local/state/wireplumber/default-profile`. WirePlumber's
   find-stored-profile restores it before priority is ever considered, and
-  the combine sinks go silent. Recovery: MANUAL-STEPS §#225 step 3. The four outputs share one controller
-  clock, so the two channels can't drift apart.
+  the combine sinks go silent. Recovery: MANUAL-STEPS §#225 step 3.
+  *One clock.* The four outputs share one controller clock, so the
+  channels can't drift apart.
   *Matched by monitor name, not node.name.* The driver hands out PCM slots
   to monitors dynamically. Right now the HDMI-attached QC is on `hdmi:0` and
   the QS is on `hdmi:1`, which isn't connector order. Slots can move after

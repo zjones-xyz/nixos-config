@@ -1092,9 +1092,8 @@ playback for a second or two.
    silent or the sides are swapped, run
    `systemctl --user restart wireplumber` and tell Claude. That is the
    known gap in DECISIONS.md, and it would justify the re-matching hook.
-9. [ ] Centre trial, once the commit that adds the centre sinks is
-   switched in and step 2's restart has run. Match the LG output's volume
-   to the Dells'. Slots move, so find the LG by
+9. [ ] Centre trial (after steps 1–2). Match the LG output's volume to
+   the Dells'. Slots move, so find the LG by
    name, not by "HDMI n":
    `pw-dump | jq '.[] | select(.info.props["node.nick"]=="LG HDR 4K") | .id'`
    → `wpctl set-volume <id> 0.79`.
