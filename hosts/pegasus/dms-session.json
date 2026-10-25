@@ -209,12 +209,5 @@
     "ba"
   ],
   "appDrawerLastMode": "all",
-  "configVersion": 7,
-  "hiddenOutputDeviceNames": [
-    "alsa_output.pci-0000_2b_00.1.hdmi-stereo-extra1",
-    "alsa_output.pci-0000_2b_00.1.hdmi-stereo-extra2",
-    "alsa_output.pci-0000_2b_00.1.hdmi-stereo-extra3",
-    "alsa_output.pci-0000_2b_00.1.hdmi-stereo",
-    "monitor_speakers_lcr"
-  ]
+  "configVersion": 7
 }

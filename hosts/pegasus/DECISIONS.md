@@ -1772,6 +1772,12 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   2026-08-18" was triggered by exactly this kind of churn, so if Dux drops
   out while a monitor is cycling, that is the likely cause. Recovery is the
   same: `systemctl --user restart dms.service`.
+  *Keyed to the PCI address:* both the profile rule
+  (`alsa_card.pci-0000_2b_00.1`) and Dux's hidden list (`alsa_output.pci-
+  0000_2b_00.1.*`) name the 4070's audio function by PCI address. If the
+  card moves slots or the BIOS renumbers the bus, both stop matching with
+  no error: there's one HDMI sink again, and all four outputs show up in
+  Dux. Update both to the new address.
   *Known gap:* `node.nick` is fixed when the sink is created. A Dell that was
   off or disconnected when PipeWire started, or that came back on a
   different slot, isn't matched until the sinks are recreated
@@ -1797,7 +1803,7 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   `hiddenOutputDeviceNames`, not removed in PipeWire. Set this through Dux
   Settings → Audio. Editing `session.json` by hand doesn't work: this build
   doesn't reload the file on change, and its next save puts the old list
-  back. The `dms-session.json` checkpoint carries the list for a fresh
-  seed.
+  back. Fresh seeds get the list from the Dux checkpoints, which now live
+  in the private `dux-state` repo (#226).
   Hiding is by `node.name`, so it covers all four slots. Their volumes stay
   reachable through Dux Settings → Audio → Hidden, or through `wpctl`.

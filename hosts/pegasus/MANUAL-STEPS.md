@@ -1092,14 +1092,17 @@ playback for a second or two.
    silent or the sides are swapped, run
    `systemctl --user restart wireplumber` and tell Claude. That is the
    known gap in DECISIONS.md, and it would justify the re-matching hook.
-9. [ ] Centre trial, after the next switch and the step 2 restart. Match
-   the LG output's volume to the Dells'. Slots move, so find the LG by
+9. [ ] Centre trial, once the commit that adds the centre sinks is
+   switched in and step 2's restart has run. Match the LG output's volume
+   to the Dells'. Slots move, so find the LG by
    name, not by "HDMI n":
    `pw-dump | jq '.[] | select(.info.props["node.nick"]=="LG HDR 4K") | .id'`
    → `wpctl set-volume <id> 0.79`.
 10. [ ] Compare **Monitor Speakers (L/R + centre fill)** and
-    **Monitor Speakers (3.0 L/C/R)** in Dux, with both music and a 5.1 film
-    in Jellyfin. With 3.0, `speaker-test -D pipewire -c 3 -t wav` should
+    **Monitor Speakers (3.0 L/C/R)**, with both music and a 5.1 film in
+    Jellyfin. 3.0 is hidden in Dux (step 12). Unhide it under Settings →
+    Audio → Hidden, or select it with `wpctl set-default` and the id
+    `wpctl status` shows for it. With 3.0, `speaker-test -D pipewire -c 3 -t wav` should
     put "Front Center" on the LG alone.
 11. [x] Pick one. Both kept for now, for experimenting (2026-10-25). If 3.0
     is ever dropped, the FC upmix goes with it.
@@ -1109,4 +1112,5 @@ playback for a second or two.
     hidden in the same pass, so Dux shows "Hidden (5)". Unhide it there if
     that wasn't intended.
 13. [ ] After any change to the hidden list, run `dms-settings-snapshot`
-    and commit `hosts/pegasus/dms-session.json`, so a fresh seed matches.
+    and commit in `~/dux-state` (the private repo, #226), so a fresh seed
+    matches.
