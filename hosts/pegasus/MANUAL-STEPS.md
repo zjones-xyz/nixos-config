@@ -1063,7 +1063,6 @@ upgrade; nothing was lost.
     (`DankIcon` → `DIcon`, `DankListView` → `DListView`) before upstream
     removes the shims.
 
-
 ## #225 Monitor Speakers (L/R) — first switch and degradation tests
 
 A switch doesn't restart the user's audio daemons. Steps 2–3 interrupt
@@ -1072,9 +1071,13 @@ playback for a second or two.
 1. [ ] `sudo nixos-rebuild switch --flake .#pegasus`
 2. [ ] `systemctl --user restart pipewire pipewire-pulse wireplumber`
 3. [ ] `wpctl status` lists a sink per monitor (AD104 … HDMI, HDMI 2,
-   HDMI 3, HDMI 4) plus **Monitor Speakers (L/R)**.
+   HDMI 3, HDMI 4) plus **Monitor Speakers (L/R)**, **(L/R + centre
+   fill)** and **(3.0 L/C/R)**.
    `pactl list cards | grep 'Active Profile'` shows `output:hdmi-all` for
-   the AD104.
+   the AD104. If it shows a single-HDMI profile instead, a stored profile is
+   overriding it (DECISIONS.md, monitor speakers). Remove the AD104's line
+   from `~/.local/state/wireplumber/default-profile`, then
+   `systemctl --user restart wireplumber`.
 4. [ ] Pick **Monitor Speakers (L/R)** in Dux's output menu.
    `pw-play` a left/right test file, or use `speaker-test -D pipewire -c 2 -t wav`.
    "Front Left" plays from both speakers of the left Dell only, and
@@ -1090,15 +1093,20 @@ playback for a second or two.
    `systemctl --user restart wireplumber` and tell Claude. That is the
    known gap in DECISIONS.md, and it would justify the re-matching hook.
 9. [ ] Centre trial, after the next switch and the step 2 restart. Match
-   the LG output's volume to the Dells':
-   `wpctl status` → the AD104 "HDMI 3" sink's id → `wpctl set-volume <id> 0.79`.
+   the LG output's volume to the Dells'. Slots move, so find the LG by
+   name, not by "HDMI n":
+   `pw-dump | jq '.[] | select(.info.props["node.nick"]=="LG HDR 4K") | .id'`
+   → `wpctl set-volume <id> 0.79`.
 10. [ ] Compare **Monitor Speakers (L/R + centre fill)** and
     **Monitor Speakers (3.0 L/C/R)** in Dux, with both music and a 5.1 film
     in Jellyfin. With 3.0, `speaker-test -D pipewire -c 3 -t wav` should
     put "Front Center" on the LG alone.
 11. [x] Pick one. Both kept for now, for experimenting (2026-10-25). If 3.0
     is ever dropped, the FC upmix goes with it.
-12. [ ] The four raw HDMI outputs are gone from Dux's output menu, both in
-    the control centre and in Settings → Audio, where they sit under
-    "Hidden (4)". They were hidden live on 2026-10-25, and
-    `dms-session.json` seeds the same list.
+12. [x] Hide the four raw HDMI outputs in Dux Settings → Audio. Done
+    2026-10-25 through the UI. A hand edit to `session.json` before that
+    didn't take, because Dux doesn't reload the file. **3.0 L/C/R** was
+    hidden in the same pass, so Dux shows "Hidden (5)". Unhide it there if
+    that wasn't intended.
+13. [ ] After any change to the hidden list, run `dms-settings-snapshot`
+    and commit `hosts/pegasus/dms-session.json`, so a fresh seed matches.

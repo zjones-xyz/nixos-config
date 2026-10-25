@@ -1748,7 +1748,11 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   (`/etc/alsa-card-profile/…/pegasus-hdmi-all.conf`) `.include`s the stock
   `default.conf` and adds `output:hdmi-all`, which opens all four HDMI PCMs at
   priority 10000. WirePlumber's find-best-profile then picks it on its own,
-  with no stored-state dependence. The four outputs share one controller
+  but only while no profile is stored for the card. A profile picked by hand
+  (Plasma's sound settings, pavucontrol) is saved in
+  `~/.local/state/wireplumber/default-profile`. WirePlumber's
+  find-stored-profile restores it before priority is ever considered, and
+  the combine sinks go silent. Recovery: MANUAL-STEPS §#225 step 3. The four outputs share one controller
   clock, so the two channels can't drift apart.
   *Matched by monitor name, not node.name.* The driver hands out PCM slots
   to monitors dynamically. Right now the HDMI-attached QC is on `hdmi:0` and
@@ -1763,6 +1767,11 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   monitors do. The combine sink itself always exists, so a default set to it
   never jumps elsewhere. niri's power-off-monitors (DPMS) doesn't drop ELD
   on any of the three panels; tested live 2026-10-25.
+  *Hotplug churn:* every monitor power cycle now adds and removes more
+  audio nodes. The Quickshell crash recorded under "Dual-head bring-up,
+  2026-08-18" was triggered by exactly this kind of churn, so if Dux drops
+  out while a monitor is cycling, that is the likely cause. Recovery is the
+  same: `systemctl --user restart dms.service`.
   *Known gap:* `node.nick` is fixed when the sink is created. A Dell that was
   off or disconnected when PipeWire started, or that came back on a
   different slot, isn't matched until the sinks are recreated
@@ -1785,6 +1794,10 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   one is ever picked. Drop it if the 3.0 variant is ever removed.
   *Raw HDMI sinks hidden in Dux.* The four per-monitor sinks must exist for
   the combine streams, so they are hidden with Dux's own
-  `hiddenOutputDeviceNames` (`dms-session.json`), not removed in PipeWire.
+  `hiddenOutputDeviceNames`, not removed in PipeWire. Set this through Dux
+  Settings → Audio. Editing `session.json` by hand doesn't work: this build
+  doesn't reload the file on change, and its next save puts the old list
+  back. The `dms-session.json` checkpoint carries the list for a fresh
+  seed.
   Hiding is by `node.name`, so it covers all four slots. Their volumes stay
   reachable through Dux Settings → Audio → Hidden, or through `wpctl`.
