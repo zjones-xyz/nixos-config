@@ -1063,3 +1063,29 @@ upgrade; nothing was lost.
     (`DankIcon` → `DIcon`, `DankListView` → `DListView`) before upstream
     removes the shims.
 
+
+## #225 Monitor Speakers (L/R) — first switch and degradation tests
+
+A switch doesn't restart the user's audio daemons. Steps 2–3 interrupt
+playback for a second or two.
+
+1. [ ] `sudo nixos-rebuild switch --flake .#pegasus`
+2. [ ] `systemctl --user restart pipewire pipewire-pulse wireplumber`
+3. [ ] `wpctl status` lists a sink per monitor (AD104 … HDMI, HDMI 2,
+   HDMI 3, HDMI 4) plus **Monitor Speakers (L/R)**.
+   `pactl list cards | grep 'Active Profile'` shows `output:hdmi-all` for
+   the AD104.
+4. [ ] Pick **Monitor Speakers (L/R)** in Dux's output menu.
+   `pw-play` a left/right test file, or use `speaker-test -D pipewire -c 2 -t wav`.
+   "Front Left" plays from both speakers of the left Dell only, and
+   "Front Right" from the right Dell only.
+5. [ ] Turn the **left** Dell off at its power button, with audio playing.
+   The right Dell keeps playing. Turn it back on, and the left resumes
+   within a few seconds with nothing touched.
+6. [ ] Repeat step 5 for the **right** Dell.
+7. [ ] Repeat steps 5–6 with an input switch instead of power-off.
+8. [ ] Turn both Dells off, then turn them on in the *opposite* order
+   (right first). Check that left/right didn't swap. If either side stays
+   silent or the sides are swapped, run
+   `systemctl --user restart wireplumber` and tell Claude. That is the
+   known gap in DECISIONS.md, and it would justify the re-matching hook.
