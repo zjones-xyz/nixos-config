@@ -1770,3 +1770,16 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   route changes would close it if this happens in practice.
   *Alt rejected:* `pro-audio`. It also exposes every PCM, but drops the ELD
   names and jack detection the matching depends on.
+  *Centre on trial (2026-10-25).* The LG between them (32UN880-B, 2 × 5 W)
+  leaves a hole in the middle, so two variants sit beside the plain L/R sink
+  to compare by ear: **L/R + centre fill**, where the LG plays the ordinary
+  stereo mix, and **3.0 L/C/R**, where the LG plays FC only. Keep one and
+  drop the other. For stereo sources the 3.0 sink needs an FC to be
+  synthesised. audioconvert's built-in defaults are `upmix = none` and
+  `fc-cutoff = 0`; client.conf's `#channelmix.upmix = true` is a
+  commented-out example, not a live setting. So the module sets upmix
+  (`psd`, FC lowpassed at 12 kHz) in `stream.properties` for native and
+  Pulse clients. Upmixing happens in each app's stream, which is why the
+  setting can't be scoped to one sink. It only acts when a sink has channels
+  the source lacks: here that's the 3.0 sink, or an HDMI surround profile if
+  one is ever picked. Drop it with the 3.0 variant if fill wins.

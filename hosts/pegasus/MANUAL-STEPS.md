@@ -1089,3 +1089,12 @@ playback for a second or two.
    silent or the sides are swapped, run
    `systemctl --user restart wireplumber` and tell Claude. That is the
    known gap in DECISIONS.md, and it would justify the re-matching hook.
+9. [ ] Centre trial, after the next switch and the step 2 restart. Match
+   the LG output's volume to the Dells':
+   `wpctl status` → the AD104 "HDMI 3" sink's id → `wpctl set-volume <id> 0.79`.
+10. [ ] Compare **Monitor Speakers (L/R + centre fill)** and
+    **Monitor Speakers (3.0 L/C/R)** in Dux, with both music and a 5.1 film
+    in Jellyfin. With 3.0, `speaker-test -D pipewire -c 3 -t wav` should
+    put "Front Center" on the LG alone.
+11. [ ] Tell Claude which one stays. The other is removed, and with 3.0 gone
+    the FC upmix goes too.
