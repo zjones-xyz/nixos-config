@@ -1096,5 +1096,9 @@ playback for a second or two.
     **Monitor Speakers (3.0 L/C/R)** in Dux, with both music and a 5.1 film
     in Jellyfin. With 3.0, `speaker-test -D pipewire -c 3 -t wav` should
     put "Front Center" on the LG alone.
-11. [ ] Tell Claude which one stays. The other is removed, and with 3.0 gone
-    the FC upmix goes too.
+11. [x] Pick one. Both kept for now, for experimenting (2026-10-25). If 3.0
+    is ever dropped, the FC upmix goes with it.
+12. [ ] The four raw HDMI outputs are gone from Dux's output menu, both in
+    the control centre and in Settings → Audio, where they sit under
+    "Hidden (4)". They were hidden live on 2026-10-25, and
+    `dms-session.json` seeds the same list.
