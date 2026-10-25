@@ -138,16 +138,22 @@ warn_if_location() {
   echo "$found" | sed 's/^/      /' >&2
 }
 
-# Writes $1 to $2 with any location rounded to one decimal. No jq means no
-# rounding, so refuse rather than copy an address-precise location verbatim.
+# session.json also caches built-in plugins' content under
+# builtInPluginState — the Notepad's full text among it. That is user data,
+# not config, so snapshot drops the key and restore keeps the live copy.
+#
+# Writes $1 to $2 with any location rounded to one decimal and
+# builtInPluginState removed. No jq means neither, so refuse rather than
+# copy the file verbatim.
 round_location() {
   if ! command -v jq >/dev/null 2>&1; then
-    echo "dms-settings.sh: jq not found — refusing to copy $1 without rounding its location." >&2
+    echo "dms-settings.sh: jq not found — refusing to copy $1 without scrubbing it." >&2
     return 1
   fi
   jq '
     def r1: (. * 10 | round) / 10;
-    (if has("latitude") and (.latitude | type) == "number" then .latitude |= r1 else . end)
+    del(.builtInPluginState)
+    | (if has("latitude") and (.latitude | type) == "number" then .latitude |= r1 else . end)
     | (if has("longitude") and (.longitude | type) == "number" then .longitude |= r1 else . end)
     | (if (.weatherCoordinates | type) == "string" and (.weatherCoordinates | test(","))
        then .weatherCoordinates |= (split(",") | map(tonumber | r1 | tostring) | join(","))
@@ -221,7 +227,16 @@ for t in $TARGETS; do
         continue
       fi
       mkdir -p "$(dirname "$LIVE")"
-      cp "$CHECKPOINT" "$LIVE"
+      if [ -f "$LIVE" ] && command -v jq >/dev/null 2>&1 \
+        && jq -e 'has("builtInPluginState")' "$LIVE" >/dev/null 2>&1; then
+        tmp="$(mktemp)"
+        jq -s '.[0] + {builtInPluginState: .[1].builtInPluginState}' \
+          "$CHECKPOINT" "$LIVE" > "$tmp"
+        cat "$tmp" > "$LIVE"
+        rm -f "$tmp"
+      else
+        cp "$CHECKPOINT" "$LIVE"
+      fi
       echo "[$t] Restored $CHECKPOINT -> $LIVE"
       RESTORED+=("$t")
       ;;
