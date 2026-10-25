@@ -1736,3 +1736,37 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   The scheduled bump PR (`update-apps.yml`) is now `[all]` and says to switch
   the whole fleet. Every `home.nix` importing `common.nix` needs `appsForHm`.
   Once a release ships herdr, move it to plain `pkgs.herdr`.
+
+- **Monitor speakers as one L/R sink, 2026-10-25** —
+  `hosts/pegasus/monitor-speakers.nix`. The left and right Dells
+  (S2722QC, S2721QS) both have speakers. "Monitor Speakers (L/R)" is a
+  PipeWire combine-stream sink that sends the left channel to both left-Dell
+  speakers and the right channel to both right-Dell speakers.
+  *Every monitor as its own sink.* The 4070's HDA controller offers each
+  HDMI/DP output as a separate, mutually exclusive profile, so only one
+  monitor could play at a time. A custom ACP profile set
+  (`/etc/alsa-card-profile/…/pegasus-hdmi-all.conf`) `.include`s the stock
+  `default.conf` and adds `output:hdmi-all`, which opens all four HDMI PCMs at
+  priority 10000. WirePlumber's find-best-profile then picks it on its own,
+  with no stored-state dependence. The four outputs share one controller
+  clock, so the two channels can't drift apart.
+  *Matched by monitor name, not node.name.* The driver hands out PCM slots
+  to monitors dynamically. Right now the HDMI-attached QC is on `hdmi:0` and
+  the QS is on `hdmi:1`, which isn't connector order. Slots can move after
+  replugs or reboots, so the combine rules match `node.nick`, which comes
+  from the monitor's ELD when the sink is created.
+  *Degrading.* ACP marks a multi-port profile unavailable only when *all*
+  its ports are, so one Dell going dark leaves the profile and both sinks in
+  place. The other Dell keeps playing, and the dark one resumes when it
+  returns. If every monitor drops, WirePlumber falls back to another profile
+  and the combine streams go with the sinks. They come back when the
+  monitors do. The combine sink itself always exists, so a default set to it
+  never jumps elsewhere. niri's power-off-monitors (DPMS) doesn't drop ELD
+  on any of the three panels; tested live 2026-10-25.
+  *Known gap:* `node.nick` is fixed when the sink is created. A Dell that was
+  off or disconnected when PipeWire started, or that came back on a
+  different slot, isn't matched until the sinks are recreated
+  (`systemctl --user restart wireplumber`). A WirePlumber hook re-matching on
+  route changes would close it if this happens in practice.
+  *Alt rejected:* `pro-audio`. It also exposes every PCM, but drops the ELD
+  names and jack detection the matching depends on.
