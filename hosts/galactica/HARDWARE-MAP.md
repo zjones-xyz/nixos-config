@@ -431,6 +431,101 @@ If the four 12 TB caddies get labelled first, the insertions are unnecessary:
 read each disk's `sdX` from its serial and resolve the controller from sysfs
 directly.
 
+### Verifying every disk from the initrd
+
+Before any boot that follows cabling work, check the disks at the unlock prompt,
+before the passphrase. It only reads, so nothing changes, and a fault found
+here costs a power-off, not a degraded `tank`. First run 2026-10-25: every
+check passed and every port matched the expected column below.
+
+⚠ **The initrd has no `grep`, `lsblk`, `blkid`, `smartctl`, `cryptsetup` or
+`zpool`.** It ships bash, coreutils, `find`, `less`, systemd (`udevadm`,
+`journalctl`), kmod, lvm2 and btrfs-progs. Everything below is plain bash over
+`/dev/disk/by-*`, `/sys` and the kernel journal.
+
+```sh
+ssh -p 2222 root@galactica.internal          # plain ssh, not unlock-galactica
+udevadm settle --timeout=60                  # the LSI probes slower than onboard
+```
+
+**1. Presence, by serial.** Nine `OK` lines: four RAIDZ1 spinners, three
+special-vdev SSDs (3255 also holds `/boot`), midden and the NVMe root. The
+patterns end in the serial, so `-part*` links don't match.
+
+```sh
+for d in ata-*_*HJDH ata-*_*NS3Y ata-*_*T97E ata-*_*YWAH \
+         ata-*_*768C ata-*_*8162 ata-*_*3255 ata-*_*9545 nvme-*_*0206; do
+  set -- /dev/disk/by-id/$d
+  if [ -e "$1" ]; then echo "OK    $d -> $(readlink -f "$1")"
+  else                 echo "MISS  $d"; fi
+done
+```
+
+**2. Readable headers, by UUID.** udev reads the LUKS and filesystem headers
+itself, so a UUID link means the disk answers reads, not just that it is on the
+bus. In order: cryptroot; HJDH, NS3Y, T97E, YWAH, 3255, 768C, 8162 (crypttab in
+`configuration.nix`); cryptlogs; nix-build scratch; the `/boot` ESP.
+
+```sh
+for u in 0f3c74bc-87df-4c14-915f-c46741962b38 \
+         0e3ffb41-6b97-4a7d-9581-27c6987ef21c d55d13e2-91b1-4bba-96da-2f25facee673 \
+         dbf28412-07e7-4b61-8afa-33c38bd6d1f6 8688b77c-28d9-49a1-a1c5-75210cdc2d7f \
+         016d6496-2bc1-456d-bdcc-21ca45436d5e f0a8f677-290b-4607-9422-d3cbd43b7666 \
+         2fccd949-3fad-4a91-a218-c55aab11c553 b44e545c-b4b3-4037-a263-d5a522933b37 \
+         644dbaff-563a-415f-877b-11d41ed8cb89 0B82-159C; do
+  [ -e /dev/disk/by-uuid/$u ] && echo "OK    $u" || echo "MISS  $u"
+done
+```
+
+**3. Ports.** Compare against cage A's table above and the expected column
+below. The LSI shows as `hostN`, not `ataN`.
+
+```sh
+re='(0000:[0-9a-f:.]+)/(ata[0-9]+|host[0-9]+)'
+for b in /sys/block/sd*; do
+  [[ $(readlink -f $b/device) =~ $re ]]
+  printf '%-5s %-28s %s %s\n' "${b##*/}" "$(cat $b/device/model)" \
+    "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+done
+```
+
+| Disk | Expected |
+|---|---|
+| `h-HJDH`, `h-T97E`, `h-NS3Y`, `h-YWAH` | `00:1f.2` `ata5`, `ata6`, `ata3`, `ata4` (cage A) |
+| `s-3255` | `00:1f.2` `ata1`. Required: the BIOS UEFI-boots only the C204 |
+| `s-9545` | `00:1f.2` `ata2` |
+| `s-768C`, `s-8162` | LSI `02:00.0`, `hostN` |
+
+**4. Link speed and errors.** `ata1`/`ata2` should read `6.0 Gbps` and
+`ata3`–`ata6` `3.0 Gbps` (§4: that is this board, not a fault). The second loop
+should print nothing; a line naming an `ataN` points at that cable or caddy.
+
+```sh
+ok='SATA link|Attached SCSI disk|LSISAS'
+journalctl -k -b --no-pager -o cat | while IFS= read -r l; do
+  [[ $l =~ $ok ]] && echo "$l"; done
+bad='hard resetting|serror|exception emask|failed command|link is slow|i/o error'
+shopt -s nocasematch
+journalctl -k -b --no-pager -o cat | while IFS= read -r l; do
+  [[ $l =~ $bad ]] && echo "$l"; done
+shopt -u nocasematch
+```
+
+**Reading a failure:**
+
+- **An HC520 is missing from step 1** with its bay looking fine: power-disable,
+  as above. Power off, then use the cage or a no-3.3 V adapter.
+- **In step 1 but not step 2:** it answers but its header doesn't read. Don't
+  unlock; power off and reseat it.
+- **A `tank` member is missing:** unlocking is still safe. Every crypttab line
+  is `nofail`, so `tank` imports degraded. Fix it before the next scrub.
+- **`s-3255` is missing:** the firmware stops before the initrd, since it holds
+  `/boot`.
+
+**After the unlock** the initrd's blind spots are visible: `zpool status -v
+tank` (7 members ONLINE, 0/0/0) and `ls /dev/mapper/` (cryptroot, cryptlogs,
+the 7 `array-*`/`special-*`).
+
 ---
 
 ## 4. Controllers and ports

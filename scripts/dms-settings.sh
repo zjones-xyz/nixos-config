@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Snapshot/restore/diff Dux Shell's (DMS, formerly DankMaterialShell) live
-# JSON config against per-host checkpoints committed in this repo.
+# JSON config against per-host checkpoints in the PRIVATE zjones-xyz/dux-state
+# repo, cloned at ~/dux-state ($DMS_CHECKPOINT_REPO overrides). Not this
+# public repo: these files hold whatever the GUI writes, and snapshots kept
+# catching things that shouldn't be published. See hosts/pegasus/DECISIONS.md.
 #
 # Deliberately NOT a Home-Manager symlink (neither `home.file`'s in-store
 # form nor `mkOutOfStoreSymlink`): DMS saves every file below with an
@@ -35,14 +38,14 @@
 # live files yet — see its `seedDmsSettings` activation script.
 #
 # Generic across hosts — the checkpoint path is derived from the running
-# host's name (hosts/<hostname>/dms-*.json), same "generic script,
+# host's name (<dux-state>/hosts/<hostname>/*.json), same "generic script,
 # per-host data" split as npull.sh.
 #
 # Usage: dms-settings.sh <snapshot|restore|diff> [settings|plugins|session|all]
 #
-#   snapshot   Copy the live file(s) into the repo checkpoint(s). Review
-#              the diff and `git commit` it yourself — this script never
-#              touches git.
+#   snapshot   Copy the live file(s) into the dux-state checkpoint(s).
+#              Review the diff and `git commit` it there yourself — this
+#              script never commits.
 #   restore    Copy the repo checkpoint(s) over the live file(s). Refuses
 #              to overwrite a live file that already exists; FORCE=1
 #              overrides that.
@@ -104,11 +107,20 @@ if [ ! -d "$REPO/hosts/$HOST" ]; then
   exit 2
 fi
 
+STATE_REPO="${DMS_CHECKPOINT_REPO:-$HOME/dux-state}"
+if ! git -C "$STATE_REPO" rev-parse --show-toplevel >/dev/null 2>&1; then
+  echo "dms-settings.sh: no dux-state checkout at $STATE_REPO." >&2
+  echo "Clone it: gh repo clone zjones-xyz/dux-state $STATE_REPO" >&2
+  exit 2
+fi
+mkdir -p "$STATE_REPO/hosts/$HOST"
+
 # Two of these files can carry a real-world location: session.json's
 # latitude/longitude (written by night mode's location automation) and
-# weatherLocation/weatherCoordinates. This repo is public, so a snapshot is
-# a permanent, world-readable commit. City-level disclosure is an accepted
-# trade-off; anything finer is not.
+# weatherLocation/weatherCoordinates. dux-state is private, but the
+# checkpoints were public until 2026-10-25 and a private repo can still leak,
+# so the scrubbing below stays as defence in depth. City-level is the
+# accepted granularity; anything finer is not.
 #
 # DMS does not round — its LocationService stores whatever geolocation hands
 # back, which can be address-precise — so snapshot rounds latitude/longitude
@@ -138,16 +150,22 @@ warn_if_location() {
   echo "$found" | sed 's/^/      /' >&2
 }
 
-# Writes $1 to $2 with any location rounded to one decimal. No jq means no
-# rounding, so refuse rather than copy an address-precise location verbatim.
+# session.json also caches built-in plugins' content under
+# builtInPluginState — the Notepad's full text among it. That is user data,
+# not config, so snapshot drops the key and restore keeps the live copy.
+#
+# Writes $1 to $2 with any location rounded to one decimal and
+# builtInPluginState removed. No jq means neither, so refuse rather than
+# copy the file verbatim.
 round_location() {
   if ! command -v jq >/dev/null 2>&1; then
-    echo "dms-settings.sh: jq not found — refusing to copy $1 without rounding its location." >&2
+    echo "dms-settings.sh: jq not found — refusing to copy $1 without scrubbing it." >&2
     return 1
   fi
   jq '
     def r1: (. * 10 | round) / 10;
-    (if has("latitude") and (.latitude | type) == "number" then .latitude |= r1 else . end)
+    del(.builtInPluginState)
+    | (if has("latitude") and (.latitude | type) == "number" then .latitude |= r1 else . end)
     | (if has("longitude") and (.longitude | type) == "number" then .longitude |= r1 else . end)
     | (if (.weatherCoordinates | type) == "string" and (.weatherCoordinates | test(","))
        then .weatherCoordinates |= (split(",") | map(tonumber | r1 | tostring) | join(","))
@@ -161,15 +179,15 @@ target_paths() {
   case "$1" in
     settings)
       LIVE="$(dms_dir "$CONFIG_HOME")/settings.json"
-      CHECKPOINT="$REPO/hosts/$HOST/dms-settings.json"
+      CHECKPOINT="$STATE_REPO/hosts/$HOST/settings.json"
       ;;
     plugins)
       LIVE="$(dms_dir "$CONFIG_HOME")/plugin_settings.json"
-      CHECKPOINT="$REPO/hosts/$HOST/dms-plugin-settings.json"
+      CHECKPOINT="$STATE_REPO/hosts/$HOST/plugin-settings.json"
       ;;
     session)
       LIVE="$(dms_dir "$STATE_HOME")/session.json"
-      CHECKPOINT="$REPO/hosts/$HOST/dms-session.json"
+      CHECKPOINT="$STATE_REPO/hosts/$HOST/session.json"
       ;;
   esac
 }
@@ -221,7 +239,21 @@ for t in $TARGETS; do
         continue
       fi
       mkdir -p "$(dirname "$LIVE")"
-      cp "$CHECKPOINT" "$LIVE"
+      if [ -f "$LIVE" ] && command -v jq >/dev/null 2>&1 \
+        && jq -e 'has("builtInPluginState")' "$LIVE" >/dev/null 2>&1; then
+        tmp="$(mktemp)"
+        if ! jq -s '.[0] + {builtInPluginState: .[1].builtInPluginState}' \
+          "$CHECKPOINT" "$LIVE" > "$tmp"; then
+          rm -f "$tmp"
+          echo "dms-settings.sh: [$t] merging $CHECKPOINT with $LIVE failed — live file untouched." >&2
+          STATUS=1
+          continue
+        fi
+        cat "$tmp" > "$LIVE"
+        rm -f "$tmp"
+      else
+        cp "$CHECKPOINT" "$LIVE"
+      fi
       echo "[$t] Restored $CHECKPOINT -> $LIVE"
       RESTORED+=("$t")
       ;;
@@ -255,14 +287,20 @@ if [ "$ACTION" = "snapshot" ] && [ "${#TOUCHED[@]}" -gt 0 ]; then
   # content as an addition on a first-ever snapshot, without fully staging
   # it (a later `git add` still behaves normally). Harmless no-op on a
   # checkpoint that's already tracked.
-  git -C "$REPO" add --intent-to-add -- "${TOUCHED[@]}" 2>/dev/null || true
+  git -C "$STATE_REPO" add --intent-to-add -- "${TOUCHED[@]}" 2>/dev/null || true
   echo
-  echo "Review with: git -C $REPO diff -- ${TOUCHED[*]}"
+  echo "Review with: git -C $STATE_REPO diff -- ${TOUCHED[*]}"
 fi
 
 if [ "$ACTION" = "restore" ] && [ "${#RESTORED[@]}" -gt 0 ]; then
   echo
-  echo "DMS watches these for external changes and reloads them live — no restart needed."
+  # Dux 2.0 reloads settings.json on change, but plugin_settings.json and
+  # session.json only at startup.
+  case " ${RESTORED[*]} " in
+    *" plugins "* | *" session "*)
+      echo "Plugins/session load only at startup: systemctl --user restart dms.service" ;;
+    *) echo "Dux reloads settings.json live — no restart needed." ;;
+  esac
 fi
 
 exit "$STATUS"
