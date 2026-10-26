@@ -4,6 +4,7 @@
   imports = [
     ./hardware-configuration.nix
     ./borgmatic.nix
+    ./monitor-speakers.nix
     ../../modules/nixos/common.nix
     ../../modules/nixos/nvidia.nix
     ../../modules/nixos/desktop-plasma.nix

@@ -484,7 +484,7 @@ in
     # session.json lives under XDG_STATE_HOME, not XDG_CONFIG_HOME — see
     # scripts/dms-settings.sh for what it holds and why it is checkpointed.
     DMS_STATE_DIR="$(seed_dms_dir "''${XDG_STATE_HOME:-$HOME/.local/state}")"
-    CHECKPOINTS="$HOME/dux-state/hosts/pegasus"
+    CHECKPOINTS="''${DMS_CHECKPOINT_REPO:-$HOME/dux-state}/hosts/${osConfig.networking.hostName}"
 
     if [ ! -e "$DMS_DIR/settings.json" ] && [ -e "$CHECKPOINTS/settings.json" ]; then
       $DRY_RUN_CMD mkdir -p "$DMS_DIR"
