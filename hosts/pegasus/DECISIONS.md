@@ -1773,8 +1773,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   `854c3af`) predate rounding and carry a full-precision
   latitude/longitude. Whether to rewrite history is an open call for the
   owner. The Notepad text was never committed.
-  *Cost:* a rebuilt pegasus needs `~/dux-state` cloned before its first
-  switch to be seeded (MANUAL-STEPS.md §#226). Without it, Dux starts on its
+  *Cost:* a rebuilt pegasus needs `~/dux-state` cloned before Dux first
+  starts, then the seed re-run, since Home Manager activates at boot before
+  any login (MANUAL-STEPS.md §#226). Without it, Dux starts on its
   defaults, and nothing fails.
 
 - **Monitor speakers as one L/R sink, 2026-10-25** —

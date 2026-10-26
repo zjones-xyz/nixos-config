@@ -1069,13 +1069,15 @@ The current pegasus needs nothing: `~/dux-state` is cloned, and its first
 commit is the live state as of 2026-10-25. These steps are for a
 rebuild-from-scratch.
 
-1. [ ] Before Home Manager first activates for `z` and Dux first starts,
-   clone the private repo: before the first `nixos-rebuild switch` if
-   that's how the install proceeds, otherwise before the first graphical
-   login. If Dux got there first, step 2's fallback applies. `gh` may not be installed yet, so either use
+1. [ ] Clone the private repo before Dux first starts. Home Manager's
+   activation (`home-manager-z.service`) runs at boot, before any login,
+   so on a fresh install: log in on a TTY, clone, then re-run the seed with
+   `sudo systemctl restart home-manager-z.service`, all before the first
+   graphical login. `gh` may not be installed yet; either
    `nix shell nixpkgs#gh -c sh -c 'gh auth login && gh repo clone zjones-xyz/dux-state ~/dux-state'`
    or, with an SSH key GitHub knows,
    `git clone git@github.com:zjones-xyz/dux-state.git ~/dux-state`.
+   If Dux started first, step 2's fallback applies.
 2. [ ] After the switch, Dux comes up with the checkpointed bar, theme,
    wallpaper and pinned apps rather than its defaults. If it doesn't, check
    that `~/dux-state/hosts/pegasus/*.json` exist. The seed only fills in
@@ -1090,9 +1092,11 @@ playback for a second or two.
 
 1. [ ] `sudo nixos-rebuild switch --flake .#pegasus`
 2. [ ] `systemctl --user restart pipewire pipewire-pulse wireplumber`
-3. [ ] `wpctl status` lists a sink per monitor (AD104 … HDMI, HDMI 2,
-   HDMI 3, HDMI 4) plus **Monitor Speakers (L/R)**, **(L/R + centre
-   fill)** and **(3.0 L/C/R)**.
+3. [ ] `wpctl status` lists a sink per monitor under Sinks (AD104 … HDMI,
+   HDMI 2, HDMI 3, HDMI 4). The three Monitor Speakers outputs are under
+   **Filters**, by node name: `monitor_speakers_lr`, `_lr_fill` and `_lcr`,
+   each followed by one `output.…` stream per monitor it feeds (two, three,
+   three).
    `pactl list cards | grep 'Active Profile'` shows `output:hdmi-all` for
    the AD104. If it shows a single-HDMI profile instead, a stored profile is
    overriding it (DECISIONS.md, monitor speakers). Remove the AD104's line
@@ -1120,9 +1124,12 @@ playback for a second or two.
 10. [ ] Compare **Monitor Speakers (L/R + centre fill)** and
     **Monitor Speakers (3.0 L/C/R)**, with both music and a 5.1 film in
     Jellyfin. 3.0 is hidden in Dux (step 12). Unhide it under Settings →
-    Audio → Hidden, or select it with `wpctl set-default` and the id
-    `wpctl status` shows for it. With 3.0, `speaker-test -D pipewire -c 3 -t wav` should
-    put "Front Center" on the LG alone.
+    Audio → Hidden, or select it with `wpctl set-default` and the id shown
+    beside `monitor_speakers_lcr` under Filters in `wpctl status`.
+    With 3.0, `speaker-test -D pipewire -c 3 -t wav` puts "Front Center" on
+    the LG alone. Also check a mono source, such as a call or
+    `speaker-test -D pipewire -c 1 -t wav`: it should play on all three
+    monitors, not only the LG.
 11. [x] Pick one. Both kept for now, for experimenting (2026-10-25). If 3.0
     is ever dropped, the FC upmix goes with it.
 12. [x] Hide the four raw HDMI outputs in Dux Settings → Audio. Done
