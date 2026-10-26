@@ -1,15 +1,9 @@
 #!/usr/bin/env bash
 # Pull this repo, then state — unmissably — which branch the checkout is on.
 #
-# `npull` is step one of the two-step that ends in `nrs`, and `nrs` builds
-# whatever happens to be checked out. A checkout left on a feature branch by an
-# earlier session pulls cleanly, rebuilds cleanly, says nothing, and leaves the
-# machine running a config that is not main. Git's own output does not close
-# that gap: "Already up to date." reads identically on every branch, and the one
-# line that does name a branch appears only on some outcomes. So the branch gets
-# a banner of its own, printed *after* the pull — before, and git's output
-# pushes it off the top; after, it is the last thing on screen at the moment
-# `nrs` is typed on the next line.
+# `npull` is step one of the two-step that ends in `nrs`, and both act on
+# whatever happens to be checked out; branch-banner.sh has the why, and prints
+# the banner for both.
 #
 # Generic across hosts — bound as the per-host `npull` alias in each home.nix
 # rather than duplicated per machine. It deliberately takes no repo argument:
@@ -74,34 +68,11 @@ fi
 RC=0
 git -C "$REPO" pull "$@" || RC=$?
 
-# Empty means detached HEAD rather than an error.
-BRANCH="$(git -C "$REPO" branch --show-current)"
-
-# Colour only when stdout is a terminal — npull output gets piped and
-# scrollback-grepped, and escape codes in that are noise.
-if [ -t 1 ]; then
-  BOLD=$'\033[1m'
-  DIM=$'\033[2m'
-  YELLOW=$'\033[33m'
-  RESET=$'\033[0m'
-else
-  BOLD='' DIM='' YELLOW='' RESET=''
-fi
-RULE='────────────────────────────────────────────────────────────────────'
-
-echo
-printf '%s%s%s\n' "$DIM" "$RULE" "$RESET"
-if [ -z "$BRANCH" ]; then
-  printf '  branch   %s%s⚠ DETACHED HEAD%s at %s\n' \
-    "$BOLD" "$YELLOW" "$RESET" "$(git -C "$REPO" rev-parse --short HEAD)"
-  printf '  %s⚠ not on a branch: nothing to pull into, and nrs would build%s\n' "$YELLOW" "$RESET"
-  printf '  %s  this detached commit. Run "git switch %s" to get back.%s\n' "$YELLOW" "$TRUNK" "$RESET"
-elif [ "$BRANCH" = "$TRUNK" ]; then
-  printf '  branch   %s%s%s\n' "$BOLD" "$BRANCH" "$RESET"
-else
-  printf '  branch   %s%s%s%s\n' "$BOLD" "$YELLOW" "$BRANCH" "$RESET"
-  printf '  %s⚠ not %s — nrs on this host builds THIS branch.%s\n' "$YELLOW" "$TRUNK" "$RESET"
-fi
-printf '%s%s%s\n' "$DIM" "$RULE" "$RESET"
+# After the pull, not before: before, and git's output pushes it off the top;
+# after, it is the last thing on screen at the moment `nrs` is typed on the
+# next line. The banner itself lives in branch-banner.sh, shared with the
+# rebuild aliases so the two warnings cannot drift apart.
+"$SCRIPT_DIR/branch-banner.sh" "$REPO" \
+  "the rebuild aliases on this host build THIS branch."
 
 exit "$RC"
