@@ -100,11 +100,9 @@ if ! git -C "$STATE_REPO" rev-parse --show-toplevel >/dev/null 2>&1; then
   echo "Clone it: gh repo clone zjones-xyz/dux-state $STATE_REPO" >&2
   exit 2
 fi
-# Only snapshot may create a host's directory; diff/restore on a host with
-# no checkpoints (or a mistyped name) is an error, not an empty dir.
-if [ "$ACTION" = "snapshot" ]; then
-  mkdir -p "$STATE_REPO/hosts/$HOST"
-elif [ ! -d "$STATE_REPO/hosts/$HOST" ]; then
+# Only snapshot creates a host's directory, and only once it has a live file
+# to put there; diff/restore for a host with no checkpoints is an error.
+if [ "$ACTION" != "snapshot" ] && [ ! -d "$STATE_REPO/hosts/$HOST" ]; then
   echo "dms-settings.sh: no checkpoints for $HOST in $STATE_REPO/hosts/." >&2
   exit 2
 fi
@@ -212,6 +210,7 @@ for t in $TARGETS; do
         STATUS=1
         continue
       fi
+      mkdir -p "$(dirname "$CHECKPOINT")"
       cat "$tmp" > "$CHECKPOINT"   # keeps the checkpoint's mode, unlike mv
       rm -f "$tmp"
       echo "[$t] Snapshotted $LIVE -> $CHECKPOINT"
