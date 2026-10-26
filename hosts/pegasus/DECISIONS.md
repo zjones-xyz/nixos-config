@@ -861,7 +861,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   set, worth knowing before committing.
   **No checkpoint committed yet** — `hosts/pegasus/dms-settings.json` only
   exists after `dms-settings-snapshot` is run on real hardware with a DMS
-  config worth keeping; nothing here fabricates one.
+  config worth keeping; nothing here fabricates one. *(Superseded: the
+  checkpoints were committed later and moved to private `dux-state` on
+  2026-10-25; see that entry.)*
   **Extended 2026-08-23** to also cover `plugin_settings.json` (per-plugin
   enabled flag + config — a second file DMS saves the same atomic way,
   separate from `settings.json`), and added a `diff` action (compares live
@@ -1160,7 +1162,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   before committing; this makes that look an informed one rather than one
   that depends on remembering. ⟨No checkpoint with real coordinates has been
   committed — `hosts/pegasus/dms-session.json` does not exist until someone
-  runs `snapshot` on the host.⟩
+  runs `snapshot` on the host.⟩ *(Corrected 2026-10-25: false. Three
+  2026-09-08 commits carry full-precision coordinates; see the `dux-state`
+  entry.)*
 - **`qt.platformTheme = "qt5ct"` set system-wide, accepting that it changes
   Qt theming in the Plasma and Dragonized sessions too, 2026-09-09.**
   DMS's "apply colours to Qt" button reported `failed to apply Qt colors`.
@@ -1736,3 +1740,112 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   The scheduled bump PR (`update-apps.yml`) is now `[all]` and says to switch
   the whole fleet. Every `home.nix` importing `common.nix` needs `appsForHm`.
   Once a release ships herdr, move it to plain `pkgs.herdr`.
+
+- **Dux checkpoints moved to the private `dux-state` repo, 2026-10-25** —
+  supersedes where the checkpoints live in the `dms-settings.sh` entries
+  above: `hosts/pegasus/dms-*.json` are gone from this public repo.
+  `scripts/dms-settings.sh` now writes
+  `~/dux-state/hosts/<host>/{settings,plugin-settings,session}.json`, a
+  clone of private `zjones-xyz/dux-state` (`DMS_CHECKPOINT_REPO`
+  overrides). `seedDmsSettings` reads from the same place.
+  *Why:* these files are whatever Dux's GUI chooses to write, and they
+  carry more than config. The near-miss that settled it was a
+  `session.json` snapshot carrying `builtInPluginState`, the Notepad's
+  full text, which was caught before commit. Location had already needed
+  rounding. Reviewing every snapshot for leaks is a control that fails the
+  one time it's skipped. A private repo means a miss stays under the
+  owner's control.
+  *No flake input.* Nothing in Nix reads the checkpoints. The script and
+  the activation seed both read them at runtime from `$HOME`, so the
+  private repo never enters evaluation, CI or other hosts.
+  *Scrubbing kept as defence in depth:* snapshot rounds latitude/longitude
+  and `weatherCoordinates` to one decimal (since #214; the earlier
+  surface-only approach is gone). It now also drops `builtInPluginState`,
+  and restore keeps the live copy of that key.
+  *Amends "session.json checkpointed too, wholesale rather than filtered"*
+  (2026-09-09): that entry rejected filtering because a faithful copy can't
+  drift. Dropping `builtInPluginState` is a filter. The cost is that Dux
+  merges that key into its built-in plugins' settings, so if a built-in
+  plugin ever keeps settings there, a rebuilt host won't get them back.
+  Today it holds only the Notepad's content.
+  *Public history is not clean.* Older commits of the three files remain
+  in this repo's history. Three from 2026-09-08 (`843d171`, `adf48eb`,
+  `854c3af`) predate rounding and carry a full-precision
+  latitude/longitude. Whether to rewrite history is an open call for the
+  owner. The Notepad text was never committed.
+  *Cost:* a rebuilt pegasus needs `~/dux-state` cloned before Dux first
+  starts, then the seed re-run, since Home Manager activates at boot before
+  any login (MANUAL-STEPS.md §#226). Without it, Dux starts on its
+  defaults, and nothing fails.
+
+- **Monitor speakers as one L/R sink, 2026-10-25** —
+  `hosts/pegasus/monitor-speakers.nix`. The left and right Dells
+  (S2722QC, S2721QS) both have speakers. "Monitor Speakers (L/R)" is a
+  PipeWire combine-stream sink that sends the left channel to both left-Dell
+  speakers and the right channel to both right-Dell speakers.
+  *Every monitor as its own sink.* The 4070's HDA controller offers each
+  HDMI/DP output as a separate, mutually exclusive profile, so only one
+  monitor could play at a time. A custom ACP profile set
+  (`/etc/alsa-card-profile/…/pegasus-hdmi-all.conf`) `.include`s the stock
+  `default.conf` and adds `output:hdmi-all`, which opens all four HDMI PCMs at
+  priority 10000. WirePlumber's find-best-profile then picks it on its own,
+  but only while no profile is stored for the card. A profile picked by hand
+  (Plasma's sound settings, pavucontrol) is saved in
+  `~/.local/state/wireplumber/default-profile`. WirePlumber's
+  find-stored-profile restores it before priority is ever considered, and
+  the combine sinks go silent. Recovery: MANUAL-STEPS §#225 step 3.
+  *One clock.* The four outputs share one controller clock, so the
+  channels can't drift apart.
+  *Matched by monitor name, not node.name.* The driver hands out PCM slots
+  to monitors dynamically. Right now the HDMI-attached QC is on `hdmi:0` and
+  the QS is on `hdmi:1`, which isn't connector order. Slots can move after
+  replugs or reboots, so the combine rules match `node.nick`, which comes
+  from the monitor's ELD when the sink is created.
+  *Degrading.* ACP marks a multi-port profile unavailable only when *all*
+  its ports are, so one Dell going dark leaves the profile and both sinks in
+  place. The other Dell keeps playing, and the dark one resumes when it
+  returns. If every monitor drops, WirePlumber falls back to another profile
+  and the combine streams go with the sinks. They come back when the
+  monitors do. The combine sink itself always exists, so a default set to it
+  never jumps elsewhere. niri's power-off-monitors (DPMS) doesn't drop ELD
+  on any of the three panels; tested live 2026-10-25.
+  *Hotplug churn:* every monitor power cycle now adds and removes more
+  audio nodes. The Quickshell crash recorded under "Dual-head bring-up,
+  2026-08-18" was triggered by exactly this kind of churn, so if Dux drops
+  out while a monitor is cycling, that is the likely cause. Recovery is the
+  same: `systemctl --user restart dms.service`.
+  *Keyed to the PCI address:* both the profile rule
+  (`alsa_card.pci-0000_2b_00.1`) and Dux's hidden list (`alsa_output.pci-
+  0000_2b_00.1.*`) name the 4070's audio function by PCI address. If the
+  card moves slots or the BIOS renumbers the bus, both stop matching with
+  no error: there's one HDMI sink again, and all four outputs show up in
+  Dux. Update both to the new address.
+  *Known gap:* `node.nick` is fixed when the sink is created. A Dell that was
+  off or disconnected when PipeWire started, or that came back on a
+  different slot, isn't matched until the sinks are recreated
+  (`systemctl --user restart wireplumber`). A WirePlumber hook re-matching on
+  route changes would close it if this happens in practice.
+  *Alt rejected:* `pro-audio`. It also exposes every PCM, but drops the ELD
+  names and jack detection the matching depends on.
+  *Centre on trial (2026-10-25).* The LG between them (32UN880-B, 2 × 5 W)
+  leaves a hole in the middle, so two variants sit beside the plain L/R sink
+  to compare by ear: **L/R + centre fill**, where the LG plays the ordinary
+  stereo mix, and **3.0 L/C/R**, where the LG plays FC only. Both stay for
+  now (owner's call, 2026-10-25). For stereo sources the 3.0 sink needs an FC to be
+  synthesised. audioconvert's built-in defaults are `upmix = none` and
+  `fc-cutoff = 0`; client.conf's `#channelmix.upmix = true` is a
+  commented-out example, not a live setting. So the module sets upmix
+  (`psd`, FC lowpassed at 12 kHz) in `stream.properties` for native and
+  Pulse clients. Upmixing happens in each app's stream, which is why the
+  setting can't be scoped to one sink. It only acts when a sink has channels
+  the source lacks: here that's the 3.0 sink, or an HDMI surround profile if
+  one is ever picked. Drop it if the 3.0 variant is ever removed.
+  *Raw HDMI sinks hidden in Dux.* The four per-monitor sinks must exist for
+  the combine streams, so they are hidden with Dux's own
+  `hiddenOutputDeviceNames`, not removed in PipeWire. Set this through Dux
+  Settings → Audio. Editing `session.json` by hand doesn't work: this build
+  doesn't reload the file on change, and its next save puts the old list
+  back. Fresh seeds get the list from the Dux checkpoints, which now live
+  in the private `dux-state` repo (#226).
+  Hiding is by `node.name`, so it covers all four slots. Their volumes stay
+  reachable through Dux Settings → Audio → Hidden, or through `wpctl`.

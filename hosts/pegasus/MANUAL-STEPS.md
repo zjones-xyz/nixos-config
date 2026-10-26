@@ -782,8 +782,8 @@ named workspace is homed there.
    back to the left monitor rather than staying on whichever monitor adopted
    it — that is the named-workspace behaviour the whole design leans on.
 5. [ ] Optional, cosmetic: DMS shows workspace *names* only with Settings →
-   Workspaces → "Workspace Names" on (off in the checked-in
-   `dms-settings.json`), or by giving `Mail` an icon under "Named Workspace
+   Workspaces → "Workspace Names" on (off in the `dux-state`
+   checkpoint), or by giving `Mail` an icon under "Named Workspace
    Icons" — that card only appears once niri reports a named workspace. If
    either is turned on, capture it with `dms-settings-snapshot`.
 
@@ -1063,3 +1063,80 @@ upgrade; nothing was lost.
     (`DankIcon` → `DIcon`, `DankListView` → `DListView`) before upstream
     removes the shims.
 
+## #226 Dux checkpoints in private `dux-state` — fresh-host bootstrap
+
+The current pegasus needs nothing: `~/dux-state` is cloned, and its first
+commit is the live state as of 2026-10-25. These steps are for a
+rebuild-from-scratch.
+
+1. [ ] Clone the private repo before Dux first starts. Home Manager's
+   activation (`home-manager-z.service`) runs at boot, before any login,
+   so on a fresh install: log in on a TTY, clone, then re-run the seed with
+   `sudo systemctl restart home-manager-z.service`, all before the first
+   graphical login. `gh` may not be installed yet; either
+   `nix shell nixpkgs#gh -c sh -c 'gh auth login && gh repo clone zjones-xyz/dux-state ~/dux-state'`
+   or, with an SSH key GitHub knows,
+   `git clone git@github.com:zjones-xyz/dux-state.git ~/dux-state`.
+   If Dux started first, step 2's fallback applies.
+2. [ ] After the switch, Dux comes up with the checkpointed bar, theme,
+   wallpaper and pinned apps rather than its defaults. If it doesn't, check
+   that `~/dux-state/hosts/pegasus/*.json` exist. The seed only fills in
+   files that are missing, so remove the live ones (or use
+   `FORCE=1 dms-settings-restore all`) and then
+   `systemctl --user restart dms.service`.
+
+## #225 Monitor Speakers (L/R) — first switch and degradation tests
+
+A switch doesn't restart the user's audio daemons. Steps 2–3 interrupt
+playback for a second or two.
+
+1. [ ] `sudo nixos-rebuild switch --flake .#pegasus`
+2. [ ] `systemctl --user restart pipewire pipewire-pulse wireplumber`
+3. [ ] `wpctl status` lists a sink per monitor under Sinks (AD104 … HDMI,
+   HDMI 2, HDMI 3, HDMI 4). The three Monitor Speakers outputs are under
+   **Filters**, by node name: `monitor_speakers_lr`, `_lr_fill` and `_lcr`,
+   each followed by one `output.…` stream per monitor it feeds (two, three,
+   three).
+   `pactl list cards | grep 'Active Profile'` shows `output:hdmi-all` for
+   the AD104. If it shows a single-HDMI profile instead, a stored profile is
+   overriding it (DECISIONS.md, monitor speakers). Remove the AD104's line
+   from `~/.local/state/wireplumber/default-profile`, then
+   `systemctl --user restart wireplumber`.
+4. [ ] Pick **Monitor Speakers (L/R)** in Dux's output menu.
+   `pw-play` a left/right test file, or use `speaker-test -D pipewire -c 2 -t wav`.
+   "Front Left" plays from both speakers of the left Dell only, and
+   "Front Right" from the right Dell only.
+5. [ ] Turn the **left** Dell off at its power button, with audio playing.
+   The right Dell keeps playing. Turn it back on, and the left resumes
+   within a few seconds with nothing touched.
+6. [ ] Repeat step 5 for the **right** Dell.
+7. [ ] Repeat steps 5–6 with an input switch instead of power-off.
+8. [ ] Turn both Dells off, then turn them on in the *opposite* order
+   (right first). Check that left/right didn't swap. If either side stays
+   silent or the sides are swapped, run
+   `systemctl --user restart wireplumber` and tell Claude. That is the
+   known gap in DECISIONS.md, and it would justify the re-matching hook.
+9. [ ] Centre trial (after steps 1–2). Match the LG output's volume to
+   the Dells'. Slots move, so find the LG by
+   name, not by "HDMI n":
+   `pw-dump | jq '.[] | select(.info.props["node.nick"]=="LG HDR 4K") | .id'`
+   → `wpctl set-volume <id> 0.79`.
+10. [ ] Compare **Monitor Speakers (L/R + centre fill)** and
+    **Monitor Speakers (3.0 L/C/R)**, with both music and a 5.1 film in
+    Jellyfin. 3.0 is hidden in Dux (step 12). Unhide it under Settings →
+    Audio → Hidden, or select it with `wpctl set-default` and the id shown
+    beside `monitor_speakers_lcr` under Filters in `wpctl status`.
+    With 3.0, `speaker-test -D pipewire -c 3 -t wav` puts "Front Center" on
+    the LG alone. Also check a mono source, such as a call or
+    `speaker-test -D pipewire -c 1 -t wav`: it should play on all three
+    monitors, not only the LG.
+11. [x] Pick one. Both kept for now, for experimenting (2026-10-25). If 3.0
+    is ever dropped, the FC upmix goes with it.
+12. [x] Hide the four raw HDMI outputs in Dux Settings → Audio. Done
+    2026-10-25 through the UI. A hand edit to `session.json` before that
+    didn't take, because Dux doesn't reload the file. **3.0 L/C/R** was
+    hidden in the same pass, so Dux shows "Hidden (5)". Unhide it there if
+    that wasn't intended.
+13. [ ] After any change to the hidden list, run `dms-settings-snapshot`
+    and commit in `~/dux-state` (the private repo, #226), so a fresh seed
+    matches.

@@ -8,11 +8,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1792718685,
-        "narHash": "sha256-RwFBSJHLJxf+LWHhvn0RV4XovmvQ3LupQUjtXNGvwJ8=",
+        "lastModified": 1792981821,
+        "narHash": "sha256-oK5bx6tAH8jNb13eZw7zmqyWcyH9lrgYonissUC6OMc=",
         "ref": "refs/heads/main",
-        "rev": "9cc52c82c96535002542a39907b8f1394e0cb5da",
-        "revCount": 1446,
+        "rev": "b6db2954d03cdd04dc443b109962e181a5ef3f9c",
+        "revCount": 1454,
         "type": "git",
         "url": "https://github.com/aaddrick/claude-desktop-debian.git"
       },
@@ -184,11 +184,11 @@
         "uv2nix": "uv2nix"
       },
       "locked": {
-        "lastModified": 1792802433,
-        "narHash": "sha256-2aE338u+Y0eSwUkxu5kDjiDTeQzVI9eYMVoYJ8DDonY=",
+        "lastModified": 1793017553,
+        "narHash": "sha256-o9Bo3FTzTCoQQBaljPti8ZuSXBDfeMSFK3vHfnXlejU=",
         "ref": "refs/heads/main",
-        "rev": "5894e750c3dba980d43b25aa29e3958149ba2c61",
-        "revCount": 58216,
+        "rev": "daec3cd4c6d34f5befbc8f25a8af3e3b84b94f06",
+        "revCount": 59458,
         "type": "git",
         "url": "https://github.com/NousResearch/hermes-agent.git"
       },
@@ -442,10 +442,10 @@
     },
     "nixpkgs-apps": {
       "locked": {
-        "lastModified": 1792502884,
-        "narHash": "sha256-IoNisKcGbUjdd45qCqywGMCYmZ5EnkxezvLII0FWwNA=",
+        "lastModified": 1792773339,
+        "narHash": "sha256-rZLrzrC6i+jnTAlvPZHogKDulY7WWDEv9hJeHieO7Zw=",
         "ref": "nixos-unstable",
-        "rev": "02c087f3fe673c9e317f206a627cb6b910336dbe",
+        "rev": "3ec636362e1816bc2f0888fa0fa2c69f1bc9e504",
         "shallow": true,
         "type": "git",
         "url": "https://github.com/NixOS/nixpkgs.git"
@@ -839,11 +839,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1792595242,
-        "narHash": "sha256-kH/E0uJDslOgYcnmU+c0cm6HrUjsEtvZQKZtuQ1+uvo=",
+        "lastModified": 1792963762,
+        "narHash": "sha256-ThRNX0+T2Gb3ZD0Xf+/R3wJdL93/mW80ubMnLjZelTY=",
         "ref": "refs/heads/main",
-        "rev": "f19490ac889eabb05bdb7e8dcb85225ee75bd87b",
-        "revCount": 1341,
+        "rev": "ed68d814d6cf2e221ba43d84f1e32429f5e2786f",
+        "revCount": 1342,
         "type": "git",
         "url": "https://github.com/0xc000022070/zen-browser-flake.git"
       },
