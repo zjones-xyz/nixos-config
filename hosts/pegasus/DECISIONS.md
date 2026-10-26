@@ -861,7 +861,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   set, worth knowing before committing.
   **No checkpoint committed yet** — `hosts/pegasus/dms-settings.json` only
   exists after `dms-settings-snapshot` is run on real hardware with a DMS
-  config worth keeping; nothing here fabricates one.
+  config worth keeping; nothing here fabricates one. *(Superseded: the
+  checkpoints were committed later and moved to private `dux-state` on
+  2026-10-25; see that entry.)*
   **Extended 2026-08-23** to also cover `plugin_settings.json` (per-plugin
   enabled flag + config — a second file DMS saves the same atomic way,
   separate from `settings.json`), and added a `diff` action (compares live
@@ -1160,7 +1162,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   before committing; this makes that look an informed one rather than one
   that depends on remembering. ⟨No checkpoint with real coordinates has been
   committed — `hosts/pegasus/dms-session.json` does not exist until someone
-  runs `snapshot` on the host.⟩
+  runs `snapshot` on the host.⟩ *(Corrected 2026-10-25: false. Three
+  2026-09-08 commits carry full-precision coordinates; see the `dux-state`
+  entry.)*
 - **`qt.platformTheme = "qt5ct"` set system-wide, accepting that it changes
   Qt theming in the Plasma and Dragonized sessions too, 2026-09-09.**
   DMS's "apply colours to Qt" button reported `failed to apply Qt colors`.
@@ -1739,8 +1743,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
 
 - **Dux checkpoints moved to the private `dux-state` repo, 2026-10-25** —
   supersedes where the checkpoints live in the `dms-settings.sh` entries
-  above (their `hosts/pegasus/dms-*.json` paths are history now). `hosts/pegasus/dms-*.json` are gone from this
-  public repo. `scripts/dms-settings.sh` now writes
+  above: `hosts/pegasus/dms-*.json` are gone from this public repo.
+  `scripts/dms-settings.sh` now writes
   `~/dux-state/hosts/<host>/{settings,plugin-settings,session}.json`, a
   clone of private `zjones-xyz/dux-state` (`DMS_CHECKPOINT_REPO`
   overrides). `seedDmsSettings` reads from the same place.

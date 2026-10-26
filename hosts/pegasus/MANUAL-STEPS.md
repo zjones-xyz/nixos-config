@@ -1069,8 +1069,10 @@ The current pegasus needs nothing: `~/dux-state` is cloned, and its first
 commit is the live state as of 2026-10-25. These steps are for a
 rebuild-from-scratch.
 
-1. [ ] Before the first `nixos-rebuild switch` on the new install, clone
-   the private repo. `gh` may not be installed yet, so either use
+1. [ ] Before Home Manager first activates for `z` and Dux first starts,
+   clone the private repo: before the first `nixos-rebuild switch` if
+   that's how the install proceeds, otherwise before the first graphical
+   login. If Dux got there first, step 2's fallback applies. `gh` may not be installed yet, so either use
    `nix shell nixpkgs#gh -c sh -c 'gh auth login && gh repo clone zjones-xyz/dux-state ~/dux-state'`
    or, with an SSH key GitHub knows,
    `git clone git@github.com:zjones-xyz/dux-state.git ~/dux-state`.

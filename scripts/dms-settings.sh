@@ -46,7 +46,7 @@
 #   snapshot   Copy the live file(s) into the dux-state checkpoint(s).
 #              Review the diff and `git commit` it there yourself — this
 #              script never commits.
-#   restore    Copy the repo checkpoint(s) over the live file(s). Refuses
+#   restore    Copy the dux-state checkpoint(s) over the live file(s). Refuses
 #              to overwrite a live file that already exists; FORCE=1
 #              overrides that.
 #   diff       Show what differs between the live file(s) and their
@@ -78,15 +78,6 @@ case "$TARGET" in
     ;;
 esac
 
-# `cd … && pwd` rather than `realpath`/`readlink -f`, same reasoning as
-# npull.sh: portable to darwin, where neither is guaranteed present.
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-
-if ! REPO="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)"; then
-  echo "dms-settings.sh: $SCRIPT_DIR is not inside a git checkout." >&2
-  exit 2
-fi
-
 HOST="$(hostname -s 2>/dev/null || hostname)"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
@@ -101,11 +92,6 @@ dms_dir() {
     echo "$1/DankMaterialShell"
   fi
 }
-
-if [ ! -d "$REPO/hosts/$HOST" ]; then
-  echo "dms-settings.sh: no hosts/$HOST/ in $REPO — is this the right host/checkout?" >&2
-  exit 2
-fi
 
 STATE_REPO="${DMS_CHECKPOINT_REPO:-$HOME/dux-state}"
 if ! git -C "$STATE_REPO" rev-parse --show-toplevel >/dev/null 2>&1; then
@@ -298,7 +284,8 @@ if [ "$ACTION" = "restore" ] && [ "${#RESTORED[@]}" -gt 0 ]; then
   # session.json only at startup.
   case " ${RESTORED[*]} " in
     *" plugins "* | *" session "*)
-      echo "Plugins/session load only at startup: systemctl --user restart dms.service" ;;
+      echo "Plugins/session load only at startup. Restart Dux now, before it saves"
+      echo "and writes its in-memory copy back: systemctl --user restart dms.service" ;;
     *) echo "Dux reloads settings.json live — no restart needed." ;;
   esac
 fi
