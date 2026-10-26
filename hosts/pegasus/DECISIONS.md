@@ -1746,8 +1746,10 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   above: `hosts/pegasus/dms-*.json` are gone from this public repo.
   `scripts/dms-settings.sh` now writes
   `~/dux-state/hosts/<host>/{settings,plugin-settings,session}.json`, a
-  clone of private `zjones-xyz/dux-state` (`DMS_CHECKPOINT_REPO`
-  overrides). `seedDmsSettings` reads from the same place.
+  clone of private `zjones-xyz/dux-state`. `seedDmsSettings` reads from
+  the same place. `DMS_CHECKPOINT_REPO` overrides the path for the script
+  only: the seed runs in `home-manager-z.service`, which never sees a
+  shell variable, so honouring it there would only suggest it works.
   *Why:* these files are whatever Dux's GUI chooses to write, and they
   carry more than config. The near-miss that settled it was a
   `session.json` snapshot carrying `builtInPluginState`, the Notepad's

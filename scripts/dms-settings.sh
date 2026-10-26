@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Snapshot/restore/diff Dux Shell's (DMS, formerly DankMaterialShell) live
 # JSON config against per-host checkpoints in the PRIVATE zjones-xyz/dux-state
-# repo, cloned at ~/dux-state ($DMS_CHECKPOINT_REPO overrides). Not this
+# repo, cloned at ~/dux-state ($DMS_CHECKPOINT_REPO overrides it for this
+# script only; home.nix's seed always reads ~/dux-state). Not this
 # public repo: these files hold whatever the GUI writes, and snapshots kept
 # catching things that shouldn't be published. See hosts/pegasus/DECISIONS.md.
 #
@@ -99,7 +100,14 @@ if ! git -C "$STATE_REPO" rev-parse --show-toplevel >/dev/null 2>&1; then
   echo "Clone it: gh repo clone zjones-xyz/dux-state $STATE_REPO" >&2
   exit 2
 fi
-mkdir -p "$STATE_REPO/hosts/$HOST"
+# Only snapshot may create a host's directory; diff/restore on a host with
+# no checkpoints (or a mistyped name) is an error, not an empty dir.
+if [ "$ACTION" = "snapshot" ]; then
+  mkdir -p "$STATE_REPO/hosts/$HOST"
+elif [ ! -d "$STATE_REPO/hosts/$HOST" ]; then
+  echo "dms-settings.sh: no checkpoints for $HOST in $STATE_REPO/hosts/." >&2
+  exit 2
+fi
 
 # Two of these files can carry a real-world location: session.json's
 # latitude/longitude (written by night mode's location automation) and
