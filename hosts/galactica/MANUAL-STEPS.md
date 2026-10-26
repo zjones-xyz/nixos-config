@@ -1563,6 +1563,11 @@ survive a power cycle.
    finished 2026-10-12 and X4WE is out of `tank`, but it is still physically on
    the loose LSI lead until §21 step 10 pulls it for the RMA. Weigh the LSI at
    that same visit: afterwards the card drives the two BX500s and nothing else.
+   ⚠ **Check first whether that is already done.** §3's initrd verification
+   (first run 2026-10-25) expects nine disks, none of them X4WE, and only the
+   two BX500s on the LSI — but §21 step 10 is unticked. Tick it, or pull the
+   disk, before planning the visit around it. `PLATFORM.md` §13c item 3 carries
+   the same caveat.
 6. [ ] **Measure the seed set.** The number that decides §13f, and the cheapest
    of the three. It is the *active seed* total, not just what is in flight:
    ```sh

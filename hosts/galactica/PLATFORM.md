@@ -1853,7 +1853,17 @@ out. A SAS2008 draws ~9–11 W whether it
 is feeding eight disks or two — the largest *fixed* load on the machine after
 the CPU and the array.
 
-The port arithmetic even works out. The onboard C204's six ports are full
+⚠ **Confirm step 10 has not already happened, before treating the gate as
+open.** `HARDWARE-MAP.md` §3's initrd verification, first run 2026-10-25,
+expects **nine** disks — X4WE not among them — and lists only the two BX500s on
+the LSI, while §21 step 10 is still unticked. Either the pull has happened and
+the checkbox is stale, or the run book is written against the intended steady
+state. That same run is what confirms the port census below ("ports as
+mapped"), so it is good evidence either way; it just cannot settle this one on
+its own.
+
+The port arithmetic even works out, and as of 2026-10-25 it is confirmed from a
+run rather than from a map. The onboard C204's six ports are full
 (`ata1` WD Blue, `ata2` midden, `ata3`–`ata6` the four He12s), so the two BX500s
 need a controller — and §4's own bare-metal port budget already assumes
 **onboard 6 + ASM1166 6, with the ASM1064 removed**: a layout with no LSI in it.
