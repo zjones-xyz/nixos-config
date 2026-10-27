@@ -10,9 +10,9 @@
 
 let
   # The library's group — shared with the *arr trees so what one stack writes
-  # the other can read. The number is pinned in nixflix.nix, and
-  # reading-acquisition.nix asserts it is set (READING-STACK.md §4.7).
+  # the other can read. The number is pinned in nixflix.nix; asserted below.
   mediaGroup = config.nixflix.globals.libraryOwner.group;
+  mediaGid = toString config.users.groups.${mediaGroup}.gid;
 
   # ── Paths ─────────────────────────────────────────────────────────────────
   # /tank/books is its OWN dataset, inverting nixflix's one-layout rule:
@@ -57,6 +57,14 @@ let
   mariadbUid = 999;
 in
 {
+  # ⚠ An empty GROUP_ID reads as "use my default group" (READING-STACK.md §4.7).
+  assertions = [
+    {
+      assertion = config.users.groups.${mediaGroup}.gid != null;
+      message = "users.groups.${mediaGroup}.gid is null, so Grimmory would start with an empty GROUP_ID. Pin it in nixflix.nix.";
+    }
+  ];
+
   # ── Secrets ───────────────────────────────────────────────────────────────
   # ⚠ Every one must exist before sops-nix activates or the switch fails — the
   # nixflix.nix precedent. ⚠ BOOKBRIDGE_SECRET_KEY comes from sops on purpose:
@@ -104,7 +112,7 @@ in
         # Grimmory needs `media` to write the bookdrop: Shelfmark's entrypoint
         # chowns it to `shelfmark:media` on every start, so uid ownership alone
         # would leave Grimmory able to read but not ingest out of it.
-        GROUP_ID = toString config.users.groups.${mediaGroup}.gid;
+        GROUP_ID = mediaGid;
         SWAGGER_ENABLED = "false";
         # ⚠ DISK_TYPE stays unset (= local). It selects NFS/SMB-safe file
         # handling, and /tank/books is a local dataset — that this host also

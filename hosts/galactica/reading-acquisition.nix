@@ -168,14 +168,11 @@ in
   # without renaming it back would leave manga acquisition with zero extensions
   # and no error anywhere. MANUAL-STEPS.md §18 item 17.
   assertions = [
-    # ⚠ An empty PGID/GROUP_ID reads as "use my default group" in all three
-    # entrypoints — a silent miswrite into the shared trees (READING-STACK.md §4.7).
+    # ⚠ An empty PGID reads as "use my default group" in both entrypoints — a
+    # silent miswrite into the shared trees (READING-STACK.md §4.7).
     {
       assertion = config.users.groups.${mediaGroup}.gid != null;
-      message = ''
-        users.groups.${mediaGroup}.gid is null, so Chaptarr, Shelfmark and
-        Grimmory would start with an empty PGID/GROUP_ID. Pin it in nixflix.nix.
-      '';
+      message = "users.groups.${mediaGroup}.gid is null, so Chaptarr and Shelfmark would start with an empty PGID. Pin it in nixflix.nix.";
     }
     {
       assertion = lib.versionAtLeast config.services.suwayomi-server.package.version "2.3";
