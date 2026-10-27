@@ -9,7 +9,7 @@
   hopper.ip = "192.168.8.10";
   hamilton.ip = "192.168.8.11";
   pegasus.ip = "192.168.8.72";
-  memory-alpha-2.ip = "192.168.8.98";
+  bambuddy.ip = "192.168.8.98"; # container on memory-alpha (bambuddy.nix)
   memory-alpha.ip = "192.168.8.99";
   homeassistant.ip = "192.168.8.142";
   galactica.ip = "192.168.8.190";

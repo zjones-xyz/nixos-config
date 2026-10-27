@@ -8,7 +8,7 @@ let
     "hopper"
     "hamilton"
     "pegasus"
-    "memory-alpha-2"
+    "bambuddy"
     "memory-alpha"
     "homeassistant"
     "galactica"
