@@ -328,8 +328,9 @@ the live group had been created as **991** in the meantime, and NixOS never
 renumbers a live group. Every activation warned `not applying GID change of
 group 'media' (991 -> 169)`. `nixflix.nix` now pins
 `users.groups.media.gid = lib.mkForce 991`, so the evaluated and live numbers
-agree. `z` is a member again. The runtime resolver below is redundant but still
-correct. What follows is the original analysis, kept as history.
+agree. `z` is a member again. The runtime resolver below was removed in #228;
+the containers read the pinned gid. What follows is the original analysis, kept
+as history.
 
 **Root cause found, and it is upstream's.** `config.users.groups.media` carries
 **two `mkForce { }` definitions** — from nixflix's `torrentClients/qbittorrent.nix`
