@@ -402,8 +402,9 @@ Nothing live is touched and no nixflix patch is carried.
 
 **Resolver removed (#228).** Once #222 pinned `users.groups.media.gid` to the
 live 991 in `nixflix.nix`, the gid is known at evaluation: the containers now take
-`PGID`/`GROUP_ID` straight from it, and an assertion in
-`reading-acquisition.nix` keeps a null gid from rendering an empty one.
+`PGID`/`GROUP_ID` straight from it. Since #229, `reading-acquisition.nix` and
+`reading-library.nix` each assert the gid is set, so a null one can't render an
+empty `PGID` or `GROUP_ID`.
 
 ## 5. Acquisition
 
