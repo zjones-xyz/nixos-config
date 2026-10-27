@@ -1559,15 +1559,13 @@ survive a power cycle.
    failure that landmine is exposed to, and steps 3 and 5 here want the same
    case-open visit. Doing them together is what makes the controller swap safe
    rather than a new dependency on an unreplaced 2011 cell.
-   ⚠ **One step of §21 still stands in the way, and only one.** The resilver
-   finished 2026-10-12 and X4WE is out of `tank`, but it is still physically on
-   the loose LSI lead until §21 step 10 pulls it for the RMA. Weigh the LSI at
-   that same visit: afterwards the card drives the two BX500s and nothing else.
-   ⚠ **Check first whether that is already done.** §3's initrd verification
-   (first run 2026-10-25) expects nine disks, none of them X4WE, and only the
-   two BX500s on the LSI — but §21 step 10 is unticked. Tick it, or pull the
-   disk, before planning the visit around it. `PLATFORM.md` §13c item 3 carries
-   the same caveat.
+   ⭐ **Nothing in §21 stands in the way, and this item claimed one step did.**
+   §21 step 10 records the pull as done 2026-10-11; its box is open only for the
+   `h-YWAH` caddy label, which has no bearing on the card. §3's initrd
+   verification (first run 2026-10-25) confirms it: nine disks, X4WE not among
+   them, two BX500s on the LSI. The card already drives those two and nothing
+   else, so this measurement waits on nothing but the next case-open visit.
+   `PLATFORM.md` §13c item 3 carries the correction.
 6. [ ] **Measure the seed set.** The number that decides §13f, and the cheapest
    of the three. It is the *active seed* total, not just what is in flight:
    ```sh

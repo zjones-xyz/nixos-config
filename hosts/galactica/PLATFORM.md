@@ -1843,27 +1843,25 @@ wipes it, and it is exactly the kind of setting nobody re-checks.
 LSI ports 2–7 are empty. With item 1 collected this is the biggest single
 reclaimable load remaining, behind only item 2's unmeasured BIOS spread.
 
-§7b put the card in to drive eight spinners at once. It now drives
-two: the BX500 pair in `tank`'s special vdev. ⚠ Three in the meantime, and since
-§21's bay swap it is **`h-X4WE`** on the loose lead rather than YWAH — the swap
-put YWAH into X4WE's cage-A bay and X4WE onto YWAH's old lead, where it stays
-until §21 step 10 pulls it for the RMA. So the gate on this item is step 10, not
-the bay swap; nothing to act on until the replacement is finished and X4WE is
-out. A SAS2008 draws ~9–11 W whether it
-is feeding eight disks or two — the largest *fixed* load on the machine after
-the CPU and the array.
+§7b put the card in to drive eight spinners at once. **It now drives two: the
+BX500 pair in `tank`'s special vdev** — three for a day during §21's bay swap,
+which put YWAH into X4WE's cage-A bay and X4WE onto YWAH's old loose lead. A
+SAS2008 draws ~9–11 W whether it is feeding eight disks or two — the largest
+*fixed* load on the machine after the CPU and the array.
 
-⚠ **Confirm step 10 has not already happened, before treating the gate as
-open.** `HARDWARE-MAP.md` §3's initrd verification, first run 2026-10-25,
-expects **nine** disks — X4WE not among them — and lists only the two BX500s on
-the LSI, while §21 step 10 is still unticked. Either the pull has happened and
-the checkbox is stale, or the run book is written against the intended steady
-state. That same run is what confirms the port census below ("ports as
-mapped"), so it is good evidence either way; it just cannot settle this one on
-its own.
+⭐ **There is no gate left on this item, and this section said otherwise for a
+fortnight.** It read that X4WE stays on the loose lead "until §21 step 10 pulls
+it for the RMA", making step 10 the blocker. Step 10's own body has said the
+opposite since 2026-10-12: *"Pulled and `HARDWARE-MAP.md` updated
+2026-10-11."* Its box is open only because the `h-YWAH` **caddy label** is still
+to print — a label, not a disk, and nothing to do with the card.
+`HARDWARE-MAP.md` §3's initrd verification (first run 2026-10-25) is the
+independent confirmation: nine disks, X4WE not among them, and only the two
+BX500s on the LSI. So the ~9 W has been reclaimable since 2026-10-11; what
+stands between it and the wall is the decision below, not a disk.
 
-The port arithmetic even works out, and as of 2026-10-25 it is confirmed from a
-run rather than from a map. The onboard C204's six ports are full
+The port arithmetic even works out, and that same run confirms it from the
+machine rather than from §4's map. The onboard C204's six ports are full
 (`ata1` WD Blue, `ata2` midden, `ata3`–`ata6` the four He12s), so the two BX500s
 need a controller — and §4's own bare-metal port budget already assumes
 **onboard 6 + ASM1166 6, with the ASM1064 removed**: a layout with no LSI in it.
