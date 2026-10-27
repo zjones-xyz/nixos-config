@@ -59,7 +59,6 @@
     })
   ];
 
-  # ⟨Follow-up: route smartd alerts to ntfy via notifications.mail.mailer
-  # (same pattern as nut.nix). Not wired yet — the cross-host ntfy URL is
-  # unverified, and a guessed endpoint fails silently.⟩
+  # Alerts: smartd's mail notification is routed to ntfy by alerts.nix on hosts
+  # that set homelab.alerts.enable.
 }
