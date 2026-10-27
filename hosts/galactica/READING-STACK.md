@@ -399,7 +399,7 @@ after it. ⚠ It **fails loudly** if the group has no gid rather than writing an
 empty `PGID`, which is the silent miswrite this whole section exists to prevent.
 Nothing live is touched and no nixflix patch is carried.
 
-**Resolver removed (#__PR__).** Once #222 pinned `users.groups.media.gid` to the
+**Resolver removed (#228).** Once #222 pinned `users.groups.media.gid` to the
 live 991 in `nixflix.nix`, the gid is known at evaluation: the containers now take
 `PGID`/`GROUP_ID` straight from it, and an assertion in
 `reading-acquisition.nix` keeps a null gid from rendering an empty one.
