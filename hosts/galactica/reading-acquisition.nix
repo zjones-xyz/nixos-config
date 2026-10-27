@@ -42,8 +42,8 @@ let
   # entry for why not appdata.
   stagingDir = "${library}/staging";
 
-  # Written by reading-media-gid.service below; read by both containers.
-  gidEnvFile = "/run/reading/media-gid.env";
+  # Pinned in nixflix.nix; the assertion below keeps it from rendering empty.
+  mediaGid = toString config.users.groups.${mediaGroup}.gid;
 
   # Applied to Suwayomi's dataDir and the parents of the module's own tmpfiles
   # rule — see that rule for why the parents have to be spelled out.
@@ -86,42 +86,6 @@ let
   downloadsDir = nixflix.downloadsDir;
 in
 {
-  # ── The `media` gid, resolved at unit-start time ───────────────────────────
-  # Built when nixflix wiped the gid at evaluation (READING-STACK.md §4.7). It
-  # is pinned in nixflix.nix now, so this is redundant but still correct: it
-  # reads the live number and hands it over through an env file, which `docker
-  # run --env-file` reads at start.
-  systemd.services.reading-media-gid = {
-    description = "Resolve the ${mediaGroup} gid for the reading stack's containers";
-    # reading-library.nix's Grimmory consumes the same file — it has to write
-    # into the bookdrop, which Shelfmark chowns to shelfmark:media on start.
-    wantedBy = [ "multi-user.target" ];
-
-    serviceConfig = {
-      Type = "oneshot";
-      # The env file has to outlive the unit's exit, and RuntimeDirectory is
-      # cleaned on stop without both of these.
-      RemainAfterExit = true;
-      RuntimeDirectory = "reading";
-      RuntimeDirectoryPreserve = true;
-    };
-
-    script = ''
-      gid=$(${pkgs.getent}/bin/getent group ${mediaGroup} | ${pkgs.coreutils}/bin/cut -d: -f3)
-      # ⚠ Fail loudly rather than write an empty PGID: the entrypoints read that
-      # as "use my default group", which is exactly the silent miswrite §4.7
-      # exists to prevent.
-      if [ -z "$gid" ]; then
-        echo "group ${mediaGroup} exists with no gid — refusing to write an empty PGID" >&2
-        exit 1
-      fi
-      # Both spellings: Chaptarr and Shelfmark read PGID, Grimmory reads
-      # GROUP_ID, and an unused extra in an env file is inert.
-      ${pkgs.coreutils}/bin/printf 'PGID=%s\nGROUP_ID=%s\n' "$gid" "$gid" \
-        > /run/reading/media-gid.env
-    '';
-  };
-
   # ── Container identities ──────────────────────────────────────────────────
   # These accounts run nothing; they exist so `PUID`/`PGID` name a real owner
   # and the uid is reserved. Fixed ids above nixpkgs' static range (ids.nix
@@ -204,6 +168,15 @@ in
   # without renaming it back would leave manga acquisition with zero extensions
   # and no error anywhere. MANUAL-STEPS.md §18 item 17.
   assertions = [
+    # ⚠ An empty PGID/GROUP_ID reads as "use my default group" in all three
+    # entrypoints — a silent miswrite into the shared trees (READING-STACK.md §4.7).
+    {
+      assertion = config.users.groups.${mediaGroup}.gid != null;
+      message = ''
+        users.groups.${mediaGroup}.gid is null, so Chaptarr, Shelfmark and
+        Grimmory would start with an empty PGID/GROUP_ID. Pin it in nixflix.nix.
+      '';
+    }
     {
       assertion = lib.versionAtLeast config.services.suwayomi-server.package.version "2.3";
       message = ''
@@ -238,7 +211,7 @@ in
 
     environment = {
       PUID = toString config.users.users.chaptarr.uid;
-      # PGID arrives from the env file below, not from here (§4.7).
+      PGID = mediaGid;
       UMASK = "002";
       TZ = config.time.timeZone;
 
@@ -257,7 +230,6 @@ in
 
     environmentFiles = [
       config.sops.templates."chaptarr.env".path
-      gidEnvFile
     ];
     ports = [ "127.0.0.1:${toString chaptarrPort}:${toString chaptarrPort}" ];
 
@@ -276,7 +248,7 @@ in
 
     environment = {
       PUID = toString config.users.users.shelfmark.uid;
-      # PGID arrives from the env file below, same as Chaptarr's — §4.7.
+      PGID = mediaGid;
       UMASK = "002";
       TZ = config.time.timeZone;
 
@@ -329,7 +301,6 @@ in
 
     environmentFiles = [
       config.sops.templates."shelfmark.env".path
-      gidEnvFile
     ];
     ports = [ "127.0.0.1:${toString shelfmarkPort}:${toString shelfmarkPort}" ];
 
@@ -536,8 +507,8 @@ in
   # directories on the root filesystem.
   systemd.services = {
     docker-chaptarr = {
-      after = nixflix.serviceDependencies ++ [ "reading-media-gid.service" ];
-      requires = nixflix.serviceDependencies ++ [ "reading-media-gid.service" ];
+      after = nixflix.serviceDependencies;
+      requires = nixflix.serviceDependencies;
       unitConfig.RequiresMountsFor = [
         "${appdata}/chaptarr"
         library
@@ -545,8 +516,8 @@ in
       ];
     };
     docker-shelfmark = {
-      after = nixflix.serviceDependencies ++ [ "reading-media-gid.service" ];
-      requires = nixflix.serviceDependencies ++ [ "reading-media-gid.service" ];
+      after = nixflix.serviceDependencies;
+      requires = nixflix.serviceDependencies;
       unitConfig.RequiresMountsFor = [
         "${appdata}/shelfmark"
         stagingDir
