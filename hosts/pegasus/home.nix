@@ -93,7 +93,17 @@ in
     # not worth the trust trade for a client that's also just a browser tab
     # away. Same call as Brain.fm below: web app via firefox/chrome.
 
-    pkgsApps.discord
+    # NVDEC (libnvcuvid) segfaults Discord's renderer mid-call, so it's masked
+    # inside Discord's sandbox only; video falls back to software (OpenH264),
+    # NVENC goes with it (MANUAL-STEPS.md §21). bwrap refuses to mount over a
+    # symlink, hence resolving the real driver file at launch.
+    (pkgsApps.discord.override {
+      buildFHSEnv = args: pkgsApps.buildFHSEnv (args // {
+        extraBwrapArgs = [
+          ''--ro-bind /dev/null "$(${pkgs.coreutils}/bin/readlink -f /run/opengl-driver/lib/libnvcuvid.so.1)"''
+        ];
+      });
+    })
     pkgsApps.ferdium
     pkgsApps.signal-desktop
     pkgsApps.slack

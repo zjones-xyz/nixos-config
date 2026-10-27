@@ -640,6 +640,24 @@ opt out of an experiment; the confirmed fix was Vesktop, which does.
 Interim workaround that already works here: restart Discord right before a
 screenshare.
 
+**Update 2026-10-25 — the lockups here are crashes in NVIDIA's decoder.**
+Four Discord renderer SIGSEGVs in one hour of calls while sharing a Chrome
+window (`coredumpctl list`), each a few minutes into a share. All four fault
+at the same offset, and the one with symbols resolves it to
+`libnvcuvid.so.595.71.05 + 0x19fc1` (NVDEC, hardware video decode, driver
+595.71.05). Discord's crash log shows the pattern the user sees: the
+renderer goes `unresponsive`, then `render-process-gone { reason: 'crashed',
+exitCode: 139 }`. Its voice log advertised experimental H.265 and AV1 next
+to H.264 on every connection, and only NVDEC can decode those (OpenH264 is
+H.264 only), though no log line names the codec each stream negotiated.
+Linux Discord has no H.264 hardware-acceleration toggle under Voice & Video
+→ Advanced (only OpenH264 and diagnostics), so the fix is declarative:
+`home.nix` binds `/dev/null` over `libnvcuvid` inside Discord's bwrap
+sandbox, and nothing else on the system loses it. Trade-off:
+`libnvidia-encode` links `libnvcuvid`, so NVENC goes too, and both decoding
+and encoding stream video fall back to the CPU. If that load is too high,
+revert the override and try step 2 below.
+
 **Some games freeze within the first minute or two if unfocused on start.**
 Matches the open bug https://github.com/Supreeeme/xwayland-satellite/issues/201 —
 X11 games under xwayland-satellite desync when unfocused and can freeze
@@ -664,12 +682,18 @@ game fits at all.
 
 To try, roughly cheapest-first:
 
-1. [ ] Stock Discord: toggle **off** hardware acceleration (User Settings →
-   Advanced), restart, test a longer screenshare. The classic NVIDIA/Electron
-   freeze lever — didn't help in the linked report, but it's a 30-second test.
-2. [ ] Try Vesktop without installing: `nix run nixpkgs#vesktop`, sign in,
-   then Settings → Vencord → enable the "Experiments" plugin → restart →
-   set the `2026-03-linux-vulkan-capture` experiment to "not eligible", and
+1. [ ] After the switch that masks `libnvcuvid`, fully quit and relaunch
+   Discord (tray → Quit; an already-running instance keeps the old sandbox).
+   During a call with a share running, confirm the mask took:
+   `grep -l nvcuvid /proc/$(pgrep -f 'Discord-wrapped --type=renderer' | head -1)/maps`
+   prints nothing. Then do a 30+ minute share and check
+   `coredumpctl list | grep -i discord` for new entries. Watch CPU while
+   sharing: encoding now runs on the CPU too.
+2. [ ] Only if the crashes continue with the mask in place: try Vesktop
+   (it decodes through Chromium's own path, not Discord's voice module)
+   without installing: `nix run nixpkgs#vesktop`, sign in, then
+   Settings → Vencord → enable the "Experiments" plugin → restart → set
+   the `2026-03-linux-vulkan-capture` experiment to "not eligible", and
    test a screenshare. If it holds up, have the config session declare
    `vesktop` in `home.nix` (keep or drop `discord` — either works; note
    Discord's ToS technically frowns on modified clients, enforcement against
