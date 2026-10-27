@@ -13,7 +13,8 @@ in
   system.activationScripts.postActivation.text = ''
     # The CA's first base64 line covers its random serial, so it identifies it.
     marker=$(sed -n 2p ${ca})
-    for app in ${lib.escapeShellArgs apps}; do
+    apps=(${lib.escapeShellArgs apps})
+    for app in "''${apps[@]}"; do
       cer="$app/Contents/Resources/cert/printer.cer"
       [ -f "$cer" ] || continue
       grep -qF "$marker" "$cer" && continue
