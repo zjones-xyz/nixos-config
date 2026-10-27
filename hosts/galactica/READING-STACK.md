@@ -320,7 +320,17 @@ loses Audiobookshelf, suspect resolution before suspecting either service —
 and lever 1 above is then a one-line hedge that removes DNS from the path
 entirely.
 
-### 4.7 ⚠⚠ BLOCKING: two nixflix modules wipe the `media` group
+### 4.7 ✅ Resolved: two nixflix modules wiped the `media` group
+
+✅ **Resolved by the private nixflix fork (#198, #206), which dropped both
+`mkForce { }`s.** nixflix's own `gid = 169` then took effect at evaluation, but
+the live group had been created as **991** in the meantime, and NixOS never
+renumbers a live group. Every activation warned `not applying GID change of
+group 'media' (991 -> 169)`. `nixflix.nix` now pins
+`users.groups.media.gid = lib.mkForce 991`, so the evaluated and live numbers
+agree. `z` is a member again. The runtime resolver below was removed in #228;
+the containers read the pinned gid. What follows is the original analysis, kept
+as history.
 
 **Root cause found, and it is upstream's.** `config.users.groups.media` carries
 **two `mkForce { }` definitions** — from nixflix's `torrentClients/qbittorrent.nix`
@@ -389,6 +399,12 @@ both acquisition containers take that as an `environmentFiles` entry and order
 after it. ⚠ It **fails loudly** if the group has no gid rather than writing an
 empty `PGID`, which is the silent miswrite this whole section exists to prevent.
 Nothing live is touched and no nixflix patch is carried.
+
+**Resolver removed (#228).** Once #222 pinned `users.groups.media.gid` to the
+live 991 in `nixflix.nix`, the gid is known at evaluation: the containers now take
+`PGID`/`GROUP_ID` straight from it. Since #229, `reading-acquisition.nix` and
+`reading-library.nix` each assert the gid is set, so a null one can't render an
+empty `PGID` or `GROUP_ID`.
 
 ## 5. Acquisition
 

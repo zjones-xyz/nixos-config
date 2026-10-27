@@ -1752,6 +1752,8 @@ Written alongside `READING-STACK.md`; deployed in the order below.
    (not nixflix's 169, which is why the resolver reads `getent` at unit-start
    instead of trusting the constant), and `z` is **not a member**
    (`uid=1000(z) gid=100(users)`). The uid is 1000 as assumed.
+   Superseded since: #222 pinned the gid to 991 and #228 removed the resolver,
+   so Grimmory now also gets `GROUP_ID=991` directly (`READING-STACK.md` §4.7).
    ```bash
    sudo chown 1000:media /tank/books/library /tank/books/bookdrop
    sudo chmod 2775 /tank/books/library /tank/books/bookdrop

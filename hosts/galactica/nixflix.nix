@@ -270,6 +270,13 @@ in
     };
   };
 
+  # ── The `media` gid: the live number, not nixflix's ───────────────────────
+  # nixflix declares 169, but the group was created as 991 while nixflix still
+  # wiped its gid, and everything on tank carries 991. NixOS never renumbers a
+  # live group, so this records reality. mkForce, so a module forcing another
+  # number fails evaluation instead of winning silently (READING-STACK.md §4.7).
+  users.groups.${config.nixflix.globals.libraryOwner.group}.gid = lib.mkForce 991;
+
   # ── qBittorrent's WebUI API key, from sops ────────────────────────────────
   # The conf is reinstalled from the store on every start, so a key made in
   # the UI dies with the next restart. qBittorrent keeps it in plaintext, so
