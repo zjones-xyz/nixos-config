@@ -28,7 +28,7 @@ let
         # jellyfin.zjones.xyz is the Pangolin-tunneled public name — normally
         # terminated at Pangolin's edge and forwarded straight to
         # localhost:8096 by Newt, bypassing Traefik entirely. galactica's
-        # AdGuard rewrite (fleet/services.nix) sends LAN
+        # AdGuard rewrite (hosts/galactica/configuration.nix) sends LAN
         # clients to memory-alpha directly for this name instead, so Traefik
         # needs its own router or that split-horizon bypass 404s (confirmed
         # live, 2026-09-20). zjones.xyz is a separate Cloudflare zone from

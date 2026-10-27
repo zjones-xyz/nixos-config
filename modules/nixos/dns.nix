@@ -3,10 +3,10 @@
 let
   # IPs come from fleet/hosts.nix; the order is spelled out because attrsets
   # enumerate alphabetically and this list renders into AdGuardHome.yaml.
-  # hamilton: not in service, no known IP — add it there once it exists.
   clientOrder = [
     "router"
     "hopper"
+    "hamilton"
     "pegasus"
     "memory-alpha-2"
     "memory-alpha"
@@ -16,6 +16,10 @@ let
   ];
 in
 {
+  # clients.persistent reads homelab.fleet.hosts; import it here too so this
+  # module stands alone (the module system dedups the common.nix import).
+  imports = [ ./fleet.nix ];
+
   # DNS stack: AdGuard Home (LAN-facing filter) → Unbound (recursive resolver).
   #
   #   client → AdGuard Home :53 (LAN)  →  Unbound 127.0.0.1:5335 (localhost only)
