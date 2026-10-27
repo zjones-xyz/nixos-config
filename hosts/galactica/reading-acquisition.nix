@@ -87,12 +87,10 @@ let
 in
 {
   # ── The `media` gid, resolved at unit-start time ───────────────────────────
-  # ⚠ `config.users.groups.media.gid` is NULL at evaluation — two nixflix
-  # modules mkForce the group to an empty set, wiping the gid it otherwise sets
-  # (READING-STACK.md §4.7). The number does exist once the system is up, so
-  # read it then and hand it over through an env file: `docker run --env-file`
-  # reads that at start. Touches no live group, needs no nixflix patch, and
-  # follows if the number ever moves.
+  # Built when nixflix wiped the gid at evaluation (READING-STACK.md §4.7). It
+  # is pinned in nixflix.nix now, so this is redundant but still correct: it
+  # reads the live number and hands it over through an env file, which `docker
+  # run --env-file` reads at start.
   systemd.services.reading-media-gid = {
     description = "Resolve the ${mediaGroup} gid for the reading stack's containers";
     # reading-library.nix's Grimmory consumes the same file — it has to write
@@ -240,8 +238,7 @@ in
 
     environment = {
       PUID = toString config.users.users.chaptarr.uid;
-      # PGID arrives from the env file below, not from here — the gid does not
-      # exist at evaluation time (§4.7).
+      # PGID arrives from the env file below, not from here (§4.7).
       UMASK = "002";
       TZ = config.time.timeZone;
 
