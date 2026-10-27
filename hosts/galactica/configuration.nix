@@ -142,6 +142,12 @@ in
       answer = "192.168.8.10";
     }
 
+    # hamilton (paused; name and address reserved, fleet/hosts.nix)
+    {
+      domain = "hamilton.internal";
+      answer = "192.168.8.11";
+    }
+
     # pegasus
     {
       domain = "pegasus.internal";
