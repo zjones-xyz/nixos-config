@@ -1,9 +1,8 @@
-# ── Fleet host registry ──────────────────────────────────────────────────────
-# Pure data, exposed as `homelab.fleet.hosts` by modules/nixos/fleet.nix.
-# dns.nix derives AdGuard's `clients.persistent` from it; fleet/lib.nix
-# resolves each service's host to an IP. IP only for now — Traefik fields
-# (cert anchors, deployment shape) land with the phase that consumes them.
-# hamilton is paused, but its address is reserved so it can rejoin as-is.
+# ── Fleet address registry ───────────────────────────────────────────────────
+# Every fixed LAN address, not just NixOS hosts: devices (router, BMC) and
+# containers (bambuddy) too. Each becomes an AdGuard client name (dns.nix);
+# a service's `host` in fleet/services.nix should be the machine that actually
+# serves its names. hamilton is paused; its address stays reserved.
 {
   router.ip = "192.168.8.1";
   hopper.ip = "192.168.8.10";

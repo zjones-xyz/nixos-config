@@ -137,3 +137,18 @@ compose paths.
    defaults (or enter `http://host.docker.internal:13003` / `:13001`). Then
    slice a small model once with each slicer, one of them from cold.
 6. [ ] homelab-stacks: delete `memory-alpha/orca-slicer-api/`.
+
+## #232 jellyfin.zjones.xyz certificate — confirm the Cloudflare token
+
+The `jellyfin-xyz` router (`modules/nixos/traefik.nix`) gets its cert by
+DNS-01 in the `zjones.xyz` zone, a different Cloudflare zone from `zjones.dev`.
+That only works if `CF_DNS_API_TOKEN` (sops `cloudflare/apiToken`) is allowed
+to edit DNS in both zones. Widening it was recorded as an owner step but never
+confirmed.
+
+1. [ ] On memory-alpha, check that a cert was issued:
+   `sudo jq -r '.letsencrypt.Certificates[].domain.main' /home/z/traefik/letsencrypt/acme.json | grep zjones.xyz`.
+   Prints `jellyfin.zjones.xyz` → done, tick both steps.
+2. [ ] Otherwise: in Cloudflare, give the token `Zone:DNS:Edit` on
+   `zjones.xyz` too (the token value doesn't change, so sops needs nothing),
+   then `sudo systemctl restart traefik-docker` and repeat step 1.
