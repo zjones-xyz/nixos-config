@@ -20,6 +20,26 @@ in
   # module stands alone (the module system dedups the common.nix import).
   imports = [ ./fleet.nix ];
 
+  # clientOrder must name exactly the hosts in fleet/hosts.nix: a host missing
+  # from it gets no AdGuard client entry, silently.
+  assertions =
+    let
+      hostNames = lib.attrNames config.homelab.fleet.hosts;
+      missing = lib.subtractLists clientOrder hostNames;
+      extra = lib.subtractLists hostNames clientOrder;
+      list = names: lib.concatMapStringsSep ", " (n: "`${n}`") names;
+    in
+    [
+      {
+        assertion = missing == [ ] && extra == [ ];
+        message = lib.concatStringsSep " " (
+          [ "modules/nixos/dns.nix: clientOrder and fleet/hosts.nix disagree." ]
+          ++ lib.optional (missing != [ ]) "In fleet/hosts.nix but not clientOrder: ${list missing}."
+          ++ lib.optional (extra != [ ]) "In clientOrder but not fleet/hosts.nix: ${list extra}."
+        );
+      }
+    ];
+
   # DNS stack: AdGuard Home (LAN-facing filter) → Unbound (recursive resolver).
   #
   #   client → AdGuard Home :53 (LAN)  →  Unbound 127.0.0.1:5335 (localhost only)
