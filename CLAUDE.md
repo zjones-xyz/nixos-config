@@ -42,7 +42,8 @@ stay consistent. This file documents the repo's structure and patterns.
   rewrite: galactica generates its rows. A new fixed address goes in `hosts.nix`
   only; AdGuard's client list follows it, ordered by IP.
   Wildcard groups and host identities stay hand-written in galactica's
-  `configuration.nix`.
+  `configuration.nix`. Design, roadmap and open decisions:
+  `docs/FLEET-REGISTRY.md`.
 - **`docs/<topic>.md`** — fleet-wide documentation that belongs to no single host
   (e.g. `DISK-LABELLING.md`, the physical disk naming and cable-labelling
   convention; `DISK-DRAWER.md`, unassigned spare disks; `BACKUP.md`, which host
