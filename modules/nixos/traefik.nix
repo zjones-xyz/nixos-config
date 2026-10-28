@@ -16,8 +16,8 @@ let
   # File provider config for non-Docker services, watched at runtime.
   # jellyfin-xyz serves LAN clients that galactica's split-horizon rewrite
   # (fleet/services.nix) sends here; Newt carries the public name straight to
-  # :8096. Its cert is a DNS-01 order in the separate zjones.xyz zone, which
-  # CF_DNS_API_TOKEN must cover (MANUAL-STEPS.md §#232); no shared SANs.
+  # :8096. Its cert (no shared SANs) is a DNS-01 order in the zjones.xyz zone,
+  # which CF_DNS_API_TOKEN must cover: hosts/memory-alpha/MANUAL-STEPS.md §#232.
   jellyfinConfig = pkgs.writeText "jellyfin.yml" ''
     http:
       routers:

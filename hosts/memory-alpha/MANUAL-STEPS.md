@@ -147,8 +147,9 @@ to edit DNS in both zones. Widening it was recorded as an owner step but never
 confirmed.
 
 1. [ ] On memory-alpha, check that a cert was issued:
-   `sudo jq -r '.letsencrypt.Certificates[].domain.main' /home/z/traefik/letsencrypt/acme.json | grep zjones.xyz`.
-   Prints `jellyfin.zjones.xyz` → done, tick both steps.
+   `sudo jq -r '.letsencrypt.Certificates[]?.domain.main' /home/z/traefik/letsencrypt/acme.json | grep zjones.xyz`.
+   If it prints `jellyfin.zjones.xyz`, the token already covers the zone: tick
+   this step and mark step 2 not needed.
 2. [ ] Otherwise: in Cloudflare, give the token `Zone:DNS:Edit` on
    `zjones.xyz` too (the token value doesn't change, so sops needs nothing),
    then `sudo systemctl restart traefik-docker` and repeat step 1.

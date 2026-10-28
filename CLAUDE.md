@@ -131,7 +131,7 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
     widget's `HOMEPAGE_VAR_*` line in `homepages.nix`, and its sops secret,
     count too.
   - `/dns`: an AdGuard rewrite on galactica, including a `fleet/services.nix`
-    entry, which generates one.
+    change that alters the rows it generates.
   - `/dhcp`: a DHCP reservation or pool exclusion. These live on the router
     for now, so the PR body says what to set.
   - `[memory-alpha/dashboard/dns] …`: the real change is on memory-alpha.
