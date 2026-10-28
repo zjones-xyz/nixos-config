@@ -1092,7 +1092,8 @@ and the guest one is on the LAN. What remains — 4-8 below, the public
 checklist plus the two traps worth knowing before starting: the sops entry in
 step 5 must exist *before* the switch that references it (a missing key fails
 activation, not eval), and `guest.zjones.xyz` has a LAN rewrite but no Traefik
-router, so step 6 should be tested from on-network as well as off.
+router, so step 6 should be tested from on-network as well as off; step 6a
+adds that router.
 
 4. [ ] **Create the Pangolin Site.** Pangolin admin → Sites → create
    `galactica` (Newt connector). Copy the issued **id** and **secret**.
@@ -1109,6 +1110,18 @@ router, so step 6 should be tested from on-network as well as off.
    resolve; `localhost:<published port>` does, same as memory-alpha's
    Jellyfin resource). Keep whatever auth/SSO the old Tower resource had.
    Verify from off-LAN (phone on cellular).
+
+6a. [ ] **Add a `guest-xyz` Traefik router** (a `.nix` change, so a PR). In
+   `homepages.nix`, add a router for ``Host(`guest.zjones.xyz`)`` on
+   `websecure` with `tls.certResolver = "letsencrypt"`, pointing at
+   `guest-svc`, the same fix memory-alpha uses for `jellyfin.zjones.xyz`
+   (`jellyfin-xyz` in `modules/nixos/traefik.nix`). Without it, the LAN
+   split-horizon rewrite sends LAN clients to galactica, where no router
+   matches. The cert is a DNS-01 order in the `zjones.xyz` zone, so check
+   galactica's `cloudflare/apiToken` can edit DNS there before switching.
+   Keep it a separate router with no shared SANs, so a failed `.xyz` order
+   can't touch the `guest.zjones.dev` cert. Verify from a LAN client:
+   `curl -sI https://guest.zjones.xyz` returns the dashboard, not a 404.
 
 7. [ ] **Verify the guest links actually work from outside.** The guest
    dashboard currently lists only Jellyfin (`jellyfin.zjones.dev`) — confirm

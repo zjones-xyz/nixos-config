@@ -105,7 +105,7 @@ for the pull), so a cold start never waits on a download.
 Data stays in `/home/z/orca-slicer-api` and `/home/z/bambu-studio-api`, the
 compose paths.
 
-1. [ ] Stop the compose stack (Dockge, or
+1. [ ] Stop the compose stack (Arcane, or
    `docker compose -f ~/homelab-stacks/memory-alpha/orca-slicer-api/compose.yaml down`).
    The Nix containers reuse both names, and their pre-start runs
    `docker rm -f <name>`: the first cold start would silently delete a
@@ -137,3 +137,19 @@ compose paths.
    defaults (or enter `http://host.docker.internal:13003` / `:13001`). Then
    slice a small model once with each slicer, one of them from cold.
 6. [ ] homelab-stacks: delete `memory-alpha/orca-slicer-api/`.
+
+## 3. Dockge decommission (on the hardware, after switching)
+
+Arcane already manages the stacks tree Dockge used to; this cleans up what
+the flake switch cannot reach itself.
+
+1. [ ] `nixos-rebuild switch` — removing the unit stops it, and the old
+   unit's `ExecStop` runs `docker compose down`, taking the container with
+   it. If one lingers: `docker rm -f dockge`.
+2. [ ] `docker compose ls` — any project whose config path still points
+   under `/opt/stacks/` gets one redeploy from Arcane. Expect a container
+   recreate, not an error: the compose working-dir label changes from the
+   symlinked path to the real one.
+3. [ ] `sudo rm /opt/stacks && sudo rmdir /opt` (if otherwise empty) — the
+   tmpfiles symlink outlives the rule that created it.
+4. [ ] `rm -rf /home/z/dockge` once satisfied nothing in it is wanted.
