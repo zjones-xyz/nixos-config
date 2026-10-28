@@ -1,6 +1,6 @@
 # ── Fleet address registry ───────────────────────────────────────────────────
-# Every fixed LAN address, not just NixOS hosts: devices (router, BMC) and
-# containers (bambuddy) too. dns.nix makes each an AdGuard client name;
+# Fixed LAN addresses that need a name, not just NixOS hosts: devices (router,
+# BMC) and containers (bambuddy) too. dns.nix makes each an AdGuard client name;
 # fleet/lib.nix resolves a service's `host` (fleet/services.nix) to its IP
 # here, so that should be the machine that serves its names. hamilton is
 # paused; its address stays reserved.

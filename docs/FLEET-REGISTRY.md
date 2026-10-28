@@ -15,9 +15,11 @@ rewrite list, and the same IPs were typed out in several places.
 
 ## Shape
 
-- **`fleet/hosts.nix`**: name → IP for every fixed LAN address. That covers
-  NixOS hosts, but also the router, the BMC and containers such as
-  `bambuddy`. Each becomes an AdGuard client name, ordered by IP.
+- **`fleet/hosts.nix`**: name → IP for the fixed LAN addresses that need a
+  name or an AdGuard client label. That covers NixOS hosts, but also the
+  router, the BMC and containers such as `bambuddy`. Not every fixed address is
+  here (Bambuddy's virtual-printer addresses .95-.97 aren't), and adding one
+  makes it an AdGuard client. Entries are labelled in AdGuard ordered by IP.
 - **`fleet/services.nix`**: one entry per single-host service: the machine
   that serves it, a `scope`, and the DNS planes it answers on.
 - **`fleet/lib.nix`**: pure functions that turn those into AdGuard rewrite rows
@@ -25,8 +27,11 @@ rewrite list, and the same IPs were typed out in several places.
 - **Planes**:
   - `internal`: a `.internal` name, self-signed cert, answers with a LAN
     address.
-  - `private`: a `zjones.dev` name, trusted Let's Encrypt cert, answers with a
-    LAN address and never resolves publicly.
+  - `private`: a `zjones.dev` name with a Let's Encrypt cert, answering with a
+    LAN address. The cert is browser-trusted once the serving host sets
+    `homelab.letsencryptStaging = false` (the default is staging). These names
+    are meant to resolve only through AdGuard, which is why their certs use
+    DNS-01.
   - `public`: a `zjones.xyz` name reachable from the internet through
     Pangolin. On the LAN it only gets a split-horizon rewrite, which
     `homelab.dns.splitHorizon` can drop fleet-wide (kept so the tunnel path
@@ -45,9 +50,9 @@ Done once both merge:
   §5).
 - AdGuard's client list is built from `hosts.nix`, ordered by IP.
 - Assertions fail every host's eval on an unknown `host`, two services claiming
-  one name, or a generated rewrite duplicating a hand-written one (exact names
-  only: AdGuard ranks exact matches above wildcards, so a wildcard can't shadow
-  a generated name).
+  one name, or a generated rewrite duplicating a hand-written one. That check is
+  exact-name only: a wildcard overlapping a generated name isn't flagged, and
+  needn't be, because AdGuard answers with the exact rewrite over the wildcard.
 
 Traefik stays hand-written in Phase 1.
 

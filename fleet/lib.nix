@@ -72,8 +72,8 @@ in
     }) dupes;
 
   # Backstop over the final merged list, so a generated row that duplicates a
-  # hand-written one fails too. Exact match only — a wildcard shadowing a
-  # generated name is not detected.
+  # hand-written one fails too. Exact match only: a wildcard overlapping a
+  # generated name isn't flagged, and needn't be, since AdGuard prefers exact.
   mergedRewriteAssertions =
     rows:
     let

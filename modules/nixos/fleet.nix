@@ -42,7 +42,7 @@ in
           # certificate is what tells them apart. public is the internet name.
           planes = {
             internal = plane true "A `.internal` name with a self-signed cert. Answers with a LAN address.";
-            private = plane true "A `zjones.dev` name with a trusted Let's Encrypt cert. Answers with a LAN address; never resolves publicly.";
+            private = plane true "A `zjones.dev` name with a Let's Encrypt cert (browser-trusted once the serving host sets `homelab.letsencryptStaging = false`). Answers with a LAN address; meant to resolve only through AdGuard, which is why its certs use DNS-01.";
             public = plane false "A `zjones.xyz` name, reachable from the internet through Pangolin. On the LAN it gets a split-horizon rewrite, which `splitHorizon` can drop.";
           };
           splitHorizon = bool true;

@@ -35,8 +35,8 @@ stay consistent. This file documents the repo's structure and patterns.
   `bambuddy-vp-ca.crt`, appended to OrcaSlicer's `printer.cer` on pegasus and
   serenity). Certificates only, never keys.
 - **`fleet/`** — the fleet registry, plain data exposed read-only as
-  `homelab.fleet.*` by `modules/nixos/fleet.nix`. `hosts.nix` maps every fixed
-  LAN address (hosts, but also the router, BMC and containers) to a name;
+  `homelab.fleet.*` by `modules/nixos/fleet.nix`. `hosts.nix` names the fixed
+  LAN addresses that need a name (hosts, but also the router, BMC, containers);
   `services.nix` lists single-host services and the DNS planes they answer on.
   A new flat-name service gets a `services.nix` entry, not a hand-written AdGuard
   rewrite: galactica generates its rows. A new fixed address goes in `hosts.nix`
