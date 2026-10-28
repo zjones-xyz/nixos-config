@@ -154,7 +154,7 @@ in
       answer = "192.168.8.72";
     }
 
-    # memory-alpha-2
+    # Bambuddy's address on memory-alpha (bambuddy.nix); legacy name kept
     {
       domain = "memory-alpha-2.internal";
       answer = "192.168.8.98";

@@ -1,19 +1,11 @@
 { config, pkgs, lib, ... }:
 
 let
-  # IPs come from fleet/hosts.nix; the order is spelled out because attrsets
-  # enumerate alphabetically and this list renders into AdGuardHome.yaml.
-  clientOrder = [
-    "router"
-    "hopper"
-    "hamilton"
-    "pegasus"
-    "memory-alpha-2"
-    "memory-alpha"
-    "homeassistant"
-    "galactica"
-    "towerbmc"
-  ];
+  # Every registry address, ascending by IP: attrsets enumerate alphabetically,
+  # and this list renders into AdGuardHome.yaml in this order.
+  clients = lib.sort (a: b: builtins.compareVersions a.ip b.ip < 0) (
+    lib.mapAttrsToList (name: h: { inherit name; inherit (h) ip; }) config.homelab.fleet.hosts
+  );
 in
 {
   # clients.persistent reads homelab.fleet.hosts; import it here too so this
@@ -117,11 +109,11 @@ in
       # (confirmed live, 2026-09-08 — the router replica inherited the same
       # bug via AdGuardHome-Sync, since it just mirrors whatever origin
       # reports).
-      clients.persistent = map (name: {
-        inherit name;
-        ids = [ config.homelab.fleet.hosts.${name}.ip ];
+      clients.persistent = map (c: {
+        inherit (c) name;
+        ids = [ c.ip ];
         use_global_settings = true;
-      }) clientOrder;
+      }) clients;
 
       # Every importer of this module (galactica live; hopper/hamilton staged)
       # gets the same client list — keep it host-agnostic.

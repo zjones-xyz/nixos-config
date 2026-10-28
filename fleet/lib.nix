@@ -8,18 +8,18 @@
 let
   suffix = {
     internal = "internal";
-    dev = "zjones.dev";
-    xyz = "zjones.xyz";
+    private = "zjones.dev";
+    public = "zjones.xyz";
   };
 
   domainFor =
     name: svc: plane:
     if svc.scope == "flat" then "${name}.${suffix.${plane}}" else "${name}.${svc.host}.${suffix.${plane}}";
 
-  # The xyz plane is the only one the split-horizon switches can drop.
+  # The public plane is the only one the split-horizon switches can drop.
   emitted =
     splitHorizonGlobal: svc: plane:
-    svc.planes.${plane} && (plane != "xyz" || (svc.splitHorizon && splitHorizonGlobal));
+    svc.planes.${plane} && (plane != "public" || (svc.splitHorizon && splitHorizonGlobal));
 
   unknownHost =
     name: svc: "fleet/services.nix: `${name}` names unknown host `${svc.host}` (not in fleet/hosts.nix).";
@@ -72,8 +72,8 @@ in
     }) dupes;
 
   # Backstop over the final merged list, so a generated row that duplicates a
-  # hand-written one fails too. Exact match only — a wildcard shadowing a
-  # generated name is not detected.
+  # hand-written one fails too. Exact match only: a wildcard overlapping a
+  # generated name isn't flagged, and needn't be, since AdGuard prefers exact.
   mergedRewriteAssertions =
     rows:
     let

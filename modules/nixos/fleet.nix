@@ -8,6 +8,11 @@ let
     type = types.bool;
     inherit default;
   };
+
+  plane = default: description: mkOption {
+    type = types.bool;
+    inherit default description;
+  };
 in
 {
   # ── Fleet registry: typed, read-only views of fleet/{hosts,services}.nix ───
@@ -33,10 +38,12 @@ in
             type = types.enum [ "flat" "host" ];
             default = "host";
           };
+          # internal and private both answer with a LAN address; the
+          # certificate is what tells them apart. public is the internet name.
           planes = {
-            internal = bool true;
-            dev = bool true;
-            xyz = bool false;
+            internal = plane true "A `.internal` name with a self-signed cert. Answers with a LAN address.";
+            private = plane true "A `zjones.dev` name with a Let's Encrypt cert (browser-trusted once the serving host sets `homelab.letsencryptStaging = false`). Answers with a LAN address; meant to resolve only through AdGuard, which is why its certs use DNS-01.";
+            public = plane false "A `zjones.xyz` name, reachable from the internet through Pangolin. On the LAN it gets a split-horizon rewrite, which `splitHorizon` can drop.";
           };
           splitHorizon = bool true;
           note = mkOption {
@@ -48,7 +55,7 @@ in
     };
   };
 
-  # Drops every generated `.xyz` row (not enabled = false — AdGuardHome-Sync
+  # Drops every generated public (`.xyz`) row (not enabled = false — AdGuardHome-Sync
   # mirroring of that isn't trusted). Fleet-wide and redeploys galactica: for
   # one-off debugging use `dig @1.1.1.1` or `curl --resolve` instead.
   options.homelab.dns.splitHorizon = bool true;

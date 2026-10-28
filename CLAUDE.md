@@ -34,6 +34,16 @@ stay consistent. This file documents the repo's structure and patterns.
 - **`certs/`** — public certificates more than one host trusts (e.g.
   `bambuddy-vp-ca.crt`, appended to OrcaSlicer's `printer.cer` on pegasus and
   serenity). Certificates only, never keys.
+- **`fleet/`** — the fleet registry, plain data exposed read-only as
+  `homelab.fleet.*` by `modules/nixos/fleet.nix`. `hosts.nix` names the fixed
+  LAN addresses that need a name (hosts, but also the router, BMC, containers);
+  `services.nix` lists single-host services and the DNS planes they answer on.
+  A new flat-name service gets a `services.nix` entry, not a hand-written AdGuard
+  rewrite: galactica generates its rows. A new fixed address goes in `hosts.nix`
+  only; AdGuard's client list follows it, ordered by IP.
+  Wildcard groups and host identities stay hand-written in galactica's
+  `configuration.nix`. Design, roadmap and open decisions:
+  `docs/FLEET-REGISTRY.md`.
 - **`docs/<topic>.md`** — fleet-wide documentation that belongs to no single host
   (e.g. `DISK-LABELLING.md`, the physical disk naming and cable-labelling
   convention; `DISK-DRAWER.md`, unassigned spare disks; `BACKUP.md`, which host
@@ -120,7 +130,8 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
   - `/dashboard`: a service or bookmark in `hosts/galactica/homepage/`. A
     widget's `HOMEPAGE_VAR_*` line in `homepages.nix`, and its sops secret,
     count too.
-  - `/dns`: an AdGuard rewrite on galactica.
+  - `/dns`: an AdGuard rewrite on galactica, including a `fleet/services.nix`
+    change that alters the rows it generates.
   - `/dhcp`: a DHCP reservation or pool exclusion. These live on the router
     for now, so the PR body says what to set.
   - `[memory-alpha/dashboard/dns] …`: the real change is on memory-alpha.
