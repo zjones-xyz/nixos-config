@@ -13,13 +13,11 @@ let
     then "/letsencrypt/acme-staging.json"
     else "/letsencrypt/acme.json";
 
-  # File provider config for non-Docker services.
-  # Traefik watches this directory for YAML files at runtime.
-  # jellyfin-xyz: Newt forwards the public jellyfin.zjones.xyz straight to :8096,
-  # but galactica's split-horizon rewrite (generated from fleet/services.nix)
-  # sends LAN clients here, so without this router they get a 404. zjones.xyz is
-  # its own Cloudflare zone (CF_DNS_API_TOKEN must cover it); no SANs are shared
-  # with `jellyfin`, so its DNS-01 order can't break the .dev cert.
+  # File provider config for non-Docker services, watched at runtime.
+  # jellyfin-xyz serves LAN clients that galactica's split-horizon rewrite
+  # (fleet/services.nix) sends here; Newt carries the public name straight to
+  # :8096. Its cert is a DNS-01 order in the separate zjones.xyz zone, which
+  # CF_DNS_API_TOKEN must cover (MANUAL-STEPS.md §#232); no shared SANs.
   jellyfinConfig = pkgs.writeText "jellyfin.yml" ''
     http:
       routers:

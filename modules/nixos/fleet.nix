@@ -38,12 +38,12 @@ in
             type = types.enum [ "flat" "host" ];
             default = "host";
           };
-          # internal and private are both LAN-only; the certificate is what
-          # tells them apart. public is the only name reachable off the LAN.
+          # internal and private both answer with a LAN address; the
+          # certificate is what tells them apart. public is the internet name.
           planes = {
-            internal = plane true "A `.internal` name with a self-signed cert. LAN only.";
-            private = plane true "A `zjones.dev` name with a trusted Let's Encrypt cert. LAN only; never resolves publicly.";
-            public = plane false "A `zjones.xyz` name, terminated by Pangolin. On the LAN it gets a split-horizon rewrite, which `splitHorizon` can drop.";
+            internal = plane true "A `.internal` name with a self-signed cert. Answers with a LAN address.";
+            private = plane true "A `zjones.dev` name with a trusted Let's Encrypt cert. Answers with a LAN address; never resolves publicly.";
+            public = plane false "A `zjones.xyz` name, reachable from the internet through Pangolin. On the LAN it gets a split-horizon rewrite, which `splitHorizon` can drop.";
           };
           splitHorizon = bool true;
           note = mkOption {
