@@ -8,18 +8,18 @@
 let
   suffix = {
     internal = "internal";
-    dev = "zjones.dev";
-    xyz = "zjones.xyz";
+    private = "zjones.dev";
+    public = "zjones.xyz";
   };
 
   domainFor =
     name: svc: plane:
     if svc.scope == "flat" then "${name}.${suffix.${plane}}" else "${name}.${svc.host}.${suffix.${plane}}";
 
-  # The xyz plane is the only one the split-horizon switches can drop.
+  # The public plane is the only one the split-horizon switches can drop.
   emitted =
     splitHorizonGlobal: svc: plane:
-    svc.planes.${plane} && (plane != "xyz" || (svc.splitHorizon && splitHorizonGlobal));
+    svc.planes.${plane} && (plane != "public" || (svc.splitHorizon && splitHorizonGlobal));
 
   unknownHost =
     name: svc: "fleet/services.nix: `${name}` names unknown host `${svc.host}` (not in fleet/hosts.nix).";
