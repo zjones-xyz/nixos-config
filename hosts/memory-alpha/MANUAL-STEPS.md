@@ -105,7 +105,7 @@ for the pull), so a cold start never waits on a download.
 Data stays in `/home/z/orca-slicer-api` and `/home/z/bambu-studio-api`, the
 compose paths.
 
-1. [ ] Stop the compose stack (Dockge, or
+1. [ ] Stop the compose stack (Arcane, or
    `docker compose -f ~/homelab-stacks/memory-alpha/orca-slicer-api/compose.yaml down`).
    The Nix containers reuse both names, and their pre-start runs
    `docker rm -f <name>`: the first cold start would silently delete a
