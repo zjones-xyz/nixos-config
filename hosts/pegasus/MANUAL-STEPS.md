@@ -1141,7 +1141,7 @@ playback for a second or two.
     and commit in `~/dux-state` (the private repo, #226), so a fresh seed
     matches.
 
-## #234 Ferdium + Claude Desktop at login — verify after the next switch
+## #235 Ferdium + Claude Desktop at login — verify after the next switch
 
 Both now start with the niri session. Ferdium shares TickTick's at-startup
 rule (right monitor) and Claude Desktop has its own (centre monitor). Claude
