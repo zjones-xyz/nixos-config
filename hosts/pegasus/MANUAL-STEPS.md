@@ -1140,3 +1140,18 @@ playback for a second or two.
 13. [ ] After any change to the hidden list, run `dms-settings-snapshot`
     and commit in `~/dux-state` (the private repo, #226), so a fresh seed
     matches.
+
+## #234 Ferdium + Claude Desktop at login — verify after the next switch
+
+Both now start with the niri session. Ferdium shares TickTick's at-startup
+rule (right monitor) and Claude Desktop has its own (centre monitor). Claude
+Desktop's app-id is already verified; Ferdium's is the unverified
+`(?i)ferdium$` from §22.
+
+1. [ ] With Ferdium open, check `niri msg windows`: its app-id should match
+   `(?i)ferdium$`. Fix the regex in `niri-settings.nix` if it doesn't (the
+   §22 block-out uses the same one).
+2. [ ] Log out and back in. Ferdium should open on the right monitor and
+   Claude Desktop on the centre one, neither of them focused.
+3. [ ] Mid-session, quit and relaunch each by hand. Each should open on the
+   current workspace, focused.
