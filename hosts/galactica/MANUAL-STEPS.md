@@ -1520,9 +1520,9 @@ step makes the next one interpretable.
 including the ~13 W that item 1 has now collected. Step 1 is what changes that,
 and it is free.
 
-⚠ **Read `PLATFORM.md` §13e before spinning anything down.** smartd and the
-Scrutiny collector both wake sleeping disks, and the ATA standby timer does not
-survive a power cycle.
+⛔ **The array spins continuously, decided 2026-10-29** — `PLATFORM.md` §13f is
+closed and items 6–9 below retired with it. §13e is still the reason, and still
+what to read before anyone proposes parking a disk here again.
 
 1. [ ] **Baseline at the wall.** Falls out of §6 for free — once `power.ups` is
    up, `upsc ups` reports `ups.load` and usually `ups.realpower`. Record the
@@ -1579,84 +1579,32 @@ survive a power cycle.
    them, two BX500s on the LSI. The card already drives those two and nothing
    else, so this measurement waits on nothing but the next case-open visit.
    `PLATFORM.md` §13c item 3 carries the correction.
-6. [ ] **Measure the seed set.** The number that decides §13f, and the cheapest
-   of the three. It is the *active seed* total, not just what is in flight:
-   ```sh
-   du -sh /tank/nixflix_media/downloads
-   # and, for what qBittorrent is actually still seeding, its own total —
-   # WebUI → Statistics, or sum "total_size" over the torrents list
-   ```
-   Under ~1.5 TB and a 2 TB tier is comfortable; near or over 2 TB and the whole
-   option needs a bigger device.
-   ⭐ **The seeding-retention policy this item used to ask for exists**, as of
-   #206: ratio 3.0 or 14 days, whichever is first, then the \*arrs remove the
-   torrent. ⚠ Which gives the measurement a *date*. Taken before the switch that
-   carries #206, the `du` counts the unbounded regime and reads high; taken just
-   after it, it catches §#206 step 3's one-off cleanup but not yet the steady
-   state. Take it **at least 14 days after that switch**. What it should then
-   show is 14 days of everything plus the all-time set of the one indexer that
-   seeds indefinitely — and only if §#206 step 2 exempted that indexer's
-   existing torrents before the switch, since otherwise they were removed with
-   the rest and the number reads low instead.
-   ⚠ Since the reading stack landed (§18), Chaptarr and Shelfmark drive
-   nixflix's qBittorrent through the same `downloadsDir`, so book and manga
-   torrents are in this total as well. The `du` already counts them — just
-   don't read the number as media-only, or size the device against the wrong
-   growth rate.
-7. [ ] **Count concurrently seeded torrents.** This is what picks `h-SDCP` over
-   a bought SSD, not the power figures — a single 5400-class spinner is
-   ~75–100 IOPS and a large swarm is seek-bound. A few dozen: the spinner is
-   fine. Several hundred: buy the SSD. `PLATFORM.md` §13f has the table.
-   ⚠ Same timing caveat as item 6: #206's window bounds this count too, so a
-   count taken before the window has turned over is of the old regime and
-   overstates it.
-8. [ ] **Burn `h-SDCP` in before trusting it, and read its hours first.** Drawer
-   stock is untested by convention (`docs/DISK-DRAWER.md`, `PLATFORM.md` §12).
-   `smartctl -a` for `Power_On_Hours` — a 2017 Blue at 45k hours is a different
-   proposition from one at 800 — then `badblocks -wsv` or `f3`, plus a SMART
-   long test. ⚠ It would become the one permanently-awake device in the
-   machine, so it is the wrong place to accept an unknown.
-9. [ ] **Settle the blockers §13f does not remove**, before concluding that a
-   seed tier bought spin-down:
-   - **Paperless-ngx's database and Whoosh index are on the spinners**
-     (`/tank/documents/paperless`, §15) — the one app of the recent batch whose
-     live data did not land on the special vdev, because it was restored in
-     place rather than moved. Measure how often it actually touches disk when
-     nobody is using it (its periodic index/sanity/classifier tasks) before
-     assuming the idle windows are long. If it turns out to be the binding
-     constraint, moving just its `data` dir to `tank/appdata` is a smaller
-     change than the whole seed tier.
-   - **The reading stack's content is on the spinners as well** — `tank/books`
-     is its own dataset (§18, `READING-STACK.md` §6). Unlike Paperless its
-     state did land on the special vdev, so what reaches the array is
-     Audiobookshelf playback, Suwayomi's manga downloads and Chaptarr's
-     imports: user-driven bursts rather than a background index, and a seed
-     tier moves none of it. Worth watching over the same window as Paperless
-     before calling the idle gaps long.
-   - **smartd's self-test schedule** (§13e item 7, added by #162) wakes every
-     disk weekly at 03:00 and runs a multi-hour long test monthly. No flag
-     suppresses it — a scheduled test must spin the disk up — so it is a third
-     fixed hour to design around, and the one that cannot be moved onto the
-     back of another wake.
-   - The **Scrutiny collector's** nightly sweep wakes every disk (§13e item 2).
-     Now at 01:00 local, alongside borgmatic's 01:30 rather than in a window of
-     its own — but 30 minutes apart is still two wakes if the standby timer is
-     shorter than the gap. Close it to ~01:25, or set a timer longer than the
-     gap, once a spin-down is actually armed.
-   - **The three NFS exports memory-alpha mounts** are all on the spinners, and
-     `tank/bambuddy_library` gained a real consumer with PR #155 (§13e item 6).
-     Measure it from the server — `nfsstat -s`, plus the He12s'
-     `Start_Stop_Count` across a day — because the client is another machine and
-     nothing on galactica shows who woke the array.
-   - Whether **Jellyfin's and the \*arrs' scheduled scans stay metadata-only**.
-     All metadata is on the special vdev, so an unchanged library *should* walk
-     from SSD + ARC without waking a spinner. Plausible, unverified, decisive.
-     Watch the He12s' `Start_Stop_Count` across a scan rather than guessing.
+6. [x] **~~Measure the seed set.~~ RETIRED 2026-10-29** with §13f — it existed
+   to size the seed tier. If the question ever returns: the number wanted is the
+   *active seed* total (`du -sh /tank/nixflix_media/downloads` plus
+   qBittorrent's own), it includes book and manga torrents since the reading
+   stack shares `downloadsDir`, and since #206 it converges on 14 days of
+   everything plus the one indefinitely-seeding indexer.
+7. [x] **~~Count concurrently seeded torrents.~~ RETIRED 2026-10-29** with §13f
+   — it only ever picked `h-SDCP` over a bought SSD.
+8. [x] **~~Burn `h-SDCP` in before trusting it.~~ RETIRED 2026-10-29** with
+   §13f. The disk stays in the drawer uncommitted, where `docs/DISK-DRAWER.md`
+   and `PLATFORM.md` §12 already require a burn-in before it is trusted.
+9. [x] **~~Settle the blockers §13f does not remove.~~ RETIRED 2026-10-29** —
+   they were blockers only to a spin-down, and §13e keeps every one as a fact
+   about the host. One survives for a different reason: **Paperless-ngx's
+   SQLite database and Whoosh index are on the RAIDZ1 spinners**
+   (`/tank/documents/paperless`, §15), restored in place rather than onto the
+   special vdev. That is a latency question now, not a power one, and moving
+   just its `data` dir to `tank/appdata` is still the small fix.
 10. [ ] **Check whether borgmatic's nightly run re-reads everything.** Its ZFS
     hook mounts each snapshot at a fresh path per run and borg's files cache is
-    path-keyed; if that defeats the cache, 01:30 becomes hours of spinning
-    rather than a metadata sweep (§13e item 3). Compare the job's duration and
-    read volume against the amount of data that actually changed that day.
+    path-keyed; if that defeats the cache, 01:30 is hours of reading the whole
+    Critical + Precious set rather than a metadata sweep (§13e item 3). ⭐ Kept
+    after §13f closed because it was never really a power item: a backup that
+    re-reads everything nightly is a duration and array-load problem on a pool
+    that stays spinning either way. Compare the job's duration and read volume
+    against the amount of data that actually changed that day.
 
 ---
 

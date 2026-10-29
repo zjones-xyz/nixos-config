@@ -1934,9 +1934,10 @@ number on the page: 4× He12 from 5.0 W idle to ~1.0 W standby is ~16 W. It does
 not work *against the current layout*, for reasons that are structural rather
 than tunable:
 
-> ⚠ **§13f revisits the first bullet, and only the first.** Moving the seed set
-> off `tank` is the one change that dissolves it. The others below are unchanged
-> by that, which is why §13f is a candidate and not a conclusion.
+> ⛔ **DECIDED 2026-10-29: the array spins continuously.** §13f's seed tier was
+> the one change that would have dissolved the first bullet; the owner's call is
+> not to build it, so §13f is closed and this rejection now rests on a decision
+> as well as on the layout. The other bullets are unchanged either way.
 
 - **qBittorrent seeds out of `/tank/nixflix_media/downloads`.** That is a plain
   subdirectory of the media dataset, deliberately (`nixflix.nix`'s layout rule:
@@ -2009,15 +2010,22 @@ the fix is still in the BIOS, not in Nix.
 router as a sync replica), the NFS server memory-alpha mounts, and the
 acquisition half of the media stack. There is no idle window to suspend into.
 
-### 13e. ⚠ Eight things independently wake a sleeping disk on this host
+### 13e. Eight things independently wake a sleeping disk on this host
 
-Any spin-down has to survive all eight, or it looks like it worked for half an
-hour and then quietly stops:
+Written as the test any spin-down had to survive — all eight, or it looks like
+it worked for half an hour and then quietly stops. ⭐ Since 2026-10-29 it is the
+*reason* the array spins rather than a list to clear: three are fixed hours, one
+lives on another machine, none is cheap to move. Kept because most are facts
+about this host whatever it does with its disks, and because reopening §13f
+means answering them again.
 
 1. **smartd, every 30 minutes.** `modules/nixos/smart.nix` monitors with `-a`,
    which issues a full attribute read to every autodetected disk — spinning a
    standby drive straight back up. This is why `homelab.smart.standbyAware`
-   exists and why `configuration.nix` sets it; the module explains the flag.
+   exists; the module explains the flag. ⛔ **galactica no longer sets it**
+   (2026-10-29): nothing here parks a disk, so the clause would be inert, and
+   config that claims otherwise is worse than silence. The option stays in the
+   module, default false.
    > ⚠ **The flag does not cover `-o on`**, which stays in the monitored
    > string. On some drives the firmware's armed offline-collection routine
    > spins the disk up by itself, which would defeat the spin-down from the
@@ -2134,9 +2142,24 @@ settled on 2026-10-06. The point survives the example: any spin-down armed this
 way has to be re-armed after every reset, which is why §13f is about moving a
 workload rather than about a timer.
 
-### 13f. A separate seed tier — the one change that could let `tank` sleep
+### 13f. ❌ A separate seed tier — closed 2026-10-29, kept for the reasoning
 
-**Not yet decided; the preconditions are `MANUAL-STEPS.md` §17 items 6–10.**
+⛔ **DECIDED AGAINST.** This was the one change that would have let `tank`
+sleep. Nothing below is wrong; it is simply not being done, and it is kept so
+the idea is not re-proposed from scratch. In the section's own terms the call is
+easy to agree with: it is "necessary but not sufficient", it is the only item in
+§13 needing new hardware and a copy instead of a hardlink on every \*arr import,
+and §13e bounds the windows it could ever have bought — while §13c's two largest
+remaining items need none of it. ⭐ It also drops a reliability cost rather than
+buying one: no spin-up or load/unload accumulation on the four disks a
+one-tolerance pool can least afford, which is §13d's APM argument.
+
+**What would reopen it:** the spinners' continuous load changing shape — the
+seed set leaving `tank` for other reasons, or Paperless's index and `tank/books`
+both moving off. Then §13e is the list to re-answer. `MANUAL-STEPS.md` §17
+items 6–9 retired with this section; item 10 stayed, for a non-power reason.
+
+**The original analysis follows.** Its preconditions were §17 items 6–10.
 
 §13d rejects `tank` spin-down because qBittorrent seeds out of
 `/tank/nixflix_media/downloads`. That path is a plain subdirectory of the media

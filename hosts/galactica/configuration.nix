@@ -528,9 +528,9 @@
   # stays the local alerter.
   services.scrutinyCollector.enable = true;
 
-  # 01:00 rather than the default midnight — the sweep wakes every disk, so it
-  # belongs in the same night-time window as borgmatic's 01:30 rather than in
-  # its own. Local time, not UTC: the module sets the container's TZ.
+  # 01:00 rather than the default midnight, and clear of borgmatic's 01:30.
+  # Local time, not UTC: the module sets the container's TZ, without which this
+  # fires at 18:00.
   services.scrutinyCollector.cronSchedule = "0 1 * * *";
 
   # ── Remote access for the dashboards (homepages.nix) ───────────────────────
@@ -605,10 +605,6 @@
   # ~20 h spinner long test clear of the scrub, which starts on the 1st and
   # runs ~12 h. No stagger: the index counts every disk, SSDs included.
   homelab.smart.selfTests = "(S/../../7/03|L/../15/./03)";
-
-  # Don't spin a parked disk up just to read its attributes — the 30-minute
-  # poll is otherwise what defeats every spin-down here. PLATFORM.md §13e.
-  homelab.smart.standbyAware = true;
 
   # Flipped after staging issuance was proven (which is what the flag is
   # for). Separate cert storage per CA, so this is freely reversible.

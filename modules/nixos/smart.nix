@@ -83,7 +83,7 @@
         autodetect = true;
 
         # Full attribute set + the drive's own offline collection/autosave.
-# Self-tests are opt-in per host (selfTests): only hosts whose SMART
+        # Self-tests are opt-in per host (selfTests): only hosts whose SMART
         # data reaches Scrutiny have anyone reading the result. ⚠ Both `-o on`
         # and `-s` spin a parked disk up regardless of `-n standby` — see
         # standbyAware's description.
