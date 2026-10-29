@@ -462,6 +462,20 @@ in
     noDisplay = true;
   };
 
+  # ── Paperless-ngx as an app window ──────────────────────────────────────────
+  # Linux stand-in for Paperparrot (Apple-only): galactica's web UI in a bare
+  # Chrome --app window. startupWMClass is the app_id Chrome gives that window,
+  # so it groups under this entry instead of under Chrome.
+  xdg.desktopEntries.paperless = {
+    name = "Paperless-ngx";
+    genericName = "Document Manager";
+    type = "Application";
+    exec = "${pkgsApps.google-chrome}/bin/google-chrome-stable --app=https://paperless.peacock-koi.ts.net";
+    icon = "x-office-document";
+    categories = [ "Office" ];
+    settings.StartupWMClass = "chrome-paperless.peacock-koi.ts.net__-Default";
+  };
+
   # ksycoca needs to know about the new/changed desktop entry above (and any
   # other desktop-entry-based shortcut) before KGlobalAccel can resolve it —
   # rebuild on every activation rather than requiring a full logout each
