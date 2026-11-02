@@ -1849,3 +1849,32 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   in the private `dux-state` repo (#226).
   Hiding is by `node.name`, so it covers all four slots. Their volumes stay
   reachable through Dux Settings → Audio → Hidden, or through `wpctl`.
+
+- **PWAs on PWAsForFirefox, 2026-11-02.** Chrome and Vivaldi PWAs looked
+  out of place under niri. Their titlebars ignored the system theme, their
+  icons were close to but not the same as the rest of the desktop, and many
+  sites put page-style text in the window title. `firefoxpwa` runs each app
+  as its own window with its own app-id (`FFPWA-<ULID>`), on the release
+  Firefox engine. That keeps it on `pkgs` like `firefox`, because stable
+  backports its security releases ("Exposed apps on the fast lane" above).
+  *Default-profile prefs, via `user.js`.* Upstream defaults let the site
+  drive the window title, the window icon and the toolbar colour. The
+  default profile (the all-zero ULID) turns all of those off, so the window
+  shows the app's own name and icon, and the toolbar keeps the Firefox
+  system theme. `user.js` is re-applied at every launch, so the same toggles
+  in an app's own settings page don't survive a restart. Change them here.
+  Apps put in a new profile don't get the file and keep upstream behaviour.
+  *Icons are fixed per app, not by the icon theme.* firefoxpwa names each
+  app's icon after its ULID, which no icon theme will ever contain. To swap
+  one, use `firefoxpwa site update <ULID> --icon-url data:…`. A `data:` URL
+  is needed because the icon fetcher handles `http(s)` and `data` URLs, not
+  `file://`.
+  *Alt rejected: Home Manager's `programs.firefoxpwa`.* It can declare
+  sites, names and icons, but it writes `config.json` whenever it is enabled,
+  as a read-only store link. With it on, the extension can't install
+  anything. Revisit once the set of apps stops changing. Moving to it would
+  mean declaring every app, with its ULID copied from the live
+  `config.json`.
+  *Alt rejected: GNOME Web.* Its WebKitGTK renders black on this NVIDIA
+  card without `WEBKIT_DISABLE_DMABUF_RENDERER`, as Orca's pages already
+  do, and site compatibility is worse.
