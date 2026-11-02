@@ -27,9 +27,11 @@
     # Plain cross-platform CLI tools that nixpkgs provides are kept in nix
     # instead (see hosts/serenity/home.nix). Homebrew keeps only what's awkward
     # to get from nixpkgs on darwin: asdf (shell-integrated runtime manager),
-    # handbrake (CLI), and immich-go.
+    # handbrake (CLI), immich-go, and firefoxpwa (Linux-only in nixpkgs).
     brews = [
       "asdf"
+      # modules/home/firefoxpwa.nix links its manifest for the extension.
+      "firefoxpwa"
       "handbrake"
       "immich-go"
     ];
@@ -50,6 +52,8 @@
       # not found compiling abseil-cpp; not worth chasing for a docs browser).
       "dash"
       "ferdium"
+      # Needed for the PWAsForFirefox extension (modules/home/firefoxpwa.nix).
+      "firefox"
       "fuse-t"
       "macos-fuse-t/cask/fuse-t-sshfs"
       "jetbrains-toolbox"

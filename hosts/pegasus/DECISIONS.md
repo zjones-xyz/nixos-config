@@ -1875,6 +1875,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   anything. Revisit once the set of apps stops changing. Moving to it would
   mean declaring every app, with its ULID copied from the live
   `config.json`.
+  *Shared with serenity (#236).* The wiring is `modules/home/firefoxpwa.nix`.
+  serenity gets the native program from Homebrew (serenity DECISIONS.md §2).
   *Alt rejected: GNOME Web.* Its WebKitGTK renders black on this NVIDIA
   card without `WEBKIT_DISABLE_DMABUF_RENDERER`, as Orca's pages already
   do, and site compatibility is worse.

@@ -8,6 +8,7 @@ in
 {
   imports = [
     ../../modules/home/common.nix
+    ../../modules/home/firefoxpwa.nix
     ./niri-settings.nix
   ];
 
@@ -63,9 +64,6 @@ in
     vscode
     pkgsApps.google-chrome
     firefox
-    # PWAs as their own windows, on the release Firefox engine (same lane as
-    # firefox above). Wiring and default-profile prefs: "PWAs" block below.
-    firefoxpwa
     pkgsApps.vivaldi
     # nixpkgs' upstream `floorp` was replaced with this prebuilt variant —
     # building it from source became unfeasible starting with its 12.x line.
@@ -452,20 +450,6 @@ in
   # stays installed: niri's GNOME portal uses it for open/save dialogs.
   xdg.dataFile."dbus-1/services/org.freedesktop.FileManager1.service".source =
     "${osConfig.programs.dux-files.package}/share/dbus-1/services/dev.duxlabs.files.FileManager1.service";
-
-  # ── PWAs: PWAsForFirefox ───────────────────────────────────────────────────
-  # The native host lets the browser extension install apps. Not Home
-  # Manager's programs.firefoxpwa: it owns config.json read-only, which locks
-  # out installing from the extension. The prefs keep each app's own name and
-  # icon on its window and leave the toolbar on the system theme instead of
-  # the site's brand colour (DECISIONS.md, "PWAs on PWAsForFirefox").
-  mozilla.firefoxNativeMessagingHosts = [ pkgs.firefoxpwa ];
-  xdg.dataFile."firefoxpwa/profiles/00000000000000000000000000/user.js".text = ''
-    user_pref("firefoxpwa.dynamicWindowTitle", false);
-    user_pref("firefoxpwa.dynamicWindowIcon", false);
-    user_pref("firefoxpwa.sitesSetThemeColor", false);
-    user_pref("firefoxpwa.dynamicThemeColor", false);
-  '';
 
   # Vicinae has no built-in global-shortcut support by design — the DE's own
   # shortcut mechanism binds its CLI toggle. A plain single-Exec desktop
