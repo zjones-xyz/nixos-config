@@ -1140,3 +1140,28 @@ playback for a second or two.
 13. [ ] After any change to the hidden list, run `dms-settings-snapshot`
     and commit in `~/dux-state` (the private repo, #226), so a fresh seed
     matches.
+
+## #236 PWAsForFirefox — first apps
+
+Background: DECISIONS.md, "PWAs on PWAsForFirefox".
+
+1. [ ] Switch pegasus, then install the **PWAsForFirefox** extension in
+   Firefox from addons.mozilla.org. Its setup page should report the
+   native program as installed (version 2.18.2). Don't run its "install
+   runtime" step: the Nix package already includes it.
+2. [ ] Install the first app from the extension's toolbar button while on
+   the site. Check that `firefoxpwa site list` shows it and that the app is
+   in the launcher.
+3. [ ] Launch it. The window title should be the app's name, not the page
+   title, and the toolbar should keep the system theme rather than the
+   site's colour. Check the app-id with `niri msg windows`. It should be
+   `FFPWA-<ULID>`.
+4. [ ] Optional, per app whose icon looks off: pick the icon you want
+   (e.g. from the icon theme) and run
+   `firefoxpwa site update <ULID> --icon-url "data:image/svg+xml;base64,$(base64 -w0 icon.svg)"`.
+   The launcher entry is regenerated with that icon. This takes a `data:`
+   URL because `file://` isn't accepted.
+5. [ ] Optional: a niri window rule for an app goes in
+   `niri-settings.nix`'s `window-rules`, matched on its app-id, e.g.
+   `{ matches = [ { app-id = "^FFPWA-<ULID>$"; } ]; open-on-workspace = "…"; }`.
+   That needs a PR, since the ULID is only known after step 2.
