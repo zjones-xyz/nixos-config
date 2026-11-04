@@ -472,6 +472,23 @@
         "type": "github"
       }
     },
+    "nixpkgs-umbriel": {
+      "locked": {
+        "lastModified": 1792773339,
+        "narHash": "sha256-rZLrzrC6i+jnTAlvPZHogKDulY7WWDEv9hJeHieO7Zw=",
+        "ref": "refs/heads/master",
+        "rev": "3ec636362e1816bc2f0888fa0fa2c69f1bc9e504",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/NixOS/nixpkgs.git"
+      },
+      "original": {
+        "rev": "3ec636362e1816bc2f0888fa0fa2c69f1bc9e504",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/NixOS/nixpkgs.git"
+      }
+    },
     "npm-lockfile-fix": {
       "inputs": {
         "nixpkgs": [
@@ -652,6 +669,7 @@
         "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs",
         "nixpkgs-apps": "nixpkgs-apps",
+        "nixpkgs-umbriel": "nixpkgs-umbriel",
         "opera-flake": "opera-flake",
         "plasma-manager": "plasma-manager",
         "sops-nix": "sops-nix",

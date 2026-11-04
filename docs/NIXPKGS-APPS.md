@@ -35,10 +35,18 @@ missing argument.
 **System level (pegasus only).** `modules/nixos/hushmic.nix` reads
 `self.inputs.nixpkgs-apps.legacyPackages` directly, and the `hushmic-nix`
 input follows `nixpkgs-apps`. So a bump also rebuilds a NixOS-level package
-on pegasus, not only its Home Manager profile. This is the one exception to
+on pegasus, not only its Home Manager profile. This is the first exception to
 the policy above. HushMic is still an app, but its package reaches the host
 outside Home Manager, as a system package, and runs as a systemd user
 service defined in this repo. It takes no modules from the lane.
+
+**Separate pin (pegasus only).** `nixpkgs-umbriel` is a second unstable
+nixpkgs, held on a fixed rev, and `modules/nixos/desktop-{umbriel,noctalia}.nix`
+read its `legacyPackages` directly. This is the second exception: Umbriel is
+a compositor, not an app, and it reaches the host as a session, systemd
+user units and a portal. It stays off `nixpkgs-apps` so the scheduled bump
+can't move it, and it takes no modules from that nixpkgs either. Why, and how
+to move it: pegasus's `DECISIONS.md` (Noctalia and Umbriel entry).
 
 ## Who uses it
 
@@ -49,6 +57,7 @@ service defined in this repo. It takes no modules from the lane.
 | pegasus (`hosts/pegasus/home.nix`) | coding agents: codex, copilot, opencode, pi, qwen | 2026-10-24 |
 | pegasus (`kimi-cli`, `hermes-agent` flakes, following the lane) | Kimi Code, Hermes Agent | 2026-10-24 |
 | pegasus (`modules/nixos/hushmic.nix`) | HushMic | 2026-10-14 |
+| pegasus (`nixpkgs-umbriel`, its own pin) | Umbriel, Noctalia | 2026-11-04, #PRNUM |
 
 On pegasus, "slicers" includes open-bamboo-networking (OrcaSlicer's network
 plugin, `pkgsApps.callPackage`) and "chat apps" includes zoom-us. The
