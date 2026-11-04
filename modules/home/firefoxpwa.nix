@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, pkgsApps, ... }:
 
 let
   inherit (pkgs.stdenv.hostPlatform) isDarwin isLinux;
@@ -19,11 +19,12 @@ in
   # Not Home Manager's programs.firefoxpwa: it owns config.json read-only,
   # which locks out installing from the extension. nixpkgs builds firefoxpwa
   # for Linux only, so on darwin it is a Homebrew formula
-  # (modules/darwin/homebrew.nix) and this only links its manifest.
+  # (modules/darwin/homebrew.nix) and this only links its manifest. Linux takes
+  # the app lane: the release's 2.18.2 breaks against Firefox 158 (DECISIONS.md).
   config = lib.mkMerge [
     (lib.mkIf isLinux {
-      home.packages = [ pkgs.firefoxpwa ];
-      mozilla.firefoxNativeMessagingHosts = [ pkgs.firefoxpwa ];
+      home.packages = [ pkgsApps.firefoxpwa ];
+      mozilla.firefoxNativeMessagingHosts = [ pkgsApps.firefoxpwa ];
       xdg.dataFile."firefoxpwa/${userJs}".text = prefs;
     })
     (lib.mkIf isDarwin {

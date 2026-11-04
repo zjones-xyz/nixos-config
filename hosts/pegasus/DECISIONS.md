@@ -1854,9 +1854,12 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   out of place under niri. Their titlebars ignored the system theme, their
   icons were close to but not the same as the rest of the desktop, and many
   sites put page-style text in the window title. `firefoxpwa` runs each app
-  as its own window with its own app-id (`FFPWA-<ULID>`), on the release
-  Firefox engine. That keeps it on `pkgs` like `firefox`, because stable
-  backports its security releases ("Exposed apps on the fast lane" above).
+  as its own window with its own app-id (`FFPWA-<ULID>`).
+  *On `pkgsApps`, unlike `firefox`.* Its native program patches the Firefox
+  runtime it bundles, so it has to keep pace with Firefox itself. Stable
+  backports Firefox 158 but kept firefoxpwa at 2.18.2. Upstream says 158
+  needs 2.20.1, which unstable carries, built against the same 158.0.1. The
+  scheduled `nixpkgs-apps` bump keeps the two moving together.
   *Default-profile prefs, via `user.js`.* Upstream defaults let the site
   drive the window title, the window icon and the toolbar colour. The
   default profile (the all-zero ULID) turns all of those off, so the window

@@ -1147,7 +1147,7 @@ Background: DECISIONS.md, "PWAs on PWAsForFirefox".
 
 1. [ ] Switch pegasus, then install the **PWAsForFirefox** extension in
    Firefox from addons.mozilla.org. Its setup page should report the
-   native program as installed (version 2.18.2). Don't run its "install
+   native program as installed (version 2.20.1). Don't run its "install
    runtime" step: the Nix package already includes it.
 2. [ ] Install the first app from the extension's toolbar button while on
    the site. Check that `firefoxpwa site list` shows it and that the app is
