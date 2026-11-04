@@ -17,7 +17,7 @@ let
 
   # ⚠ Uses the colon action syntax of the pinned Umbriel. Upstream replaced it
   # with word arguments on 2026-10-29, so moving the nixpkgs-umbriel pin past
-  # that means rewriting these binds: MANUAL-STEPS.md §#PRNUM.
+  # that means rewriting these binds: MANUAL-STEPS.md §#237.
   settings = {
     general.autostart = [
       "protonmail-bridge-gui --no-window"

@@ -57,7 +57,7 @@ to move it: pegasus's `DECISIONS.md` (Noctalia and Umbriel entry).
 | pegasus (`hosts/pegasus/home.nix`) | coding agents: codex, copilot, opencode, pi, qwen | 2026-10-24 |
 | pegasus (`kimi-cli`, `hermes-agent` flakes, following the lane) | Kimi Code, Hermes Agent | 2026-10-24 |
 | pegasus (`modules/nixos/hushmic.nix`) | HushMic | 2026-10-14 |
-| pegasus (`nixpkgs-umbriel`, its own pin) | Umbriel, Noctalia | 2026-11-04, #PRNUM |
+| pegasus (`nixpkgs-umbriel`, its own pin) | Umbriel, Noctalia | 2026-11-04, #237 |
 
 On pegasus, "slicers" includes open-bamboo-networking (OrcaSlicer's network
 plugin, `pkgsApps.callPackage`) and "chat apps" includes zoom-us. The

@@ -1870,7 +1870,7 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   carry Umbriel across the syntax change while `umbriel-settings.nix` still
   uses colons (the pin's build, 0-unstable-2026-10-16, predates it).
   Noctalia comes from the same pin, so the shell and compositor always
-  agree on IPC. Moving the pin is MANUAL-STEPS §#PRNUM. nixpkgs-unstable's
+  agree on IPC. Moving the pin is MANUAL-STEPS §#237. nixpkgs-unstable's
   `programs.umbriel` module can't be imported into 26.05
   (`docs/NIXPKGS-APPS.md`), so the module is wired by hand: packages, session
   file, the package's systemd user units, and the portal.

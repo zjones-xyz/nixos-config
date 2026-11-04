@@ -1141,7 +1141,7 @@ playback for a second or two.
     and commit in `~/dux-state` (the private repo, #226), so a fresh seed
     matches.
 
-## #PRNUM Niri (Noctalia) and Umbriel sessions — first switch and trial
+## #237 Niri (Noctalia) and Umbriel sessions — first switch and trial
 
 Adds two SDDM sessions beside plain Niri + Dux, which stays the default.
 Session wiring was checked in a VM first. Everything below is what the VM
