@@ -439,8 +439,46 @@ in
         "x-scheme-handler/unknown" = vivaldi;
         # Dux Files (modules/nixos/dux-files.nix) opens folders.
         "inode/directory" = [ "dev.duxlabs.files.desktop" ];
+        # Ferdium's login callback.
+        "x-scheme-handler/ferdium" = [ "ferdium.desktop" ];
       } // archives;
+      # "Open with" entries, not defaults.
+      associations.added = {
+        "application/pdf" = [ "com.google.Chrome.desktop" ];
+        "application/x-extension-ics" = [ "thunderbird.desktop" ];
+      };
     };
+
+  # ── mimeapps.list: Home Manager wins, but keeps what it overwrites ─────────
+  # Apps' "set as default" and "always open with" replace the link with a
+  # file, which used to fail the switch on the backup name. Now the switch
+  # overwrites it, after saving the app's copy and a diff against the declared
+  # one to ~/.local/state/mimeapps-drift/ and sending a notification. Copy
+  # anything worth keeping into xdg.mimeApps above.
+  # Set on home.file (xdg.configFile is assigned wholesale for Orca below);
+  # mkForce because xdg.nix passes its own force = false through.
+  home.file."${config.xdg.configHome}/mimeapps.list".force = lib.mkForce true;
+  home.activation.saveMimeappsDrift = lib.hm.dag.entryBefore [ "checkLinkTargets" ] ''
+    f=${lib.escapeShellArg "${config.xdg.configHome}/mimeapps.list"}
+    if [[ -f "$f" && ! -L "$f" && ! -v DRY_RUN ]]; then
+      dir=${lib.escapeShellArg "${config.xdg.stateHome}/mimeapps-drift"}
+      saved="$dir/mimeapps.list.$(date +%Y%m%d-%H%M%S)"
+      mkdir -p "$dir"
+      cp "$f" "$saved"
+      ${pkgs.diffutils}/bin/diff -u --label declared --label "$f" \
+        "$newGenPath/home-files/${lib.removePrefix "${config.home.homeDirectory}/" config.xdg.configHome}/mimeapps.list" \
+        "$f" > "$saved.diff" || true
+      warnEcho "mimeapps.list was changed outside Home Manager and will be overwritten."
+      warnEcho "The app's copy: $saved (diff: $saved.diff)"
+      cat "$saved.diff"
+      bus="/run/user/$(id -u)/bus"
+      if [[ -S "$bus" ]]; then
+        DBUS_SESSION_BUS_ADDRESS="unix:path=$bus" ${pkgs.libnotify}/bin/notify-send \
+          -a "Home Manager" "mimeapps.list overwritten" \
+          "An app changed default apps. Its copy and a diff: $saved.diff" || true
+      fi
+    fi
+  '';
 
   # ── "Show in folder" → Dux Files, not Nautilus ─────────────────────────────
   # Both ship a D-Bus activation file for org.freedesktop.FileManager1, and
