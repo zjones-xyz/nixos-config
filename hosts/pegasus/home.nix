@@ -8,6 +8,7 @@ in
 {
   imports = [
     ../../modules/home/common.nix
+    ../../modules/home/firefoxpwa.nix
     ./niri-settings.nix
   ];
 
