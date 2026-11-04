@@ -138,6 +138,11 @@
     # on `nixpkgs`. Policy for what goes here: docs/NIXPKGS-APPS.md.
     nixpkgs-apps.url = "git+https://github.com/NixOS/nixpkgs.git?ref=nixos-unstable&shallow=1";
 
+    # Umbriel + Noctalia (pegasus), held on their own pin: the scheduled lane
+    # bump would cross Umbriel's 2026-10-29 change to its action syntax, which
+    # breaks umbriel-settings.nix. Moving it: MANUAL-STEPS.md §#237.
+    nixpkgs-umbriel.url = "git+https://github.com/NixOS/nixpkgs.git?rev=3ec636362e1816bc2f0888fa0fa2c69f1bc9e504&shallow=1";
+
     # Non-flake theme sources for pegasus's Dragonized session, pinned here so
     # every source pin lives in flake.lock — consumed by
     # modules/nixos/desktop-dragonized.nix via specialArgs.

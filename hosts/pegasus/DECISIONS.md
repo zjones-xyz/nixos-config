@@ -1849,3 +1849,62 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   in the private `dux-state` repo (#226).
   Hiding is by `node.name`, so it covers all four slots. Their volumes stay
   reachable through Dux Settings → Audio → Hidden, or through `wpctl`.
+- **Noctalia and Umbriel as trial sessions beside Niri + Dux, 2026-11-04** —
+  `modules/nixos/desktop-noctalia.nix`, `modules/nixos/desktop-umbriel.nix`,
+  `hosts/pegasus/{noctalia,umbriel}-settings.nix`. SDDM gains **Niri
+  (Noctalia)** and **Umbriel**. Plain **Niri** with Dux stays the default
+  session and is otherwise unchanged.
+  *The 2026-08-11 comparison is stale.* Noctalia v5 is a native C++ shell,
+  no longer Quickshell, so the field reports behind "DankMaterialShell
+  chosen over Noctalia" describe a different codebase. Its multi-monitor
+  behaviour is unknown again, and this trial is how to find out.
+  *Umbriel needs Noctalia, not Dux.* Umbriel is a wlroots 0.20 compositor,
+  so it replaces niri, not the shell. On 2026-10-29 Umbriel removed its
+  `action:arg` command syntax in favour of word arguments. Noctalia switched
+  the same day, but Dux master still sends the colon form
+  (`workspace-switch:…`, `session-quit:skip-confirmation`), so Dux can't
+  drive Umbriel either side of that change.
+  *Own pin, `nixpkgs-umbriel`.* Umbriel needs wlroots ≥ 0.20.1 and 26.05
+  has 0.20.0, so both packages come from unstable. They come from a
+  separate rev pin, not `nixpkgs-apps`, so the scheduled lane bump can't
+  carry Umbriel across the syntax change while `umbriel-settings.nix` still
+  uses colons (the pin's build, 0-unstable-2026-10-16, predates it).
+  Noctalia comes from the same pin, so the shell and compositor always
+  agree on IPC. Moving the pin is MANUAL-STEPS §#237. nixpkgs-unstable's
+  `programs.umbriel` module can't be imported into 26.05
+  (`docs/NIXPKGS-APPS.md`), so the module is wired by hand: packages, session
+  file, the package's systemd user units, and the portal.
+  *One shell per session, chosen by `DESKTOP_SESSION`.* Both shells hang off
+  `graphical-session.target`, so without a gate a login would run both, with
+  two notification daemons and two polkit agents. SDDM exports the session
+  file's basename as `DESKTOP_SESSION`. `niri-session` and `start-umbriel`
+  both import the environment into systemd --user on every login, so the
+  value can't go stale across logouts in the shared user manager.
+  `noctalia.service` and `dms.service` each carry a `ConditionEnvironment`
+  on it. A marker file written by a wrapper was rejected: a crashed session
+  leaves it behind. niri's config is shared by both niri sessions, so its
+  shell binds call `shell-ipc <verb>`, which picks `noctalia msg` or
+  `dms ipc` by the same variable.
+  *Umbriel's unit `PATH`.* Any NixOS override of a packaged unit (here
+  `restartIfChanged = false`) also writes a coreutils-only `PATH` drop-in.
+  Umbriel's keybinds and autostart inherit it, so every launch failed with
+  "command not found". `path = lib.mkForce [ ]` drops it, and the unit keeps
+  the imported session `PATH`.
+  *No stream privacy under Umbriel.* Window and layer `block_capture` and
+  `is_cast_target` rules exist only on Umbriel master. The pinned build
+  rejects them, so nothing is hidden from screen shares in that session.
+  Niri (Noctalia) keeps niri's window rules, with Noctalia's notification
+  and panel layers added.
+  *Gaps against Dux, accepted for a trial:* no notepad (the bind is a
+  no-op under Noctalia), the raw HDMI sinks from "Monitor speakers as one
+  L/R sink" are visible because Noctalia has no hidden-device list, the
+  `dmsThemeSync`/`dcalUpcoming` plugins don't carry over, and Umbriel
+  has no swappy annotation bind.
+  *Checked in a VM before pegasus.* A throwaway NixOS test (SDDM autologin,
+  these modules and settings, virgl over software GL) ran all three
+  sessions through six logins in a row. The right shell ran, alone, in each
+  session. The launcher key, lock key and polkit prompt worked, each logout
+  went back to SDDM, and the Umbriel logout bug (Umbriel #627,
+  `umbriel.service` left running) didn't reproduce. NVIDIA, the three
+  monitors, games and streaming were out of reach there. The `PATH` bug
+  above was found this way.

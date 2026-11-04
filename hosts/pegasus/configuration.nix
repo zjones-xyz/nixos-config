@@ -11,6 +11,8 @@
     ../../modules/nixos/desktop-cosmic.nix
     ../../modules/nixos/desktop-dragonized.nix
     ../../modules/nixos/desktop-niri.nix
+    ../../modules/nixos/desktop-noctalia.nix
+    ../../modules/nixos/desktop-umbriel.nix
     ../../modules/nixos/dankcalendar.nix
     ../../modules/nixos/dux-files.nix
     ../../modules/nixos/hushmic.nix
