@@ -55,6 +55,11 @@ let
     networks:
       proxy:
         external: true
+      # Traefik ↔ socket proxy only. CONTAINERS=1 includes `inspect`, which
+      # returns every container's environment (Traefik's CF_DNS_API_TOKEN too),
+      # so the proxy must not sit on the shared `proxy` network.
+      socket-proxy:
+        internal: true
 
     services:
       # Hardened, read-only gateway to the rootful Docker socket. Traefik talks to
@@ -63,7 +68,9 @@ let
       # is exposed (CONTAINERS=1); writes are denied (POST=0). The socket itself is
       # mounted :ro here and nowhere else public-facing.
       docker-socket-proxy:
-        image: tecnativa/docker-socket-proxy:latest
+        # Pinned, same as galactica's (traefik-galactica.nix): with compose's
+        # default pull policy a floating tag resolves once and never moves.
+        image: tecnativa/docker-socket-proxy:v0.5.0
         container_name: docker-socket-proxy
         restart: unless-stopped
         environment:
@@ -76,7 +83,7 @@ let
         volumes:
           - "/run/docker.sock:/var/run/docker.sock:ro"
         networks:
-          - proxy
+          - socket-proxy
 
       traefik:
         image: traefik:v3
@@ -125,6 +132,7 @@ let
           - "/home/z/traefik/auth/htpasswd:/auth/users:ro"
         networks:
           - proxy
+          - socket-proxy
         labels:
           - "traefik.enable=true"
           # Dashboard on .internal (self-signed)
