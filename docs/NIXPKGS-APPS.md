@@ -73,6 +73,16 @@ profile, servers and Pis included:
   every host; a pegasus-only app fails just pegasus. Either way no bump PR
   opens until it's fixed. A failed scheduled run is the signal: hold that
   app back with its own pin, or wait for unstable to fix it.
+- **Eval passing isn't enough.** A stale fixed-output hash (opencode's
+  `node_modules`, #242) or a build that only fails at compile time (codex,
+  same PR) evaluates fine. So the workflow also dry-runs every host before and
+  after the bump (`.github/scripts/lane-uncached.sh`). Fixed-output
+  derivations the bump newly leaves off cache.nixos.org are downloads, so it
+  builds them and fails on a hash mismatch. Other new local builds can't be
+  told apart from Hydra just running behind, so they don't block: they're
+  listed under "⚠ Newly off cache.nixos.org" in the PR body. Check those
+  against Hydra or nixpkgs issues before switching. Only x86_64-linux
+  fixed-output derivations are built, since the runner can't build the others.
 - **Closure cost.** Lane packages link unstable's glibc and other libraries,
   so the first one on a host adds those beside the release's. For herdr on
   aarch64 that is about 87 MiB, which lands even on the Pis' SD cards.
