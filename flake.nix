@@ -128,9 +128,14 @@
     };
     hermes-agent = {
       url = "git+https://github.com/NousResearch/hermes-agent.git";
-      inputs.nixpkgs.follows = "nixpkgs-apps";
+      inputs.nixpkgs.follows = "nixpkgs-hermes";
       inputs.home-manager.follows = "home-manager";
     };
+    # Hermes held back on its own lane pin: its pm-packages.nix patches
+    # patchelf with a fix written for 0.19.2, and unstable reverted to 0.15.2,
+    # where it doesn't apply. 1d06008 is the last lane rev on 0.19.2. Back to
+    # nixpkgs-apps once hermes or nixpkgs moves (docs/NIXPKGS-APPS.md).
+    nixpkgs-hermes.url = "git+https://github.com/NixOS/nixpkgs.git?ref=nixos-unstable&rev=1d060086d60cb76a40cf37109f979d88a5bd6396&shallow=1";
 
     # Apps that should move faster than the 26.05 system — deliberately NOT
     # inputs.nixpkgs.follows. Handed to every host's Home Manager as
