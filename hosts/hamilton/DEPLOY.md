@@ -70,8 +70,9 @@ zstdcat *.img.zst | sudo dd of=/dev/diskN bs=4M status=progress conv=fsync
 This image *is* the full hamilton config — there's no separate "switch to the
 real config" step. Insert the card, connect hamilton to the network, power it on.
 
-1. Add a **DHCP reservation** on the GL.iNet router so hamilton's IP is stable,
-   and point `hamilton.internal` at it (or rely on mDNS).
+1. Add a **DHCP reservation** on the GL.iNet router for hamilton at
+   **192.168.8.11**, the address `fleet/hosts.nix` records. AdGuard's client
+   list and the `hamilton.internal` rewrite on galactica already point there.
 2. Confirm SSH works (your key is baked in via `common.nix`):
 
    ```sh

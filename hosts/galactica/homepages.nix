@@ -90,7 +90,7 @@ in
   # `*.arr.{internal,zjones.dev}` names, so these dashboards register their
   # own router pairs directly instead, same shape as configuration.nix's
   # `adguard`/`adguard-dev` pair. `guest.zjones.xyz` is NOT routed here —
-  # per dns.nix's rewrites comment, `.xyz` names are terminated by Pangolin
+  # per fleet/services.nix's header, `.xyz` names are terminated by Pangolin
   # (a Newt tunnel target), not Traefik. Neither `home.zjones.dev` nor
   # `guest.zjones.dev` falls under the arr wildcard's SAN list
   # (`*.arr.zjones.dev`), so each requests its own single-name LE
