@@ -18,7 +18,7 @@ and `main`):
    GC root and state are removed and nothing is built.
 2. If that commit was already built, or already failed to build, it is
    skipped.
-3. Otherwise it builds
+3. Otherwise it sends a low-urgency **started** notification and builds
    `git+<repo>?ref=<branch>&rev=<sha>#nixosConfigurations.<host>.config.system.build.toplevel`
    into `/var/lib/prebuild/result-<branch>`. The out-link is a GC root, so the
    build survives garbage collection until the switch.
@@ -31,6 +31,8 @@ and `main`):
 A build failure is recorded against that commit and not retried. An eval or
 fetch error, which may be a network blip, is retried on the next run but
 notified only once per commit. So is a build killed by the memory cap below.
+**started** is also sent once per commit (`<branch>.started` records it), not
+on each retry.
 
 ## Staying out of the way
 
@@ -79,6 +81,9 @@ The `prebuild` command:
 | `prebuild now -f` | The same, then follow the build's output |
 | `prebuild stop` | Cancel a running prebuild, e.g. before `nrs` |
 
+- Status shows each branch as built, FAILED, error (retrying), nothing yet,
+  or "started …, not finished": a build is running, or was stopped before
+  it ended.
 - Watch a bump: when the bump PR opens, run `prebuild now` (or wait for the
   next hourly check) and wait for "ready" before merging.
 - Build a commit again after a real failure, e.g. a flaky test: delete the

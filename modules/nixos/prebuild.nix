@@ -34,13 +34,17 @@ let
         key=''${branch//\//_}
         sha=$(git ls-remote "$REPO" "refs/heads/$branch" | cut -f1)
         if [ -z "$sha" ]; then # branch gone (merged bump PR): drop its GC root
-          rm -f "$state/$key".{sha,err,log} "$state/result-$key"
+          rm -f "$state/$key".{sha,err,log,started} "$state/result-$key"
           continue
         fi
         [ "$(cat "$state/$key.sha" 2>/dev/null)" = "$sha" ] && continue
 
         short=''${sha:0:7}
         echo "prebuild: $branch @ $short"
+        if [ "$(cat "$state/$key.started" 2>/dev/null)" != "$sha" ]; then # once per commit, not per retry
+          echo "$sha" >"$state/$key.started"
+          notify "$HOST prebuild started" "$branch @ $short" low
+        fi
         if nix build --max-jobs "$MAX_JOBS" --cores "$CORES" --out-link "$state/result-$key" \
             "git+$REPO?ref=$branch&rev=$sha#nixosConfigurations.$HOST.config.system.build.toplevel" \
             2>&1 | tee "$state/$key.log"; then
@@ -87,9 +91,13 @@ let
             "next check: $(systemctl show prebuild.timer -p NextElapseUSecRealtime --value)"
           for branch in ${lib.escapeShellArgs cfg.branches}; do
             key=''${branch//\//_}
-            if [ -e "$state/$key.err" ]; then s="error at $(cut -c1-7 "$state/$key.err"), retrying"
-            elif [ -e "$state/result-$key" ]; then s="built $(cut -c1-7 "$state/$key.sha")"
-            elif [ -e "$state/$key.sha" ]; then s="FAILED at $(cut -c1-7 "$state/$key.sha")"
+            st=$(cat "$state/$key.started" 2>/dev/null || true)
+            sh=$(cat "$state/$key.sha" 2>/dev/null || true)
+            er=$(cat "$state/$key.err" 2>/dev/null || true)
+            if [ -n "$st" ] && [ "$st" != "$sh" ] && [ "$st" != "$er" ]; then s="started ''${st:0:7}, not finished"
+            elif [ -n "$er" ]; then s="error at ''${er:0:7}, retrying"
+            elif [ -e "$state/result-$key" ]; then s="built ''${sh:0:7}"
+            elif [ -n "$sh" ]; then s="FAILED at ''${sh:0:7}"
             else s="nothing yet"; fi
             echo "  $branch: $s"
           done
