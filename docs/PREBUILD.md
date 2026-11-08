@@ -9,28 +9,76 @@ merging has nothing left to compile.
 
 ## What it does
 
-An hourly timer (`prebuild.timer`) runs `prebuild.service` as root. For each
-watched branch (by default `bump-app-inputs`, the scheduled bump's PR branch,
-and `main`):
+An hourly timer (`prebuild.timer`) runs `prebuild.service` as root. It
+builds the watched branches (by default `bump-app-inputs`, the scheduled
+bump's PR branch, and `main`), then every ref listed in
+`/var/lib/prebuild/targets` (see [Open PRs](#open-prs)). For each:
 
-1. `git ls-remote` asks origin for the branch head. If the branch doesn't
-   exist, as after a bump PR merges and its branch is deleted, the branch's
-   GC root and state are removed and nothing is built.
+1. One `git ls-remote` asks origin for all their heads. If a ref doesn't
+   exist, as after a bump PR merges and its branch is deleted, its GC root
+   and state are removed and nothing is built.
 2. If that commit was already built, or already failed to build, it is
    skipped.
-3. Otherwise it builds
-   `git+<repo>?ref=<branch>&rev=<sha>#nixosConfigurations.<host>.config.system.build.toplevel`
-   into `/var/lib/prebuild/result-<branch>`. The out-link is a GC root, so the
+3. Otherwise it sends a low-urgency **started** notification and builds
+   `git+<repo>?ref=<ref>&rev=<sha>#nixosConfigurations.<host>.config.system.build.toplevel`
+   into `/var/lib/prebuild/result-<key>`. The out-link is a GC root, so the
    build survives garbage collection until the switch.
 4. It sends a desktop notification to `notifyUser`'s session if that user is
    logged in: **ready**, **failed** (naming the first derivation that didn't
    build), **out of memory** (hit the cap below) or **error** (evaluation or
-   fetch failed). The full log is at
-   `/var/lib/prebuild/<branch>.log`.
+   fetch failed). The full log is at `/var/lib/prebuild/<key>.log`.
+
+The `<key>` is the branch name (`/` becomes `_`) for a watched branch, and
+`pr-<N>` for `refs/pull/<N>/head`.
 
 A build failure is recorded against that commit and not retried. An eval or
 fetch error, which may be a network blip, is retried on the next run but
 notified only once per commit. So is a build killed by the memory cap below.
+**started** is also sent once per commit (`<key>.started` records it), not
+on each retry.
+
+## Open PRs
+
+With `discover.enable` (on for pegasus), `prebuild-discover.service` runs
+before every prebuild, including `prebuild now`, and lists the open PRs that
+touch this host into `targets`. It is the only part that talks to GitHub: the
+prebuild itself just reads the file, so anything else can feed it too.
+
+- **Which PRs.** One unauthenticated call to
+  `GET /repos/<slug>/pulls?state=open&per_page=100`, far under the 60/hour
+  limit. A PR is listed when its title's leading scope (the convention in
+  `CLAUDE.md`, "Workflow") names this host or `all`: `[pegasus] …`,
+  `[pegasus/dashboard/dns] …`, `[pegasus, serenity] …`, `[serenity] [pegasus] …`
+  and `[all] …` all count. `discover.scopes` changes the list. Drafts count,
+  since most PRs here open as drafts.
+- **Which not.** PRs from forks, which would otherwise be built as root. PRs
+  whose branch is already a watched branch (the bump PR), so nothing is built
+  twice. PRs not updated in `discover.maxAgeDays` (14) days: a parked PR
+  would still cost a full build and a GC root each, and in November 2026
+  that cut the list from 28 PRs to 13. Set it to `null` to list them all.
+- **When it fails.** `prebuild.service` only `wants` discovery. If GitHub is
+  down or rate-limits, discovery fails, `targets` keeps its last contents,
+  and the prebuild runs on those.
+- **When a PR closes or merges.** It leaves `targets` on the next discovery,
+  and the next prebuild removes its state and `result-pr-<N>`. Watched
+  branches are never touched by this.
+
+### The `targets` file
+
+`/var/lib/prebuild/targets` has one ref per line, a tab, then the label used
+in notifications and `prebuild status`:
+
+```text
+refs/pull/244/head	#244 [pegasus] Prebuild the bump PR and main in the background
+refs/heads/some-branch	some-branch, by hand
+```
+
+Discovery replaces it atomically (temporary file, then `mv`). Lines that
+aren't a plain `refs/…` name, like blanks or comments, are skipped, and a
+missing label falls back to the ref. A ref other than `refs/pull/<N>/head`
+gets the key `ref-<path>` (`ref-heads_some-branch`). With discovery off, the
+file is still read, so a hand edit works. Discovery overwrites a hand edit on
+its next run.
 
 ## Staying out of the way
 
@@ -74,10 +122,22 @@ The `prebuild` command:
 
 | Command | Does |
 |---|---|
-| `prebuild` or `prebuild status` | Each branch's last result and the next scheduled check |
+| `prebuild` or `prebuild status` | Each branch's and listed PR's last result, and the next scheduled check |
 | `prebuild now` | Check right away instead of waiting for the timer (needs sudo) |
 | `prebuild now -f` | The same, then follow the build's output |
 | `prebuild stop` | Cancel a running prebuild, e.g. before `nrs` |
+
+- Status looks like this. "started …, not finished" means a build is running,
+  or was stopped before it ended:
+
+  ```text
+  service: activating, next check: Sun 2026-11-08 14:07:31 GMT
+    bump-app-inputs: nothing yet
+    main: built 3fa1c02
+  targets (listed 2026-11-08 13:12):
+    #244 [pegasus] Prebuild the bump PR and main in the background: started 0097fd9, not finished
+    #242 [all] Bump nixpkgs-apps past opencode's hash break; fix codex, hold hermes back: error at 5be7d10, retrying
+  ```
 
 - Watch a bump: when the bump PR opens, run `prebuild now` (or wait for the
   next hourly check) and wait for "ready" before merging.
@@ -85,15 +145,16 @@ The `prebuild` command:
   branch's recorded commit, then run `prebuild now`.
 
   ```bash
-  sudo rm /var/lib/prebuild/main.sha
+  sudo rm /var/lib/prebuild/main.sha    # or pr-244.sha for a PR
   ```
 
-- Logs: `/var/lib/prebuild/<branch>.log` for the last build, and
-  `journalctl -u prebuild` for history.
+- Logs: `/var/lib/prebuild/<key>.log` for the last build, and
+  `journalctl -u prebuild -u prebuild-discover` for history.
 
 ## Turning it on for another host
 
-Import `modules/nixos/prebuild.nix` and set `services.prebuild.enable = true`.
+Import `modules/nixos/prebuild.nix` and set `services.prebuild.enable = true`,
+and `discover.enable = true` to build its open PRs too.
 `host` defaults to `networking.hostName`. Leave `notifyUser` unset on hosts
 without a desktop session, where the result is only in the journal. On the
 Pis, keep building through memory-alpha as their `DEPLOY.md` describes.

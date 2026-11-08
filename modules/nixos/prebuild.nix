@@ -1,18 +1,28 @@
 { config, pkgs, lib, ... }:
 
 # ── Prebuild: build this host's next system before the switch ──
-# Polls origin and builds the toplevel of each watched branch that moved, so a
-# broken bump surfaces before merging and `nrs` afterwards finds it built.
-# Builds bypass nix-daemon so they run in this unit's own cgroup, hard-capped
-# and idle, where a kill costs a retry and not the desktop. docs/PREBUILD.md.
+# Polls origin and builds the toplevel of each watched branch, and each ref in
+# the `targets` file, that moved: breakage surfaces before merging and `nrs`
+# finds it built. prebuild-discover fills `targets` from GitHub; the build only
+# reads it. Builds bypass nix-daemon, so this unit's caps apply. docs/PREBUILD.md.
 let
   cfg = config.services.prebuild;
+  discoverUnit = lib.optional cfg.discover.enable "prebuild-discover.service";
+
+  # targets ref → state key: refs/pull/<N>/head → pr-<N>, anything else ref-<path>.
+  keyOf = ''
+    key_of() {
+      if [[ $1 =~ ^refs/pull/([0-9]+)/head$ ]]; then echo "pr-''${BASH_REMATCH[1]}"
+      else r=''${1#refs/}; echo "ref-''${r//\//_}"; fi
+    }
+  '';
 
   run = pkgs.writeShellApplication {
     name = "prebuild-run";
-    runtimeInputs = [ config.nix.package ] ++ (with pkgs; [ git coreutils gnugrep libnotify util-linux ]);
+    runtimeInputs = [ config.nix.package ] ++ (with pkgs; [ git coreutils gawk gnugrep libnotify util-linux ]);
     text = ''
       state=$STATE_DIRECTORY
+      ${keyOf}
 
       notify() { # summary body urgency
         [ -n "$NOTIFY_USER" ] || return 0
@@ -29,24 +39,52 @@ let
         notify "$2" "$3" normal
       }
 
-      rc=0
+      # The static branches, then each "<ref>\t<label>" line of targets.
+      refs=() keys=() labels=()
       for branch in $BRANCHES; do
-        key=''${branch//\//_}
-        sha=$(git ls-remote "$REPO" "refs/heads/$branch" | cut -f1)
-        if [ -z "$sha" ]; then # branch gone (merged bump PR): drop its GC root
-          rm -f "$state/$key".{sha,err,log} "$state/result-$key"
+        refs+=("refs/heads/$branch") keys+=("''${branch//\//_}") labels+=("$branch")
+      done
+      if [ -r "$state/targets" ]; then
+        while IFS=$'\t' read -r ref label || [ -n "$ref" ]; do
+          [[ $ref =~ ^refs/[A-Za-z0-9._/-]+$ ]] || continue # also keeps the URL below intact
+          k=$(key_of "$ref")
+          case " ''${keys[*]} " in *" $k "*) continue ;; esac
+          refs+=("$ref") keys+=("$k") labels+=("''${label:-$ref}")
+        done <"$state/targets"
+      fi
+
+      # A ref that left targets (PR closed or merged): drop its state and GC root.
+      shopt -s nullglob
+      for f in "$state"/pr-* "$state"/ref-* "$state"/result-pr-* "$state"/result-ref-*; do
+        k=''${f##*/}
+        case $k in result-*) k=''${k#result-} ;; *) k=''${k%.*} ;; esac
+        case " ''${keys[*]} " in *" $k "*) ;; *) rm -f "$f" ;; esac
+      done
+
+      heads=$(git ls-remote "$REPO" "''${refs[@]}")
+
+      rc=0
+      for i in "''${!refs[@]}"; do
+        ref=''${refs[i]} key=''${keys[i]} label=''${labels[i]}
+        sha=$(awk -v r="$ref" '$2 == r { print $1 }' <<<"$heads")
+        if [ -z "$sha" ]; then # ref gone (merged bump PR): drop its GC root
+          rm -f "$state/$key".{sha,err,log,started} "$state/result-$key"
           continue
         fi
         [ "$(cat "$state/$key.sha" 2>/dev/null)" = "$sha" ] && continue
 
         short=''${sha:0:7}
-        echo "prebuild: $branch @ $short"
+        echo "prebuild: $label @ $short"
+        if [ "$(cat "$state/$key.started" 2>/dev/null)" != "$sha" ]; then # once per commit, not per retry
+          echo "$sha" >"$state/$key.started"
+          notify "$HOST prebuild started" "$label @ $short" low
+        fi
         if nix build --max-jobs "$MAX_JOBS" --cores "$CORES" --out-link "$state/result-$key" \
-            "git+$REPO?ref=$branch&rev=$sha#nixosConfigurations.$HOST.config.system.build.toplevel" \
+            "git+$REPO?ref=$ref&rev=$sha#nixosConfigurations.$HOST.config.system.build.toplevel" \
             2>&1 | tee "$state/$key.log"; then
           echo "$sha" >"$state/$key.sha"
           rm -f "$state/$key.err"
-          notify "$HOST prebuild ready" "$branch @ $short is built." normal
+          notify "$HOST prebuild ready" "$label @ $short is built." normal
           continue
         fi
 
@@ -55,17 +93,46 @@ let
         if grep -qE 'signal 9|Killed|deadly signal' "$state/$key.log"; then
           # Hit this unit's memory cap: not the package's fault.
           soft_fail "$sha" "$HOST prebuild out of memory" \
-            "$branch @ $short: ''${failed:-a build} hit the prebuild's $MEMORY_MAX cap. Retrying next run; nrs can build it uncapped."
+            "$label @ $short: ''${failed:-a build} hit the prebuild's $MEMORY_MAX cap. Retrying next run; nrs can build it uncapped."
         elif [ -n "$failed" ]; then
           # A real build failure: don't retry this commit.
           echo "$sha" >"$state/$key.sha"
           rm -f "$state/$key.err" "$state/result-$key"
-          notify "$HOST prebuild failed" "$branch @ $short: $failed doesn't build. Log: $state/$key.log" critical
+          notify "$HOST prebuild failed" "$label @ $short: $failed doesn't build. Log: $state/$key.log" critical
         else
-          soft_fail "$sha" "$HOST prebuild error" "$branch @ $short didn't evaluate or fetch. Log: $state/$key.log"
+          soft_fail "$sha" "$HOST prebuild error" "$label @ $short didn't evaluate or fetch. Log: $state/$key.log"
         fi
       done
       exit "$rc"
+    '';
+  };
+
+  # Writes targets for the run above, and is the only part that talks to GitHub.
+  # Same-repo heads only: a fork's PR would otherwise be built as root.
+  discover = pkgs.writeShellApplication {
+    name = "prebuild-discover";
+    runtimeInputs = with pkgs; [ curl jq coreutils ];
+    text = ''
+      out=$STATE_DIRECTORY/targets
+      tmp=$(mktemp "$out.XXXXXX")
+      trap 'rm -f "$tmp"' EXIT
+      curl -fsSL --max-time 60 --retry 2 \
+        -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' \
+        "https://api.github.com/repos/$SLUG/pulls?state=open&per_page=100" |
+        jq -r --arg slug "$SLUG" --argjson scopes "$SCOPES" --argjson skip "$SKIP" --argjson days "$MAX_AGE_DAYS" '
+          if type == "array" then .[] else error("unexpected response: \(.)") end
+          | select(.head.repo.full_name == $slug and (.head.ref | IN($skip[]) | not))
+          | select($days == null or (.updated_at | fromdateiso8601) > now - $days * 86400)
+          # Leading scopes: "[pegasus] …", "[pegasus/dashboard] …", "[pegasus, serenity] …"
+          | select([.title | (capture("^(?<s>(\\[[^]]*\\]\\s*)+)").s // "")
+                    | scan("\\[([^]]*)\\]")[0] | split(",")[]
+                    | split("/")[0] | gsub("^\\s+|\\s+$"; "")]
+                   | any(IN($scopes[])))
+          | "refs/pull/\(.number)/head\t#\(.number) \(.title | gsub("[\\t\\n\\r]"; " "))"
+        ' >"$tmp"
+      chmod 644 "$tmp"
+      mv "$tmp" "$out"
+      echo "prebuild-discover: $(wc -l <"$out") matching PR(s)"
     '';
   };
 
@@ -75,6 +142,18 @@ let
     runtimeInputs = with pkgs; [ systemd coreutils ];
     text = ''
       state=/var/lib/prebuild
+      ${keyOf}
+      show() { # key label
+        st=$(cat "$state/$1.started" 2>/dev/null || true)
+        sh=$(cat "$state/$1.sha" 2>/dev/null || true)
+        er=$(cat "$state/$1.err" 2>/dev/null || true)
+        if [ -n "$st" ] && [ "$st" != "$sh" ] && [ "$st" != "$er" ]; then s="started ''${st:0:7}, not finished"
+        elif [ -n "$er" ]; then s="error at ''${er:0:7}, retrying"
+        elif [ -e "$state/result-$1" ]; then s="built ''${sh:0:7}"
+        elif [ -n "$sh" ]; then s="FAILED at ''${sh:0:7}"
+        else s="nothing yet"; fi
+        echo "  $2: $s"
+      }
       case "''${1:-status}" in
         now)
           sudo systemctl start --no-block prebuild.service
@@ -86,13 +165,15 @@ let
           echo "service: $(systemctl is-active prebuild.service || true)," \
             "next check: $(systemctl show prebuild.timer -p NextElapseUSecRealtime --value)"
           for branch in ${lib.escapeShellArgs cfg.branches}; do
-            key=''${branch//\//_}
-            if [ -e "$state/$key.err" ]; then s="error at $(cut -c1-7 "$state/$key.err"), retrying"
-            elif [ -e "$state/result-$key" ]; then s="built $(cut -c1-7 "$state/$key.sha")"
-            elif [ -e "$state/$key.sha" ]; then s="FAILED at $(cut -c1-7 "$state/$key.sha")"
-            else s="nothing yet"; fi
-            echo "  $branch: $s"
+            show "''${branch//\//_}" "$branch"
           done
+          if [ -r "$state/targets" ]; then
+            echo "targets (listed $(date -r "$state/targets" '+%F %R')):"
+            while IFS=$'\t' read -r ref label || [ -n "$ref" ]; do
+              [[ $ref =~ ^refs/[A-Za-z0-9._/-]+$ ]] || continue
+              show "$(key_of "$ref")" "''${label:-$ref}"
+            done <"$state/targets"
+          fi
           ;;
         *) echo "usage: prebuild [now [-f] | status | stop]" >&2; exit 2 ;;
       esac
@@ -148,6 +229,25 @@ in
       default = 4;
       description = "Threads per derivation build.";
     };
+    discover = {
+      enable = lib.mkEnableOption "listing this host's open PRs into the prebuild's targets file before each run";
+      slug = lib.mkOption {
+        type = lib.types.str;
+        default = "zjones-xyz/nixos-config";
+        description = "GitHub owner/repo whose open PRs are listed: the repo `repo` points at.";
+      };
+      scopes = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ cfg.host "all" ];
+        defaultText = lib.literalExpression ''[ config.services.prebuild.host "all" ]'';
+        description = "PR-title scopes to build, as in `[<scope>] …`, `[<scope>/dns] …` or `[other, <scope>] …`.";
+      };
+      maxAgeDays = lib.mkOption {
+        type = lib.types.nullOr lib.types.ints.positive;
+        default = 14;
+        description = "Skip PRs not updated in this many days, so a backlog of parked PRs isn't each built and GC-rooted. null lists all.";
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -161,9 +261,10 @@ in
     };
 
     systemd.services.prebuild = {
-      description = "Prebuild ${cfg.host}'s system from ${lib.concatStringsSep ", " cfg.branches}";
-      wants = [ "network-online.target" ];
-      after = [ "network-online.target" ];
+      description = "Prebuild ${cfg.host}'s system from ${lib.concatStringsSep ", " cfg.branches} and listed targets";
+      # wants, not requires: when discovery fails, build the last targets list.
+      wants = [ "network-online.target" ] ++ discoverUnit;
+      after = [ "network-online.target" ] ++ discoverUnit;
       environment = {
         HOST = cfg.host;
         REPO = cfg.repo;
@@ -192,6 +293,40 @@ in
         OOMScoreAdjust = 1000;
         ManagedOOMMemoryPressure = "kill";
         ManagedOOMMemoryPressureLimit = "50%";
+      };
+    };
+
+    systemd.services.prebuild-discover = lib.mkIf cfg.discover.enable {
+      description = "List ${cfg.discover.slug} PRs scoped to ${cfg.host} for the prebuild";
+      wants = [ "network-online.target" ];
+      after = [ "network-online.target" ];
+      environment = {
+        SLUG = cfg.discover.slug;
+        SCOPES = builtins.toJSON cfg.discover.scopes;
+        SKIP = builtins.toJSON cfg.branches; # built anyway, as static branches
+        MAX_AGE_DAYS = builtins.toJSON cfg.discover.maxAgeDays;
+      };
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = lib.getExe discover;
+        StateDirectory = "prebuild";
+        Slice = "prebuild.slice";
+        # Root only to write the root-owned state dir; no capabilities beyond that.
+        CapabilityBoundingSet = "";
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        PrivateTmp = true;
+        PrivateDevices = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" ];
+        RestrictNamespaces = true;
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        SystemCallArchitectures = "native";
+        SystemCallFilter = [ "@system-service" "~@privileged" ];
       };
     };
 
