@@ -166,6 +166,12 @@
     defaultSopsFile = ../../secrets/pegasus.yaml;
     age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
     secrets."tailscale/authKey" = { };
+    # Beszel: the hub's shared public KEY and this host's registration TOKEN,
+    # consumed via sops.templates."beszel-agent.env" (below). ⚠ Both must be
+    # in secrets/pegasus.yaml before the first switch: a declared sops secret
+    # that isn't there fails activation, not eval (MANUAL-STEPS.md §#PRNUM).
+    secrets."beszel/hubKey" = { };
+    secrets."beszel/agentToken" = { };
     # Declarative login password for z — without this, a fresh install leaves
     # the account genuinely passwordless/locked (NixOS doesn't set one unless
     # told to), failing every SDDM/PAM login while key-based SSH still works.
@@ -235,6 +241,38 @@
   # Same disks, reported to the Scrutiny hub on memory-alpha for trend history
   # alongside smartd's local alerting.
   services.scrutinyCollector.enable = true;
+
+  # ── Beszel agent — report pegasus to the fleet hub on memory-alpha ─────────
+  # nixpkgs' native module, not the fleet's compose module (beszel-agent.nix,
+  # galactica's shape): the binary agent reads the 4070 through nvidia-smi,
+  # which the Alpine image cannot run, and it needs no Docker socket. Why the
+  # fleet now has two agent shapes: DECISIONS.md.
+  # ⚠ Registration and secrets are owner steps: MANUAL-STEPS.md §#PRNUM.
+  services.beszel.agent = {
+    enable = true;
+    # The hub pulls from this agent over the LAN, so the port must be open.
+    openFirewall = true;
+    environment.HUB_URL = "https://beszel.monitor.zjones.dev";
+    # KEY + TOKEN, rendered below from the same two secrets galactica keeps.
+    environmentFile = config.sops.templates."beszel-agent.env".path;
+  };
+  systemd.services.beszel-agent.serviceConfig = {
+    # The module puts the agent in `docker` whenever Docker is on, which is
+    # root-equivalent API access for a containers tab pegasus doesn't need.
+    # Without it the agent still reports host and GPU metrics.
+    SupplementaryGroups = lib.mkForce [ ];
+    # The module's private /dev hides /dev/nvidia*, so nvidia-smi finds no
+    # GPU. Real /dev, but only the two nodes nvidia-smi needs (upstream's
+    # binary-agent recipe), not a blanket device policy.
+    PrivateDevices = lib.mkForce false;
+    DeviceAllow = [ "/dev/nvidiactl rw" "/dev/nvidia0 rw" ];
+  };
+  # EnvironmentFile format; systemd reads it as root before dropping to the
+  # unit's dynamic user, so the default root-only mode is right.
+  sops.templates."beszel-agent.env".content = ''
+    KEY=${config.sops.placeholder."beszel/hubKey"}
+    TOKEN=${config.sops.placeholder."beszel/agentToken"}
+  '';
 
   # Internet-facing? No — LAN/tailnet only. Traefik/LE machinery lives on
   # memory-alpha; pegasus does not import it.

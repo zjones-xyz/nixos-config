@@ -1849,3 +1849,53 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   in the private `dux-state` repo (#226).
   Hiding is by `node.name`, so it covers all four slots. Their volumes stay
   reachable through Dux Settings → Audio → Hidden, or through `wpctl`.
+- **Beszel agent: nixpkgs' native `services.beszel.agent`, not the fleet's
+  compose module (2026-11-08).** *alt:* `services.beszelAgent` from
+  `modules/nixos/beszel-agent.nix`, the shape galactica uses and the one
+  memory-alpha's own agent runs. *Why:* two things pegasus wants that the
+  compose shape can't give it without widening root-equivalent surface.
+  *Docker stats.* The module on `main` mounts `/run/docker.sock:ro`, and
+  `:ro` on a socket restricts nothing: the image has the whole Docker API,
+  which is root on the host. #207 fixes that on galactica by pointing the
+  agent at the read-only socket proxy Traefik already runs there. pegasus
+  has no Traefik and no proxy, and its only long-lived container is the
+  Scrutiny collector, so a proxy would exist to populate a containers tab
+  nobody will open. The native module adds the agent to `docker` whenever
+  Docker is enabled, which is the same access by another route, so
+  `SupplementaryGroups` is forced empty: no Docker stats, no socket.
+  *GPU.* The agent image is Alpine; `nvidia-smi` is glibc and won't run in
+  it. Upstream's `beszel-agent-nvidia` image needs the NVIDIA container
+  toolkit on the host, another root-side component. The native module
+  already puts `hardware.nvidia.package`'s `bin` on the unit's PATH when
+  `videoDrivers` has `nvidia`, so the 4070 reports for free, with one
+  override: the module's `PrivateDevices=true` hides `/dev/nvidia*`
+  (nixpkgs issue 507976), so the unit gets the real `/dev` plus a
+  `DeviceAllow` for the two nodes `nvidia-smi` needs, which is upstream's
+  own binary-agent recipe.
+  *What was verified about the pin:* nixpkgs at `flake.lock`'s `nixos-26.05`
+  rev (`da6dc0e7`) has `nixos/modules/services/monitoring/beszel-agent.nix`
+  with `enable`, `package`, `openFirewall`, `smartmon`, `environment`
+  (freeform, lands in the store), `environmentFile` and `extraPath`;
+  `pkgs.beszel` is 0.18.7. The unstable lane (`nixpkgs-apps`) carries the
+  identical module and beszel 0.21.1. HUB_URL goes in `environment`; KEY
+  and TOKEN go through `sops.templates` as an `EnvironmentFile`, which
+  systemd reads as root before dropping to the unit's `DynamicUser`, so the
+  secrets stay root-only. Same two secret names as galactica, so the hub's
+  "Add system" dialog feeds both hosts the same way.
+  *Costs accepted:* the fleet now has two agent shapes. The agent follows
+  the release branch and lags the hub (0.18.7 against the 0.21.0 the hub
+  stack pins). The release notes from 0.18.8 to 0.21.1 flag no agent-side
+  break; 0.19.0's one warning is that agents now verify the hub's HTTPS
+  certificate, which the `.zjones.dev` LE cert satisfies. If the hub ever
+  does refuse an older agent, `services.beszel.agent.package` from
+  `nixpkgs-apps` is the escape hatch `docs/NIXPKGS-APPS.md` already names
+  for a service binary.
+  No containers tab for pegasus in the hub.
+  *Firewall:* `openFirewall = true`, as on galactica. With HUB_URL and
+  TOKEN the agent dials the hub over a WebSocket, and the hub's inbound
+  pull on 45876 is the fallback. Keeping the port open keeps both paths
+  working, and the hub's "Add system" entry for pegasus can use the LAN
+  address like galactica's does.
+  *Not affected by #207:* pegasus doesn't import `beszel-agent.nix`, so the
+  image pin, `dockerHost` option and dropped socket mount change nothing
+  here.
