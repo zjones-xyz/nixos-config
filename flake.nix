@@ -52,12 +52,19 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # DankMaterialShell (used on pegasus, layered on Niri) — a Quickshell-based
-    # desktop shell, not in nixpkgs. Quickshell itself IS in nixpkgs 26.05
+    # Dux Shell (DMS; DankMaterialShell until 2.0, used on pegasus, layered on
+    # Niri) — a Quickshell-based desktop shell. nixpkgs' dms-shell lags (1.6.x)
+    # so it comes from its own flake. Quickshell itself IS in nixpkgs 26.05
     # (0.3.0, meets DMS's stated minimum) so no separate quickshell input is
     # needed — only DMS's own flake, for its NixOS module and package build.
     dank-material-shell = {
-      url = "git+https://github.com/AvengeMedia/DankMaterialShell.git";
+      url = "git+https://github.com/duxlabs-dev/dux-shell.git";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Dux Files (pegasus) — Dux Shell's sibling file manager, own flake.
+    dux-files = {
+      url = "git+https://github.com/duxlabs-dev/dux-files.git";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -93,43 +100,43 @@
       inputs.nixpkgs-stable.follows = "nixpkgs";
     };
 
-    # nixflix (galactica) — the declarative *arr media stack. Points at
-    # UPSTREAM, pinned to the exact rev the zjones-xyz/nixflix-exp canary has
-    # proven against 26.05 — never a branch URL, or a routine `nix flake
-    # update` pulls an unrehearsed revision. Bump = merge upstream into the
-    # fork, let its CI go green against 26.05, then move this rev to match.
-    #
-    # ⚠ Carried debt: the fork is private, CI cannot fetch it, and three of
-    # its fixes this host needs are therefore re-applied by hand in
-    # hosts/galactica/nixflix.nix. DECISIONS.md §10 has the full argument and
-    # the exit. git+https rather than github: — see claude-desktop-debian.
+    # nixflix (galactica) — the *arr stack, from the private nixflix-exp fork:
+    # upstream merged in, CI-proven on 26.05, plus galactica's private indexer
+    # list. Pinned to an exact rev, never a branch. ⚠ Private: fetching needs
+    # a token (CI's NIXFLIX_EXP_TOKEN; on galactica a sops nix.conf include),
+    # hence github: rather than git+https. DECISIONS.md §10.
     nixflix = {
-      url = "git+https://github.com/kiriwalawren/nixflix.git?rev=c5b5944791ecbc2a434fbf6d8d95859aee47b3b9&shallow=1";
+      url = "github:zjones-xyz/nixflix-exp/9c6c80d2a2cd368ce4c0e6d69946be0e59f9fd02";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # A second, standalone nixpkgs — deliberately NOT inputs.nixpkgs.follows —
-    # pinned to exactly the commit that bumped `orca-slicer` (used on
-    # pegasus), so the diff is that one vetted version bump and nothing else.
-    # Bumping the *shared* nixpkgs instead would move package versions
-    # fleet-wide for one desktop app on one host (hosts/pegasus/DECISIONS.md).
-    nixpkgs-orca-slicer.url = "git+https://github.com/NixOS/nixpkgs.git?rev=e749b91730e1d4c612294f1e10dd351674d697fa&shallow=1";
+    # HushMic (pegasus) — noise-suppressing PipeWire virtual mic. Not in
+    # nixpkgs; this is the upstream author's own flake. Follows nixpkgs-apps,
+    # the input its own CI builds against (unstable) — app policy, not a pin.
+    hushmic-nix = {
+      url = "git+https://github.com/Fovty/hushmic-nix.git";
+      inputs.nixpkgs.follows = "nixpkgs-apps";
+    };
 
-    # Same idea as nixpkgs-orca-slicer above, for bambu-studio: the main
-    # nixpkgs pin has it at 02.03.01.51 with the NVIDIA-GL fix hand-applied
-    # via overrideAttrs (hosts/pegasus/home.nix). This pins the commit where
-    # nixpkgs both bumped it to 02.05.00.67 *and* already carries the real
-    # upstream withNvidiaGLWorkaround package arg (nixpkgs#522161) — so this
-    # replaces the hand-rolled overrideAttrs fix with the real thing, plus
-    # picks up two extra version bumps (02.04.00.70, 02.05.00.67).
-    nixpkgs-bambu-studio.url = "git+https://github.com/NixOS/nixpkgs.git?rev=13b979d75662827615c1de6dd22f87e6296ba71d&shallow=1";
+    # Kimi Code CLI and Hermes Agent (pegasus) — terminal coding agents not in
+    # nixpkgs; each is its upstream's own uv2nix flake. Follow nixpkgs-apps
+    # like hushmic-nix above. Hermes's home-manager input only feeds its own
+    # checks, so it follows ours rather than locking a second copy.
+    kimi-cli = {
+      url = "git+https://github.com/MoonshotAI/kimi-cli.git";
+      inputs.nixpkgs.follows = "nixpkgs-apps";
+    };
+    hermes-agent = {
+      url = "git+https://github.com/NousResearch/hermes-agent.git";
+      inputs.nixpkgs.follows = "nixpkgs-apps";
+      inputs.home-manager.follows = "home-manager";
+    };
 
-    # Same idea again, for ferdium (7.1.2 -> 7.2.3). Here the separate pin is
-    # forced rather than merely preferred: 26.05 dropped the EOL 7.1 kernel
-    # *before* the ferdium bump landed, and pegasus pins 7.1 because the
-    # NVIDIA driver still won't build against 7.2 — so no revision of the
-    # shared nixpkgs has both. See hosts/pegasus/DECISIONS.md.
-    nixpkgs-ferdium.url = "git+https://github.com/NixOS/nixpkgs.git?rev=d34d77df0bd187ec660064937ca01f91fe75f6df&shallow=1";
+    # Apps that should move faster than the 26.05 system — deliberately NOT
+    # inputs.nixpkgs.follows. Handed to every host's Home Manager as
+    # `pkgsApps` (appsForHm below); kernel, services and everything else stay
+    # on `nixpkgs`. Policy for what goes here: docs/NIXPKGS-APPS.md.
+    nixpkgs-apps.url = "git+https://github.com/NixOS/nixpkgs.git?ref=nixos-unstable&shallow=1";
 
     # Non-flake theme sources for pegasus's Dragonized session, pinned here so
     # every source pin lives in flake.lock — consumed by
@@ -144,7 +151,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, niri-flake, nixflix, nixpkgs-orca-slicer, nixpkgs-bambu-studio, nixpkgs-ferdium, dr460nized-src, window-title-applet-src, ... }:
+  outputs = { self, nixpkgs, home-manager, sops-nix, nixos-hardware, nix-darwin, plasma-manager, claude-desktop-debian, dank-material-shell, zen-browser, opera-flake, dux-files, niri-flake, nixflix, nixpkgs-apps, kimi-cli, hermes-agent, dr460nized-src, window-title-applet-src, ... }:
   let
     # The HOMEPAGE_VAR_* names one Homepage instance actually receives, read
     # back out of the rendered sops template rather than restated here — so
@@ -159,6 +166,32 @@
         declarations = builtins.filter (nixpkgs.lib.hasPrefix "HOMEPAGE_VAR_") lines;
       in
       map (line: builtins.head (nixpkgs.lib.splitString "=" line)) declarations;
+
+    # ── Bambuddy's virtual-printer CA in the slicers' printer.cer ──
+    # OrcaSlicer trusts printers only via its bundled cert/printer.cer, and
+    # SLIC3R_FHS bakes its path into the binary, so the CA is appended in the
+    # package itself. serenity's casks: modules/darwin/slicer-certs.nix.
+    bambuddyCa = ./certs/bambuddy-vp-ca.crt;
+    withBambuddyCa = appDir: pkg:
+      pkg.overrideAttrs (old: {
+        postInstall = (old.postInstall or "") + ''
+          cer=$out/share/${appDir}/cert/printer.cer
+          test -f "$cer"
+          [ -z "$(tail -c1 "$cer")" ] || echo >> "$cer"
+          cat ${bambuddyCa} >> "$cer"
+        '';
+      });
+
+    # ── nixpkgs-apps for every host's Home Manager ──
+    # Passed to each home.nix as `pkgsApps` (policy: docs/NIXPKGS-APPS.md).
+    # A separate nixpkgs instance, so it needs its own allowUnfree:
+    # modules/nixos/common.nix only configures the system's.
+    appsForHm = system: {
+      home-manager.extraSpecialArgs.pkgsApps = import nixpkgs-apps {
+        inherit system;
+        config.allowUnfree = true;
+      };
+    };
   in
   {
     formatter = {
@@ -193,6 +226,7 @@
         modules = [
           ./hosts/memory-alpha/configuration.nix
           home-manager.nixosModules.home-manager
+          (appsForHm "x86_64-linux")
           sops-nix.nixosModules.sops
         ];
       };
@@ -206,8 +240,10 @@
         modules = [
           ./hosts/pegasus/configuration.nix
           home-manager.nixosModules.home-manager
+          (appsForHm "x86_64-linux")
           sops-nix.nixosModules.sops
           dank-material-shell.nixosModules.dank-material-shell
+          dux-files.nixosModules.dux-files
           {
             # Make plasma-manager's and niri-flake's HM options available to
             # hosts/pegasus/home.nix (niri-flake's homeModules.config is
@@ -219,26 +255,21 @@
             ];
             # claude-desktop-debian has no HM module, just a package — pass it
             # through directly rather than adding it as a NixOS-level overlay.
-            # orcaSlicerNewer/bambuStudioNewer are the same idea, from the
-            # standalone nixpkgs-orca-slicer/nixpkgs-bambu-studio inputs above
-            # (see their comments for why they're separate nixpkgs rather than
-            # an overlay on the shared one). withNvidiaGLWorkaround is the
-            # real upstream fix (nixpkgs#522161) baked into that pin — see
-            # hosts/pegasus/home.nix and DECISIONS.md.
             home-manager.extraSpecialArgs = {
               claudeDesktop = claude-desktop-debian.packages.x86_64-linux.claude-desktop-fhs;
               # Askimo (multi-LLM desktop chat client) — not in nixpkgs at
-              # all, unlike claudeDesktop/orcaSlicerNewer/bambuStudioNewer
-              # above (which are all upstream packages nixpkgs just hasn't
-              # caught up to yet). pkgs/askimo.nix unpacks upstream's own
-              # jpackage .deb release and runs it on nixpkgs' jdk25 — see
-              # that file for why. callPackage against the main nixpkgs
-              # rather than a pin: no version-skew concern since there's no
-              # nixpkgs copy of this package to skew against.
+              # all, unlike claudeDesktop above (an upstream package nixpkgs
+              # just hasn't caught up to yet). pkgs/askimo.nix unpacks
+              # upstream's own jpackage .deb release and runs it on nixpkgs'
+              # jdk25 — see that file for why. callPackage against the main
+              # nixpkgs rather than a pin: no version-skew concern since
+              # there's no nixpkgs copy of this package to skew against.
               askimoDesktop = nixpkgs.legacyPackages.x86_64-linux.callPackage ./pkgs/askimo.nix { };
               # Zen and Opera: same "no HM module, just a package" shape as
               # claudeDesktop/askimoDesktop above — neither flake ships one.
               zenBrowser = zen-browser.packages.x86_64-linux.default;
+              kimiCli = kimi-cli.packages.x86_64-linux.default;
+              hermesAgent = hermes-agent.packages.x86_64-linux.default;
               # opera-flake's pinned deb (129.0.5823.65) 404s — Opera's CDN
               # only serves a handful of recent stable builds and the flake
               # hasn't re-run its own update.sh since that commit. Override
@@ -250,21 +281,9 @@
                   hash = "sha256-EAmqAX4XKllVk1bN8sNBRcetUhIA0huoIu4jVNMlb0k=";
                 };
               });
-              orcaSlicerNewer = nixpkgs-orca-slicer.legacyPackages.x86_64-linux.orca-slicer;
-              ferdiumNewer = nixpkgs-ferdium.legacyPackages.x86_64-linux.ferdium;
-              # bambu-studio is unfree (agpl3Plus + unfree, marked as of the
-              # pinned commit) — legacyPackages defaults to allowUnfree =
-              # false, unlike the main `nixpkgs` above (set globally via
-              # modules/nixos/common.nix), so this needs its own pkgs import
-              # rather than plain legacyPackages.
-              bambuStudioNewer =
-                (import nixpkgs-bambu-studio {
-                  system = "x86_64-linux";
-                  config.allowUnfree = true;
-                }).bambu-studio.override
-                  {
-                    withNvidiaGLWorkaround = true;
-                  };
+              # Appends Bambuddy's CA to OrcaSlicer's printer.cer (see the
+              # banner above); home.nix applies it to pkgsApps.orca-slicer.
+              inherit withBambuddyCa;
             };
             # Niri's own auto-generated ~/.config/niri/config.kdl (a plain,
             # not-home-manager-owned file, hand-edited in place during Niri
@@ -289,6 +308,7 @@
         modules = [
           ./hosts/galactica/configuration.nix
           home-manager.nixosModules.home-manager
+          (appsForHm "x86_64-linux")
           sops-nix.nixosModules.sops
           # Brings in nixflix's own modules AND vpn-confinement (nixflix's
           # nixosModules.default imports it), which is what provides the
@@ -297,6 +317,8 @@
           # sidecar. The stack's own configuration lives in that file, which
           # configuration.nix imports.
           nixflix.nixosModules.default
+          # Fork-only: the indexer list kept out of this public repo.
+          nixflix.nixosModules.galactica-indexers
         ];
       };
 
@@ -310,6 +332,7 @@
           "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
           ./hosts/hopper/configuration.nix
           home-manager.nixosModules.home-manager
+          (appsForHm "aarch64-linux")
           sops-nix.nixosModules.sops
         ];
       };
@@ -324,6 +347,7 @@
           "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
           ./hosts/hamilton/configuration.nix
           home-manager.nixosModules.home-manager
+          (appsForHm "aarch64-linux")
           sops-nix.nixosModules.sops
         ];
       };
@@ -350,6 +374,7 @@
       modules = [
         ./hosts/serenity/configuration.nix
         home-manager.darwinModules.home-manager
+        (appsForHm "aarch64-darwin")
         {
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;

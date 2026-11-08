@@ -320,7 +320,17 @@ loses Audiobookshelf, suspect resolution before suspecting either service —
 and lever 1 above is then a one-line hedge that removes DNS from the path
 entirely.
 
-### 4.7 ⚠⚠ BLOCKING: two nixflix modules wipe the `media` group
+### 4.7 ✅ Resolved: two nixflix modules wiped the `media` group
+
+✅ **Resolved by the private nixflix fork (#198, #206), which dropped both
+`mkForce { }`s.** nixflix's own `gid = 169` then took effect at evaluation, but
+the live group had been created as **991** in the meantime, and NixOS never
+renumbers a live group. Every activation warned `not applying GID change of
+group 'media' (991 -> 169)`. `nixflix.nix` now pins
+`users.groups.media.gid = lib.mkForce 991`, so the evaluated and live numbers
+agree. `z` is a member again. The runtime resolver below was removed in #228;
+the containers read the pinned gid. What follows is the original analysis, kept
+as history.
 
 **Root cause found, and it is upstream's.** `config.users.groups.media` carries
 **two `mkForce { }` definitions** — from nixflix's `torrentClients/qbittorrent.nix`
@@ -371,7 +381,7 @@ Consequences, in order of how much they matter:
    `users.users.z.extraGroups = [ "media" ]`, not `members`. ⚠ Still read
    `getent group media` first: if the live number differs from what you pin, plan
    a recursive `chgrp` over `/tank/nixflix_media`.
-3. **A fourth hand-carried nixflix patch** (`DECISIONS.md` §10 tracks three)
+3. **Another hand-carried nixflix patch** (`DECISIONS.md` §10 tracks three)
    removing the two `mkForce`es. Fixes the cause, restores `z`'s membership at
    normal priority, and adds to the carried debt.
 4. ~~**A dedicated `reading` group.**~~ ⚠ **Dead, not merely imperfect.**
@@ -389,6 +399,12 @@ both acquisition containers take that as an `environmentFiles` entry and order
 after it. ⚠ It **fails loudly** if the group has no gid rather than writing an
 empty `PGID`, which is the silent miswrite this whole section exists to prevent.
 Nothing live is touched and no nixflix patch is carried.
+
+**Resolver removed (#228).** Once #222 pinned `users.groups.media.gid` to the
+live 991 in `nixflix.nix`, the gid is known at evaluation: the containers now take
+`PGID`/`GROUP_ID` straight from it. Since #229, `reading-acquisition.nix` and
+`reading-library.nix` each assert the gid is set, so a null one can't render an
+empty `PGID` or `GROUP_ID`.
 
 ## 5. Acquisition
 
@@ -439,7 +455,7 @@ Read out of Chaptarr's own source (`develop`), not inferred from the fork:
   the dataset's ownership or every import lands unreadable.
 - ⚠ **`UMASK`** is honoured by the entrypoint, and upstream recommends `002` when
   other containers share the media group. Same fix, same reason as the
-  `UMask = "0002"` override `nixflix.nix` already applies to qBittorrent.
+  `UMask = "0002"` that nixflix's qBittorrent module sets.
 - ⚠ **`CopyUsingHardlinks` is not declarable.** It lives in the `Config` table of
   `chaptarr.db`; env vars only reach `config.xml`-level settings (port, API key,
   log level). So it is UI state or a one-shot
@@ -550,16 +566,19 @@ quiet behaviour: an empty intersection makes Prowlarr skip the indexer with only
 `Debug` log, and a FullSync *deletes* a previously-synced indexer that stops
 matching.
 
-**Two nixflix gotchas for whoever implements this:**
+**Two nixflix gotchas, both handled in `reading-acquisition.nix` since #198:**
 
 1. ⚠ `prowlarr.config.applications` is `mkDefault`, and the `prowlarr-applications`
-   unit **deletes every Prowlarr application not in the configured list**. Adding
-   Chaptarr by assigning the option replaces the whole list — **Sonarr, Radarr and
-   Lidarr must be re-listed** or they are wiped.
+   unit **deletes every Prowlarr application not in the configured list**. Plain
+   assignment replaces the whole list, wiping Sonarr, Radarr and Lidarr. The
+   Chaptarr entry is therefore itself `mkDefault`: two definitions at the same
+   priority concatenate, so nixflix's defaults stay without being re-listed.
+   Until #198 the entry was UI-only and survived only because the unit had not
+   re-run since.
 2. ⚠ `prowlarr-applications.service` orders itself after radarr/sonarr/
    sonarr-anime/lidarr only, and the script runs `set -eu` and exits 1 on a failed
-   PUT. Nothing orders it after a Chaptarr unit, so a cold boot can fail before
-   Chaptarr is listening — add Chaptarr to its `after`/`requires`.
+   save, which Prowlarr returns for an app it cannot reach. So the unit is
+   ordered after `docker-chaptarr` and waits in `preStart` for Chaptarr's port.
 
 ⟨Undetermined and worth a diagnostic: Chaptarr exposes media-type-scoped roots
 (`/ebook/api/v1/…`, `/audiobook/api/v1/…`). Pointing Prowlarr at the plain root
@@ -715,7 +734,7 @@ through a **second FlareSolverr of its own**; **IRC is disabled.** The shape:
    both are the point of this arrangement rather than incidental:
    - `nixflix` **hardcodes** `http://127.0.0.1:8191` for Prowlarr's indexer proxy
      (`modules/prowlarr/indexerProxies.nix:67`). Confining the shared instance
-     breaks that and buys a fourth hand-carried nixflix patch (`DECISIONS.md` §10).
+     breaks that and buys another hand-carried nixflix patch (`DECISIONS.md` §10).
    - Routing indexer scraping through a VPN exit is actively harmful: private
      trackers commonly block or flag datacenter ranges, and **Cloudflare is
      harsher on known VPN ranges — so it would make FlareSolverr worse at the only

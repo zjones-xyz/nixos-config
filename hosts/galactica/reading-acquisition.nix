@@ -42,8 +42,8 @@ let
   # entry for why not appdata.
   stagingDir = "${library}/staging";
 
-  # Written by reading-media-gid.service below; read by both containers.
-  gidEnvFile = "/run/reading/media-gid.env";
+  # Pinned in nixflix.nix; the assertion below keeps it from rendering empty.
+  mediaGid = toString config.users.groups.${mediaGroup}.gid;
 
   # Applied to Suwayomi's dataDir and the parents of the module's own tmpfiles
   # rule — see that rule for why the parents have to be spelled out.
@@ -86,44 +86,6 @@ let
   downloadsDir = nixflix.downloadsDir;
 in
 {
-  # ── The `media` gid, resolved at unit-start time ───────────────────────────
-  # ⚠ `config.users.groups.media.gid` is NULL at evaluation — two nixflix
-  # modules mkForce the group to an empty set, wiping the gid it otherwise sets
-  # (READING-STACK.md §4.7). The number does exist once the system is up, so
-  # read it then and hand it over through an env file: `docker run --env-file`
-  # reads that at start. Touches no live group, needs no nixflix patch, and
-  # follows if the number ever moves.
-  systemd.services.reading-media-gid = {
-    description = "Resolve the ${mediaGroup} gid for the reading stack's containers";
-    # reading-library.nix's Grimmory consumes the same file — it has to write
-    # into the bookdrop, which Shelfmark chowns to shelfmark:media on start.
-    wantedBy = [ "multi-user.target" ];
-
-    serviceConfig = {
-      Type = "oneshot";
-      # The env file has to outlive the unit's exit, and RuntimeDirectory is
-      # cleaned on stop without both of these.
-      RemainAfterExit = true;
-      RuntimeDirectory = "reading";
-      RuntimeDirectoryPreserve = true;
-    };
-
-    script = ''
-      gid=$(${pkgs.getent}/bin/getent group ${mediaGroup} | ${pkgs.coreutils}/bin/cut -d: -f3)
-      # ⚠ Fail loudly rather than write an empty PGID: the entrypoints read that
-      # as "use my default group", which is exactly the silent miswrite §4.7
-      # exists to prevent.
-      if [ -z "$gid" ]; then
-        echo "group ${mediaGroup} exists with no gid — refusing to write an empty PGID" >&2
-        exit 1
-      fi
-      # Both spellings: Chaptarr and Shelfmark read PGID, Grimmory reads
-      # GROUP_ID, and an unused extra in an env file is inert.
-      ${pkgs.coreutils}/bin/printf 'PGID=%s\nGROUP_ID=%s\n' "$gid" "$gid" \
-        > /run/reading/media-gid.env
-    '';
-  };
-
   # ── Container identities ──────────────────────────────────────────────────
   # These accounts run nothing; they exist so `PUID`/`PGID` name a real owner
   # and the uid is reserved. Fixed ids above nixpkgs' static range (ids.nix
@@ -206,6 +168,12 @@ in
   # without renaming it back would leave manga acquisition with zero extensions
   # and no error anywhere. MANUAL-STEPS.md §18 item 17.
   assertions = [
+    # ⚠ An empty PGID reads as "use my default group" in both entrypoints — a
+    # silent miswrite into the shared trees (READING-STACK.md §4.7).
+    {
+      assertion = config.users.groups.${mediaGroup}.gid != null;
+      message = "users.groups.${mediaGroup}.gid is null, so Chaptarr and Shelfmark would start with an empty PGID. Pin it in nixflix.nix.";
+    }
     {
       assertion = lib.versionAtLeast config.services.suwayomi-server.package.version "2.3";
       message = ''
@@ -240,8 +208,7 @@ in
 
     environment = {
       PUID = toString config.users.users.chaptarr.uid;
-      # PGID arrives from the env file below, not from here — the gid does not
-      # exist at evaluation time (§4.7).
+      PGID = mediaGid;
       UMASK = "002";
       TZ = config.time.timeZone;
 
@@ -260,7 +227,6 @@ in
 
     environmentFiles = [
       config.sops.templates."chaptarr.env".path
-      gidEnvFile
     ];
     ports = [ "127.0.0.1:${toString chaptarrPort}:${toString chaptarrPort}" ];
 
@@ -279,7 +245,7 @@ in
 
     environment = {
       PUID = toString config.users.users.shelfmark.uid;
-      # PGID arrives from the env file below, same as Chaptarr's — §4.7.
+      PGID = mediaGid;
       UMASK = "002";
       TZ = config.time.timeZone;
 
@@ -332,7 +298,6 @@ in
 
     environmentFiles = [
       config.sops.templates."shelfmark.env".path
-      gidEnvFile
     ];
     ports = [ "127.0.0.1:${toString shelfmarkPort}:${toString shelfmarkPort}" ];
 
@@ -539,8 +504,8 @@ in
   # directories on the root filesystem.
   systemd.services = {
     docker-chaptarr = {
-      after = nixflix.serviceDependencies ++ [ "reading-media-gid.service" ];
-      requires = nixflix.serviceDependencies ++ [ "reading-media-gid.service" ];
+      after = nixflix.serviceDependencies;
+      requires = nixflix.serviceDependencies;
       unitConfig.RequiresMountsFor = [
         "${appdata}/chaptarr"
         library
@@ -548,8 +513,8 @@ in
       ];
     };
     docker-shelfmark = {
-      after = nixflix.serviceDependencies ++ [ "reading-media-gid.service" ];
-      requires = nixflix.serviceDependencies ++ [ "reading-media-gid.service" ];
+      after = nixflix.serviceDependencies;
+      requires = nixflix.serviceDependencies;
       unitConfig.RequiresMountsFor = [
         "${appdata}/shelfmark"
         stagingDir
@@ -565,15 +530,39 @@ in
       serviceConfig.UMask = "0002";
     };
 
-    # Chaptarr is not in Prowlarr's application list yet (§5b leaves the sync
-    # unproven and the list is nixflix's to own), but the ordering edge is
-    # cheap now and easy to forget later: prowlarr-applications orders itself
-    # after the four *arrs only, runs `set -eu`, and exits 1 on a failed PUT.
+    # prowlarr-applications orders itself after the four *arrs only, runs
+    # `set -eu`, and exits 1 on a failed save — which Prowlarr returns when it
+    # cannot reach the app. docker-chaptarr counts as started when the
+    # container does, not when it listens, so wait for the port as well.
     prowlarr-applications = lib.mkIf nixflix.prowlarr.enable {
       after = [ "docker-chaptarr.service" ];
       wants = [ "docker-chaptarr.service" ];
+      preStart = ''
+        for _ in $(seq 120); do
+          ${pkgs.curl}/bin/curl -s -o /dev/null --max-time 2 \
+            http://127.0.0.1:${toString chaptarrPort}/ && exit 0
+          sleep 1
+        done
+        echo "Chaptarr is not answering on ${toString chaptarrPort}" >&2
+      '';
     };
   };
+
+  # ── Prowlarr → Chaptarr sync ──────────────────────────────────────────────
+  # ⚠ mkDefault on purpose: nixflix's own default list is mkDefault too, so the
+  # two concatenate. Plain assignment would replace it and the reconciler would
+  # delete Sonarr/Radarr/Lidarr. No Chaptarr type upstream, hence Readarr;
+  # 3000/3030 or audiobook search issues zero queries. READING-STACK.md §5b.
+  nixflix.prowlarr.config.applications = lib.mkDefault [
+    {
+      name = "Chaptarr";
+      implementationName = "Readarr";
+      apiKey._secret = config.sops.secrets."reading/chaptarrApiKey".path;
+      baseUrl = "http://127.0.0.1:${toString chaptarrPort}";
+      prowlarrUrl = "http://${hostAddress}:${toString prowlarrPort}";
+      syncCategories = [ 3000 3030 7000 7010 7020 7030 7040 7050 7060 ];
+    }
+  ];
 
   # ── Routes ────────────────────────────────────────────────────────────────
   # The `read.*` domain group's own contract (traefik-galactica.nix); nothing

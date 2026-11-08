@@ -1,5 +1,10 @@
-{ config, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, orcaSlicerNewer, bambuStudioNewer, ferdiumNewer, ... }:
+{ config, osConfig, pkgs, lib, claudeDesktop, askimoDesktop, zenBrowser, operaBrowser, kimiCli, hermesAgent, pkgsApps, withBambuddyCa, ... }:
 
+let
+  # Built against pkgsApps, the nixpkgs Orca comes from, so the plugin's
+  # libstdc++/OpenSSL match the process that dlopens it.
+  openBambooNetworking = pkgsApps.callPackage ../../pkgs/open-bamboo-networking.nix { };
+in
 {
   imports = [
     ../../modules/home/common.nix
@@ -44,18 +49,21 @@
   # ── Desktop apps ────────────────────────────────────────────────────────────
   # allowUnfree is already set globally in modules/nixos/common.nix, which
   # pegasus imports — vscode/google-chrome/vivaldi/1Password/discord/spotify/
-  # ticktick/obsidian/bambu-studio/operaBrowser are all unfree and need it;
-  # firefox/ferdium/signal-desktop/openscad/orca-slicer/streamdeck-ui/
-  # floorp-bin/zenBrowser are free/open.
+  # obsidian/operaBrowser are all unfree and need it; firefox/signal-desktop/
+  # openscad/streamdeck-ui/floorp-bin/zenBrowser are free/open. `pkgsApps.*`
+  # (the nixpkgs-apps input, see flake.nix) is a separate instance with its
+  # own allowUnfree — ticktick and bambu-studio there are unfree. Browsers
+  # and web-facing Electron apps come from it too (DECISIONS.md: "Exposed
+  # apps on the fast lane").
   #
   # Brain.fm was left out — no nixpkgs package, no native Linux client
   # anywhere (subscription web app only); usable via firefox/chrome.
   home.packages = with pkgs; [
     sl # for the inevitable `sl` typo
     vscode
-    google-chrome
+    pkgsApps.google-chrome
     firefox
-    vivaldi
+    pkgsApps.vivaldi
     # nixpkgs' upstream `floorp` was replaced with this prebuilt variant —
     # building it from source became unfeasible starting with its 12.x line.
     floorp-bin
@@ -67,6 +75,16 @@
     # build-from-source-when-available reason claude-code isn't the -bin
     # variant either).
     gemini-cli
+    # More terminal coding agents. On the app lane: they ship weekly and the
+    # release's copies are months behind. Kimi and Hermes aren't in nixpkgs
+    # and come from their upstream flakes (flake.nix).
+    pkgsApps.codex
+    pkgsApps.github-copilot-cli
+    pkgsApps.opencode
+    pkgsApps.pi-coding-agent
+    pkgsApps.qwen-code
+    kimiCli
+    hermesAgent
     # ChatGPT desktop: nixpkgs' `chatgpt` package unpacks a .dmg and is
     # darwin-only (see hosts/serenity, via modules/darwin/homebrew.nix) —
     # OpenAI ships no official Linux client. The only Linux option is a
@@ -75,18 +93,15 @@
     # not worth the trust trade for a client that's also just a browser tab
     # away. Same call as Brain.fm below: web app via firefox/chrome.
 
-    discord
-    # 7.2.3, from the separate nixpkgs-ferdium input rather than the shared
-    # pin — reaching it there would mean giving up this host's 7.1 kernel
-    # pin (see flake.nix).
-    ferdiumNewer
-    signal-desktop
-    slack
+    pkgsApps.discord
+    pkgsApps.ferdium
+    pkgsApps.signal-desktop
+    pkgsApps.slack
     openscad
     obsidian
     spotify
-    # Ahead of nixpkgs (8.0.11 on master) — drop once it catches up.
-    (ticktick.overrideAttrs (finalAttrs: old: {
+    # Ahead of nixpkgs-apps (8.0.11 on unstable) — drop once it catches up.
+    (pkgsApps.ticktick.overrideAttrs (finalAttrs: old: {
       version = "8.0.20";
       src = fetchurl {
         url = "https://d2atcrkye2ik4e.cloudfront.net/download/linux/linux_deb_x64/ticktick-${finalAttrs.version}-amd64.deb";
@@ -222,7 +237,7 @@
     proton-vpn # renamed from protonvpn-gui upstream
     protonmail-desktop
     dropbox
-    zoom-us # NOT `zoom` — that's an unrelated Z-code/interactive-fiction player
+    pkgsApps.zoom-us # NOT `zoom` — that's an unrelated Z-code/interactive-fiction player
     prismlauncher # Minecraft — better-maintained than the bare official launcher on Linux
     zeal # offline API docs, the real Linux equivalent of Dash
     speedtest-cli
@@ -262,7 +277,11 @@
     # claude-desktop-debian flake input via home-manager.extraSpecialArgs in
     # flake.nix — the FHS-wrapped variant, needed for MCP servers to work
     # (they shell out to npx/uvx/etc. expecting a standard FHS layout).
-    claudeDesktop
+    # Upstream's env has no python3 and no hook to add packages, so it rides
+    # in on the `uv` argument — the env's /usr/bin gets both.
+    (claudeDesktop.override {
+      uv = pkgs.symlinkJoin { name = "uv-with-python3"; paths = [ pkgs.uv pkgs.python3 ]; };
+    })
     # Askimo — multi-LLM desktop chat client (ChatGPT/Claude/Gemini/Ollama),
     # not in nixpkgs. askimoDesktop comes from pkgs/askimo.nix via
     # home-manager.extraSpecialArgs in flake.nix — see that file's comment
@@ -278,17 +297,20 @@
     # by a former nixpkgs maintainer) via home-manager.extraSpecialArgs in
     # flake.nix.
     operaBrowser
-    # 02.05.00.67, with the real upstream withNvidiaGLWorkaround applied —
-    # fixes the blank Prepare/Preview build plate on this host's NVIDIA GPU.
-    # From the separate nixpkgs-bambu-studio input (see flake.nix); this
-    # flake's main nixpkgs pin predates both that version bump and the fix.
-    bambuStudioNewer
-    # 2.3.2 — this flake's main nixpkgs pin predates nixpkgs' 2.3.1 -> 2.3.2
-    # bump, so this comes from the separate nixpkgs-orca-slicer input
-    # instead (see flake.nix). Confirmed viewport already renders fine on
-    # this host's NVIDIA setup at 2.3.1, so no GL workaround needed here
-    # unlike bambuStudioNewer above.
-    orcaSlicerNewer
+    # withNvidiaGLWorkaround fixes the blank Prepare/Preview build plate on
+    # this host's NVIDIA GPU (nixpkgs#522161) — keep it.
+    (pkgsApps.bambu-studio.override { withNvidiaGLWorkaround = true; })
+    # No GL workaround (its Zink route regresses Orca; DECISIONS.md), but its
+    # WebKit pages render black on NVIDIA without this one variable. The
+    # Bambuddy CA is baked into the package; the variable is a thin wrapper.
+    (pkgs.symlinkJoin {
+      inherit (pkgsApps.orca-slicer) name meta;
+      paths = [ (withBambuddyCa "OrcaSlicer" pkgsApps.orca-slicer) ];
+      nativeBuildInputs = [ pkgs.makeWrapper ];
+      postBuild = ''
+        wrapProgram $out/bin/orca-slicer --set WEBKIT_DISABLE_DMABUF_RENDERER 1
+      '';
+    })
   ];
 
   # ── kitty: launch zsh directly, not the login shell ─────────────────────────
@@ -395,6 +417,17 @@
   xdg.mimeApps =
     let
       vivaldi = [ "vivaldi-stable.desktop" ];
+      # Dux Files claims these too and sorts ahead of Ark in mimeinfo.cache,
+      # where it would extract on open instead of showing the archive.
+      archives = lib.genAttrs [
+        "application/zip" "application/x-tar" "application/gzip"
+        "application/x-compressed-tar" "application/x-bzip2"
+        "application/x-bzip2-compressed-tar" "application/x-xz"
+        "application/x-xz-compressed-tar" "application/zstd"
+        "application/x-zstd-compressed-tar" "application/x-lzma"
+        "application/x-lzma-compressed-tar" "application/x-7z-compressed"
+        "application/vnd.rar" "application/x-cpio"
+      ] (_: [ "org.kde.ark.desktop" ]);
     in
     {
       enable = true;
@@ -404,8 +437,18 @@
         "x-scheme-handler/https" = vivaldi;
         "x-scheme-handler/about" = vivaldi;
         "x-scheme-handler/unknown" = vivaldi;
-      };
+        # Dux Files (modules/nixos/dux-files.nix) opens folders.
+        "inode/directory" = [ "dev.duxlabs.files.desktop" ];
+      } // archives;
     };
+
+  # ── "Show in folder" → Dux Files, not Nautilus ─────────────────────────────
+  # Both ship a D-Bus activation file for org.freedesktop.FileManager1, and
+  # Nautilus's in the profile dirs would be read first and win. dbus-broker
+  # reads $XDG_DATA_HOME before those, so this copy wins instead. Nautilus
+  # stays installed: niri's GNOME portal uses it for open/save dialogs.
+  xdg.dataFile."dbus-1/services/org.freedesktop.FileManager1.service".source =
+    "${osConfig.programs.dux-files.package}/share/dbus-1/services/dev.duxlabs.files.FileManager1.service";
 
   # Vicinae has no built-in global-shortcut support by design — the DE's own
   # shortcut mechanism binds its CLI toggle. A plain single-Exec desktop
@@ -427,42 +470,69 @@
     $DRY_RUN_CMD ${pkgs.kdePackages.kservice}/bin/kbuildsycoca6 $VERBOSE_ARG
   '';
 
-  # ── DankMaterialShell settings: seed-only-if-missing ────────────────────────
-  # DMS's own settings.json and plugin_settings.json are deliberately NOT
-  # Home-Manager-managed (no home.file/xdg.configFile, in-store or
-  # mkOutOfStoreSymlink alike) — DMS saves both via an atomic
-  # write-temp-then-rename, which severs any symlink at that path on the
-  # very first GUI change instead of writing through it. See
-  # scripts/dms-settings.sh and DECISIONS.md for the full reasoning.
-  #
-  # This just seeds a fresh host — one with no live file yet — from the
-  # repo's checkpoints (hosts/pegasus/dms-settings.json and
-  # dms-plugin-settings.json, created by `dms-settings-snapshot`), so a
-  # rebuild-from-scratch starts from the last-known-good config instead of
-  # DMS's own defaults. Each check is independent and never touches an
-  # existing live file, so it can't clobber an in-progress GUI experiment —
-  # that traffic only ever flows explicitly, via dms-settings-snapshot/
-  # -restore/-diff above.
+  # ── Dux Shell (DMS) settings: seed-only-if-missing ──────────────────────────
+  # Not Home-Manager-managed: Dux's atomic rename-writes sever symlinks. Seeds
+  # each missing live file from the PRIVATE dux-state checkpoints at
+  # ~/dux-state (no clone, no seed); never touches an existing file. Changes
+  # flow only via dms-settings-snapshot/-restore/-diff. See DECISIONS.md.
   home.activation.seedDmsSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    DMS_DIR="$HOME/.config/DankMaterialShell"
+    # Dux 2.0 renamed DankMaterialShell/ to dms/ and migrates on first launch.
+    # Until it has, keep writing to the legacy dir: seeding dms/ alongside it
+    # would make that migration a merge with conflicting settings.json files.
+    seed_dms_dir() { if [ -e "$1/dms" ] || [ ! -e "$1/DankMaterialShell" ]; then echo "$1/dms"; else echo "$1/DankMaterialShell"; fi; }
+    DMS_DIR="$(seed_dms_dir "''${XDG_CONFIG_HOME:-$HOME/.config}")"
     # session.json lives under XDG_STATE_HOME, not XDG_CONFIG_HOME — see
     # scripts/dms-settings.sh for what it holds and why it is checkpointed.
-    DMS_STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/DankMaterialShell"
-    CHECKPOINTS="$HOME/nixos-config/hosts/pegasus"
+    DMS_STATE_DIR="$(seed_dms_dir "''${XDG_STATE_HOME:-$HOME/.local/state}")"
+    CHECKPOINTS="''${DMS_CHECKPOINT_REPO:-$HOME/dux-state}/hosts/${osConfig.networking.hostName}"
 
-    if [ ! -e "$DMS_DIR/settings.json" ] && [ -e "$CHECKPOINTS/dms-settings.json" ]; then
+    if [ ! -e "$DMS_DIR/settings.json" ] && [ -e "$CHECKPOINTS/settings.json" ]; then
       $DRY_RUN_CMD mkdir -p "$DMS_DIR"
-      $DRY_RUN_CMD cp "$CHECKPOINTS/dms-settings.json" "$DMS_DIR/settings.json"
+      $DRY_RUN_CMD cp "$CHECKPOINTS/settings.json" "$DMS_DIR/settings.json"
     fi
 
-    if [ ! -e "$DMS_DIR/plugin_settings.json" ] && [ -e "$CHECKPOINTS/dms-plugin-settings.json" ]; then
+    if [ ! -e "$DMS_DIR/plugin_settings.json" ] && [ -e "$CHECKPOINTS/plugin-settings.json" ]; then
       $DRY_RUN_CMD mkdir -p "$DMS_DIR"
-      $DRY_RUN_CMD cp "$CHECKPOINTS/dms-plugin-settings.json" "$DMS_DIR/plugin_settings.json"
+      $DRY_RUN_CMD cp "$CHECKPOINTS/plugin-settings.json" "$DMS_DIR/plugin_settings.json"
     fi
 
-    if [ ! -e "$DMS_STATE_DIR/session.json" ] && [ -e "$CHECKPOINTS/dms-session.json" ]; then
+    if [ ! -e "$DMS_STATE_DIR/session.json" ] && [ -e "$CHECKPOINTS/session.json" ]; then
       $DRY_RUN_CMD mkdir -p "$DMS_STATE_DIR"
-      $DRY_RUN_CMD cp "$CHECKPOINTS/dms-session.json" "$DMS_STATE_DIR/session.json"
+      $DRY_RUN_CMD cp "$CHECKPOINTS/session.json" "$DMS_STATE_DIR/session.json"
+    fi
+  '';
+
+  # ── OrcaSlicer: open-bamboo-networking instead of Bambu's plugin ──────────
+  # Bambu's stock network plugin aborts Orca 2.4.2 at startup (DECISIONS.md).
+  # Orca dlopens plugins/libbambu_networking_<network_plugin_version>.so from
+  # its data dir, so the open build is linked there and OrcaSlicer.conf is
+  # pointed at it. Orca owns that file, so only these keys are set, and only
+  # once it exists. Run book: MANUAL-STEPS.md §29.
+  xdg.configFile = lib.listToAttrs (map (so: {
+    name = "OrcaSlicer/plugins/${so}";
+    value.source = "${openBambooNetworking}/plugins/${so}";
+  }) [
+    "libbambu_networking_${openBambooNetworking.pluginVersion}.so"
+    "libBambuSource.so"
+    "liblive555.so"
+  ]);
+
+  home.activation.orcaNetworkPlugin = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    conf="${config.xdg.configHome}/OrcaSlicer/OrcaSlicer.conf"
+    if [ -f "$conf" ]; then
+      tmp=$(mktemp)
+      # network_plugin_skipped_versions is a ';'-joined string, not an array.
+      ${pkgs.jq}/bin/jq --arg v "${openBambooNetworking.pluginVersion}" '
+        .app.installed_networking = "true"
+        | .app.network_plugin_version = $v
+        | .app.network_plugin_remind_later = "true"
+        | .app.update_network_plugin = "false"
+        | if (.app.network_plugin_skipped_versions | type) == "string"
+          then .app.network_plugin_skipped_versions |=
+            (split(";") | map(select(. != "" and . != $v)) | join(";"))
+          else . end
+      ' "$conf" > "$tmp"
+      if cmp -s "$tmp" "$conf"; then rm -f "$tmp"; else $DRY_RUN_CMD mv "$tmp" "$conf"; fi
     fi
   '';
 

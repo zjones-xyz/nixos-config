@@ -8,11 +8,12 @@ result-*
 # Ignore NixOS interactive test driver history
 **/.nixos-test-history
 
-# Local Claude Code config (except the tracked session-start hook/settings)
+# Local Claude Code config (except the tracked hooks, skills and settings)
 .claude/*
 !.claude/settings.json
 !.claude/hooks/
 !.claude/hooks/*
+!.claude/skills/
 
 # SSH keypairs (e.g. the remote-build builder key) — never commit private keys
 keys/

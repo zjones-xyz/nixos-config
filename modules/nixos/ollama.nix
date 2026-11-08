@@ -44,4 +44,20 @@
       end = "${pkgs.systemd}/bin/systemctl stop ollama-pause.service";
     };
   };
+
+  # ── Polkit: let the drain run unattended ────────────────────────────────────
+  # gamemoded is a *user* unit, so the hooks above run as z — and touching a
+  # system unit from there goes through polkit's manage-units action, which
+  # prompts. A drain that needs a password dialog mid-launch is not a drain.
+  # Scoped to this one unit and to start/stop, so it grants nothing else.
+  security.polkit.extraConfig = ''
+    polkit.addRule(function(action, subject) {
+      if (action.id == "org.freedesktop.systemd1.manage-units" &&
+          subject.user == "z" &&
+          action.lookup("unit") == "ollama-pause.service" &&
+          (action.lookup("verb") == "start" || action.lookup("verb") == "stop")) {
+        return polkit.Result.YES;
+      }
+    });
+  '';
 }

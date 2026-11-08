@@ -2,7 +2,7 @@
 
 let
   # No native NixOS module for speedtest-tracker, so run it as a Docker
-  # container managed by a systemd unit — same shape as the dockge module.
+  # container managed by a systemd unit — same shape as the traefik module.
   composeFile = pkgs.writeText "speedtest-tracker-compose.yml" ''
     networks:
       proxy:

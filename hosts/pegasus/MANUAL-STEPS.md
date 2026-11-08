@@ -650,40 +650,17 @@ own Xwayland and takes satellite out of the loop; `gaming.nix` already
 installs it. Interim workaround: keep a freshly launched game focused for
 its first minute or two.
 
-**gamescope is not usable here as of 2026-10-08** — tried against ACE COMBAT
-8 and it never reached a window. Launched from Steam's environment,
-gamescope 3.16.23 aborts during backend setup (`CSDLBackend::~CSDLBackend` ←
-`IBackend::Set` ← `main`, "terminate called without an active exception").
-From a clean shell both backends *do* initialise, but each dumps core on
-teardown once the child exits: SIGABRT under `--backend sdl`, SIGSEGV under
-`--backend wayland`. A compositor that crashes while tearing its outputs down
-is the same event that takes Discord and Steam's CEF windows with it, so this
-trades a freeze for a crash. Revisit on a gamescope bump; the command to
-retry with is:
-`gamescope -f -w 2560 -h 1440 -W 3840 -H 2160 --force-grab-cursor --backend sdl -- gamemoderun %command%`
-— `-W`/`-H` is the output's *native* mode (the centre LG is 3840x2160) and
-`-w`/`-h` the render size, so the panel is never asked to change mode. Also
-note Lutris's own gamescope toggle is NOT a substitute for Steam titles:
-Lutris's Steam runner hands launching off to the Steam client, so Lutris
-system options never wrap the game process
-(https://github.com/lutris/lutris/issues/3085). It only applies to games
-Lutris itself execs (Wine/native/GOG/EGS).
-
-**`gamemoderun` in a game's launch options is verified working, 2026-10-08.**
-Added to ACE COMBAT 8's line, `gamemoded` registered the title and the
-`ollama-pause` GPU drain in `modules/nixos/ollama.nix` fired within 2s of the
-game starting: `ollama` went `inactive`, `ollama-pause` `active`. That unit
-had never been activated once before. Proton titles don't request gamemode
-themselves, so this is per-game — every title that should drain the GPU needs
-`gamemoderun` in its own launch options, and the drain stays dead for any
-that don't.
-⚠ **But it prompts for authentication, so it is not yet unattended.**
-`gamemoded` is a *user* unit, so `custom.start`/`end` run as z, and
-`systemctl start ollama-pause.service` on a *system* unit goes through
-polkit's `org.freedesktop.systemd1.manage-units` action — DMS's auth dialog
-pops mid-launch, and the 2s figure above was measured with it authenticated.
-Needs a polkit rule granting z that one unit before the drain runs on its
-own.
+**Launch options now live in `docs/runbooks/steam-launch-options.md`** — go
+there when setting up any new Steam title. Both halves were verified against
+ACE COMBAT 8 on the hardware, 2026-10-08: `gamemoderun %command%` works and is
+what the `ollama-pause` GPU drain depends on, **per-game**, because Proton
+titles never request gamemode themselves — so the drain stays dead for any
+title whose launch options lack it. gamescope does *not* work here: it crashes
+on teardown in both backends, taking Electron/CEF windows with it, so it trades
+an occasional freeze for a reliable crash. The runbook carries the crash
+signatures and retry command, the Proton `winewayland.drv` finding, the polkit
+prompt that still gates the drain, and the VRAM ceiling that decides whether a
+game fits at all.
 
 To try, roughly cheapest-first:
 
@@ -700,18 +677,11 @@ To try, roughly cheapest-first:
 3. [ ] Native Wayland — `PROTON_ENABLE_WAYLAND=1 gamemoderun %command%`.
    Avoids the satellite bug at its root rather than working around it, per
    the issue reporter, and needs no nested compositor. **Blocked on the
-   Proton build:** the flag only does anything if that Proton ships
-   `winewayland.drv`, and none of the three here do — checked 2026-10-08,
-   Proton 11.0, Proton Hotfix (`hotfix-20261007-x86_64`) and GE-Proton11-1
-   (from `gaming.nix`) all carry `winex11.drv` only. Set against AC8 the
-   flag was simply inert: the game launched on X11 anyway, its niri window
-   still owned by `xwayland-satellite` (niri reports the satellite's PID,
-   not the game's — that's how to tell, not the window's app-id, which is
-   `steam_app_<appid>` either way). So this step needs Proton Experimental
-   installed first (Steam → Properties → Compatibility), then re-check for
-   `winewayland.drv` before trusting the flag.
-   Denuvo is *not* the blocker: AC8 goes through `start_protected_game.exe`
-   and started fine with the flag set.
+   Proton build:** none of the three installed here ship `winewayland.drv`,
+   so the flag is inert — install Proton Experimental first (Steam →
+   Properties → Compatibility), then re-check for the driver before trusting
+   it. Which builds were checked, and how to tell native Wayland from
+   Xwayland afterwards, are in `docs/runbooks/steam-launch-options.md`.
 4. [ ] Check https://github.com/Supreeeme/xwayland-satellite/issues/201
    occasionally; once fixed and the nixpkgs package carries it, step 3
    becomes unnecessary for the unfocused-freeze.
@@ -765,23 +735,27 @@ in the other sessions. Both halves want confirming on real hardware — see
 
 ## 24. DMS `qt.sh` patch — confirm, then file upstream
 
-`modules/nixos/desktop-niri.nix` patches two bugs in DMS's
-`scripts/qt.sh` at build time (full reasoning in `DECISIONS.md`). Both are
+`modules/nixos/desktop-niri.nix` patched two bugs in DMS's
+`scripts/qt.sh` at build time (full reasoning in `DECISIONS.md`). Both were
 confirmed on the hardware: the palette renders in Qt apps, and it survives
 a full logout/login (2026-09-08) — DMS regenerates its matugen output at
-session start and leaves `color_scheme_path` alone. Neither bug is
-reported upstream; only the filing below is left.
+session start and leaves `color_scheme_path` alone. Upstream fixed the
+literal-`\n` bug itself in Dux 2.0 (its #3457), so since #214 only the
+`color_scheme_path` substitution remains. That one is still unreported
+upstream; only the filing below is left.
 
 1. [x] After the next switch, press **apply colours to Qt** and check that
    `~/.config/qt6ct/qt6ct.conf` and `~/.config/qt5ct/qt5ct.conf` each point
    `color_scheme_path` at their *own* `colors/matugen.conf`.
 2. [x] Open a Qt app and confirm the matugen palette actually renders. This
    is the step that has never once passed on this host.
-3. [ ] File the upstream issue against `AvengeMedia/DankMaterialShell` —
-   draft ready at `~/dms-qt-issue-draft.md`, unsent. Covers both bugs.
+3. [ ] File the upstream issue against `duxlabs-dev/dux-shell` (formerly
+   `AvengeMedia/DankMaterialShell`) — draft at `~/dms-qt-issue-draft.md`,
+   unsent. Trim it to the `color_scheme_path` bug first: upstream fixed the
+   literal-`\n` one itself in 2.0 (its issue #3457).
 4. [ ] Once upstream fixes it, delete the `package` override in
    `desktop-niri.nix`. It is `--replace-fail`-anchored, so a rebuild will
-   fail loudly rather than silently no-op if upstream edits those lines
+   fail loudly rather than silently no-op if upstream edits that line
    first — that failure is the signal to remove the shim, not to repair it.
    Issue #110 records the exact failure text and the three cases it can be.
 
@@ -808,8 +782,8 @@ named workspace is homed there.
    back to the left monitor rather than staying on whichever monitor adopted
    it — that is the named-workspace behaviour the whole design leans on.
 5. [ ] Optional, cosmetic: DMS shows workspace *names* only with Settings →
-   Workspaces → "Workspace Names" on (off in the checked-in
-   `dms-settings.json`), or by giving `Mail` an icon under "Named Workspace
+   Workspaces → "Workspace Names" on (off in the `dux-state`
+   checkpoint), or by giving `Mail` an icon under "Named Workspace
    Icons" — that card only appears once niri reports a named workspace. If
    either is turned on, capture it with `dms-settings-snapshot`.
 
@@ -848,3 +822,321 @@ enabled) covers that with no extra host config.
        that needs a bridged libvirt network instead of the default NAT
        one — not set up here since it wasn't asked for; revisit only if the
        NAT setup actually fails for that reason.
+
+## 27. LTS kernel + `nixpkgs-apps` — verify after the next switch
+
+The kernel moves from 7.1.9 to the 6.18 LTS, and four apps now come from
+`nixpkgs-apps` (see `DECISIONS.md`: "Kernel → the release LTS" and "Desktop
+apps from `nixpkgs-apps`"). Both were validated by eval only. The same switch
+is also the first build of Claude Desktop 2.31226.1 (#171): its `.deb` host
+was outside the authoring session's network, so nothing has fetched it yet.
+The 7.1.9 generation stays in the systemd-boot menu as the rollback until the
+next garbage collection.
+
+1. [x] Switch from another host or a TTY (decision 4 in `DECISIONS.md`), then
+   **reboot** — a kernel change only takes effect on boot.
+2. [x] `uname -r` shows `6.18.x`.
+3. [x] `nvidia-smi` shows the 4070 on driver 595.71.05, and the niri Wayland
+   session logs in.
+4. [x] Scheduler: `cat /sys/kernel/sched_ext/state` shows `disabled` and
+   `systemctl status scx` is inactive, i.e. EEVDF (same as §3).
+5. [x] One Proton title launches and plays for a few minutes.
+6. [x] Bambu Studio (now 02.08): the Prepare/Preview build plate renders
+   rather than going blank — that is the NVIDIA GL workaround still working.
+   Separately, the toolbar and tooltips strobe on hover. That predates this
+   change: it happens on 02.05 too, under `GDK_BACKEND=x11` too, and on the
+   7.1.9 generation too. Deferred to #177 (suspect: the workaround's zink path).
+7. [x] OrcaSlicer (now 2.4.2). The stock Bambu network plugin Orca downloads
+   into `~/.config/OrcaSlicer/plugins/` makes every later launch abort
+   (`free(): invalid size`), so keep it out until the open-source replacement
+   lands: `mv ~/.config/OrcaSlicer/plugins ~/.config/OrcaSlicer/plugins.stock-crashes`,
+   and dismiss the "Bambu Network Plug-in Required" dialog (✕) on each start
+   rather than letting it download again. Launched normally (the wrapper sets
+   `WEBKIT_DISABLE_DMABUF_RENDERER`), check: the Home page and Setup Wizard
+   render rather than black, the 3D viewport renders, the Device/Project pages
+   and preset dialogs open — and it **survives a second launch**. Without the
+   plugin, Orca can slice but cannot reach Bambu printers or Bambuddy.
+   Passed with `plugins/` moved aside, second launch included.
+8. [x] ferdium and ticktick open (same versions, rebuilt against unstable).
+9. [x] Claude Desktop (now 2.31226.1, up from 1.34493.1) launches, and its MCP
+   servers start — Settings → Developer lists them as running. A 1.x → 2.x
+   jump is where an MCP config-format change would show up. Pegasus had no MCP
+   servers configured; a throwaway `npx` filesystem server came up running,
+   which exercises the FHS wrapper's `npx` path.
+10. [ ] If anything above fails: boot the previous generation from the
+    systemd-boot menu, note here what broke, and leave the PR's fix to a
+    config session rather than patching on the host.
+
+## 29. OrcaSlicer on open-bamboo-networking — verify after the next switch
+
+`home.nix` links open-bamboo-networking (OBN) into `~/.config/OrcaSlicer/plugins/`
+and points `OrcaSlicer.conf` at it (`DECISIONS.md`: "OrcaSlicer's network
+plugin → open-bamboo-networking"). The activation step only edits an existing
+`OrcaSlicer.conf`, and Orca rewrites that file when it exits, so quit Orca
+before switching.
+
+1. [x] Quit OrcaSlicer. Move aside anything left in `plugins/` from the stock
+       plugin, or Home Manager refuses to replace `libBambuSource.so`:
+       `mv ~/.config/OrcaSlicer/plugins ~/.config/OrcaSlicer/plugins.stock-$(date +%F)`
+       (§27 step 7 may already have done this).
+2. [x] Switch. `ls -l ~/.config/OrcaSlicer/plugins/` shows three links into
+       the store, and
+       `jq '.app | {installed_networking, network_plugin_version, update_network_plugin}' ~/.config/OrcaSlicer/OrcaSlicer.conf`
+       shows `"true"`, `"02.03.00.99"`, `"false"`.
+3. [x] Launch Orca from a terminal. stderr shows
+       `[obn] Loaded Open Bamboo Networking plugin, version v2.2.0`, there is
+       no "Bambu Network Plug-in Required" dialog, and it **survives a second
+       launch**.
+4. [x] Device tab: add a printer by IP and access code and confirm it
+       connects. A Bambuddy virtual printer also needs Bambuddy's CA in
+       Orca's `printer.cer` (§#166).
+
+## 30. nix-daemon build limits + oomd — verify during a big build
+
+`modules/nixos/performance.nix` now runs nix-daemon builds at `batch` CPU
+priority with `MemoryHigh=40G`, `max-jobs = 4`, `cores = 8`, and turns oomd on
+for the user slices (it previously watched nothing). Evaluated only, never
+switched; reasoning in DECISIONS.md (nix-daemon build limits).
+
+Steps 1–3 verified after the switch (2026-10-12): values exactly as listed,
+and `oomctl` monitors `/user.slice` and its descendants (`app.slice`,
+`background.slice`, `session.slice`) at 80% / 30 s, with no system or root
+slice and no swap-monitored cgroups.
+
+1. [x] After the switch, confirm the unit picked it up:
+   `systemctl show nix-daemon -p MemoryHigh -p CPUSchedulingPolicy -p IOSchedulingClass`
+   → `MemoryHigh=42949672960`, `CPUSchedulingPolicy=3` (batch),
+   `IOSchedulingClass=3` (idle).
+2. [x] `nix config show | grep -E '^(max-jobs|cores) '` → `4` / `8`.
+3. [x] `oomctl` lists `user.slice` (and the user manager's slices) under
+   monitored memory-pressure cgroups, and does **not** list `system.slice`
+   or `-.slice`.
+4. [ ] Force a big local build (e.g. `nix build --rebuild` of Bambu Studio
+   or OrcaSlicer, or the next `nixos-rebuild switch` that compiles one). While
+   it runs: the desktop, video playback and a game stay responsive;
+   `pid=$(pgrep -n cc1plus) && chrt -p "$pid"` reports `SCHED_BATCH`;
+   `pgrep -c cc1plus` stays at or under ~32.
+5. [ ] During that build, watch `systemctl status nix-daemon` (the `Memory:`
+   line) and `cat /sys/fs/cgroup/system.slice/nix-daemon.service/memory.events`.
+   A rising `high` count is the throttle working; the build should finish,
+   just slower. If it crawls for long stretches, lower `cores` before
+   raising `MemoryHigh`.
+6. [ ] Run a game during a build. Check whether the build keeps moving at
+   about half speed and the game holds its frame rate. If the game stutters,
+   switch to the root-level idle slice described in the DECISIONS entry and
+   record the result here.
+
+## #166 Bambuddy's CA in OrcaSlicer's `printer.cer`
+
+`flake.nix`'s `withBambuddyCa` appends `certs/bambuddy-vp-ca.crt` to the
+`printer.cer` inside `pkgsApps.orca-slicer`. Without it, connecting to a
+Bambuddy virtual printer fails with `code=-1`. OrcaSlicer no longer comes from the
+binary cache: the next switch compiles it locally.
+
+1. [x] Switch, then check the last entry is `CN=Virtual Printer CA …` with the
+       fingerprint Bambuddy shows:
+       ```sh
+       cer=$(dirname "$(readlink -f "$(which orca-slicer)")")/../share/OrcaSlicer/cert/printer.cer
+       while openssl x509 -noout -subject -sha256 -fingerprint; do :; done < "$cer"
+       ```
+2. [x] Connect OrcaSlicer to a virtual printer and confirm it no longer fails
+       with `code=-1`. This goes through open-bamboo-networking (§29), which
+       checks the printer against this same `printer.cer`.
+
+Verified on pegasus with VP-queue (queue mode, .97): OBN logs `insecure=0`
+and `mqtt connect callback rc=0 (accepted)`. Test with a queue- or
+archive-mode VP: a proxy-mode VP announces the real printer's serial, so Orca
+treats the two as one device and connects to the printer directly.
+
+## #186 HushMic — verify after the next switch
+
+`modules/nixos/hushmic.nix` runs `hushmic --tray` as a user unit. It adds a
+"HushMic" PipeWire source, and apps that should get the cleaned voice pick it
+as their input. The first switch compiles HushMic locally (Rust, a few
+minutes). Rationale: DECISIONS.md, "HushMic as the noise-suppressed mic".
+
+1. [x] Start it, then check it is running and the tray icon shows up in
+       DMS. A switch does not start a new user unit; it starts by itself
+       from the next login on.
+       ```sh
+       systemctl --user start hushmic
+       systemctl --user status hushmic
+       hushmic status
+       ```
+2. [ ] Pick the real microphone in the tray menu. Then use **Test my mic** to
+       record a sample and compare the raw and cleaned playback.
+3. [x] Select **HushMic** as the input in Discord (or another app) and
+       confirm the other side hears the cleaned voice.
+4. [ ] Leave the tray's **Start on login** off. The unit already starts
+       HushMic at login, and a second instance would lose the
+       single-instance lock. If `~/.config/autostart/hushmic.desktop` exists,
+       run `hushmic config set autostart false`.
+
+Verified on pegasus, 2026-10-14: after a manual `start` the unit is active and
+the tray icon shows in DMS. On a Discord call with HushMic as the input, the
+other side could not hear the keyboard. At first the voice came through
+quiet: the mic's input volume was low, and the default strength (100 dB)
+damped speech too. Both were fixed from the tray. These settings are runtime
+state, not Nix: HushMic keeps the strength per mic in
+`~/.config/hushmic/config.toml`, and WirePlumber remembers the input volume.
+
+## #193 Exposed apps on the fast lane — owner steps and first switch
+
+Vivaldi, Chrome, Discord, Slack, Signal and Zoom now come from `nixpkgs-apps`,
+and `.github/workflows/update-apps.yml` bumps the app inputs twice a week.
+Rationale: DECISIONS.md, "Exposed apps on the fast lane".
+
+1. [ ] In the repo's Settings → Actions → General, turn on "Allow GitHub
+       Actions to create and approve pull requests". Without it the
+       workflow can't open its bump PR.
+2. [ ] Optional: add a fine-grained PAT (contents + pull requests, this repo
+       only) as the `APP_BUMP_TOKEN` secret. Bump PRs opened with the default
+       token don't trigger `nix-check.yml`. The workflow runs the same evals
+       itself, but `flake-check` never reports on the PR.
+3. [ ] Start one run by hand (Actions → "Bump app inputs" → Run workflow) and
+       confirm it opens a `[pegasus] Bump app inputs` PR, or none if nothing
+       moved.
+4. [ ] Switch pegasus (`npullnrs`), then open Vivaldi, Chrome, Discord,
+       Slack, Signal and Zoom. A newer app over the system's NVIDIA userspace
+       is the first suspect if one fails to render.
+
+## #214 Dux Shell 2.0 — verify after the first switch
+
+The first launch of Dux 2.0 moves `DankMaterialShell/` to `dms/` under
+config, state, cache and data. If a file differs between the two, the merge
+is only partial and nothing but the journal says so. The `dms` unit also
+becomes `Type=notify`. Reasoning in `DECISIONS.md` (DankMaterialShell → Dux
+Shell entry).
+
+1. [x] Switch, then log out and back into niri. Bar, wallpaper (per monitor,
+   light/dark) and pinned apps should look as they did before.
+2. [x] `ls -la ~/.config ~/.local/state ~/.cache ~/.local/share | grep -i -e dms -e DankMaterialShell`.
+   Each `DankMaterialShell` should be a symlink to `dms`. A real
+   `DankMaterialShell` dir next to `dms/` means the merge stopped partway.
+   Compare the two, keep the right files in `dms/`, then remove the legacy
+   dir and run `dms` once so it can create the symlink.
+3. [x] `journalctl --user -u dms -b | grep -i -e migrat -e 'dms dir'` shows no
+   migration warnings, and `systemctl --user status dms` shows it active
+   (it should not be stuck in "activating" now that it is `Type=notify`).
+4. [x] The four plugins still load: `dankLauncherKeys`, `dcalUpcoming`,
+   `dmsThemeSync`, `qcalCalendar`. Dux 2.0 keeps compatibility shims for
+   the old `Dank*` widget names but logs a deprecation error for each, so
+   `journalctl --user -u dms -b | grep -i deprecat` shows which plugins
+   are on borrowed time.
+5. [x] `dms-settings-diff all` shows no unexpected drift against the
+   checkpoints.
+6. [x] Press **apply colours to Qt** and confirm a Qt app still renders the
+   matugen palette (§24.1–2).
+
+Dux Files arrives in the same switch (`modules/nixos/dux-files.nix`):
+
+7. [x] `systemctl --user status dfiles` is active, and `dfiles show` brings
+   up a window at once. `dfiles ipc devices.list` lists the drives (udisks2)
+   and `dfiles ipc network.mounts` answers without an error (gvfs).
+8. [x] From a Dux Files window, double-click a text file and a PDF, and use
+   "Open terminal here". All three must launch. This is the check for the
+   daemon's PATH (DECISIONS.md, Dux Files entry).
+9. [x] `xdg-mime query default inode/directory` prints
+   `dev.duxlabs.files.desktop`, and `xdg-mime query default application/zip`
+   prints `org.kde.ark.desktop`.
+10. [x] "Show in folder" goes to Dux Files: from Vivaldi's downloads list, or
+    `dfiles ipc system.fileManager.get` reports it owns the name. If it
+    reports queued behind Nautilus, check for a leftover Nautilus process
+    from before the switch and log out and back in.
+11. [x] An open/save dialog (Ctrl+O in any GTK app) is still Nautilus's and
+    still works. The portal was deliberately left alone.
+
+All eleven verified on pegasus after the first switch (2026-10-21): both
+dirs migrated cleanly to symlinks, no migration warnings, `dms.service`
+active as `Type=notify`. For step 4, `dcalUpcoming` and `dmsThemeSync`
+still use `DankIcon`/`DankListView` in their bar widgets, and
+`dankLauncherKeys` only in its settings page; `qcalCalendar` is clean.
+They work through the shims for now. The step 5 diff was 2.0's settings
+rewrite (`configVersion` 16 → 42) plus checkpoint drift from before the
+upgrade; nothing was lost.
+
+12. [x] `dms-settings-snapshot all` and commit the refreshed
+    `hosts/pegasus/dms-*.json`, so a rebuilt host is seeded with 2.0-format
+    settings.
+13. [ ] Move `dcalUpcoming` and `dmsThemeSync` (and `dankLauncherKeys`'s
+    settings page) to `qs.DCommon.Widgets` and the `D*` names
+    (`DankIcon` → `DIcon`, `DankListView` → `DListView`) before upstream
+    removes the shims.
+
+## #226 Dux checkpoints in private `dux-state` — fresh-host bootstrap
+
+The current pegasus needs nothing: `~/dux-state` is cloned, and its first
+commit is the live state as of 2026-10-25. These steps are for a
+rebuild-from-scratch.
+
+1. [ ] Clone the private repo before Dux first starts. Home Manager's
+   activation (`home-manager-z.service`) runs at boot, before any login,
+   so on a fresh install: log in on a TTY, clone, then re-run the seed with
+   `sudo systemctl restart home-manager-z.service`, all before the first
+   graphical login. `gh` may not be installed yet; either
+   `nix shell nixpkgs#gh -c sh -c 'gh auth login && gh repo clone zjones-xyz/dux-state ~/dux-state'`
+   or, with an SSH key GitHub knows,
+   `git clone git@github.com:zjones-xyz/dux-state.git ~/dux-state`.
+   If Dux started first, step 2's fallback applies.
+2. [ ] After the switch, Dux comes up with the checkpointed bar, theme,
+   wallpaper and pinned apps rather than its defaults. If it doesn't, check
+   that `~/dux-state/hosts/pegasus/*.json` exist. The seed only fills in
+   files that are missing, so remove the live ones (or use
+   `FORCE=1 dms-settings-restore all`) and then
+   `systemctl --user restart dms.service`.
+
+## #225 Monitor Speakers (L/R) — first switch and degradation tests
+
+A switch doesn't restart the user's audio daemons. Steps 2–3 interrupt
+playback for a second or two.
+
+1. [ ] `sudo nixos-rebuild switch --flake .#pegasus`
+2. [ ] `systemctl --user restart pipewire pipewire-pulse wireplumber`
+3. [ ] `wpctl status` lists a sink per monitor under Sinks (AD104 … HDMI,
+   HDMI 2, HDMI 3, HDMI 4). The three Monitor Speakers outputs are under
+   **Filters**, by node name: `monitor_speakers_lr`, `_lr_fill` and `_lcr`,
+   each followed by one `output.…` stream per monitor it feeds (two, three,
+   three).
+   `pactl list cards | grep 'Active Profile'` shows `output:hdmi-all` for
+   the AD104. If it shows a single-HDMI profile instead, a stored profile is
+   overriding it (DECISIONS.md, monitor speakers). Remove the AD104's line
+   from `~/.local/state/wireplumber/default-profile`, then
+   `systemctl --user restart wireplumber`.
+4. [ ] Pick **Monitor Speakers (L/R)** in Dux's output menu.
+   `pw-play` a left/right test file, or use `speaker-test -D pipewire -c 2 -t wav`.
+   "Front Left" plays from both speakers of the left Dell only, and
+   "Front Right" from the right Dell only.
+5. [ ] Turn the **left** Dell off at its power button, with audio playing.
+   The right Dell keeps playing. Turn it back on, and the left resumes
+   within a few seconds with nothing touched.
+6. [ ] Repeat step 5 for the **right** Dell.
+7. [ ] Repeat steps 5–6 with an input switch instead of power-off.
+8. [ ] Turn both Dells off, then turn them on in the *opposite* order
+   (right first). Check that left/right didn't swap. If either side stays
+   silent or the sides are swapped, run
+   `systemctl --user restart wireplumber` and tell Claude. That is the
+   known gap in DECISIONS.md, and it would justify the re-matching hook.
+9. [ ] Centre trial (after steps 1–2). Match the LG output's volume to
+   the Dells'. Slots move, so find the LG by
+   name, not by "HDMI n":
+   `pw-dump | jq '.[] | select(.info.props["node.nick"]=="LG HDR 4K") | .id'`
+   → `wpctl set-volume <id> 0.79`.
+10. [ ] Compare **Monitor Speakers (L/R + centre fill)** and
+    **Monitor Speakers (3.0 L/C/R)**, with both music and a 5.1 film in
+    Jellyfin. 3.0 is hidden in Dux (step 12). Unhide it under Settings →
+    Audio → Hidden, or select it with `wpctl set-default` and the id shown
+    beside `monitor_speakers_lcr` under Filters in `wpctl status`.
+    With 3.0, `speaker-test -D pipewire -c 3 -t wav` puts "Front Center" on
+    the LG alone. Also check a mono source, such as a call or
+    `speaker-test -D pipewire -c 1 -t wav`: it should play on all three
+    monitors, not only the LG.
+11. [x] Pick one. Both kept for now, for experimenting (2026-10-25). If 3.0
+    is ever dropped, the FC upmix goes with it.
+12. [x] Hide the four raw HDMI outputs in Dux Settings → Audio. Done
+    2026-10-25 through the UI. A hand edit to `session.json` before that
+    didn't take, because Dux doesn't reload the file. **3.0 L/C/R** was
+    hidden in the same pass, so Dux shows "Hidden (5)". Unhide it there if
+    that wasn't intended.
+13. [ ] After any change to the hidden list, run `dms-settings-snapshot`
+    and commit in `~/dux-state` (the private repo, #226), so a fresh seed
+    matches.

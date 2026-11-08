@@ -21,16 +21,15 @@ let
           - PROJECTS_DIRECTORY=/home/z/homelab-stacks/memory-alpha
           - TZ=America/Los_Angeles
         volumes:
-          # Arcane manages containers/compose stacks directly, so — like
-          # Dockge — it needs full read/write socket access, not the
-          # read-only proxy Traefik uses.
+          # Arcane manages containers/compose stacks directly, so it needs
+          # full read/write socket access, not the read-only proxy Traefik
+          # uses.
           - "/run/docker.sock:/var/run/docker.sock"
           - "/home/z/arcane/data:/app/data"
-          # Same stacks directory Dockge already manages (modules/nixos/dockge.nix)
-          # rather than a second, divergent projects tree. Bind-mounted at the
-          # same path on both sides: Arcane shells out to `docker compose`
-          # against host paths for projects it manages, so the in-container
-          # path must match the host path.
+          # The stacks tree, bind-mounted at the same path on both sides:
+          # Arcane shells out to `docker compose` against host paths for
+          # projects it manages, so the in-container path must match the
+          # host path.
           - "/home/z/homelab-stacks/memory-alpha:/home/z/homelab-stacks/memory-alpha"
         networks:
           - proxy

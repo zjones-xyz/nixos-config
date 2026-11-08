@@ -14,13 +14,30 @@
   # ── Memory pressure / swap ──────────────────────────────────────────────────
   # zram gives compressed in-RAM swap — far better than disk swap on a 64 GB box
   # for absorbing spikes (e.g. shader compilation, model loads). systemd-oomd
-  # kills runaway cgroups before the box thrashes.
+  # watches the user slices only: it kills a runaway desktop app, never a
+  # build or system service (see DECISIONS.md, nix-daemon build limits).
   zramSwap = {
     enable = true;
     algorithm = "zstd";
     memoryPercent = 90;
   };
-  systemd.oomd.enable = true;
+  systemd.oomd = {
+    enable = true;
+    enableUserSlices = true;
+  };
+
+  # ── nix-daemon build limits ─────────────────────────────────────────────────
+  # Compilers run in nix-daemon's cgroup, not under nixos-rebuild, so the limits
+  # go here. batch, not idle: builds and the desktop split CPU by slice weight
+  # either way, so idle would only starve builds behind other services. MemoryHigh
+  # throttles rather than kills, so a switch never fails on it. See DECISIONS.md.
+  nix.daemonCPUSchedPolicy = "batch";
+  nix.daemonIOSchedClass = "idle";
+  nix.settings = {
+    max-jobs = 4;
+    cores = 8;
+  };
+  systemd.services.nix-daemon.serviceConfig.MemoryHigh = "40G";
 
   # ananicy-cpp auto-applies nice/ioprio/cgroup rules per process (desktop
   # responsiveness under load).

@@ -7,7 +7,13 @@ stay consistent. This file documents the repo's structure and patterns.
 
 - **`flake.nix`** — one `nixosConfigurations.<host>` per machine (+
   `darwinConfigurations.<host>` for Macs). nixpkgs pinned to `nixos-26.05`;
-  home-manager and sops-nix follow it.
+  home-manager and sops-nix follow it. Apps (desktop or terminal) that must
+  move faster than the release come from `nixpkgs-apps` (nixos-unstable),
+  handed to every host's Home Manager as `pkgsApps` (`appsForHm`) — apps
+  only, never the kernel, services or modules (policy:
+  `docs/NIXPKGS-APPS.md`). Hosts run the release's LTS kernel: nixpkgs
+  deletes non-LTS kernels at EOL even on stable, so pinning one freezes the
+  shared nixpkgs for the whole fleet (`hosts/pegasus/DECISIONS.md`).
 - **`hosts/<host>/`** — `configuration.nix` (host wiring), `hardware-configuration.nix`,
   `home.nix` (per-host Home Manager). Pi hosts also have `DEPLOY.md`/`bootstrap.sh`.
   A host directory may exist as **documentation only**, before any config is written
@@ -15,7 +21,7 @@ stay consistent. This file documents the repo's structure and patterns.
   why). Don't "fix" a missing `configuration.nix` without reading that host's
   `DECISIONS.md`.
 - **`modules/nixos/<concern>.nix`** — one concern per module (e.g. `traefik.nix`,
-  `dockge.nix`, `nvidia.nix`, `gaming.nix`). Hosts import the modules they need.
+  `arcane.nix`, `nvidia.nix`, `gaming.nix`). Hosts import the modules they need.
 - **`modules/home/<name>.nix`** — Home Manager modules shared across hosts/platforms
   (e.g. `common.nix`, consumed by both a NixOS host and a darwin host).
 - **`secrets/<host>.yaml`** — sops-encrypted, per host. Policy in `.sops.yaml`.
@@ -25,11 +31,15 @@ stay consistent. This file documents the repo's structure and patterns.
   `hosts/galactica/homepage/*.yaml`. ⚠ `nix flake check --no-build` only
   *evaluates* these; anything that has to actually run needs its own
   `nix build .#checks.…` step in `.github/workflows/nix-check.yml`.
+- **`certs/`** — public certificates more than one host trusts (e.g.
+  `bambuddy-vp-ca.crt`, appended to OrcaSlicer's `printer.cer` on pegasus and
+  serenity). Certificates only, never keys.
 - **`docs/<topic>.md`** — fleet-wide documentation that belongs to no single host
   (e.g. `DISK-LABELLING.md`, the physical disk naming and cable-labelling
   convention; `DISK-DRAWER.md`, unassigned spare disks; `BACKUP.md`, which host
-  owes what an offsite copy). Per-host hardware inventories stay in
-  `hosts/<host>/HARDWARE-MAP.md` and reference these.
+  owes what an offsite copy; `NIXPKGS-APPS.md`, the unstable app lane).
+  Per-host hardware inventories stay in `hosts/<host>/HARDWARE-MAP.md` and
+  reference these.
 
 ## Style
 
@@ -84,12 +94,24 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
 ## Workflow
 
 - `.md`/comment/bootstrap-script changes → commit straight to `main`.
+  Exception: `.claude/skills/**/SKILL.md` is executable markdown — an agent
+  acts on it — so skill changes take the `.nix` route below, as `[all] …`.
 - Pending human/manual steps in markdown (`SECRETS-TODO.md`, `MANUAL-STEPS.md`,
   `DEPLOY.md`, etc.) use numbered checkboxes (`1. [ ]`, `2. [ ]`, …), not plain
   numbers or dashes, so they can be checked off as done while keeping sequence
   for order-dependent steps. Narrative/history — what already happened, what
   was verified on real hardware — stays prose; only actually-pending action
   items get a checkbox.
+- **`MANUAL-STEPS.md` sections are keyed by issue/PR number**, not numbered in
+  sequence: `## #155 Bambuddy + Obico — owner steps before first switch`, cited
+  as `MANUAL-STEPS.md` §#155. Use the PR that brought the steps. If there is no
+  PR, as with a straight-to-`main` doc commit, use the issue that tracks them,
+  and open one if none exists. The point is that nothing ever gets renumbered:
+  a key stays put when a section is added, dropped or reordered, so citations
+  don't go stale. It also leads back to the reasoning. A second section from the same
+  PR in the same file takes a letter (`#155b`). New sections go at the end.
+  Sections written before this rule keep their `§1`… numbers, so the many
+  existing cross-references stay valid.
 - `.nix`/config changes → feature branch + PR, title prefixed with the host scope
   in brackets, e.g. `[memory-alpha] …`, `[pegasus] …`, `[all] …`.
 - **Entry-only suffixes.** `/dashboard`, `/dns` and `/dhcp` after the host mark
@@ -116,6 +138,13 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
   you get when nobody passes one. A session already holding such a branch renames
   it before opening the PR, via GitHub's branches page so an open PR follows —
   pushing the new name and deleting the old one closes that PR instead.
+- **No branch name given? Settle one before the first push.** A session
+  started without one inherits a generated `claude/<words>-<id>` branch. Before
+  pushing anything, propose a name for the work (`nfs-cutover`) and push there
+  once the user confirms. A name in the request itself (`work on branch …`)
+  counts as that confirmation. `.claude/hooks/no-agent-branch.sh` enforces it:
+  it blocks creating or first-pushing a `claude/…` branch, and lets pushes to
+  ones that already exist on origin through.
 - Validate with `nix flake check` / `nix eval`. On the Mac (aarch64-darwin) the
   Linux closures can be *evaluated* but not *built* (no Linux builder); building
   and every `switch` happen on the target host.

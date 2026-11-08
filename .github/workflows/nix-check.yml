@@ -56,11 +56,12 @@ jobs:
 
       - uses: cachix/install-nix-action@v27
         with:
+          # galactica's nixflix input is the private zjones-xyz/nixflix-exp.
+          # Read-only fine-grained PAT; when it expires, every eval fails to
+          # fetch that input. hosts/galactica/DECISIONS.md §10.
+          github_access_token: ${{ secrets.NIXFLIX_EXP_TOKEN }}
           extra_nix_config: |
             experimental-features = nix-command flakes
-
-      - name: nix flake check
-        run: nix flake check --no-build
 
       - name: Evaluate all configuration outputs
         run: |
@@ -72,6 +73,9 @@ jobs:
             echo "== darwinConfigurations.$attr =="
             nix eval ".#darwinConfigurations.$attr.config.system.build.toplevel.drvPath"
           done
+
+      - name: nix flake check
+        run: nix flake check --no-build
 
       # `nix flake check --no-build` above only *evaluates* check derivations —
       # anything that has to actually run (yamllint, a validator script, a

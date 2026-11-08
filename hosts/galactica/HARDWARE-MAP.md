@@ -77,7 +77,8 @@ serial-derived and stable.
 |---|---|---|---|---|---|
 | `h-HJDH` | HGST HUH721212ALE601 12 TB | `*HJDH` | `ata-HUH721212ALE601_*HJDH` | `sdc` | `tank` RAIDZ1 member |
 | `h-NS3Y` | HGST HUH721212ALE601 12 TB | `*NS3Y` | `ata-HUH721212ALE601_*NS3Y` | `sde` | `tank` RAIDZ1 member |
-| `h-X4WE` | HGST HUH721212ALE601 12 TB | `*X4WE` | `ata-HUH721212ALE601_*X4WE` | `sdg` | `tank` RAIDZ1 member — ⚠ **failing, replacement pending** (below) |
+| `h-X4WE` | HGST HUH721212ALE601 12 TB | `*X4WE` | `ata-HUH721212ALE601_*X4WE` | `sdg` | ✖ **replaced by `h-YWAH` 2026-10-11** — failing (below); LUKS-erased, pulled, RMA to seller (`MANUAL-STEPS.md` §21) |
+| `h-YWAH` | HPE MB012000GWDFE (= HUH721212ALE604) 12 TB | `*YWAH` | `ata-MB012000GWDFE_*YWAH` | — | `tank` RAIDZ1 member since 2026-10-11, cage A bay `A4`. Used, SMART hours reset; HPE firmware has no 197, so its early warning is `smartctl -l devstat`, scrubs and self-tests |
 | `h-T97E` | HGST HUH721212ALE601 12 TB | `*T97E` | `ata-HUH721212ALE601_*T97E` | `sdi` | `tank` RAIDZ1 member |
 | `s-768C` | Crucial BX500 480 GB | `*768C` | `ata-CT480BX500SSD1_*768C` | `sdb` | `tank` special-vdev mirror member (on LSI) |
 | `s-8162` | Crucial BX500 480 GB | `*8162` | `ata-CT480BX500SSD1_*8162` | `sdf` | `tank` special-vdev mirror member (on LSI) |
@@ -117,6 +118,10 @@ Notes on the built pool:
 > where ZFS has not read; the drive's own offline scan found them. The other
 > three spinners read 0 on 5/197/198/199, so this is one disk wearing out, not
 > the batch.
+>
+> **Resolved 2026-10-11:** `zpool replace` onto `h-YWAH` resilvered 4.32T in
+> 18:53:42 with 0 errors; X4WE gave no READ errors throughout (5 = 14, 197 = 184,
+> 198 = 70 at the end). Cold boot afterwards imported `tank` with the new member.
 
 ### `sidepool` — a fifth pool, missing from the 2026-08-07 Main-tab reading above
 
@@ -205,7 +210,6 @@ has been wiped and handed to NixOS.
 
 | ID | Device | Size | Full serial | Notes |
 |---|---|---|---|---|
-| `h-YWAH` | **HPE MB012000GWDFE** = HGST HUH721212ALE604, firmware `HPG5` | 12 TB | `*YWAH` | X4WE's replacement (`MANUAL-STEPS.md` §21). Cabled on the LSI, burn-in in progress. ⚠ **Needs the power-disable adapter cable** — invisible to the HBA without it. ⚠ **Used, SMART hours reset:** devstat shows ≈ 255 TB written, 61 power-on resets; 0 reallocated/uncorrectable/CRC. ⚠ HPE firmware has no 197 (pending); 198/199/5 equivalents are in `smartctl -l devstat`. Scrub and self-tests are its early warning. Same byte capacity as the HUH721212ALE601s. |
 | `m2-140B` | **Silicon Power UD90**, M.2 **2230**, NVMe PCIe Gen 4 ×4, on a PCIe adapter | 1 TB | `*140B` | Intended root, replacing `s-5509`. **No physical label** — no cable to trace, unambiguous by location, and no room on the card. Identifier is for inventory only. |
 
 Read off the drive's own label 2026-08-07 and confirmed by the owner. **2230, not
@@ -398,12 +402,22 @@ is moot for a single column.
 > bottom. With one column there is no left/right to confuse, so `A1` is the top
 > from either side.
 
+**Read by label, 2026-10-11** (case open for the X4WE→YWAH swap, MANUAL-STEPS
+§21; label photos in `fleet-inventory`); ports from sysfs the same day. The
+bays do not map to ports in order, so trust this table, not the pattern:
+
 | Bay | Feeding port | Disk |
 |---|---|---|
-| `A1` | ⟨TBD⟩ | ⟨TBD⟩ |
-| `A2` | ⟨TBD⟩ | ⟨TBD⟩ |
-| `A3` | ⟨TBD⟩ | ⟨TBD⟩ |
-| `A4` | ⟨TBD⟩ | ⟨TBD⟩ |
+| `A1` | onboard C204 `ata5` | `h-HJDH` (HGST label) |
+| `A2` | onboard C204 `ata6` | `h-T97E` (WD label) |
+| `A3` | onboard C204 `ata3` | `h-NS3Y` (HGST label) |
+| `A4` | onboard C204 `ata4` | `h-YWAH` (HPE label) — `h-X4WE`'s bay until 2026-10-11 |
+
+**The backplane carries no 3.3 V** — it is fed by Molex. So power-disable (SATA
+pin 3) never engages in this cage, and that is the only reason it went unnoticed:
+both `h-YWAH` (ALE604) *and* `h-X4WE` (ALE601) stay dark on a PSU SATA lead and
+only spin up in the cage or on a no-3.3 V adapter. Assume every HC520 here
+honours it.
 
 **Fill the port column by measurement.** Hotswap makes it directly observable,
 and it is quicker than tracing:
@@ -416,6 +430,101 @@ readlink -f /sys/block/sdX/device         # → …/0000:00:1f.2/ata7/… — co
 If the four 12 TB caddies get labelled first, the insertions are unnecessary:
 read each disk's `sdX` from its serial and resolve the controller from sysfs
 directly.
+
+### Verifying every disk from the initrd
+
+Before any boot that follows cabling work, check the disks at the unlock prompt,
+before the passphrase. It only reads, so nothing changes, and a fault found
+here costs a power-off, not a degraded `tank`. First run 2026-10-25: every
+check passed and every port matched the expected column below.
+
+⚠ **The initrd has no `grep`, `lsblk`, `blkid`, `smartctl`, `cryptsetup` or
+`zpool`.** It ships bash, coreutils, `find`, `less`, systemd (`udevadm`,
+`journalctl`), kmod, lvm2 and btrfs-progs. Everything below is plain bash over
+`/dev/disk/by-*`, `/sys` and the kernel journal.
+
+```sh
+ssh -p 2222 root@galactica.internal          # plain ssh, not unlock-galactica
+udevadm settle --timeout=60                  # the LSI probes slower than onboard
+```
+
+**1. Presence, by serial.** Nine `OK` lines: four RAIDZ1 spinners, three
+special-vdev SSDs (3255 also holds `/boot`), midden and the NVMe root. The
+patterns end in the serial, so `-part*` links don't match.
+
+```sh
+for d in ata-*_*HJDH ata-*_*NS3Y ata-*_*T97E ata-*_*YWAH \
+         ata-*_*768C ata-*_*8162 ata-*_*3255 ata-*_*9545 nvme-*_*0206; do
+  set -- /dev/disk/by-id/$d
+  if [ -e "$1" ]; then echo "OK    $d -> $(readlink -f "$1")"
+  else                 echo "MISS  $d"; fi
+done
+```
+
+**2. Readable headers, by UUID.** udev reads the LUKS and filesystem headers
+itself, so a UUID link means the disk answers reads, not just that it is on the
+bus. In order: cryptroot; HJDH, NS3Y, T97E, YWAH, 3255, 768C, 8162 (crypttab in
+`configuration.nix`); cryptlogs; nix-build scratch; the `/boot` ESP.
+
+```sh
+for u in 0f3c74bc-87df-4c14-915f-c46741962b38 \
+         0e3ffb41-6b97-4a7d-9581-27c6987ef21c d55d13e2-91b1-4bba-96da-2f25facee673 \
+         dbf28412-07e7-4b61-8afa-33c38bd6d1f6 8688b77c-28d9-49a1-a1c5-75210cdc2d7f \
+         016d6496-2bc1-456d-bdcc-21ca45436d5e f0a8f677-290b-4607-9422-d3cbd43b7666 \
+         2fccd949-3fad-4a91-a218-c55aab11c553 b44e545c-b4b3-4037-a263-d5a522933b37 \
+         644dbaff-563a-415f-877b-11d41ed8cb89 0B82-159C; do
+  [ -e /dev/disk/by-uuid/$u ] && echo "OK    $u" || echo "MISS  $u"
+done
+```
+
+**3. Ports.** Compare against cage A's table above and the expected column
+below. The LSI shows as `hostN`, not `ataN`.
+
+```sh
+re='(0000:[0-9a-f:.]+)/(ata[0-9]+|host[0-9]+)'
+for b in /sys/block/sd*; do
+  [[ $(readlink -f $b/device) =~ $re ]]
+  printf '%-5s %-28s %s %s\n' "${b##*/}" "$(cat $b/device/model)" \
+    "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+done
+```
+
+| Disk | Expected |
+|---|---|
+| `h-HJDH`, `h-T97E`, `h-NS3Y`, `h-YWAH` | `00:1f.2` `ata5`, `ata6`, `ata3`, `ata4` (cage A) |
+| `s-3255` | `00:1f.2` `ata1`. Required: the BIOS UEFI-boots only the C204 |
+| `s-9545` | `00:1f.2` `ata2` |
+| `s-768C`, `s-8162` | LSI `02:00.0`, `hostN` |
+
+**4. Link speed and errors.** `ata1`/`ata2` should read `6.0 Gbps` and
+`ata3`–`ata6` `3.0 Gbps` (§4: that is this board, not a fault). The second loop
+should print nothing; a line naming an `ataN` points at that cable or caddy.
+
+```sh
+ok='SATA link|Attached SCSI disk|LSISAS'
+journalctl -k -b --no-pager -o cat | while IFS= read -r l; do
+  [[ $l =~ $ok ]] && echo "$l"; done
+bad='hard resetting|serror|exception emask|failed command|link is slow|i/o error'
+shopt -s nocasematch
+journalctl -k -b --no-pager -o cat | while IFS= read -r l; do
+  [[ $l =~ $bad ]] && echo "$l"; done
+shopt -u nocasematch
+```
+
+**Reading a failure:**
+
+- **An HC520 is missing from step 1** with its bay looking fine: power-disable,
+  as above. Power off, then use the cage or a no-3.3 V adapter.
+- **In step 1 but not step 2:** it answers but its header doesn't read. Don't
+  unlock; power off and reseat it.
+- **A `tank` member is missing:** unlocking is still safe. Every crypttab line
+  is `nofail`, so `tank` imports degraded. Fix it before the next scrub.
+- **`s-3255` is missing:** the firmware stops before the initrd, since it holds
+  `/boot`.
+
+**After the unlock** the initrd's blind spots are visible: `zpool status -v
+tank` (7 members ONLINE, 0/0/0) and `ls /dev/mapper/` (cryptroot, cryptlogs,
+the 7 `array-*`/`special-*`).
 
 ---
 
@@ -557,7 +666,7 @@ mildly slower for ripping.
 
 ```
 h-HJDH
-h-X4WE
+h-YWAH
 h-T97E
 h-NS3Y
 s-3255
@@ -593,7 +702,8 @@ The other cages need enumerating before their cables can be labelled at all.
 ```csv
 id,form,recording,serial_suffix,serial_full,model,size,location,role,colour,physical_label
 h-HJDH,hdd35,cmr,HJDH,*HJDH,HUH721212ALE601,12TB,cage-A,array,,yes
-h-X4WE,hdd35,cmr,X4WE,*X4WE,HUH721212ALE601,12TB,cage-A,array,,yes
+h-X4WE,hdd35,cmr,X4WE,*X4WE,HUH721212ALE601,12TB,rma,retired,,yes
+h-YWAH,hdd35,cmr,YWAH,*YWAH,MB012000GWDFE,12TB,cage-A,array,,no
 h-T97E,hdd35,cmr,T97E,*T97E,HUH721212ALE601,12TB,cage-A,array,,yes
 h-NS3Y,hdd35,cmr,NS3Y,*NS3Y,HUH721212ALE601,12TB,cage-A,array,,yes
 s-3255,ssd25,,3255,*3255,WD Blue SA510,500GB,internal,cache,,yes
@@ -626,7 +736,7 @@ drawer is, so the answer is currently no on both counts.
 | ~~Confirm the encryption inferences in §2~~ | ~~Unraid Main tab~~ | **Closed 2026-08-07** — all confirmed |
 | ~~MX100 / `btrfs device remove missing` state~~ | ~~Unraid~~ | **Closed 2026-08-07** — completed; disk unassigned |
 | **Enumerate the non-primary cages** | Case open | Six installed disks recorded only as "internal" |
-| **Port-to-bay mapping for cage A** | Hotswap insertion + sysfs | Printing cable labels |
+| ~~Port-to-bay mapping for cage A~~ | ~~sysfs from serial~~ | **Closed 2026-10-11** — §3 table |
 | ~~`s-3100` actual state after the `/mnt/services` btrfs removal~~ | ~~Unraid, `btrfs filesystem show`~~ | **Closed 2026-08-07** — duplicate of the row above; §1 and §2 both carry the answer (unassigned, NTFS, unmounted) |
 | Enumerate the other cages — letters, arrangement, type | Eyes | Bay identifiers and cable labels for six of ten disks |
 | Port-to-bay mapping | Measure it — hotswap insertion + sysfs, see §3 | All cable labels |

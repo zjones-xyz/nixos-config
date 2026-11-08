@@ -31,6 +31,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
 - **Stock latest kernel + `scx`**, no CachyOS/Chaotic kernel. `boot.kernelPackages
   = pkgs.linuxPackages_latest`. sched-ext is upstream since 6.12, so the stock
   kernel is sufficient; `services.scx` asserts kernel ≥ 6.12.
+  **Kernel half changed 2026-10-11:** now the release's LTS (`linuxPackages`),
+  still stock — see "Kernel → the release LTS" under Other decisions. The scx
+  half is unaffected; 6.18 LTS meets its ≥ 6.12 floor.
 - **GPU: RTX 4070 on the proprietary driver with OPEN kernel modules**
   (`hardware.nvidia.open = true`). No legacy pin.
 - **Dual-GTX-1070 box stays separate** — not added here (Pascal would force the
@@ -858,7 +861,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   set, worth knowing before committing.
   **No checkpoint committed yet** — `hosts/pegasus/dms-settings.json` only
   exists after `dms-settings-snapshot` is run on real hardware with a DMS
-  config worth keeping; nothing here fabricates one.
+  config worth keeping; nothing here fabricates one. *(Superseded: the
+  checkpoints were committed later and moved to private `dux-state` on
+  2026-10-25; see that entry.)*
   **Extended 2026-08-23** to also cover `plugin_settings.json` (per-plugin
   enabled flag + config — a second file DMS saves the same atomic way,
   separate from `settings.json`), and added a `diff` action (compares live
@@ -926,6 +931,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   `nixos-rebuild switch` + relaunch on pegasus still needed to confirm this
   refactor didn't change runtime behavior versus the already-confirmed
   hand-rolled version.
+  **Superseded 2026-10-11:** bambu-studio now comes from `nixpkgs-apps`,
+  workaround kept — see "Desktop apps from `nixpkgs-apps`" below.
 
 - **OrcaSlicer bumped 2.3.1 -> 2.3.2, 2026-08-22** — pulled from a third
   standalone flake input, `nixpkgs-orca-slicer`, pinned to nixpkgs commit
@@ -952,6 +959,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   Validated the same way as `nixpkgs-bambu-studio` above
   (`flake-check-sandboxed.sh`, exit 0). Not yet confirmed with a real
   `nixos-rebuild switch` on pegasus.
+  **Superseded 2026-10-11:** orca-slicer now comes from `nixpkgs-apps`, at
+  2.4.2 — see "Desktop apps from `nixpkgs-apps`" below.
 
 - **Opened UDP 2021 + 1900 on the firewall for Bambu printer LAN
   auto-discovery, 2026-08-22.** Bambu/Orca don't send a discovery query —
@@ -1026,6 +1035,7 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   break were both hit via actual `nrs` runs on pegasus (not just eval).
   The 7.1 kernel pin itself was validated with `flake-check-sandboxed.sh`
   (exit 0) but not yet confirmed with a real `nixos-rebuild switch`.
+  **Superseded 2026-10-11** by "Kernel → the release LTS" below.
 
 - **SDDM `defaultSession` switched from "plasma-dragonized" to "niri",
   2026-09-01.** Niri (added 2026-08-10, see above) is now the daily driver;
@@ -1152,7 +1162,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   before committing; this makes that look an informed one rather than one
   that depends on remembering. ⟨No checkpoint with real coordinates has been
   committed — `hosts/pegasus/dms-session.json` does not exist until someone
-  runs `snapshot` on the host.⟩
+  runs `snapshot` on the host.⟩ *(Corrected 2026-10-25: false. Three
+  2026-09-08 commits carry full-precision coordinates; see the `dux-state`
+  entry.)*
 - **`qt.platformTheme = "qt5ct"` set system-wide, accepting that it changes
   Qt theming in the Plasma and Dragonized sessions too, 2026-09-09.**
   DMS's "apply colours to Qt" button reported `failed to apply Qt colors`.
@@ -1255,6 +1267,12 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   renders in a Qt app was then confirmed too: qt6ct shows the matugen
   palette instead of stock Fusion grey. The feature has never worked on this
   host until now.
+  *Update 2026-10-21, Dux 2.0:* upstream fixed bug 2 on its own
+  (`49a639a3`, "qt: write real newlines…", upstream issue #3457, shipped in
+  v2.0.0), so its substitution stopped matching and was dropped — issue
+  #110's case 1, for that half only. Bug 1 is unchanged in 2.0: `qt.sh` still
+  hardcodes `DankMatugen.colors`, while matugen still writes the correct
+  `qt{5,6}ct/colors/matugen.conf`. That substitution stays.
 - **Plasma and COSMIC to be removed, deferred 2026-09-09 — and `desktop-plasma.nix`
   is not the file to delete when that happens.** Neither session is in daily use
   since niri became `defaultSession` (2026-09-01) and both had degraded; the
@@ -1382,3 +1400,452 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   daily driver in service of one chat app.
   Validated by eval only (`nix flake check`, ferdium resolves to 7.2.3, kernel
   still 7.1.9); not yet confirmed by a real `nixos-rebuild switch`.
+  **Superseded 2026-10-11:** the kernel is now LTS and ferdium comes from
+  `nixpkgs-apps` — both entries below.
+
+- **Kernel → the release LTS (`linuxPackages`, 6.18), was pinned
+  `linuxPackages_7_1`, 2026-10-11.** nixpkgs deletes non-LTS kernels at
+  upstream EOL *even on a stable release*: `linux_7_1` became a throw on
+  2026-09-02. The pin therefore held the **shared** nixpkgs at 2026-08-20 —
+  the last revision that still had 7.1 — freezing every host in the fleet
+  for this one, while pegasus itself ran a kernel getting no more fixes
+  (7.1.9). LTS is the only kernel nixpkgs keeps for a whole release, so it is
+  the only choice that cannot recreate this freeze. Stock kernel either way;
+  the brief's "no CachyOS/Chaotic" still holds.
+  *Reverses the ferdium entry's "Alt rejected" above.* That weighed a kernel
+  downgrade against one chat app; the real cost was the whole fleet's
+  nixpkgs plus an EOL kernel on the daily driver.
+  *Checked for an NVIDIA or scheduler reason against LTS — found none:*
+  - The 7.1 pin's only reason was that NVIDIA 595.71.05 does not build against
+    **7.2** (the strncpy and `drm_atomic_state` breaks above). Nothing in the
+    repo, its history or the run book ties NVIDIA to 7.x over 6.18; the open
+    module evaluates against 6.18.45 and is prebuilt in cache.nixos.org (per
+    the ferdium entry). §21's lockups are userspace (Discord,
+    xwayland-satellite, gamescope), not kernel.
+  - The scheduler in force is **EEVDF** — scx has been off since 2026-08-01
+    (game-launch crashes) — and EEVDF is the in-tree default since 6.6.
+    "Latest" in the brief was only ever for sched-ext's ≥ 6.12 floor; nixpkgs
+    enables `SCHED_CLASS_EXT` from 6.12, and pegasus with `scx_lavd` forced on
+    evaluates cleanly against 6.18.45. Whether the crash was `scx_lavd`, scx
+    in general, or kernel-specific remains untested on either kernel.
+  - No out-of-tree modules besides NVIDIA (`extraModulePackages = [ ]`, no
+    ZFS); all hardware (B550, RTL8125, MT7921K, Ada) predates 6.18.
+  *Not done here:* bumping the shared nixpkgs. This change makes it possible
+  without moving it — that is its own `[all]` PR.
+  Validated by eval: pegasus toplevel instantiates (6.18.45, NVIDIA
+  595.71.05 open, scx off); every other host's system is identical to main's
+  once motd's revision stamp is held constant. Real switch: MANUAL-STEPS §27.
+
+- **Desktop apps from `nixpkgs-apps` (nixos-unstable), 2026-10-11** —
+  replacing the per-app `nixpkgs-orca-slicer`, `nixpkgs-bambu-studio` and
+  `nixpkgs-ferdium` pins with one input, instantiated once in `flake.nix` as
+  `pkgsApps` (with its own `allowUnfree` — a separate instance does not
+  inherit `modules/nixos/common.nix`'s) and passed to `home.nix`.
+  *Policy:* a desktop app that has to move faster than the 26.05 release
+  comes from `pkgsApps.<name>`. Kernel, services and everything else stay on
+  `nixpkgs`. Never import NixOS *modules* from it — two nixpkgs' module sets
+  collide on option definitions; for a newer service binary use
+  `services.<x>.package` instead. This is the common community layering
+  (stable system, second nixpkgs for apps) rather than a pin per app.
+  **Widened 2026-10-23:** terminal apps too, on every host. The policy now
+  lives in `docs/NIXPKGS-APPS.md`; see also the herdr entry below.
+  *What moved:* ferdium 7.2.3 (unchanged); bambu-studio 02.05.00.67 →
+  02.08.00.50, `withNvidiaGLWorkaround` kept (verified: the installed
+  derivation is the override's, not plain); orca-slicer 2.3.2 → 2.4.2 —
+  2.4.x was deferred above for lack of a vetted nixpkgs patch set, which
+  unstable now carries. ticktick keeps its `overrideAttrs` (now on
+  `pkgsApps`): unstable is still at 8.0.11, behind the override's 8.0.20.
+  *Trade-off accepted:* apps on this input can no longer be bumped one at a
+  time — `nix flake update nixpkgs-apps` moves them together. A single app
+  that must hold back gets its own pin again, as the exception.
+  *Risk to watch:* apps now link a newer graphics stack than the NVIDIA
+  userspace from the system nixpkgs. Newer app over older driver is the
+  direction that usually works (the driver's libraries load fine under a
+  newer glibc), but it is the first suspect if one of these apps stops
+  rendering. The remaining Electron apps (discord, slack, signal-desktop,
+  obsidian, …) stay on the shared nixpkgs; moving one is a one-word change.
+  **Superseded 2026-10-16:** discord, slack and signal-desktop moved to
+  `nixpkgs-apps` with the browsers and zoom-us — see "Exposed apps on the
+  fast lane" below.
+  Validated by eval; real switch: MANUAL-STEPS §27.
+  *Found on the hardware, 2026-10-11 (6.18.45):*
+  - **OrcaSlicer 2.4.2's WebKit pages render black on NVIDIA** (Home page,
+    Setup Wizard). 2.4 moved to wxWidgets 3.3 and a newer WebKitGTK; nixpkgs
+    sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` for Orca only inside
+    `withNvidiaGLWorkaround`, which stays off here (its Zink route is the
+    regression above). Setting just that variable fixed it — Wizard and 3D
+    viewport both confirmed. Applied as a `symlinkJoin` + `wrapProgram` wrapper
+    in `home.nix` rather than `overrideAttrs`, so the cached build is reused
+    instead of compiling Orca locally. (#166's CA append will force a local
+    build anyway; fold the variable into that `overrideAttrs` then if simpler.)
+  - **OrcaSlicer 2.4.2 aborts at startup once Bambu's stock network plugin is
+    installed** (`free(): invalid size`, on Wayland and X11). First diagnosed
+    as 2.3's data dir — wrong: a fresh data dir launched once, Orca downloaded
+    `libbambu_networking_02.03.00.62.so` (plus the Agora RTC libraries) into
+    `plugins/`, and every later launch aborted; removing `plugins/` alone
+    brought it back. Not a version mismatch — 02.03.00.62 is the version 2.4.2
+    asks for — and not NVIDIA: the same build, without the plugin, launches
+    repeatedly on Mesa/Xvfb. Orca 2.4.2's own plugin table already warns that a
+    stock version "may crash on startup due to Bambu Lab's signature
+    verification". Interim: keep `plugins/` out (MANUAL-STEPS §27 step 7).
+    Follow-up: replace it with open-bamboo-networking, an open-source drop-in
+    that is LAN-first and speaks the protocol Bambuddy's virtual printers
+    emulate. Done in the entry below. (The 2.3 data dir was reset along the way; that turned out to be
+    unnecessary but harmless — kept as `OrcaSlicer.2.3-bak`.)
+  - The old Orca 2.3.2 segfaulted on opening a file on this boot. Moot now; it
+    was never confirmed on the hardware (see the 2.3.2 entry above).
+  - Bambu Studio's toolbar/tooltip strobing is **not** from this entry: 02.05
+    strobes too on the same boot, under `GDK_BACKEND=x11`, and on the 7.1.9
+    generation. Deferred to #177.
+
+- **OrcaSlicer's network plugin → open-bamboo-networking 2.2.0, built from
+  source, 2026-10-12.** Replaces Bambu's stock plugin, which aborts Orca 2.4.2
+  at startup (entry above). OBN exports the same `dlsym` ABI. Orca loads it as
+  `plugins/libbambu_networking_02.03.00.99.so` (`.99` is upstream's
+  convention for "newer than any stock build" in the 02.03.00 series Orca has
+  asked for since 2.3.2), with OBN's own `libBambuSource.so`/`liblive555.so`
+  beside it. `pkgs/open-bamboo-networking.nix` builds it against `pkgsApps`,
+  the nixpkgs Orca comes from, and `home.nix` links the three libraries into
+  `~/.config/OrcaSlicer/plugins/` and sets four `OrcaSlicer.conf` keys
+  (`installed_networking`, `network_plugin_version`,
+  `network_plugin_remind_later`, `update_network_plugin`) the way upstream's
+  own installer does. Orca owns the rest of that file, so it is patched, not
+  managed.
+  *Alt rejected:* upstream's prebuilt release tarball plus
+  `autoPatchelfHook`. Less to maintain, but binaries built on another distro
+  against other OpenSSL/libstdc++ builds, loaded into a nixpkgs process. The
+  source build is small (one CMake project; mosquitto and cJSON, which it
+  vendors via FetchContent, are fetched by Nix and handed over).
+  *Alt rejected:* OBN for Bambu Studio too. Studio's stock plugin works on
+  this host, and OBN's Studio build tracks Studio's own version, so it would
+  need rebuilding on every Studio bump. Revisit if Studio's plugin breaks.
+  Cloud printing is not used, so OBN's own defaults stand: `block_cloud = 1`
+  keeps printing and telemetry on the LAN (only sign-in and preset sync may
+  reach Bambu), and `obn.conf` is left to the plugin, which writes it on first
+  launch.
+  Note that OBN verifies printer TLS against the slicer's own
+  `cert/printer.cer`, so the Bambuddy CA append (#166) still applies.
+  Validated here: the package builds, and upstream's `probe_plugin` loads it
+  (version `02.03.00.99`, all 108 + 21 ABI symbols present). Not yet run
+  inside Orca: MANUAL-STEPS §29.
+- **nix-daemon builds run at batch priority, bounded in memory; oomd watches
+  user slices only (2026-10-11).** Local builds (Bambu Studio, OrcaSlicer)
+  took over the desktop during `nixos-rebuild switch`. The config is in
+  `modules/nixos/performance.nix`.
+  *Why on the daemon:* `nixos-rebuild` only asks nix-daemon to build; every
+  compiler runs inside `nix-daemon.service`'s cgroup. `nice`/`systemd-run`
+  around `nixos-rebuild` changes nothing.
+  *CPU — `batch`, after `idle` turned out not to reach the desktop:*
+  `nix.daemonCPUSchedPolicy = "batch"`: a waking build task never preempts
+  the running task, but builds still get CPU under contention. The first draft used `idle` plus
+  `CPUWeight = "idle"` (cgroup `cpu.idle`), and review showed it does not do
+  what it was meant to. The cpu controller is already on (systemd's
+  `user@.service` delegates `cpu`), so at the root the scheduler compares
+  `system.slice` against `user.slice`, each at weight 100. A per-task
+  SCHED_IDLE, or `cpu.idle` set on a unit *inside* `system.slice`, only ranks
+  builds against other system services, and the build keeps roughly half of
+  every contested CPU either way. So `idle` would not have stopped builds
+  for the desktop. Its one real effect was builds losing to Ollama and
+  docker. `batch` gets about the same share against the desktop without
+  starving builds behind other services, and is the honest description.
+  *Alt kept in reserve:* if builds must truly yield to the desktop, move
+  nix-daemon to its own root-level slice with `CPUWeight = "idle"`
+  (`systemd.slices.nixbuild` + `Slice = "nixbuild.slice"`; no dash in the
+  name, or it nests). That puts `cpu.idle` level with `user.slice`, at the
+  cost of builds all but stopping while a game runs.
+  *I/O:* `daemonIOSchedClass = "idle"` is kept but is probably a no-op. The
+  NVMe uses the `none` scheduler, which ignores ioprio, and dm-crypt's
+  workqueues drop the submitter's priority anyway. It matters only if BFQ is
+  ever enabled.
+  ananicy-cpp was checked for a fight: its rule set (nefelim4ag/ananicy at
+  the pinned rev) types `gcc`/`g++`/`make`/`ninja`/`cargo`/`rustc` as
+  `compiler` = nice 1, with no `sched`, `ioclass` or `cgroup` key, and has
+  no rule for `cc1plus` or `nix-daemon`. Nothing is moved out of the
+  daemon's cgroup or re-policied.
+  *Memory:* `max-jobs × cores` is the real cap — each C++ compiler process
+  is ~1–2 GB. Was `auto × 0` = 16 jobs × 16 threads, up to 256 compilers.
+  Now `max-jobs = 4`, `cores = 8`: at most 32 compiler processes (2× the
+  thread count, so the CPU stays full), and a single big build still gets 8
+  threads. `MemoryHigh = 40G` backs that up by throttling and reclaiming,
+  never killing. `MemoryMax` was rejected because a kill fails the switch
+  partway. It is a soft bound, not a hard one. Pages reclaimed into zram
+  leave the build's `memory.current`, but zram's compressed store is not
+  charged to the cgroup, so a build past 40G still grows in system RAM via
+  zram. If a hard bound is ever needed, `MemorySwapMax=` on the daemon is
+  the lever.
+  *oomd:* it was enabled with every slice option false, so it watched
+  nothing despite the comment claiming otherwise. Now `enableUserSlices`
+  only: kill once memory pressure stays at 80% for 30 s, systemd's default.
+  It kills the descendant cgroup with the most reclaim activity. That is
+  usually an app scope, but `session.slice` (the compositor) is in scope
+  too, so in the worst case oomd ends the session rather than one app.
+  Under global pressure from a build, oomd's only targets are desktop apps,
+  never the build. That is the accepted cost of the next point.
+  `system.slice` was rejected on purpose. The throttling that `MemoryHigh`
+  applies shows up as memory pressure, so oomd there would kill exactly the
+  heavy build `MemoryHigh` is meant to slow down. The root slice was
+  rejected for the same reason. *Alt kept in reserve:* oomd on
+  `system.slice` with `ManagedOOMPreference = "omit"` on nix-daemon, if a
+  system service (Ollama, docker) ever runs away.
+  Validated by eval and an independent review; MANUAL-STEPS.md §30 carries
+  the on-hardware checks.
+
+- **HushMic as the noise-suppressed mic, 2026-10-14** —
+  `modules/nixos/hushmic.nix`. HushMic adds a PipeWire virtual source,
+  "HushMic", that runs the DPDFNet model over the real mic (80 ms added
+  latency, CPU only). Apps that should get the clean voice pick it as their
+  input. The system default input stays the raw mic unless the tray's "Set
+  as default microphone" is turned on.
+  *Packaging:* not in nixpkgs. The `hushmic-nix` input is the upstream
+  author's own flake. It builds from source, which NixOS needs because the
+  prebuilt binaries won't run there. Its nixpkgs follows `nixpkgs-apps`,
+  since it is a desktop app and its own CI builds against unstable. (This
+  makes it the lane's one exception: a system package and user service, not
+  Home Manager. See `docs/NIXPKGS-APPS.md`, Wiring.) The flake has a bot
+  that bumps it daily; `flake.lock` pins the commit, so a bump only lands
+  through `nix flake update hushmic-nix`. Upstream's `package.nix` still
+  takes the `xorg` set, which unstable now deprecates. The module overrides
+  that argument with the renamed attributes (`libx11`, …) to silence the eval
+  warnings. The output path is unchanged. Drop the override once upstream
+  moves to the new names.
+  *Started as a NixOS user unit with `--tray`,* the same shape as `dcal`
+  (`dankcalendar.nix`). Upstream's shipped unit runs `--headless` on
+  `default.target`. Upstream offers the tray only through the
+  `~/.config/autostart` entry its "Start on login" writes. A declared unit
+  replaces that entry here, and the tray is HushMic's whole UI: mic choice,
+  suppress/bypass/mute, model, strength and the A/B test. A tray process
+  needs the display, so the unit binds to `graphical-session.target` and the
+  virtual mic stops at logout. That is fine on a desktop. The rest is
+  upstream's: `KillMode=mixed`, so the `pipewire -c` child can restore the
+  previous default mic; `Restart=on-failure`, because "already running"
+  exits 0; and `session.slice`, where session-critical services sit beside
+  the compositor rather than among the apps in `app.slice`.
+  *Left mutable:* `~/.config/hushmic/config.toml`. The tray writes it on
+  every change, so it is runtime state and Home Manager does not own it.
+  *Alt rejected:* EasyEffects with HushMic's LADSPA plugin. That is a full
+  effects suite to run just to get one filter.
+  Validated by eval and a local build of the package. On pegasus, keyboard
+  noise is gone on a Discord call (MANUAL-STEPS.md §#186).
+
+- **Exposed apps on the fast lane, 2026-10-16** — browsers and web-facing
+  Electron apps carry the most attack surface on this host, so they join
+  `pkgsApps`: vivaldi, google-chrome, discord, slack, signal-desktop and
+  zoom-us. None needs a real compile: the five unfree ones repackage
+  upstream binaries locally (unpack and patchelf), and signal-desktop builds
+  from source but comes from Hydra's cache. Firefox stays on `pkgs`, because
+  stable backports its security releases.
+  *Speed comes from cadence, not channel.* An app is only as fresh as
+  `flake.lock`, which was bumped by hand. `.github/workflows/update-apps.yml`
+  now bumps `nixpkgs-apps`, `zen-browser`, `opera-flake` and
+  `claude-desktop-debian` twice a week and opens a PR. Merging and switching
+  stay manual. `nixpkgs`, the kernel and service inputs stay out of it.
+  *Cost of each bump:* `nixpkgs-apps` also carries things pegasus builds
+  itself. OrcaSlicer recompiles locally whenever a bump moves it, because
+  the Bambuddy CA append (#166) is an `overrideAttrs`. Bambu Studio is
+  unfree and overridden, so it compiles locally too. open-bamboo-networking
+  and HushMic build against the same input. Budget that time at switch. A newer
+  Signal, Slack or Discord can also upgrade its profile on first run, so
+  rolling back past a bump may leave the app unable to open it.
+  Since herdr (entry below), each bump also changes every host's Home
+  Manager profile, so the bump PR is scoped `[all]`.
+  *Why not nixpkgs master:* it has no Hydra cache and no channel testing. It
+  would be days faster at best, at the cost of local builds and untested
+  revisions. For Electron apps the vendor picks the bundled Chromium anyway,
+  so a faster channel only delivers the vendor's build sooner.
+  *ticktick* keeps its hand override: its fixed `src` hash can't follow an
+  automated bump. It is a first-party to-do client, so low exposure. Drop the
+  override once unstable passes it.
+  *Claude Desktop:* `claude-desktop-debian` tracks its default branch, so the
+  scheduled bump keeps it current. Replace it when a vendor-backed source for
+  the official Linux build appears (a verified Flathub listing, an official
+  repo or flake).
+  *Rules for later (nothing enabled now):*
+  - **Flatpak** only for a verified, vendor-published Flathub app that keeps
+    outpacing unstable, or that refuses to run once outdated. Never a
+    browser: Chromium's own sandbox degrades to zypak under Flatpak. Declare
+    it with `nix-flatpak`, never by hand. Flatpak's real advantage is the
+    sandbox, but apps often punch holes in it, it lives outside `flake.lock`,
+    and NVIDIA needs a GL extension that matches the driver exactly.
+  - **Snaps** are out: NixOS has no supported snapd module.
+  - **AppImage for trials.** To try an app before packaging it, run the
+    vendor's AppImage through `programs.appimage` (`enable` + `binfmt`,
+    added when the first trial happens). Trial only: no updates, no sandbox,
+    usually unsigned. An app that stays gets a Nix package, or
+    `appimageTools` wrapping the same file.
+- **DankMaterialShell → Dux Shell 2.0, 2026-10-21 (same project, renamed).**
+  Upstream rebranded to Dux Labs and moved to `duxlabs-dev/dux-shell`; the
+  flake input follows it. Nothing Nix-facing was renamed: the flake still
+  exports `nixosModules.dank-material-shell`, the option is still
+  `programs.dank-material-shell`, and the binary is still `dms`.
+  *Config dir:* `~/.config/DankMaterialShell` becomes `~/.config/dms` (and
+  likewise under state, cache and data). Dux does the move itself on first
+  launch (`core/internal/utils/dirs.go`, `MigrateLegacyDirs`): a rename plus
+  a symlink at the old path. If *both* dirs already exist, it merges what
+  doesn't collide into `dms/`. On a file that differs, the `dms/` copy wins,
+  the legacy copy is left behind, and the old path never becomes a symlink
+  (only a journal warning says so). So `seedDmsSettings` and `dms-settings.sh` pick `dms/` unless only
+  the legacy dir exists yet. Seeding `dms/` on the first switch, before Dux
+  has run, would create exactly that conflicting pair.
+  *Why not nixpkgs' `dms-shell`:* still 1.6.3 on nixpkgs master, and its
+  module is a different one (`programs.dms-shell`, whose own option set is
+  changing in 26.11 — see issue #213).
+  *Aqueous:* Dux 2.0 supports the Aqueous compositor in full. Trialling it
+  on this host waits for 26.11 (it needs wayland-protocols ≥ 1.49), tracked
+  in issue #213.
+- **Dux Files as the default file manager, 2026-10-22.** The Dux suite's
+  own file manager (`duxlabs-dev/dux-files`, `dfiles`), from its flake's
+  `nixosModules.dux-files` — the same pattern as Dux Shell. It builds with
+  `go_1_27`, which 26.05 already has. It handles `inode/directory` and
+  "show in folder" (`org.freedesktop.FileManager1`), and runs as a
+  session-long user service (`dfiles.service`) so windows open instantly.
+  Nemo, Nautilus and Thunar stay installed.
+  *FileManager1 is pinned per user, not left to the bus.* Nautilus and Dux
+  Files both ship an activation file for that name. dbus-broker keeps the
+  first one it reads, and the per-user profile (which holds Nautilus) is
+  read before the system service dirs. `$XDG_DATA_HOME/dbus-1/services` is
+  read before both (`standard_session_servicedirs`, which NixOS's
+  session.conf keeps), so home.nix places Dux Files' file there. A running
+  Nautilus that already owns the name still beats activation (dfiles queues
+  behind it); the session-start `dfiles.service` normally gets there first.
+  *Archives stay with Ark.* The Dux Files desktop entry also claims zip/tar/
+  7z/rar and friends, sorts ahead of Ark in `mimeinfo.cache`, and extracts
+  on open by default. home.nix pins those types to Ark.
+  *PATH:* upstream's module sets `path = [ quickshell ]`, which writes a PATH
+  that replaces the session's. The daemon launches every "open with" from
+  bare desktop-entry Execs, so dux-files.nix forces `path = [ ]`, as Dux
+  Shell's own module does for `dms.service`.
+  *Every session, not just niri.* The mime default, the FileManager1
+  override and `dfiles.service` (wanted by `graphical-session.target`) are
+  per-user, so Plasma and COSMIC get Dux Files for folders too, ahead of
+  Dolphin and cosmic-files. Accepted, since both sessions are slated for
+  removal (entry above).
+  *Open/save dialogs stay with Nautilus.* Dux Files' FileChooser portal is
+  installed with the package but not preferred: niri's `portals.conf`
+  picks gnome/gtk. Preferring it (`programs.dux-files.portal`) changes every
+  app's dialog at once, so it waits until the file manager has proven out.
+
+- **`pkgsApps` fleet-wide, for herdr, 2026-10-23** (policy now in
+  `docs/NIXPKGS-APPS.md`). herdr (terminal agent multiplexer) is not in
+  26.05 at all, only unstable (0.9.5), and belongs on every host — so
+  `pkgsApps` is now handed to every host's Home Manager (`appsForHm` in
+  `flake.nix`), not just pegasus's, and `modules/home/common.nix` installs
+  `pkgsApps.herdr`. The policy above is unchanged apart from scope:
+  apps only, never modules or services; a terminal app counts as an app.
+  The one exception is HushMic (entry above), whose lane-built package is
+  a system package run as a user service defined here.
+  *Cost:* every host now evaluates a second nixpkgs, and herdr's closure pulls
+  unstable's glibc and friends (~87 MiB on aarch64, more than the binary
+  itself) — paid even on the Pis. Cached on cache.nixos.org for
+  x86_64-linux, aarch64-linux and aarch64-darwin, so nothing builds locally.
+  The scheduled bump PR (`update-apps.yml`) is now `[all]` and says to switch
+  the whole fleet. Every `home.nix` importing `common.nix` needs `appsForHm`.
+  Once a release ships herdr, move it to plain `pkgs.herdr`.
+
+- **Dux checkpoints moved to the private `dux-state` repo, 2026-10-25** —
+  supersedes where the checkpoints live in the `dms-settings.sh` entries
+  above: `hosts/pegasus/dms-*.json` are gone from this public repo.
+  `scripts/dms-settings.sh` now writes
+  `~/dux-state/hosts/<host>/{settings,plugin-settings,session}.json`, a
+  clone of private `zjones-xyz/dux-state` (`DMS_CHECKPOINT_REPO`
+  overrides). `seedDmsSettings` reads from the same place.
+  *Why:* these files are whatever Dux's GUI chooses to write, and they
+  carry more than config. The near-miss that settled it was a
+  `session.json` snapshot carrying `builtInPluginState`, the Notepad's
+  full text, which was caught before commit. Location had already needed
+  rounding. Reviewing every snapshot for leaks is a control that fails the
+  one time it's skipped. A private repo means a miss stays under the
+  owner's control.
+  *No flake input.* Nothing in Nix reads the checkpoints. The script and
+  the activation seed both read them at runtime from `$HOME`, so the
+  private repo never enters evaluation, CI or other hosts.
+  *Scrubbing kept as defence in depth:* snapshot rounds latitude/longitude
+  and `weatherCoordinates` to one decimal (since #214; the earlier
+  surface-only approach is gone). It now also drops `builtInPluginState`,
+  and restore keeps the live copy of that key.
+  *Amends "session.json checkpointed too, wholesale rather than filtered"*
+  (2026-09-09): that entry rejected filtering because a faithful copy can't
+  drift. Dropping `builtInPluginState` is a filter. The cost is that Dux
+  merges that key into its built-in plugins' settings, so if a built-in
+  plugin ever keeps settings there, a rebuilt host won't get them back.
+  Today it holds only the Notepad's content.
+  *Public history is not clean.* Older commits of the three files remain
+  in this repo's history. Three from 2026-09-08 (`843d171`, `adf48eb`,
+  `854c3af`) predate rounding and carry a full-precision
+  latitude/longitude. Whether to rewrite history is an open call for the
+  owner. The Notepad text was never committed.
+  *Cost:* a rebuilt pegasus needs `~/dux-state` cloned before Dux first
+  starts, then the seed re-run, since Home Manager activates at boot before
+  any login (MANUAL-STEPS.md §#226). Without it, Dux starts on its
+  defaults, and nothing fails.
+
+- **Monitor speakers as one L/R sink, 2026-10-25** —
+  `hosts/pegasus/monitor-speakers.nix`. The left and right Dells
+  (S2722QC, S2721QS) both have speakers. "Monitor Speakers (L/R)" is a
+  PipeWire combine-stream sink that sends the left channel to both left-Dell
+  speakers and the right channel to both right-Dell speakers.
+  *Every monitor as its own sink.* The 4070's HDA controller offers each
+  HDMI/DP output as a separate, mutually exclusive profile, so only one
+  monitor could play at a time. A custom ACP profile set
+  (`/etc/alsa-card-profile/…/pegasus-hdmi-all.conf`) `.include`s the stock
+  `default.conf` and adds `output:hdmi-all`, which opens all four HDMI PCMs at
+  priority 10000. WirePlumber's find-best-profile then picks it on its own,
+  but only while no profile is stored for the card. A profile picked by hand
+  (Plasma's sound settings, pavucontrol) is saved in
+  `~/.local/state/wireplumber/default-profile`. WirePlumber's
+  find-stored-profile restores it before priority is ever considered, and
+  the combine sinks go silent. Recovery: MANUAL-STEPS §#225 step 3.
+  *One clock.* The four outputs share one controller clock, so the
+  channels can't drift apart.
+  *Matched by monitor name, not node.name.* The driver hands out PCM slots
+  to monitors dynamically. Right now the HDMI-attached QC is on `hdmi:0` and
+  the QS is on `hdmi:1`, which isn't connector order. Slots can move after
+  replugs or reboots, so the combine rules match `node.nick`, which comes
+  from the monitor's ELD when the sink is created.
+  *Degrading.* ACP marks a multi-port profile unavailable only when *all*
+  its ports are, so one Dell going dark leaves the profile and both sinks in
+  place. The other Dell keeps playing, and the dark one resumes when it
+  returns. If every monitor drops, WirePlumber falls back to another profile
+  and the combine streams go with the sinks. They come back when the
+  monitors do. The combine sink itself always exists, so a default set to it
+  never jumps elsewhere. niri's power-off-monitors (DPMS) doesn't drop ELD
+  on any of the three panels; tested live 2026-10-25.
+  *Hotplug churn:* every monitor power cycle now adds and removes more
+  audio nodes. The Quickshell crash recorded under "Dual-head bring-up,
+  2026-08-18" was triggered by exactly this kind of churn, so if Dux drops
+  out while a monitor is cycling, that is the likely cause. Recovery is the
+  same: `systemctl --user restart dms.service`.
+  *Keyed to the PCI address:* both the profile rule
+  (`alsa_card.pci-0000_2b_00.1`) and Dux's hidden list (`alsa_output.pci-
+  0000_2b_00.1.*`) name the 4070's audio function by PCI address. If the
+  card moves slots or the BIOS renumbers the bus, both stop matching with
+  no error: there's one HDMI sink again, and all four outputs show up in
+  Dux. Update both to the new address.
+  *Known gap:* `node.nick` is fixed when the sink is created. A Dell that was
+  off or disconnected when PipeWire started, or that came back on a
+  different slot, isn't matched until the sinks are recreated
+  (`systemctl --user restart wireplumber`). A WirePlumber hook re-matching on
+  route changes would close it if this happens in practice.
+  *Alt rejected:* `pro-audio`. It also exposes every PCM, but drops the ELD
+  names and jack detection the matching depends on.
+  *Centre on trial (2026-10-25).* The LG between them (32UN880-B, 2 × 5 W)
+  leaves a hole in the middle, so two variants sit beside the plain L/R sink
+  to compare by ear: **L/R + centre fill**, where the LG plays the ordinary
+  stereo mix, and **3.0 L/C/R**, where the LG plays FC only. Both stay for
+  now (owner's call, 2026-10-25). For stereo sources the 3.0 sink needs an FC to be
+  synthesised. audioconvert's built-in defaults are `upmix = none` and
+  `fc-cutoff = 0`; client.conf's `#channelmix.upmix = true` is a
+  commented-out example, not a live setting. So the module sets upmix
+  (`psd`, FC lowpassed at 12 kHz) in `stream.properties` for native and
+  Pulse clients. Upmixing happens in each app's stream, which is why the
+  setting can't be scoped to one sink. It only acts when a sink has channels
+  the source lacks: here that's the 3.0 sink, or an HDMI surround profile if
+  one is ever picked. Drop it if the 3.0 variant is ever removed.
+  *Raw HDMI sinks hidden in Dux.* The four per-monitor sinks must exist for
+  the combine streams, so they are hidden with Dux's own
+  `hiddenOutputDeviceNames`, not removed in PipeWire. Set this through Dux
+  Settings → Audio. Editing `session.json` by hand doesn't work: this build
+  doesn't reload the file on change, and its next save puts the old list
+  back. Fresh seeds get the list from the Dux checkpoints, which now live
+  in the private `dux-state` repo (#226).
+  Hiding is by `node.name`, so it covers all four slots. Their volumes stay
+  reachable through Dux Settings → Audio → Hidden, or through `wpctl`.

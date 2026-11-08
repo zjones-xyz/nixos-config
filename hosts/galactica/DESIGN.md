@@ -215,7 +215,7 @@ blocking pre-step in `PLATFORM.md §1` and §5) degrades you instead of destroyi
 | Unraid provides | Replacement | Honest assessment |
 |---|---|---|
 | webGUI disk overview, temps, SMART, spin state | `lsblk`, `smartctl`, `snapraid status/smart`, Beszel (already a fleet module) | **Real loss.** Nothing gives you Unraid's one-glance dashboard. Beszel + a small status script recovers most of it. |
-| Docker tab, Community Applications templates | **Dockge** — already `modules/nixos/dockge.nix`, already managing `homelab-stacks/` | **Near parity.** Same affordance (browse/edit/restart compose stacks in a browser). You lose CA's one-click templates; you keep 30+ stacks in git, which you already do. |
+| Docker tab, Community Applications templates | **Arcane** — `modules/nixos/arcane.nix` on memory-alpha, managing `homelab-stacks/` (was Dockge when this was written) | **Near parity.** Same affordance (browse/edit/restart compose stacks in a browser). You lose CA's one-click templates; you keep 30+ stacks in git, which you already do. |
 | VM manager | libvirt, or nothing | Moot — the point is to not have a VM. |
 | User shares: split level, allocation method, include/exclude disks | mergerfs create policies + `minfreespace` + branch modes (RW/RO/NC) | **Biggest genuine rebuild.** Unraid's split-level UI is literally the mergerfs policy problem with a GUI on it. Same decisions, no GUI, but now they live in git with a comment explaining why. |
 | SMB/NFS share toggles, user management | `services.samba`, `services.nfs.server.exports`, sops-held credentials | Fine, but hand-written. Declarative, which is the point. |

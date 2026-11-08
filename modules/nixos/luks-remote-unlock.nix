@@ -100,9 +100,11 @@
 
   # Audible chimes at the two initrd milestones that matter when unlocking
   # headlessly: (1) SSH unlock server reachable, (2) LUKS actually decrypted.
-  # Plain BEL to /dev/console — the kernel's VT layer drives the PC speaker
-  # directly, nothing extra needed in the initrd closure. Different beep
-  # patterns so the two events are distinguishable by ear.
+  # Plain BEL to /dev/tty0, the foreground VT, whose bell drives pcspkr. Not
+  # /dev/console: serial-console.nix makes that the UART. pcspkr isn't
+  # autoloaded in the initrd, so load it. Different patterns per event.
+  boot.initrd.kernelModules = [ "pcspkr" ];
+
   boot.initrd.systemd.services.chime-waiting-unlock = {
     description = "Chime: initrd SSH unlock server ready";
     after = [ "sshd.service" ];
@@ -114,7 +116,7 @@
     path = [ pkgs.coreutils ];
     script = ''
       for i in 1 2 3; do
-        printf '\a' > /dev/console
+        printf '\a' > /dev/tty0
         sleep 0.15
       done
     '';
@@ -124,14 +126,18 @@
     description = "Chime: LUKS unlock finished";
     after = [ "cryptsetup.target" ];
     wantedBy = [ "initrd.target" ];
-    before = [ "shutdown.target" ];
+    # initrd.target waits for the chime; otherwise switch-root SIGTERMs it mid-beep.
+    before = [
+      "initrd.target"
+      "shutdown.target"
+    ];
     conflicts = [ "shutdown.target" ];
     unitConfig.DefaultDependencies = false;
     serviceConfig.Type = "oneshot";
     path = [ pkgs.coreutils ];
     script = ''
       for i in 1 2; do
-        printf '\a' > /dev/console
+        printf '\a' > /dev/tty0
         sleep 0.5
       done
     '';

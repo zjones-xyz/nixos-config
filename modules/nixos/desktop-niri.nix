@@ -38,7 +38,7 @@
   # registers under a separate xdg.portal.config key (matched at runtime by
   # $XDG_CURRENT_DESKTOP), so the two coexist without conflict.
 
-  # ── DankMaterialShell — the actual bar/launcher/notification-center/etc ─────
+  # ── Dux Shell (DMS, formerly DankMaterialShell) — bar/launcher/notifs/etc ──
   # community comparison (chosen over Noctalia, 2026-08-11 — see
   # DECISIONS.md): more feature-complete, and this host is going multi-monitor
   # soon, which is Noctalia's one documented weak spot in the field reports
@@ -57,16 +57,15 @@
   programs.dank-material-shell = {
     enable = true;
 
-    # ── Patches two upstream bugs in DMS's scripts/qt.sh ────────────────────
-    # The Qt palette is pointed at a KDE-format file qt6ct cannot parse, and
-    # the from-scratch config write emits a literal "\n". Together: "apply
-    # colours to Qt" reports success and never works. Evidence and upstream
+    # ── Patches an upstream bug in DMS's scripts/qt.sh ──────────────────────
+    # The Qt palette is pointed at a KDE-format file qt6ct cannot parse, so
+    # "apply colours to Qt" reports success and never works. (Its sibling
+    # literal-"\n" bug was fixed upstream in 2.0.) Evidence and upstream
     # status in DECISIONS.md; recovery when this breaks: issue #110.
     package = self.inputs.dank-material-shell.packages.${pkgs.stdenv.hostPlatform.system}.dms-shell.overrideAttrs (old: {
       postFixup = (old.postFixup or "") + ''
         substituteInPlace $out/share/quickshell/dms/scripts/qt.sh \
-          --replace-fail 'local config_file="$1"' 'local config_file="$1"; local color_scheme_path; color_scheme_path="$(dirname "$config_file")/colors/matugen.conf"' \
-          --replace-fail '[Appearance]\\ncustom_palette=true\\ncolor_scheme_path=%s\\n' '[Appearance]\ncustom_palette=true\ncolor_scheme_path=%s\n'
+          --replace-fail 'local config_file="$1"' 'local config_file="$1"; local color_scheme_path; color_scheme_path="$(dirname "$config_file")/colors/matugen.conf"'
       '';
     });
 
