@@ -67,15 +67,18 @@ against a directory you have half-forgotten.
 pinned to the canonical path:
 
 ```nix
-nrs = "sudo nixos-rebuild switch --flake ~/nixos-config#pegasus";
+nrs = "~/nixos-config/scripts/nrebuild.sh nixos-rebuild switch pegasus";
 ```
 
 Standing in `~/wt/nfs-cutover` and typing `nrs` builds **`~/nixos-config`** —
 the *other* checkout, on whatever branch that happens to be. The same holds for
-`npull`, whose alias is a path to `~/nixos-config/scripts/npull.sh`, and it is
-not fixed by deriving the repo from the script's own location: the script that
-runs is the canonical checkout's copy, so its own location *is* the canonical
-checkout.
+`npull`, whose alias is a path to `~/nixos-config/scripts/npull.sh`.
+
+⚠ Deriving the repo from the script's own location — which `nrebuild.sh` and
+`npull.sh` both do — does **not** fix this, and is the easy thing to get wrong
+here. The script that runs is the *canonical checkout's* copy, so its own
+location *is* the canonical checkout. Resolving from the script only helps a
+worktree when you invoke that worktree's own copy, which the alias never does.
 
 Verified by running the canonical checkout's script from inside a worktree: it
 reported the canonical checkout's branch and passed the canonical checkout's
@@ -85,9 +88,13 @@ Until §6 lands, a worktree is built by invoking its **own** copy of the script
 with an explicit path, not through the alias:
 
 ```
-cd ~/wt/nfs-cutover && ./scripts/npull.sh
-sudo nixos-rebuild switch --flake ~/wt/nfs-cutover#pegasus
+cd ~/wt/nfs-cutover
+./scripts/npull.sh
+./scripts/nrebuild.sh nixos-rebuild switch pegasus
 ```
+
+Both resolve to the worktree, and the branch banner names it — so the explicit
+form is self-checking in a way the alias is not.
 
 That is deliberate friction, and it is the correct friction while the aliases
 still mean "the canonical checkout": an alias that silently meant a different
