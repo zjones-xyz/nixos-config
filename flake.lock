@@ -176,7 +176,7 @@
           "home-manager"
         ],
         "nixpkgs": [
-          "nixpkgs-apps"
+          "nixpkgs-hermes"
         ],
         "npm-lockfile-fix": "npm-lockfile-fix",
         "pyproject-build-systems": "pyproject-build-systems",
@@ -457,6 +457,24 @@
         "url": "https://github.com/NixOS/nixpkgs.git"
       }
     },
+    "nixpkgs-hermes": {
+      "locked": {
+        "lastModified": 1793726008,
+        "narHash": "sha256-jQp1wKvbwWdLBASTXkSi/VYmDJ5AbBi1WvcMt9HWJC8=",
+        "ref": "nixos-unstable",
+        "rev": "1d060086d60cb76a40cf37109f979d88a5bd6396",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/NixOS/nixpkgs.git"
+      },
+      "original": {
+        "ref": "nixos-unstable",
+        "rev": "1d060086d60cb76a40cf37109f979d88a5bd6396",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/NixOS/nixpkgs.git"
+      }
+    },
     "nixpkgs-lib": {
       "locked": {
         "lastModified": 1793504054,
@@ -652,6 +670,7 @@
         "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs",
         "nixpkgs-apps": "nixpkgs-apps",
+        "nixpkgs-hermes": "nixpkgs-hermes",
         "opera-flake": "opera-flake",
         "plasma-manager": "plasma-manager",
         "sops-nix": "sops-nix",
