@@ -169,7 +169,7 @@
     # Beszel: the hub's shared public KEY and this host's registration TOKEN,
     # consumed via sops.templates."beszel-agent.env" (below). ⚠ Both must be
     # in secrets/pegasus.yaml before the first switch: a declared sops secret
-    # that isn't there fails activation, not eval (MANUAL-STEPS.md §#PRNUM).
+    # that isn't there fails activation, not eval (MANUAL-STEPS.md §#248).
     secrets."beszel/hubKey" = { };
     secrets."beszel/agentToken" = { };
     # Declarative login password for z — without this, a fresh install leaves
@@ -247,7 +247,7 @@
   # galactica's shape): the binary agent reads the 4070 through nvidia-smi,
   # which the Alpine image cannot run, and it needs no Docker socket. Why the
   # fleet now has two agent shapes: DECISIONS.md.
-  # ⚠ Registration and secrets are owner steps: MANUAL-STEPS.md §#PRNUM.
+  # ⚠ Registration and secrets are owner steps: MANUAL-STEPS.md §#248.
   services.beszel.agent = {
     enable = true;
     # The hub pulls from this agent over the LAN, so the port must be open.
