@@ -31,6 +31,8 @@ stay consistent. This file documents the repo's structure and patterns.
   `hosts/galactica/homepage/*.yaml`. ⚠ `nix flake check --no-build` only
   *evaluates* these; anything that has to actually run needs its own
   `nix build .#checks.…` step in `.github/workflows/nix-check.yml`.
+- **`.github/scripts/`** — scripts the workflows run that are too long to
+  inline, e.g. `lane-uncached.sh` for `update-apps.yml`.
 - **`certs/`** — public certificates more than one host trusts (e.g.
   `bambuddy-vp-ca.crt`, appended to OrcaSlicer's `printer.cer` on pegasus and
   serenity). Certificates only, never keys.
