@@ -34,9 +34,9 @@ jobs:
             experimental-features = nix-command flakes
 
       # ── What the bump leaves off cache.nixos.org ──
-      # Eval passes on a stale fixed-output hash (#242: opencode's node_modules),
-      # so new uncached FODs are built for real; other new local builds are
-      # listed in the PR body. Baseline first, against the current lock.
+      # Eval passes on a stale fixed-output hash (#233: opencode's node_modules),
+      # so FODs with new uncached outputs are built for real; other new local
+      # builds are listed in the PR body. Baseline first, against the current lock.
       - name: Uncached before bump
         run: |
           .github/scripts/lane-uncached.sh hosts >/tmp/hosts.txt
@@ -64,17 +64,19 @@ jobs:
             cat <<'BODY'
           Scheduled bump of `nixpkgs-apps`, `zen-browser`, `opera-flake`,
           `claude-desktop-debian`, `kimi-cli` and `hermes-agent`. Every host's eval,
-          `nix flake check --no-build`, and a build of every new uncached
-          fixed-output derivation passed in the run that opened this PR.
+          `nix flake check --no-build`, and a build of every x86_64-linux
+          fixed-output derivation whose output is new and uncached passed in
+          the run that opened this PR.
 
           After merging: switch pegasus and open the browsers, chat apps and coding agents.
           `nixpkgs-apps` also carries herdr for every host, so switch the
           rest of the fleet too (the Pis per their DEPLOY.md).
           BODY
             if [ -s /tmp/uncached.md ]; then
-              printf '\n### ⚠ Newly off cache.nixos.org\n\n'
-              printf 'These were cached before this bump and now build locally. Hydra may\n'
-              printf 'just be behind, or the package may be broken on unstable: check\n'
+              printf '\n### ⚠ Newly built locally\n\n'
+              printf 'A switch builds these after this bump and did not before (compared\n'
+              printf 'by package name, across every host). Hydra may just be behind, often\n'
+              printf 'for darwin, or the package may be broken on unstable: check\n'
               printf 'hydra.nixos.org or nixpkgs issues before switching.\n\n'
               cat /tmp/uncached.md
             fi
