@@ -1140,3 +1140,39 @@ playback for a second or two.
 13. [ ] After any change to the hidden list, run `dms-settings-snapshot`
     and commit in `~/dux-state` (the private repo, #226), so a fresh seed
     matches.
+
+## #248 Beszel agent — register in the hub, secrets, first switch
+
+pegasus reports to the Beszel hub on memory-alpha through nixpkgs' native
+`services.beszel.agent` (not galactica's compose module; DECISIONS.md has
+the reasoning). The agent has no Docker access on purpose, so the hub's
+containers tab stays empty for pegasus. GPU metrics come from `nvidia-smi`
+on the unit's PATH.
+
+⚠ Steps 1–2 come before the first switch: a declared sops secret that is
+missing from the file fails activation, not eval, and the config declares
+`beszel/hubKey` and `beszel/agentToken`.
+
+1. [ ] Hub (`beszel.monitor.zjones.dev`) → **Add system**: name `pegasus`,
+   host its LAN address, port 45876. Copy the shared **KEY** and the
+   per-agent **TOKEN** from the dialog (the compose snippet it shows is
+   not used here; only the two values are).
+2. [ ] `sops secrets/pegasus.yaml` → add `beszel/hubKey` and
+   `beszel/agentToken` as raw values, no `KEY=`/`TOKEN=` prefix. Same two
+   names as galactica's (`hosts/galactica/MANUAL-STEPS.md` §7), so the
+   dialog feeds both hosts the same way. Commit.
+3. [ ] `npullnrs` on pegasus. `systemctl status beszel-agent` is active;
+   `journalctl -u beszel-agent -b` shows the WebSocket connection to the
+   hub and no `nvidia-smi`, `permission denied` or `KEY`/`TOKEN` errors.
+4. [ ] In the hub, pegasus shows up with CPU, memory, disk, network and a
+   **GPU** panel for the 4070. If the GPU panel is missing and the journal
+   says `nvidia-smi` found no valid GPU data, check `ls -l /dev/nvidia*`
+   for the node names: the unit's `DeviceAllow` lists `/dev/nvidiactl` and
+   `/dev/nvidia0` only. If the agent starts before the driver has created
+   them, `systemctl restart beszel-agent` once is enough; if that recurs,
+   tell Claude so the unit gets an `After=` on the driver.
+5. [ ] If the hub reports the agent as outdated: it runs the release
+   branch's 0.18.7 against a 0.21.x hub, which the release notes say is
+   fine. Only if the hub actually refuses it is
+   `services.beszel.agent.package` from `nixpkgs-apps` worth switching on
+   (DECISIONS.md).
