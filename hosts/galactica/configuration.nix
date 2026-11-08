@@ -30,6 +30,7 @@
     ../../modules/nixos/traefik-galactica.nix
     ../../modules/nixos/newt.nix
     ../../modules/nixos/tsdproxy.nix
+    ../../modules/nixos/alerts.nix
     ./borgmatic.nix
     ./homepages.nix
     ./nixflix.nix
@@ -411,6 +412,9 @@
   boot.zfs.devNodes = "/dev/mapper";
   boot.zfs.extraPools = [ "tank" ];
   systemd.services."zfs-import-tank" = {
+    # crypttab is `nofail`, so a missing member imports degraded or not at all
+    # without stopping boot; ZED reports the former, this the latter.
+    onFailure = [ "notify-failure@%n.service" ];
     # Names must match the crypttab above; `-` escapes to \x2d in unit names.
     after = [
       "cryptsetup.target"
@@ -600,6 +604,10 @@
   # ~20 h spinner long test clear of the scrub, which starts on the 1st and
   # runs ~12 h. No stagger: the index counts every disk, SSDs included.
   homelab.smart.selfTests = "(S/../../7/03|L/../15/./03)";
+
+  # ZED pool events, smartd warnings and the onFailure hooks below → the
+  # homelab-alerts topic on memory-alpha's ntfy. MANUAL-STEPS.md §#209.
+  homelab.alerts.enable = true;
 
   # Flipped after staging issuance was proven (which is what the flag is
   # for). Separate cert storage per CA, so this is freely reversible.

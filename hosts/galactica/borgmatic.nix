@@ -83,6 +83,7 @@ in
   #  - PrivateDevices=yes hides /dev/zfs from zfs(8).
   #  - `zfs snapshot` + mounting it need CAP_SYS_ADMIN; drop-in list
   #    directives union, so naming the upstream two alongside keeps all three.
+  systemd.services.borgmatic.onFailure = [ "notify-failure@%n.service" ];
   systemd.services.borgmatic.serviceConfig = {
     LoadCredentialEncrypted = lib.mkForce [ "" ];
     PrivateDevices = lib.mkForce false;
