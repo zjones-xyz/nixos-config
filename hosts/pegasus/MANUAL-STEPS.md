@@ -1140,3 +1140,18 @@ playback for a second or two.
 13. [ ] After any change to the hidden list, run `dms-settings-snapshot`
     and commit in `~/dux-state` (the private repo, #226), so a fresh seed
     matches.
+
+## #243 Bump cache check — first run
+
+`update-apps.yml` now dry-runs every host before and after the bump and builds
+fixed-output derivations with new uncached outputs (docs/NIXPKGS-APPS.md
+§ Bumps). It had never run in Actions when it merged.
+
+1. [ ] Merge #242 first. The first run bumps the lane past it, and the bump
+       PR it opens would conflict with #242 on `flake.lock`.
+2. [ ] Start one run by hand (Actions → "Bump app inputs" → Run workflow).
+       Check that "Uncached before bump" and "Uncached after bump" finish
+       well inside the 60-minute limit, and note how many fixed-output
+       derivations the after step builds.
+3. [ ] Read the bump PR's "⚠ Newly built locally" list, if any, against
+       hydra.nixos.org before switching.
