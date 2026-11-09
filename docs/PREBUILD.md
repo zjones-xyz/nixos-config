@@ -9,21 +9,30 @@ merging has nothing left to compile.
 
 ## What it does
 
-An hourly timer (`prebuild.timer`, first run 15 minutes after boot) runs
-`prebuild.service` as root. One `git ls-remote` asks origin for every watched
+An hourly timer (`prebuild.timer`) runs `prebuild.service` as root. After a
+boot the first run comes 15 minutes in, or at the next hour mark if that's
+sooner; the switch that first installs the timer starts a run right away.
+A switch never restarts a running prebuild (`restartIfChanged = false`), so
+`nrs` doesn't wait on it. One `git ls-remote` asks origin for every watched
 branch's head (by default `bump-app-inputs`, the scheduled bump's PR branch,
 and `main`). If origin can't be reached, the run notifies once and stops; the
 next run retries. Then, for each branch:
 
-1. If the branch doesn't
-   exist, as after a bump PR merges and its branch is deleted, the branch's
-   GC root and state are removed and nothing is built.
+1. If the branch doesn't exist, the branch's GC root and state are removed
+   and nothing is built. ⚠ The repo doesn't delete merged branches, and the
+   bump workflow only deletes `bump-app-inputs` when a run has nothing to
+   bump, so a merged bump's branch lingers until the next bump replaces it.
+   Turn on "Automatically delete head branches" in the repo's settings for
+   this cleanup to happen at merge.
 2. If that commit was already built, or already failed to build, it is
    skipped.
-3. Otherwise it builds
+3. Otherwise it evaluates
    `git+<repo>?ref=<branch>&rev=<sha>#nixosConfigurations.<host>.config.system.build.toplevel`
-   into `/var/lib/prebuild/result-<branch>`. The out-link is a GC root, so the
-   build survives garbage collection until the switch.
+   to its `.drv` in one process, so evaluation's ~2.4 GB is freed before the
+   build, then builds that into `/var/lib/prebuild/result-<branch>`. The
+   out-link is a GC root, so the build survives garbage collection until the
+   switch. A real failure removes the branch's previous result, so
+   `prebuild status` never shows a stale "built".
 4. It sends a desktop notification to `notifyUser`'s session if that user is
    logged in: **ready**, **failed** (naming the first derivation that didn't
    build), **out of memory** (hit the cap below) or **error** (evaluation
@@ -33,10 +42,15 @@ next run retries. Then, for each branch:
    result is in `prebuild status`, and their failures still notify.
 
 A build failure is recorded against that commit and not retried. An eval
-error, a failed download (but not a hash mismatch, which is a real failure)
-and a build killed by the memory cap below are retried on the next run, and
-notified only once per commit. The memory case is read from the kernel's
-`oom_kill` count for the unit's own cgroup, not guessed from the log.
+error, a failed download and a build killed by the memory cap below are
+retried on the next run, and notified only once per commit. A failed
+download is nix's own fetch failing or a fixed-output (fetcher) derivation
+failing, but never a hash mismatch, which is a real failure. Test output
+inside a build that mentions networking doesn't count. The memory case is
+read from the kernel's `oom_kill` count for the unit's own cgroup, not
+guessed from the log. A build killed by the cap is first retried in the same
+run at `lowMemory.maxJobs × lowMemory.cores` (1 × 2); only if that is killed
+too does **out of memory** notify.
 
 ## Staying out of the way
 
@@ -49,14 +63,16 @@ batch priority"):
   against the store directly instead of asking nix-daemon. Every compiler is
   then a child of `prebuild.service`, and its limits apply. nix-daemon's
   settings (`MemoryHigh = 40G`, `batch`) don't.
-- **Memory.** `MemoryHigh` (`memoryHigh`, 12G) throttles and reclaims,
-  `MemoryMax` (`memoryMax`, 16G) OOM-kills inside the unit only, and
-  `MemorySwapMax = 2G` stops it growing on in zram. Builds run
-  `maxJobs × cores` = 2 × 4 to stay under that. `OOMScoreAdjust = 1000`
-  makes it the kernel's first choice under global OOM. `OOMPolicy = continue`
-  means a `MemoryMax` kill takes the compiler, not the whole unit, so the
-  script survives to report it. A kill fails that run only; a package that
-  never fits in the cap is still built by `nrs`, uncapped.
+- **Memory.** `MemoryHigh` (`memoryHigh`, 12G) throttles and reclaims and
+  `MemoryMax` (`memoryMax`, 16G) OOM-kills inside the unit only; both are
+  options. Hardcoded: `MemorySwapMax = 2G`, which stops it growing on in
+  zram, `OOMScoreAdjust = 1000`, which makes it the kernel's first choice
+  under global OOM, and `OOMPolicy = continue`, which keeps the unit, and so
+  the script, alive when the kernel kills a process inside it. That process
+  is usually a compiler, but it can be `nix` itself. Builds run
+  `maxJobs × cores` = 2 × 4, then 1 × 2 after a kill. A package that never
+  fits even then (OrcaSlicer, Bambu Studio and codex are the candidates) is
+  still built by `nrs`, uncapped.
 - **No systemd-oomd.** That `DECISIONS.md` entry keeps oomd off build
   cgroups because `MemoryHigh`'s throttling reads as memory pressure, so a
   pressure kill would fire at about 12G, before `MemoryMax` ever matters. The
