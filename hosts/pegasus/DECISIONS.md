@@ -1889,4 +1889,4 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   report it, and the commit is retried at 1 job × 2 cores before **out of
   memory** is reported. A package that never fits is left to `nrs`.
   *Switches:* `restartIfChanged = false`, as nixpkgs does for nix-gc. A
-  switch never restarts a running prebuild and waits for it.
+  switch neither restarts a running prebuild nor waits for it to finish.

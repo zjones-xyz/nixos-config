@@ -1161,24 +1161,29 @@ fixed-output derivations with new uncached outputs (docs/NIXPKGS-APPS.md
 `modules/nixos/prebuild.nix` builds the bump PR and `main` in the background
 (docs/PREBUILD.md). Its limits and notifications were only tested with stubs.
 
-1. [ ] Before switching: if `bump-app-inputs` on origin still points at an
+1. [x] Before switching: if `bump-app-inputs` on origin still points at an
        already-merged bump, delete it, or the first run builds that old
        commit and reports on a closed PR. Then turn on "Automatically delete
        head branches" (repo Settings → General) so merged branches go away.
-2. [ ] Switch. The switch starts a first run right away; follow it with
+       Done 2026-11-09: branch deleted, auto-delete on.
+2. [ ] Switch. The switch starts a first run within about 10 minutes
+       (`RandomizedDelaySec`); follow it with
        `journalctl -fu prebuild`, or start one with `prebuild now -f`.
        `prebuild status` should then show each branch as built or failed.
 3. [ ] Confirm the run is in its own cgroup: while it builds,
        `systemd-cgls /prebuild.slice` shows the compilers, not
        `nix-daemon.service`.
 4. [ ] Confirm the caps: `systemctl show prebuild -p MemoryHigh -p MemoryMax
-       -p MemorySwapMax -p OOMPolicy` reads 12G, 16G, 2G and `continue`, and
-       `oomctl` does not list `prebuild.service`.
+       -p MemorySwapMax -p OOMPolicy` reads `12884901888`, `17179869184`,
+       `2147483648` (bytes: 12G, 16G, 2G) and `continue`, and `oomctl` does
+       not list `prebuild.service`.
 5. [ ] Confirm a desktop notification reaches the Dux session ("pegasus
        prebuild ready" or "failed") while you're logged in.
 6. [ ] If a build hits the 16G cap (OrcaSlicer, Bambu Studio or codex), the
        log shows "OOM at 2 jobs x 4 cores" and a 1 × 2 retry. Only if that is
        killed too do you get one "out of memory" notification. Either way
        `systemctl status prebuild` must not say `oom-kill`.
-7. [ ] Run `nrs` once while a prebuild is running: the switch must not wait
-       for it (`restartIfChanged = false`).
+7. [ ] Run `nrs` once while a prebuild is running: the switch must not
+       restart the prebuild or wait for it to finish (`restartIfChanged =
+       false`). It can still wait on a derivation both are building at that
+       moment; that's the lock wait in docs/PREBUILD.md, not this.
