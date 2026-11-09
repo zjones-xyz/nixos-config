@@ -38,7 +38,9 @@ it sounds, and both have bitten PRs here already:
   each toplevel and builds memory-alpha, nothing more. So "CI is green" proves
   galactica evaluates, not that a refactor left it unchanged. W0 closes that
   gap with a CI job before any galactica refactor starts, and every galactica
-  item below cites that job as its proof.
+  item below cites that job as its proof. Adding `nixflix-exp` to the cloud
+  environment's repository list would make every session able to evaluate
+  galactica without the manual attach; that is an owner setting, not a PR.
 
 **Delete before abstracting.** #39's one piece of advice that still holds. The
 Pi era-1 modules are not refactor candidates; they are deletions waiting on the
@@ -54,6 +56,14 @@ configuration byte-identical.
 **A deployed host is the only real test for anything with runtime behaviour.**
 W5, W9, W10, W13 and W14 change what runs. They carry deploy checklists and go
 one host at a time.
+
+**Review cost is a design input.** Every PR here goes through
+`merge-after-review`: a fresh adversarial reviewer plus CI, and a new
+reviewer for every fix round. The follow-up commits after #244 and #245 were
+all run-book wording caught on a second or third full review. W17 to W19
+spend the reviewer's attention on what a machine cannot check, and the
+"while I'm in here" addition that grows a PR past its item is the single
+largest avoidable review cost, so it is out of scope for every item.
 
 ## 2. Open PRs this plan builds on, or retires
 
@@ -367,11 +377,12 @@ PR with a deploy checklist in `hosts/memory-alpha/MANUAL-STEPS.md`:
 Three of the four compose-in-systemd agents become plain containers;
 the fourth stays.
 
-- `beszel-agent.nix` moves to nixpkgs' `services.beszel.agent` if the 26.05
-  module exists and takes KEY, TOKEN and HUB_URL through its
-  `environmentFile`, which is the shape #36 used. Verify against the pinned
-  nixpkgs first; this could not be checked from a sandbox. If it does not,
-  it becomes an `oci-containers` entry like the next two.
+- `beszel-agent.nix` moves to nixpkgs' `services.beszel.agent`, the shape
+  #248 landed on pegasus: KEY and TOKEN from a `sops.templates` env file,
+  `HUB_URL` to the fleet hub, no Docker group. galactica differs in wanting
+  the containers view, so its env file also carries `DOCKER_HOST` at #207's
+  socket proxy; how a host-side unit reaches a proxy that lives on a Docker
+  network is the one detail W10 has to settle.
 - `arcane-agent.nix` and `scrutiny-collector.nix` become `oci-containers`
   entries with `sops.templates` env files, the shape `tsdproxy.nix` already
   uses. scrutiny keeps `--privileged` and its two capabilities in
@@ -387,8 +398,9 @@ the fourth stays.
   replaced by `docker-X.service`, and the rendered container environment
   matches the old compose environment key for key.
 - Hosts: galactica and pegasus switch (memory-alpha's agents live in
-  `homelab-stacks`, outside this repo).
-- Depends on: #207; W8 only for consistency of shape.
+  `homelab-stacks`, outside this repo). pegasus only for its Scrutiny
+  collector; its Beszel agent is #248.
+- Depends on: #207, #248; W8 only for consistency of shape.
 - PR title: `[galactica, pegasus] …`.
 
 ### W11. NFS client mounts
@@ -479,6 +491,72 @@ records.
 - Depends on: W0; #129/#144 landed or closed first. Independent of
   everything else.
 
+### W17. Convention checks in CI
+
+The mechanical half of `CLAUDE.md` becomes a fast job in `nix-check.yml`,
+before the Nix install, so it answers in seconds and the reviewer never
+spends a round on it:
+
+- PR title scope against touched paths: a `[pegasus]` PR that edits
+  `modules/nixos/` or `modules/home/` is misfiled; `/dashboard`, `/dns` and
+  `/dhcp` suffixes present when and only when the matching entries change.
+- A new `MANUAL-STEPS.md` section is keyed `## #<N>` with N the PR's own
+  number, and its pending steps are `1. [ ]` checkboxes.
+- Serial masking in the files that must mask (`*` plus four, with the
+  disko and niri exceptions `CLAUDE.md` names).
+- The existing dated-comment lint made blocking on *added* lines only, so the
+  backlog stays a warning and new ones cannot land.
+
+Any finding class a reviewer raises twice becomes a check here; a running
+list of past findings is not kept.
+
+- Files: `.github/workflows/nix-check.yml`, `.github/scripts/conventions.sh`.
+- Proof: run against the diffs of the last twenty merged PRs. The ones that
+  needed a follow-up doc commit for one of these reasons flag; the others
+  pass. Fixtures for each rule under `checks/conventions/`.
+- Hosts: none.
+- Depends on: nothing.
+
+### W18. Review tiers and delta re-reviews
+
+`merge-after-review` reads the W0 table and the diff's paths and picks the
+review shape:
+
+- One host changed, no file under `modules/` touched: one reviewer, the
+  project's default subagent model, the same prompt.
+- A shared module touched or two or more hosts changed, or any item this
+  plan marks runtime: the Opus adversarial review as today.
+- A fix round that changed only markdown gets a *delta* review: a new
+  reviewer, given the previous findings and the fix diff, asked whether each
+  finding is resolved. Any `.nix` change in the round means a full review.
+
+The skill is executable markdown, so this is an `[all]` PR, not a doc commit.
+
+- Files: `.claude/skills/merge-after-review/SKILL.md`.
+- Proof: replay on three merged PRs: one single-host, one shared-module, one
+  with a doc-only fix round. The tier chosen matches what the PR actually
+  needed.
+- Hosts: none.
+- Depends on: W0, for the table.
+
+### W19. Run-book sections with fixed slots and runnable checks
+
+A `MANUAL-STEPS.md` section template in `CLAUDE.md`: preconditions, switch
+order, verify, rollback, owner steps. A reviewer checks filled slots rather
+than free prose. Every *verify* step is a command in a fenced block with the
+line it should print, so the deployer runs it instead of reasoning about it.
+The follow-ups after #244 (bytes versus units from `systemctl show`, the
+first-run delay) are the kind of thing running the step would have shown.
+An extractor that runs a section's fenced checks on the host is a possible
+later step, not part of this item.
+
+- Files: `CLAUDE.md`; the template applied to the next new section, not
+  retrofitted.
+- Proof: the next three runtime PRs (W5, W9, W10) use it, and their review
+  rounds carry no run-book wording findings.
+- Hosts: none.
+- Depends on: nothing.
+
 ## 4. Dependency graph
 
 PR nodes are the open pull requests this plan waits on. The dashed node is a
@@ -520,6 +598,9 @@ graph TD
   W14["W14 NUT server module"]:::runtime
   W15["W15 Move service-hardening"]
   W16["W16 home/desktop.nix"]
+  W17["W17 Convention checks in CI"]
+  W18["W18 Review tiers + delta re-reviews"]
+  W19["W19 Run-book slots + runnable checks"]
 
   W0 --> W1
   W0 --> W2
@@ -529,6 +610,8 @@ graph TD
   W0 --> W11
   W0 --> W15
   W0 --> W16
+  W0 --> W18
+  W17 -.-> W18
 
   P139 -.-> W3
   P129 --> W3
@@ -550,6 +633,8 @@ graph TD
   P208 --> W9
   P141 -.-> W9
   P207 --> W10
+  P248["#248 pegasus Beszel agent"]:::pr
+  P248 --> W10
   W8 -.-> W10
   W7 --> W12
   P232 --> W12
@@ -571,7 +656,8 @@ open ones, gets its CI table. Then merge #105, #107, #232 (rebased), #205
 (rebased), #208, #209; rebase and merge #207; decide #139; land or close #129
 and #144. Then in any order W1, W2, W3, W4, W11, W15, W16. Each is one
 `[all]` PR proven by W0, switched at leisure since nothing changes on the
-hosts.
+hosts. W17 and W19 go anywhere in this wave, W18 as soon as W0 has produced
+its first tables; all three touch no host and pay back on every later PR.
 
 **Wave 2, galactica's Traefik.** W5, then W6, then W7, then W8, then W12. W5
 is the one step here whose unit text may change; galactica and memory-alpha
@@ -615,11 +701,14 @@ the Pis are rebuilt. Each carries a deploy checklist in the PR body and a
    Traefik first and migrate it with W9, or rebase #141 onto the shared module
    after W9. Recommendation: after, since #141 is large and W9 changes the file
    it edits.
-5. [ ] **W10's Beszel agent.** Native nixpkgs module or `oci-containers`. Decide
-   after checking the pinned nixpkgs for `services.beszel.agent` and whether
-   its `environmentFile` carries TOKEN and HUB_URL.
+5. [x] **W10's Beszel agent.** Native nixpkgs module or `oci-containers`.
+   Settled by #248: the pinned nixpkgs has `services.beszel.agent` with an
+   `environmentFile`, and pegasus runs it. W10 follows for galactica.
 6. [ ] **Whether #84 (Colmena) comes back after W4**, or deploys stay
    `nixos-rebuild --target-host`.
 7. [ ] **W0's CI job as advisory or blocking.** Advisory as written. It could
    fail a PR whose title claims a refactor when the table shows a changed
    host, once there is a convention for marking refactor PRs.
+8. [ ] **W18's single-host tier.** Whether a one-host, no-shared-module PR may
+   skip the Opus review at all, or only drop to the cheaper model. The
+   recommendation above is the cheaper model, never no review.
