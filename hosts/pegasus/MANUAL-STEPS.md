@@ -1155,3 +1155,30 @@ fixed-output derivations with new uncached outputs (docs/NIXPKGS-APPS.md
        derivations the after step builds.
 3. [ ] Read the bump PR's "⚠ Newly built locally" list, if any, against
        hydra.nixos.org before switching.
+
+## #244 Prebuild — first run on the hardware
+
+`modules/nixos/prebuild.nix` builds the bump PR and `main` in the background
+(docs/PREBUILD.md). Its limits and notifications were only tested with stubs.
+
+1. [ ] Before switching: if `bump-app-inputs` on origin still points at an
+       already-merged bump, delete it, or the first run builds that old
+       commit and reports on a closed PR. Then turn on "Automatically delete
+       head branches" (repo Settings → General) so merged branches go away.
+2. [ ] Switch. The switch starts a first run right away; follow it with
+       `journalctl -fu prebuild`, or start one with `prebuild now -f`.
+       `prebuild status` should then show each branch as built or failed.
+3. [ ] Confirm the run is in its own cgroup: while it builds,
+       `systemd-cgls /prebuild.slice` shows the compilers, not
+       `nix-daemon.service`.
+4. [ ] Confirm the caps: `systemctl show prebuild -p MemoryHigh -p MemoryMax
+       -p MemorySwapMax -p OOMPolicy` reads 12G, 16G, 2G and `continue`, and
+       `oomctl` does not list `prebuild.service`.
+5. [ ] Confirm a desktop notification reaches the Dux session ("pegasus
+       prebuild ready" or "failed") while you're logged in.
+6. [ ] If a build hits the 16G cap (OrcaSlicer, Bambu Studio or codex), the
+       log shows "OOM at 2 jobs x 4 cores" and a 1 × 2 retry. Only if that is
+       killed too do you get one "out of memory" notification. Either way
+       `systemctl status prebuild` must not say `oom-kill`.
+7. [ ] Run `nrs` once while a prebuild is running: the switch must not wait
+       for it (`restartIfChanged = false`).

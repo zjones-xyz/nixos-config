@@ -1873,3 +1873,20 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   opencode's `node_modules` hash there. That would have frozen every lane
   app to fix two, against the policy's "an app that has to hold back gets
   its own pin".
+- **Background prebuild with hard limits, 2026-11-09 (#244)** — a second
+  build path beside `nrs`: `modules/nixos/prebuild.nix` builds the bump PR
+  and `main` hourly, so a broken lane bump shows before merging and the
+  switch finds its packages built. Details in `docs/PREBUILD.md`.
+  *Why the opposite choices to the nix-daemon entry above:* that entry keeps
+  `nrs` builds soft-limited (`MemoryHigh` only, `batch`) because a kill fails
+  a switch partway. Nobody waits on a prebuild and a kill costs one retry, so
+  it runs with `NIX_REMOTE=local` (root builds in its own cgroup, not the
+  daemon's), hard caps (`MemoryMax = 16G`, `MemorySwapMax = 2G`), and that
+  entry's reserve CPU option, a root-level `prebuild.slice` with
+  `CPUWeight = idle`. oomd stays off it for the same reason it stays off the
+  daemon: `MemoryHigh`'s throttling reads as pressure.
+  *What a kill costs:* `OOMPolicy = continue` keeps the script alive to
+  report it, and the commit is retried at 1 job × 2 cores before **out of
+  memory** is reported. A package that never fits is left to `nrs`.
+  *Switches:* `restartIfChanged = false`, as nixpkgs does for nix-gc. A
+  switch never restarts a running prebuild and waits for it.
