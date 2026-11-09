@@ -193,6 +193,7 @@ The `prebuild` command:
 ## Turning it on for another host
 
 Import `modules/nixos/prebuild.nix` and set `services.prebuild.enable = true`,
-and `discover.enable = true` to build its open PRs too. `host` defaults to `networking.hostName`. Leave `notifyUser` unset on hosts
-without a desktop session, where the result is only in the journal. On the
-Pis, keep building through memory-alpha as their `DEPLOY.md` describes.
+and `discover.enable = true` to build its open PRs too. `host` defaults to
+`networking.hostName`. Leave `notifyUser` unset on hosts without a desktop
+session, where the result is only in the journal. On the Pis, keep building
+through memory-alpha as their `DEPLOY.md` describes.
