@@ -43,7 +43,7 @@ jobs:
           xargs .github/scripts/lane-uncached.sh list /tmp/before.txt </tmp/hosts.txt
 
       - name: Update app inputs
-        run: nix flake update nixpkgs-apps zen-browser opera-flake claude-desktop-debian kimi-cli hermes-agent
+        run: nix flake update nixpkgs-apps zen-browser opera-flake claude-desktop-debian kimi-cli hermes-agent gputaskman
 
       # A PR opened with the default GITHUB_TOKEN does not trigger nix-check.yml,
       # so the same evaluation runs here before the PR exists.
@@ -63,7 +63,7 @@ jobs:
           {
             cat <<'BODY'
           Scheduled bump of `nixpkgs-apps`, `zen-browser`, `opera-flake`,
-          `claude-desktop-debian`, `kimi-cli` and `hermes-agent`. Every host's eval,
+          `claude-desktop-debian`, `kimi-cli`, `hermes-agent` and `gputaskman`. Every host's eval,
           `nix flake check --no-build`, and a build of every x86_64-linux
           fixed-output derivation whose output is new and uncached passed in
           the run that opened this PR.
