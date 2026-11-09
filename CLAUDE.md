@@ -162,7 +162,9 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
   and every `switch` happen on the target host.
 - **In a Claude Code web session**, run `.claude/hooks/flake-check-sandboxed.sh`
   instead: it refetches every flake input over git+https, which the session's
-  GitHub proxy allows where the `github:` tarball fetch gets a 403. It still
-  fails on the private `nixflix` input until that repo is attached to the
-  session (`add_repo zjones-xyz/nixflix-exp`); do that first rather than
-  stubbing the input, so galactica is checked too.
+  GitHub proxy allows where the `github:` tarball fetch gets a 403. The
+  private `nixflix` input needs `zjones-xyz/nixflix-exp` on the session; the
+  NixOS cloud environment lists it, so a session started with it selected
+  checks galactica too. A session without it fails on that one input: say
+  so and ask for the attach (`add_repo`, which the owner approves) rather
+  than stubbing the input, which would leave galactica unchecked.
