@@ -37,6 +37,9 @@ was fitted later, and its wear is unknown until `smartctl` has been run on it
 ## 4. Expansion
 
 - **M.2 key E, 2230 length:** for a WiFi/BT card, not storage. **Empty.**
+  The label underneath (FCC ID `PPD-QCNFA435`) shows it shipped with a
+  Qualcomm Atheros **QCNFA435** (QCA9377: 802.11ac and Bluetooth 4.1), which
+  has since been removed. Check whether the antenna leads are still in the case.
 - **Ports** (Lenovo datasheet, not yet checked on the box): 1 GbE,
   2 × USB 3.0, 4 × USB 2.0, HDMI, VGA, a 7-in-1 card reader and an audio
   combo jack. The NIC driver is ⟨unconfirmed⟩. `luks-remote-unlock.nix` needs
