@@ -47,7 +47,8 @@ service defined in this repo. It takes no modules from the lane.
 | Every host (`modules/home/common.nix`) | herdr | 2026-10-23, #218 |
 | pegasus (`hosts/pegasus/home.nix`) | slicers, browsers, chat apps, ticktick | 2026-10-11/16 |
 | pegasus (`hosts/pegasus/home.nix`) | coding agents: codex, copilot, opencode, pi, qwen | 2026-10-24 |
-| pegasus (`kimi-cli`, `hermes-agent` flakes, following the lane) | Kimi Code, Hermes Agent | 2026-10-24 |
+| pegasus (`kimi-cli` flake, following the lane) | Kimi Code | 2026-10-24 |
+| pegasus (`hermes-agent` flake, on its own pin `nixpkgs-hermes`) | Hermes Agent: held back, its patchelf patch needs 0.19.2 and unstable reverted to 0.15.2 (#242) | 2026-10-24, pinned 2026-11-08 |
 | pegasus (`modules/nixos/hushmic.nix`) | HushMic | 2026-10-14 |
 
 On pegasus, "slicers" includes open-bamboo-networking (OrcaSlicer's network
@@ -73,10 +74,37 @@ profile, servers and Pis included:
   every host; a pegasus-only app fails just pegasus. Either way no bump PR
   opens until it's fixed. A failed scheduled run is the signal: hold that
   app back with its own pin, or wait for unstable to fix it.
+- **Eval passing isn't enough.** A stale fixed-output hash (opencode's
+  `node_modules`, #233) or a build that only fails at compile time (codex,
+  #242) evaluates fine. So the workflow also dry-runs every host before and
+  after the bump (`.github/scripts/lane-uncached.sh`). Fixed-output
+  derivations whose *output* the bump newly leaves off cache.nixos.org are
+  built, which fails the run on a hash mismatch. A derivation that merely
+  changed hash, as every one built with a fetcher does when that fetcher
+  changes, but still produces an output that was already uncached is
+  skipped. The cost: a download whose content drifted under an unchanged
+  hash is skipped too, and shows only on a fresh install or after a GC.
+  Building one also builds any uncached input its fetcher needs, which is
+  normally none. Only x86_64-linux ones are built, since the runner can't
+  build the others.
+  Other new local builds can't be told apart from Hydra just running behind,
+  darwin's most of all, so they don't block: they're listed under
+  "⚠ Newly built locally" in the PR body. Check those against Hydra or
+  nixpkgs issues before switching.
+- **What the check can't see.** That list compares package names, so a
+  package that already built locally before the bump never appears in it,
+  even when the bump breaks it. That includes, for example, OrcaSlicer,
+  Bambu Studio, open-bamboo-networking, HushMic, the overridden ticktick and
+  Claude Desktop, unfree apps that are never cached (zoom-us, opera), codex
+  while #242's override stands (#252), and hermes-agent's own toolchain
+  (#242's patchelf break was one). For those, a failure still shows only at
+  switch time.
 - **Closure cost.** Lane packages link unstable's glibc and other libraries,
   so the first one on a host adds those beside the release's. For herdr on
   aarch64 that is about 87 MiB, which lands even on the Pis' SD cards.
 - **Local compiles on pegasus.** Some lane apps there carry overrides or are
   unfree, so they build locally whenever a bump moves them (OrcaSlicer, Bambu
-  Studio, open-bamboo-networking, HushMic). Budget that time at switch; the
-  list is in pegasus's `DECISIONS.md`, "Exposed apps on the fast lane".
+  Studio, open-bamboo-networking, HushMic, and codex while #252 is open, a
+  large Rust build). Budget that time at switch; the list is in pegasus's
+  `DECISIONS.md`, "Exposed apps on the fast lane" and "Lane exceptions from
+  #242".
