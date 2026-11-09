@@ -1141,14 +1141,14 @@ playback for a second or two.
     and commit in `~/dux-state` (the private repo, #226), so a fresh seed
     matches.
 
-## #243 Bump cache check — first run
+## #245 Bump cache check — first run
 
 `update-apps.yml` now dry-runs every host before and after the bump and builds
 fixed-output derivations with new uncached outputs (docs/NIXPKGS-APPS.md
 § Bumps). It had never run in Actions when it merged.
 
-1. [ ] Merge #242 first. The first run bumps the lane past it, and the bump
-       PR it opens would conflict with #242 on `flake.lock`.
+1. [x] Merge #242 first, so the first run's bump PR doesn't conflict with
+       it on `flake.lock`. Done: #242 merged 2026-11-08.
 2. [ ] Start one run by hand (Actions → "Bump app inputs" → Run workflow).
        Check that "Uncached before bump" and "Uncached after bump" finish
        well inside the 60-minute limit, and note how many fixed-output
