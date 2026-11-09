@@ -169,6 +169,26 @@
         "type": "github"
       }
     },
+    "gputaskman": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs-apps"
+        ]
+      },
+      "locked": {
+        "lastModified": 1794191215,
+        "narHash": "sha256-EC1a4lGy8XdggwPdEOztdDBt41PqU8A1RcUHb+tH59E=",
+        "ref": "refs/heads/main",
+        "rev": "82c71dbe5f6ed6e44c8bdfc2967390f0eeed7774",
+        "revCount": 53,
+        "type": "git",
+        "url": "https://github.com/shanselman/gputaskman.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://github.com/shanselman/gputaskman.git"
+      }
+    },
     "hermes-agent": {
       "inputs": {
         "flake-parts": "flake-parts_2",
@@ -660,6 +680,7 @@
         "dank-material-shell": "dank-material-shell",
         "dr460nized-src": "dr460nized-src",
         "dux-files": "dux-files",
+        "gputaskman": "gputaskman",
         "hermes-agent": "hermes-agent",
         "home-manager": "home-manager",
         "hushmic-nix": "hushmic-nix",

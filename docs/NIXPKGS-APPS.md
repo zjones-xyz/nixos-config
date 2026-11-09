@@ -35,10 +35,14 @@ missing argument.
 **System level (pegasus only).** `modules/nixos/hushmic.nix` reads
 `self.inputs.nixpkgs-apps.legacyPackages` directly, and the `hushmic-nix`
 input follows `nixpkgs-apps`. So a bump also rebuilds a NixOS-level package
-on pegasus, not only its Home Manager profile. This is the one exception to
-the policy above. HushMic is still an app, but its package reaches the host
-outside Home Manager, as a system package, and runs as a systemd user
-service defined in this repo. It takes no modules from the lane.
+on pegasus, not only its Home Manager profile. This is one of two
+exceptions to the policy above. HushMic is still an app, but its package
+reaches the host outside Home Manager, as a system package, and runs as a
+systemd user service defined in this repo. It takes no modules from the lane.
+
+The other is gputaskman: its `gputaskman` input follows `nixpkgs-apps` too,
+and `hosts/pegasus/configuration.nix` installs it as a system package so
+`sudo gputaskman` resolves (sudo doesn't see the Home Manager profile).
 
 ## Who uses it
 
@@ -50,6 +54,7 @@ service defined in this repo. It takes no modules from the lane.
 | pegasus (`kimi-cli` flake, following the lane) | Kimi Code | 2026-10-24 |
 | pegasus (`hermes-agent` flake, on its own pin `nixpkgs-hermes`) | Hermes Agent: held back, its patchelf patch needs 0.19.2 and unstable reverted to 0.15.2 (#242) | 2026-10-24, pinned 2026-11-08 |
 | pegasus (`modules/nixos/hushmic.nix`) | HushMic | 2026-10-14 |
+| pegasus (`gputaskman` flake, following the lane; system package) | gputaskman | 2026-11-09 |
 
 On pegasus, "slicers" includes open-bamboo-networking (OrcaSlicer's network
 plugin, `pkgsApps.callPackage`) and "chat apps" includes zoom-us. The

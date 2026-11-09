@@ -1890,3 +1890,35 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   memory** is reported. A package that never fits is left to `nrs`.
   *Switches:* `restartIfChanged = false`, as nixpkgs does for nix-gc. A
   switch neither restarts a running prebuild nor waits for it to finish.
+- **gputaskman as a GPU monitor beside nvtop, 2026-11-09** — a per-process
+  GPU monitor (TUI) that, beyond nvtop's per-process VRAM and load, names a
+  running Ollama model and splits its VRAM into weights, KV cache and compute
+  buffers. That split is the useful part here: pegasus is the inference
+  endpoint with ~11.87 GiB usable (`HARDWARE-MAP.md` §8), and it shows
+  whether the gaming drain (`ollama-pause`) really empties the card.
+  nvtop stays: gputaskman is early, experimental software (0.3.4), and its
+  NVIDIA-on-bare-metal path was covered only by tests upstream, so pegasus is
+  among its first real runs. Its model breakdowns are estimates.
+  *Packaging:* not in nixpkgs. The `gputaskman` input is the upstream
+  author's own flake, following `nixpkgs-apps`. It has to: 26.05's `textual`
+  (8.2.6) and `nvidia-ml-py` (13.595.45) are below its minimums (8.2.8,
+  13.615.71), and the lane carries both exactly. Bumped by `update-apps.yml`
+  with the other app inputs.
+  *System package, not `home.packages`:* the NixOS ollama service runs as its
+  own user, and gputaskman reads other users' processes (`/proc/<pid>/maps`,
+  Ollama's model store) only as root. So the model breakdown needs
+  `sudo gputaskman`, and sudo doesn't inherit the Home Manager profile's
+  PATH, the same reason `pciutils` is a system package. Run as `z` it still
+  shows device totals and z's own processes, but not the ollama runner.
+  *`--skip-dependency-check`:* upstream's `pyproject.toml` caps `uv_build`
+  below 0.10, and its flake's `postPatch` relaxes that only to below 0.13. The
+  lane has 0.13.4, and nixpkgs' pypa build hook enforces build-system bounds,
+  so the wheel build would refuse. Skipping pypa's build-system check undoes
+  the cap without a version string that goes stale on the next bump. Runtime
+  deps are still checked by nixpkgs' runtime-deps hook. Drop the override once
+  upstream's cap admits the lane's `uv_build`.
+  *Cost:* the package is never on cache.nixos.org, so a bump of either input
+  rebuilds it locally: a small Python build plus upstream's unit tests.
+  *Alt rejected:* not following any nixpkgs, so upstream's own lock is used.
+  That adds a third nixpkgs to the closure for one TUI, against the policy's
+  "one input, not a pin per app".

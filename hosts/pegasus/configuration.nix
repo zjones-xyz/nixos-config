@@ -1,5 +1,12 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, self, ... }:
 
+let
+  # Upstream caps uv_build below the lane's; skipping pypa's build-system
+  # check undoes that, while runtime deps stay checked. DECISIONS.md.
+  gputaskman = self.inputs.gputaskman.packages.${pkgs.stdenv.hostPlatform.system}.default.overridePythonAttrs (old: {
+    pypaBuildFlags = (old.pypaBuildFlags or [ ]) ++ [ "--skip-dependency-check" ];
+  });
+in
 {
   imports = [
     ./hardware-configuration.nix
@@ -48,10 +55,12 @@
   # pegasus is where Tower's cards get flashed and probed, which is all lspci
   # work (hosts/galactica/PLATFORM.md §6). environment.systemPackages rather
   # than home.packages so `sudo lspci` resolves — sudo does not inherit the
-  # user profile's PATH.
+  # user profile's PATH. gputaskman is here for the same reason: ollama runs
+  # as its own user, so its model breakdown only shows under `sudo`.
   environment.systemPackages = with pkgs; [
     pciutils
     nmap
+    gputaskman
   ];
 
   # ── Wireshark ───────────────────────────────────────────────────────────────
