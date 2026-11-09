@@ -45,9 +45,11 @@ was fitted later, and its wear is unknown until `smartctl` has been run on it
 
 ## 5. Open items
 
-1. [ ] Case label: the MTM (`90Gxxxxx`) and system serial, logged in
-   `fleet-inventory` as `majel`.
-2. [ ] Power supply: is it internal or an external adapter? If external,
-   record its output V/A/W and tip.
+1. [ ] **System serial and MTM.** The case has no external label, so read
+   them from the BIOS's main page, or on first boot with
+   `dmidecode -s system-serial-number` and `-s system-product-name`. Log them
+   in `fleet-inventory` as `majel`.
+2. [ ] **External power adapter:** record its output V/A/W, tip, maker and
+   Lenovo P/N from the brick's own label, as its own `fleet-inventory` row.
 3. [ ] The exact CPU SKU, the NIC chip and driver, and whether the BIOS
    offers an fTPM.

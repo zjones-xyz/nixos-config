@@ -68,8 +68,9 @@ happens, it still happens after the cutover, as its own change (§7.1, §11).
 ## 2. Hardware — `310S-08ASR`, AMD Stoney Ridge
 
 Identified from photos taken inside the case on 2026-11-09. `HARDWARE-MAP.md`
-holds the detail. The **case label (MTM and system serial) is not recorded
-yet**, so the exact CPU (A6-9225, A9-9425 or A9-9430) is still unconfirmed.
+holds the detail. **The case has no external label**, so the MTM, the system
+serial and the exact CPU (A6-9225, A9-9425 or A9-9430) come from the BIOS or
+`dmidecode` (§3 item 1). Power comes from an **external adapter**.
 
 | | What it is | What it means for this job |
 |---|---|---|
@@ -84,17 +85,17 @@ Lenovo's datasheet lists 1 GbE (probably Realtek, so `r8169`, but confirm), 2 ×
 4 × USB 2.0, HDMI and VGA, and a 7-in-1 card reader.
 
 ⚠ **New equipment → log it in `fleet-inventory`** under the ID `majel`: the
-full serial from the case label, where it came from, the date, the price, and
-warranty ("none" if secondhand). If the power supply is an external adapter,
-also its output V/A/W, tip type, maker, and whether it is labelled for this
+full system serial (from the BIOS, §3 item 1), where it came from, the date, the price, and
+warranty ("none" if secondhand). The power supply is an external adapter: record
+its output V/A/W, tip type, maker, and whether it is labelled for this
 box. This repo only gets masked serials (`*XXXX`).
 
 ---
 
 ## 3. Pre-install checks (on the bench, before NixOS)
 
-1. [ ] Photograph the **case label** (MTM `90Gxxxxx` and system serial) and
-   read the exact CPU from the BIOS. The variant itself is confirmed (§2).
+1. [ ] From the BIOS, read the **system serial, the MTM and the exact CPU**.
+   The case has no external label. The variant itself is confirmed (§2).
 2. [ ] **Clean the CPU fan.** It is caked in dust, and this box will run 24/7.
    Leave the red `CLR` (clear CMOS) jumper where it is.
 3. [ ] Update the BIOS to Lenovo's latest for that MTM while Windows (or a
@@ -305,7 +306,7 @@ host makes unnecessary. Suggested:
 
 1. [x] **The name** — `majel` (`DECISIONS.md` §1).
 2. [x] **Which 310S variant**: `310S-08ASR`, with 8 GB of RAM and a 128 GB SSD (§2).
-   The case label is still to be recorded.
+   The system serial comes from the BIOS, since the case has no label.
 3. [ ] **Unattended boot: B (TPM2) or A (fleet default)?** (§4)
 4. [ ] **Radios: move them as-is, or proxies and network-attach?** (§1.1.)
    This depends on #141 §12 A4–A7, which are still unanswered.
