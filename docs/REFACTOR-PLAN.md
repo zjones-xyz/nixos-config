@@ -38,9 +38,9 @@ it sounds, and both have bitten PRs here already:
   each toplevel and builds memory-alpha, nothing more. So "CI is green" proves
   galactica evaluates, not that a refactor left it unchanged. W0 closes that
   gap with a CI job before any galactica refactor starts, and every galactica
-  item below cites that job as its proof. Adding `nixflix-exp` to the cloud
-  environment's repository list would make every session able to evaluate
-  galactica without the manual attach; that is an owner setting, not a PR.
+  item below cites that job as its proof. The NixOS cloud environment now
+  lists `nixflix-exp`, so a session started with it selected evaluates
+  galactica without the manual attach.
 
 **Delete before abstracting.** #39's one piece of advice that still holds. The
 Pi era-1 modules are not refactor candidates; they are deletions waiting on the
