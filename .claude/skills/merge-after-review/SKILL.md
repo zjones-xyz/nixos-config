@@ -21,9 +21,13 @@ would allow it.
    `gh pr view --json number`.
 2. Read its state:
    `gh pr view N --json number,title,state,isDraft,baseRefName,headRefName,headRefOid,mergeable,url`
-3. Stop and tell Zoe if any of these is true: it isn't `OPEN`, it's a draft,
-   the base isn't `main`, or `mergeable` is `CONFLICTING`.
-4. Record `headRefOid` as **SHA**. Everything below refers to SHA, never to
+3. Stop and tell Zoe if any of these is true: it isn't `OPEN`, the base
+   isn't `main`, or `mergeable` is `CONFLICTING`.
+4. If it's a draft, mark it ready for review: `gh pr ready N`, or
+   `update_pull_request` with `draft: false` where `gh` can't reach PRs.
+   Asking for this skill is the request to leave draft. It starts no new CI
+   run, because `nix-check.yml` doesn't trigger on `ready_for_review`.
+5. Record `headRefOid` as **SHA**. Everything below refers to SHA, never to
    "the branch". A push after this point invalidates the review: start over.
 
 ## 2. Adversarial review and CI, in parallel
@@ -71,8 +75,11 @@ Rules:
   LUKS roots that need a manual unlock), for a service's existing state on
   disk, and for other hosts
   that import a changed shared module.
-- You may run `nix eval` / `nix flake check --no-build` to confirm a suspicion.
-  CI runs those on its own, so don't repeat them for their own sake.
+- You may run `nix eval` or `.claude/hooks/flake-check-sandboxed.sh` to
+  confirm a suspicion. Not a bare `nix flake check --no-build`: it evaluates
+  read-only and fails on eval-time store paths ("path … is not valid") on a
+  fresh store, which is not a PR defect. CI runs these checks on its own, so
+  don't repeat them for their own sake.
 
 Output, exactly this shape:
 VERDICT: APPROVE | BLOCK
