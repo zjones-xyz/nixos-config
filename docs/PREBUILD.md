@@ -40,17 +40,18 @@ next run retries. Then, for each branch:
    build), **out of memory** (hit the cap below) or **error** (evaluation
    failed, or a download did). `/var/lib/prebuild/<branch>.log` has the
    run's output, in which nix keeps only the last lines of a failing
-   builder; `sudo nix log <drv>` has that builder's full log. Branches in `quietBranches` (default
-   `main`, which moves on every merge, docs included) skip **ready**; their
-   result is in `prebuild status`, and their failures still notify.
+   builder; `sudo nix log <drv>` has that builder's full log. Branches in
+   `quietBranches` (default `main`, which moves on every merge, docs
+   included) skip **ready**; their result is in `prebuild status`, and their
+   failures still notify.
 
 A build failure is recorded against that commit and not retried. An eval
 error, a failed download and a build killed by the memory cap below are
 retried on the next run, and notified only once per commit. **started** is
 also sent once per commit (`<branch>.started` records it), not again for
-each retry or for the low-memory attempt. A failed
-download is nix's own fetch failing or a fixed-output (fetcher) derivation
-failing, but never a hash mismatch, which is a real failure. Test output
+each retry or for the low-memory attempt. A failed download is nix's own
+fetch failing or a fixed-output (fetcher) derivation failing, but never a
+hash mismatch, which is a real failure. Test output
 inside a build that mentions networking doesn't count. The memory case is
 read from the kernel's `oom_kill` count for the unit's own cgroup, not
 guessed from the log. A build killed by the cap is first retried in the same
