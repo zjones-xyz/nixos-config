@@ -11,7 +11,9 @@ merging has nothing left to compile.
 
 An hourly timer (`prebuild.timer`) runs `prebuild.service` as root. After a
 boot the first run comes 15 minutes in, or at the next hour mark if that's
-sooner; the switch that first installs the timer starts a run right away.
+sooner; the switch that first installs the timer starts one too. Each of
+these lands up to 10 minutes later than that (`RandomizedDelaySec`), so
+the first run after a switch is not immediate: use `prebuild now` for that.
 A switch never restarts a running prebuild (`restartIfChanged = false`), so
 `nrs` doesn't wait on it. One `git ls-remote` asks origin for every watched
 branch's head (by default `bump-app-inputs`, the scheduled bump's PR branch,
@@ -26,7 +28,7 @@ next run retries. Then, for each branch:
    this cleanup to happen at merge.
 2. If that commit was already built, or already failed to build, it is
    skipped.
-3. Otherwise it evaluates
+3. Otherwise it sends a low-urgency **started** notification and evaluates
    `git+<repo>?ref=<branch>&rev=<sha>#nixosConfigurations.<host>.config.system.build.toplevel`
    to its `.drv` in one process, so evaluation's ~2.4 GB is freed before the
    build, then builds that into `/var/lib/prebuild/result-<branch>`. The
@@ -36,16 +38,20 @@ next run retries. Then, for each branch:
 4. It sends a desktop notification to `notifyUser`'s session if that user is
    logged in: **ready**, **failed** (naming the first derivation that didn't
    build), **out of memory** (hit the cap below) or **error** (evaluation
-   failed, or a download did). The full log is at
-   `/var/lib/prebuild/<branch>.log`. Branches in `quietBranches` (default
-   `main`, which moves on every merge, docs included) skip **ready**; their
-   result is in `prebuild status`, and their failures still notify.
+   failed, or a download did). `/var/lib/prebuild/<branch>.log` has the
+   run's output, in which nix keeps only the last lines of a failing
+   builder; `sudo nix log <drv>` has that builder's full log. Branches in
+   `quietBranches` (default `main`, which moves on every merge, docs
+   included) skip **ready**; their result is in `prebuild status`, and their
+   failures still notify.
 
 A build failure is recorded against that commit and not retried. An eval
 error, a failed download and a build killed by the memory cap below are
-retried on the next run, and notified only once per commit. A failed
-download is nix's own fetch failing or a fixed-output (fetcher) derivation
-failing, but never a hash mismatch, which is a real failure. Test output
+retried on the next run, and notified only once per commit. **started** is
+also sent once per commit (`<branch>.started` records it), not again for
+each retry or for the low-memory attempt. A failed download is nix's own
+fetch failing or a fixed-output (fetcher) derivation failing, but never a
+hash mismatch, which is a real failure. Test output
 inside a build that mentions networking doesn't count. The memory case is
 read from the kernel's `oom_kill` count for the unit's own cgroup, not
 guessed from the log. A build killed by the cap is first retried in the same
@@ -106,6 +112,9 @@ The `prebuild` command:
 | `prebuild now -f` | The same, then follow the build's output |
 | `prebuild stop` | Cancel a running prebuild, e.g. before `nrs` |
 
+- Status shows each branch as built, FAILED, error (retrying), nothing yet,
+  or "started …, not finished": a build is running, or was stopped before
+  it ended.
 - Watch a bump: when the bump PR opens, run `prebuild now` (or wait for the
   next hourly check) and wait for "ready" before merging.
 - Build a commit again after a real failure, e.g. a flaky test: delete the
@@ -115,8 +124,9 @@ The `prebuild` command:
   sudo rm /var/lib/prebuild/main.sha
   ```
 
-- Logs: `/var/lib/prebuild/<branch>.log` for the last build, and
-  `journalctl -u prebuild` for history.
+- Logs: `/var/lib/prebuild/<branch>.log` for the last run (nix's output,
+  which keeps only a failing builder's last lines), `sudo nix log <drv>`
+  for that builder's full log, and `journalctl -u prebuild` for history.
 
 ## Turning it on for another host
 
