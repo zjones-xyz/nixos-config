@@ -89,24 +89,31 @@ profile, servers and Pis included:
   after the bump (`.github/scripts/lane-uncached.sh`). Fixed-output
   derivations whose *output* the bump newly leaves off cache.nixos.org are
   built, which fails the run on a hash mismatch. A derivation that merely
-  changed hash, as every one does when the fetcher changes, but still
-  produces an output that was already uncached is skipped. Building one also
-  builds any uncached input its fetcher needs, which is normally none. Only
-  x86_64-linux ones are built, since the runner can't build the others.
+  changed hash, as every one built with a fetcher does when that fetcher
+  changes, but still produces an output that was already uncached is
+  skipped. The cost: a download whose content drifted under an unchanged
+  hash is skipped too, and shows only on a fresh install or after a GC.
+  Building one also builds any uncached input its fetcher needs, which is
+  normally none. Only x86_64-linux ones are built, since the runner can't
+  build the others.
   Other new local builds can't be told apart from Hydra just running behind,
   darwin's most of all, so they don't block: they're listed under
   "⚠ Newly built locally" in the PR body. Check those against Hydra or
   nixpkgs issues before switching.
 - **What the check can't see.** That list compares package names, so a
   package that already built locally before the bump never appears in it,
-  even when the bump breaks it. Today that covers OrcaSlicer, Bambu Studio,
-  open-bamboo-networking, HushMic, codex while #242's override stands, and
-  hermes-agent's own toolchain (#242's patchelf break was one). For those,
-  a failure still shows only at switch time.
+  even when the bump breaks it. That includes, for example, OrcaSlicer,
+  Bambu Studio, open-bamboo-networking, HushMic, the overridden ticktick and
+  Claude Desktop, unfree apps that are never cached (zoom-us, opera), codex
+  while #242's override stands (#252), and hermes-agent's own toolchain
+  (#242's patchelf break was one). For those, a failure still shows only at
+  switch time.
 - **Closure cost.** Lane packages link unstable's glibc and other libraries,
   so the first one on a host adds those beside the release's. For herdr on
   aarch64 that is about 87 MiB, which lands even on the Pis' SD cards.
 - **Local compiles on pegasus.** Some lane apps there carry overrides or are
   unfree, so they build locally whenever a bump moves them (OrcaSlicer, Bambu
-  Studio, open-bamboo-networking, HushMic). Budget that time at switch; the
-  list is in pegasus's `DECISIONS.md`, "Exposed apps on the fast lane".
+  Studio, open-bamboo-networking, HushMic, and codex while #252 is open, a
+  large Rust build). Budget that time at switch; the list is in pegasus's
+  `DECISIONS.md`, "Exposed apps on the fast lane" and "Lane exceptions from
+  #242".

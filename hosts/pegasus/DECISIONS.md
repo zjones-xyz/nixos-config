@@ -1849,6 +1849,30 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   in the private `dux-state` repo (#226).
   Hiding is by `node.name`, so it covers all four slots. Their volumes stay
   reachable through Dux Settings → Audio → Hidden, or through `wpctl`.
+- **Lane exceptions from #242, 2026-11-08** — two departures from
+  `docs/NIXPKGS-APPS.md`'s "one input, not a pin per app", both taken to
+  get pegasus switching after the #233 bump. Removal is tracked in #252,
+  because neither goes away on its own.
+  *codex override.* nixos-unstable `f4a03c0` added a `cargoUseSystemLibs`
+  hook to `cargo-setup-hook.sh`. It exports `AWS_LC_SYS_USE_SYSTEM`,
+  `RUSTONIG_SYSTEM_LIBONIG`, `LIBSQLITE3_SYS_USE_PKG_CONFIG` and
+  `ZSTD_SYS_USE_PKG_CONFIG`, but codex 0.167.0's package didn't provide those
+  libraries, so `aws-lc-sys`'s build script panicked. NixOS/nixpkgs#584667
+  adds them to `buildInputs`; `home.nix` does the same with `overrideAttrs`
+  until the lane carries it. Side effect: codex is never cached while the
+  override stands, so every bump compiles it locally (a large Rust build).
+  *hermes-agent pin.* Hermes's `nix/pm-packages.nix` patches patchelf with
+  NixOS/patchelf@59acc3d, written for 0.19.2. Between `1d06008` and `f4a03c0`
+  unstable reverted patchelf to 0.15.2, where the patch fails, taking hermes's
+  pinned node and ffmpeg down with it. Hermes's own `main` carries the same
+  patch, so an older hermes rev doesn't help. Hermes therefore follows
+  `nixpkgs-hermes`, pinned at `1d06008`, the last lane rev on 0.19.2. Cost:
+  a second unstable nixpkgs in the closure, for hermes only, and the
+  scheduled bump can't move it (the rev is in the URL).
+  *Alt rejected:* pinning the whole lane back to `1d06008` and overriding
+  opencode's `node_modules` hash there. That would have frozen every lane
+  app to fix two, against the policy's "an app that has to hold back gets
+  its own pin".
 - **Noctalia and Umbriel as trial sessions beside Niri + Dux, 2026-11-04** —
   `modules/nixos/desktop-noctalia.nix`, `modules/nixos/desktop-umbriel.nix`,
   `hosts/pegasus/{noctalia,umbriel}-settings.nix`. SDDM gains **Niri
