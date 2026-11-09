@@ -63,6 +63,11 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
+      # Before the ~5-minute evaluation below, so a lint finding fails the run
+      # in under a minute. checks/lint/default.nix says what it runs.
+      - name: Lint (shellcheck, actionlint, deadnix, statix)
+        run: nix build --no-link --print-build-logs .#checks.x86_64-linux.lint
+
       - name: Evaluate all configuration outputs
         run: |
           for attr in $(nix eval --json .#nixosConfigurations --apply builtins.attrNames | jq -r '.[]'); do

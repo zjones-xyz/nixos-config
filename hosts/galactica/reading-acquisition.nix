@@ -11,7 +11,7 @@
 
 
 let
-  nixflix = config.nixflix;
+  inherit (config) nixflix;
   netns = "wg";
 
   # Primary group for everything here, as in bazarr.nix: what these services
@@ -83,7 +83,7 @@ let
 
   # Same path inside the container as on the host, so neither service needs a
   # remote-path mapping to recognise what the download clients report.
-  downloadsDir = nixflix.downloadsDir;
+  inherit (nixflix) downloadsDir;
 in
 {
   # ── Container identities ──────────────────────────────────────────────────

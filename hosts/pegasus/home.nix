@@ -105,7 +105,7 @@ in
     obsidian
     spotify
     # Ahead of nixpkgs-apps (8.0.11 on unstable) — drop once it catches up.
-    (pkgsApps.ticktick.overrideAttrs (finalAttrs: old: {
+    (pkgsApps.ticktick.overrideAttrs (finalAttrs: _old: {
       version = "8.0.20";
       src = fetchurl {
         url = "https://d2atcrkye2ik4e.cloudfront.net/download/linux/linux_deb_x64/ticktick-${finalAttrs.version}-amd64.deb";
