@@ -9,11 +9,13 @@ merging has nothing left to compile.
 
 ## What it does
 
-An hourly timer (`prebuild.timer`) runs `prebuild.service` as root. For each
-watched branch (by default `bump-app-inputs`, the scheduled bump's PR branch,
-and `main`):
+An hourly timer (`prebuild.timer`, first run 15 minutes after boot) runs
+`prebuild.service` as root. One `git ls-remote` asks origin for every watched
+branch's head (by default `bump-app-inputs`, the scheduled bump's PR branch,
+and `main`). If origin can't be reached, the run notifies once and stops; the
+next run retries. Then, for each branch:
 
-1. `git ls-remote` asks origin for the branch head. If the branch doesn't
+1. If the branch doesn't
    exist, as after a bump PR merges and its branch is deleted, the branch's
    GC root and state are removed and nothing is built.
 2. If that commit was already built, or already failed to build, it is
@@ -24,13 +26,17 @@ and `main`):
    build survives garbage collection until the switch.
 4. It sends a desktop notification to `notifyUser`'s session if that user is
    logged in: **ready**, **failed** (naming the first derivation that didn't
-   build), **out of memory** (hit the cap below) or **error** (evaluation or
-   fetch failed). The full log is at
-   `/var/lib/prebuild/<branch>.log`.
+   build), **out of memory** (hit the cap below) or **error** (evaluation
+   failed, or a download did). The full log is at
+   `/var/lib/prebuild/<branch>.log`. Branches in `quietBranches` (default
+   `main`, which moves on every merge, docs included) skip **ready**; their
+   result is in `prebuild status`, and their failures still notify.
 
-A build failure is recorded against that commit and not retried. An eval or
-fetch error, which may be a network blip, is retried on the next run but
-notified only once per commit. So is a build killed by the memory cap below.
+A build failure is recorded against that commit and not retried. An eval
+error, a failed download (but not a hash mismatch, which is a real failure)
+and a build killed by the memory cap below are retried on the next run, and
+notified only once per commit. The memory case is read from the kernel's
+`oom_kill` count for the unit's own cgroup, not guessed from the log.
 
 ## Staying out of the way
 
@@ -47,9 +53,14 @@ batch priority"):
   `MemoryMax` (`memoryMax`, 16G) OOM-kills inside the unit only, and
   `MemorySwapMax = 2G` stops it growing on in zram. Builds run
   `maxJobs × cores` = 2 × 4 to stay under that. `OOMScoreAdjust = 1000`
-  makes it the kernel's first choice under global OOM, and systemd-oomd kills
-  it when its memory pressure passes 50%. A kill fails that run only; a
-  package that never fits in the cap is still built by `nrs`, uncapped.
+  makes it the kernel's first choice under global OOM. `OOMPolicy = continue`
+  means a `MemoryMax` kill takes the compiler, not the whole unit, so the
+  script survives to report it. A kill fails that run only; a package that
+  never fits in the cap is still built by `nrs`, uncapped.
+- **No systemd-oomd.** That `DECISIONS.md` entry keeps oomd off build
+  cgroups because `MemoryHigh`'s throttling reads as memory pressure, so a
+  pressure kill would fire at about 12G, before `MemoryMax` ever matters. The
+  prebuild follows it: oomd still watches the user slices only.
 - **CPU.** It runs in `prebuild.slice`, a root-level slice with
   `CPUWeight = idle`, so builds nearly stop while the desktop, a game or
   Ollama wants the CPU. This is the "alt kept in reserve" from that

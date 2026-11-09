@@ -10,9 +10,14 @@ let
 
   run = pkgs.writeShellApplication {
     name = "prebuild-run";
-    runtimeInputs = [ config.nix.package ] ++ (with pkgs; [ git coreutils gnugrep libnotify util-linux ]);
+    runtimeInputs = [ config.nix.package ] ++ (with pkgs; [ git coreutils gawk gnugrep libnotify util-linux ]);
     text = ''
       state=$STATE_DIRECTORY
+
+      # The kernel's count of OOM kills in this unit's own cgroup: whether
+      # MemoryMax killed a compiler, whatever that compiler's parent printed.
+      cg=/sys/fs/cgroup$(sed -n 's/^0:://p' /proc/self/cgroup)
+      oom_kills() { awk '$1 == "oom_kill" { print $2 }' "$cg/memory.events" 2>/dev/null || true; }
 
       notify() { # summary body urgency
         [ -n "$NOTIFY_USER" ] || return 0
@@ -29,10 +34,19 @@ let
         notify "$2" "$3" normal
       }
 
+      # One ls-remote for every branch. Unreachable origin: notify once, retry.
+      read -ra watched <<<"$BRANCHES"
+      if ! heads=$(git ls-remote "$REPO" "''${watched[@]/#/refs/heads/}"); then
+        [ -e "$state/remote.err" ] || notify "$HOST prebuild error" "Can't reach $REPO; retrying next run." normal
+        touch "$state/remote.err"
+        exit 1
+      fi
+      rm -f "$state/remote.err"
+
       rc=0
-      for branch in $BRANCHES; do
+      for branch in "''${watched[@]}"; do
         key=''${branch//\//_}
-        sha=$(git ls-remote "$REPO" "refs/heads/$branch" | cut -f1)
+        sha=$(awk -v r="refs/heads/$branch" '$2 == r { print $1 }' <<<"$heads")
         if [ -z "$sha" ]; then # branch gone (merged bump PR): drop its GC root
           rm -f "$state/$key".{sha,err,log} "$state/result-$key"
           continue
@@ -41,21 +55,29 @@ let
 
         short=''${sha:0:7}
         echo "prebuild: $branch @ $short"
+        kills=$(oom_kills)
         if nix build --max-jobs "$MAX_JOBS" --cores "$CORES" --out-link "$state/result-$key" \
             "git+$REPO?ref=$branch&rev=$sha#nixosConfigurations.$HOST.config.system.build.toplevel" \
             2>&1 | tee "$state/$key.log"; then
           echo "$sha" >"$state/$key.sha"
           rm -f "$state/$key.err"
-          notify "$HOST prebuild ready" "$branch @ $short is built." normal
+          case " $QUIET_BRANCHES " in
+            *" $branch "*) ;; # result in `prebuild status`; failures still notify
+            *) notify "$HOST prebuild ready" "$branch @ $short is built." normal ;;
+          esac
           continue
         fi
 
         rc=1
         failed=$(grep -m1 -oP "(Cannot build|fixed-output derivation) '/nix/store/[a-z0-9]{32}-\K[^']+(?=\.drv')" "$state/$key.log" || true)
-        if grep -qE 'signal 9|Killed|deadly signal' "$state/$key.log"; then
+        if [ "$(oom_kills)" != "$kills" ]; then
           # Hit this unit's memory cap: not the package's fault.
           soft_fail "$sha" "$HOST prebuild out of memory" \
             "$branch @ $short: ''${failed:-a build} hit the prebuild's $MEMORY_MAX cap. Retrying next run; nrs can build it uncapped."
+        elif ! grep -q 'hash mismatch in fixed-output' "$state/$key.log" \
+            && grep -qE 'unable to download|cannot download|Could not resolve host|Failed to connect|Connection timed out' "$state/$key.log"; then
+          # A download that failed, rather than one that arrived wrong: retry.
+          soft_fail "$sha" "$HOST prebuild error" "$branch @ $short: a download failed. Retrying next run. Log: $state/$key.log"
         elif [ -n "$failed" ]; then
           # A real build failure: don't retry this commit.
           echo "$sha" >"$state/$key.sha"
@@ -128,6 +150,12 @@ in
       default = "hourly";
       description = "systemd OnCalendar expression for the poll.";
     };
+    quietBranches = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      # main moves on every merge, docs included; its result is in `prebuild status`.
+      default = [ "main" ];
+      description = "Branches whose successful builds don't notify. Failures always do.";
+    };
     memoryHigh = lib.mkOption {
       type = lib.types.str;
       default = "12G";
@@ -172,6 +200,7 @@ in
         MAX_JOBS = toString cfg.maxJobs;
         CORES = toString cfg.cores;
         MEMORY_MAX = cfg.memoryMax;
+        QUIET_BRANCHES = lib.concatStringsSep " " cfg.quietBranches;
         # Build in this process tree, not nix-daemon's, so the limits below
         # cover the compilers. Root may use the store directly.
         NIX_REMOTE = "local";
@@ -184,14 +213,14 @@ in
         Nice = 19;
         IOSchedulingClass = "idle";
         # Hard caps: a kill here fails a retryable background build, not a
-        # switch. MemorySwapMax keeps it from growing on in zram.
+        # switch. MemorySwapMax keeps it from growing on in zram. No oomd:
+        # MemoryHigh's throttling reads as pressure (pegasus DECISIONS.md).
         MemoryHigh = cfg.memoryHigh;
         MemoryMax = cfg.memoryMax;
         MemorySwapMax = "2G";
-        # First to go under global memory pressure.
-        OOMScoreAdjust = 1000;
-        ManagedOOMMemoryPressure = "kill";
-        ManagedOOMMemoryPressureLimit = "50%";
+        OOMScoreAdjust = 1000; # first to go under global memory pressure
+        # A MemoryMax kill takes the compiler only; the script lives to report it.
+        OOMPolicy = "continue";
       };
     };
 
@@ -199,8 +228,7 @@ in
       wantedBy = [ "timers.target" ];
       timerConfig = {
         OnCalendar = cfg.interval;
-        OnBootSec = "15min";
-        Persistent = true;
+        OnBootSec = "15min"; # no Persistent: it would fire at boot regardless
         RandomizedDelaySec = "10min";
       };
     };

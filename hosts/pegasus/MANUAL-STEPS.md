@@ -1155,3 +1155,23 @@ fixed-output derivations with new uncached outputs (docs/NIXPKGS-APPS.md
        derivations the after step builds.
 3. [ ] Read the bump PR's "⚠ Newly built locally" list, if any, against
        hydra.nixos.org before switching.
+
+## #244 Prebuild — first run on the hardware
+
+`modules/nixos/prebuild.nix` builds the bump PR and `main` in the background
+(docs/PREBUILD.md). Its limits and notifications were only tested with stubs.
+
+1. [ ] After switching, run `prebuild now -f` and watch one full run.
+       `prebuild status` should then show each branch as built or failed.
+2. [ ] Confirm the run is in its own cgroup: while it builds,
+       `systemctl status prebuild` lists the compilers, and
+       `systemd-cgls /prebuild.slice` shows them, not `nix-daemon.service`.
+3. [ ] Confirm the caps: `systemctl show prebuild -p MemoryHigh -p MemoryMax
+       -p MemorySwapMax -p OOMPolicy` reads 12G, 16G, 2G and `continue`, and
+       `oomctl` does not list `prebuild.service`.
+4. [ ] Confirm a desktop notification reaches the Dux session ("pegasus
+       prebuild ready" or "failed") while you're logged in.
+5. [ ] If a build hits the 16G cap (codex is the likely one while #252 is
+       open), check you get one "out of memory" notification, the unit stays
+       up (`systemctl status prebuild` does not say `oom-kill`), and the next
+       run retries.
