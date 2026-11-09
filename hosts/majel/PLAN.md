@@ -65,52 +65,55 @@ happens, it still happens after the cutover, as its own change (§7.1, §11).
 
 ---
 
-## 2. Hardware — confirm the variant first
+## 2. Hardware — `310S-08ASR`, AMD Stoney Ridge
 
-"310S" covers at least three different boards. Everything below that is
-specific to the hardware depends on which one this is. **Read the model off the
-label underneath** (`MTM` / `90Gxxxxx`).
+Identified from photos taken inside the case on 2026-11-09. `HARDWARE-MAP.md`
+holds the detail. The **case label (MTM and system serial) is not recorded
+yet**, so the exact CPU (A6-9225, A9-9425 or A9-9430) is still unconfirmed.
 
-| Variant | Platform | Notes |
+| | What it is | What it means for this job |
 |---|---|---|
-| `310S-08IAP` | Intel Apollo Lake (Celeron J3355 / Pentium J4205) | Intel PTT (firmware TPM 2.0), possibly off in the BIOS |
-| `310S-08IGM` | Intel Gemini Lake (J4005 / J5005) | Same as above |
-| `310S-08ASR` | AMD Stoney/Bristol Ridge (A6/A9-9xxx) | AMD fTPM, depends on BIOS version |
+| Board | Lenovo **FT4STMS** v1.2, AMI Aptio BIOS | Sold as the `310S-08ASR` / `310A` AMD board, so this is the AMD variant |
+| CPU | AMD Stoney Ridge, 2 cores, under Lenovo's 18 W cooler (FRU `01EF369`) | Plenty for HA. AMD fTPM depends on the BIOS (§3 item 5) |
+| RAM | **8 GB DDR4**, 2 DIMM slots | Comfortable. HA plus Mosquitto/Z2M uses about 1–1.5 GB |
+| Disk | **Samsung PM830 128 GB SATA SSD**, Dell OEM (`MZ-7PC128D`), made in 2012 | Not the factory disk, and its history is unknown. Check SMART before trusting it (§3 item 8). 128 GB is enough for HA and the Nix store with GC |
+| M.2 | One **key E (WiFi/BT) slot**, 2230 length, **empty** | Not for storage. An Intel AX200/AX210 card here could give HA a local Bluetooth adapter (§1.1) |
+| TPM | No discrete TPM fitted. There is an unpopulated 2-row header labelled `LEO_CHIP` | Only a firmware TPM can do §4 option B |
 
-Common to every variant, according to Lenovo's datasheets: 1 GbE (Realtek,
-which uses `r8169`, but confirm), 2 × USB 3.0, 4 × USB 2.0, HDMI and VGA, a 7-in-1
-card reader, and a **2.5" SATA bay**. Many shipped with a 1 TB 5400/7200 rpm
-HDD. There may be no M.2 storage slot.
+Lenovo's datasheet lists 1 GbE (probably Realtek, so `r8169`, but confirm), 2 × USB 3.0,
+4 × USB 2.0, HDMI and VGA, and a 7-in-1 card reader.
 
-**Minimum for this job:** 4 GB RAM works and 8 GB is comfortable (HA plus
-Mosquitto/Z2M is about 1–1.5 GB). Use a **SATA SSD, not the factory HDD**: the
-recorder is a constant-write SQLite workload, and a spinning disk makes the
-history UI slow. A 240–500 GB SSD is plenty.
-
-⚠ **New equipment → log it in `fleet-inventory`**: the full serial, where it
-came from, the date, the price, and warranty ("none" if secondhand). Also the
-**external PSU** (output V/A/W, tip type, maker, and whether it is labelled for
-this box). This repo only gets the masked serial (`*XXXX`).
+⚠ **New equipment → log it in `fleet-inventory`** under the ID `majel`: the
+full serial from the case label, where it came from, the date, the price, and
+warranty ("none" if secondhand). If the power supply is an external adapter,
+also its output V/A/W, tip type, maker, and whether it is labelled for this
+box. This repo only gets masked serials (`*XXXX`).
 
 ---
 
 ## 3. Pre-install checks (on the bench, before NixOS)
 
-1. [ ] Confirm the variant (§2) and record CPU, RAM, disk and NIC.
-2. [ ] Update the BIOS to Lenovo's latest for that MTM while Windows (or a
+1. [ ] Photograph the **case label** (MTM `90Gxxxxx` and system serial) and
+   read the exact CPU from the BIOS. The variant itself is confirmed (§2).
+2. [ ] **Clean the CPU fan.** It is caked in dust, and this box will run 24/7.
+   Leave the red `CLR` (clear CMOS) jumper where it is.
+3. [ ] Update the BIOS to Lenovo's latest for that MTM while Windows (or a
    FreeDOS stick) is still an option. Old consumer BIOSes are where fTPM and
    power-loss bugs live.
-3. [ ] BIOS: **After Power Loss → Power On**. This is the item that decides
+4. [ ] BIOS: **After Power Loss → Power On**. This is the item that decides
    whether the UPS story works at all (#141 §3.1, §5.2).
-4. [ ] BIOS: enable the firmware TPM (PTT / fTPM). Then from a live NixOS ISO,
+5. [ ] BIOS: enable the firmware TPM (PTT / fTPM). Then from a live NixOS ISO,
    run `systemd-cryptenroll --tpm2-device=list`. That settles §4 in one command.
-5. [ ] BIOS: UEFI only, CSM off. Secure Boot off for now, because the fleet does
+6. [ ] BIOS: UEFI only, CSM off. Secure Boot off for now, because the fleet does
    not run lanzaboote.
-6. [ ] Disable WiFi/BT in the BIOS **only if** §1.1 picks proxies. If the onboard
-   BT is the adapter HA will use, leave it on and check its chip. A USB
-   adapter usually has better range than onboard BT on a consumer desktop.
-7. [ ] Swap in the SATA SSD and run a memtest pass (from the ISO's boot menu).
-8. [ ] Measure idle power at the wall. This box runs 24/7, and the number feeds
+7. [ ] No WiFi or Bluetooth is fitted (the M.2 key E slot is empty, §2). If
+   §1.1 picks a local adapter, decide between a USB dongle on an extension
+   and an AX200/AX210 card in that slot, which needs antenna leads.
+8. [ ] Seat the 8 GB DIMM and run a memtest pass (from the ISO's boot menu).
+   Then `smartctl -a` the PM830 and look at power-on hours, wear levelling
+   (attr 177) and reallocated sectors. If any look bad, replace it before
+   installing.
+9. [ ] Measure idle power at the wall. This box runs 24/7, and the number feeds
    the UPS runtime budget (§5).
 
 ---
@@ -163,7 +166,7 @@ already runs a systemd initrd, but test it on the bench.
   is hopper's exit-node flavour. The phone reaches HA off-network over the
   tailnet, so this has to work before cutover (#141 §9.1).
 - **UPS:** is it near galactica's UPS? If yes, import `nut-client.nix` as a
-  secondary. ⚠ That only helps if §3 item 3 holds and §4 picks B. Otherwise NUT
+  secondary. ⚠ That only helps if §3 item 4 holds and §4 picks B. Otherwise NUT
   guarantees an orderly shutdown followed by nobody turning it back on. If it
   is somewhere else (where the Pi is), a small UPS of its own is worth pricing.
   It draws about 10 W.
@@ -301,7 +304,8 @@ host makes unnecessary. Suggested:
 ## 9. Open questions for the owner
 
 1. [x] **The name** — `majel` (`DECISIONS.md` §1).
-2. [ ] **Which 310S variant**, and how much RAM and disk it has (§2).
+2. [x] **Which 310S variant**: `310S-08ASR`, with 8 GB of RAM and a 128 GB SSD (§2).
+   The case label is still to be recorded.
 3. [ ] **Unattended boot: B (TPM2) or A (fleet default)?** (§4)
 4. [ ] **Radios: move them as-is, or proxies and network-attach?** (§1.1.)
    This depends on #141 §12 A4–A7, which are still unanswered.
