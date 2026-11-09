@@ -79,6 +79,8 @@ the branch has no merge base in the shallow clone used for this check.
 | #207 | galactica beszel-agent via the socket proxy, proxy off the shared network | conflicts | Rebase and merge before W5 and W10: it adds the `dockerHost` option W10 keeps. |
 | #208 | memory-alpha socket proxy on its own compose network, pinned | clean | Merge before W9, which replaces the compose file it edits. |
 | #209 | `homelab.alerts`: ZED, smartd and failed-unit alerts to ntfy | clean | Merge. W14 uses it instead of `nut.nix`'s own ntfy script. |
+| #255 | Review friction: docs-only CI skip, union merges for run books, REST path in `merge-after-review`, branch hook | clean | Merge. The CI skip and union merges pay back on every PR below. |
+| #257 | `checks/lint`: shellcheck, actionlint, deadnix, statix in CI; ten findings fixed as no-ops | clean; touches the same `CLAUDE.md` bullets as #255, so whichever lands second merges `main` in | Merge. It is W17's lint half. |
 | #139 | `nrs`/`nrt`/`drs` through `scripts/nrebuild.sh` with a branch banner | unverified | Decide before W3. W3 generates whatever alias shape #139 settles on. |
 | #36 | pegasus Beszel agent via nixpkgs' native `services.beszel.agent` | unverified, Aug 2026 | Superseded by `beszel-agent.nix` on `main`. Close, but W10 takes its finding: nixpkgs has a native agent module. |
 | #84 | Colmena hive | conflicts, galactica missing | Park. W4's `mkHost` should expose each host's module list so `colmena.nix` can consume it instead of re-listing modules, which was #84's stated pain. Revisit after W4. |
@@ -491,11 +493,22 @@ records.
 - Depends on: W0; #129/#144 landed or closed first. Independent of
   everything else.
 
-### W17. Convention checks in CI
+### W17. Lint and convention checks in CI
 
-The mechanical half of `CLAUDE.md` becomes a fast job in `nix-check.yml`,
-before the Nix install, so it answers in seconds and the reviewer never
-spends a round on it:
+Two halves. The tooling half is #257: `checks.x86_64-linux.lint`
+(`checks/lint/`) runs shellcheck at warning severity as bash, actionlint,
+deadnix with `--no-lambda-pattern-names` (otherwise every unused `lib`,
+`pkgs` or `config` in the mandated module signature is a finding) and statix
+with W20 `repeated_keys` disabled (the repo writes `boot.loader.x` and
+`boot.binfmt.y` as separate keys so each carries its comment). One CI step
+builds it right after the Nix install, before evaluation. The ten findings
+on `main` were fixed in the same PR, and every host's toplevel drvPath was
+shown identical on `git archive` exports of both trees.
+
+The convention half is the rest of this item: the mechanical rules of
+`CLAUDE.md` that no off-the-shelf tool knows, as a fast job in
+`nix-check.yml` before the Nix install, so it answers in seconds and the
+reviewer never spends a round on it:
 
 - PR title scope against touched paths: a `[pegasus]` PR that edits
   `modules/nixos/` or `modules/home/` is misfiled; `/dashboard`, `/dns` and
@@ -506,16 +519,22 @@ spends a round on it:
   disko and niri exceptions `CLAUDE.md` names).
 - The existing dated-comment lint made blocking on *added* lines only, so the
   backlog stays a warning and new ones cannot land.
+- Added Markdown lines over 80 columns, which was the one blocking finding
+  in #219's four review rounds.
 
 Any finding class a reviewer raises twice becomes a check here; a running
-list of past findings is not kept.
+list of past findings is not kept. A formatter (nixfmt, RFC style) is a
+separate decision: 81 of 100 `.nix` files would change, so adopting it is one
+`[all]` reformat commit timed for when the open-PR queue is short, with the
+check applying only to files a PR touches until then (decision 9).
 
-- Files: `.github/workflows/nix-check.yml`, `.github/scripts/conventions.sh`.
+- Files: `.github/workflows/nix-check.yml`, `.github/scripts/conventions.sh`;
+  `checks/lint/` is #257.
 - Proof: run against the diffs of the last twenty merged PRs. The ones that
   needed a follow-up doc commit for one of these reasons flag; the others
   pass. Fixtures for each rule under `checks/conventions/`.
 - Hosts: none.
-- Depends on: nothing.
+- Depends on: #257 for the lint half, already open.
 
 ### W18. Review tiers and delta re-reviews
 
@@ -598,7 +617,8 @@ graph TD
   W14["W14 NUT server module"]:::runtime
   W15["W15 Move service-hardening"]
   W16["W16 home/desktop.nix"]
-  W17["W17 Convention checks in CI"]
+  P257["#257 checks/lint"]:::pr
+  W17["W17 Lint + convention checks"]
   W18["W18 Review tiers + delta re-reviews"]
   W19["W19 Run-book slots + runnable checks"]
 
@@ -611,6 +631,7 @@ graph TD
   W0 --> W15
   W0 --> W16
   W0 --> W18
+  P257 --> W17
   W17 -.-> W18
 
   P139 -.-> W3
@@ -712,3 +733,7 @@ the Pis are rebuilt. Each carries a deploy checklist in the PR body and a
 8. [ ] **W18's single-host tier.** Whether a one-host, no-shared-module PR may
    skip the Opus review at all, or only drop to the cheaper model. The
    recommendation above is the cheaper model, never no review.
+9. [ ] **nixfmt.** Adopt the RFC-style formatter with one reformat commit, or
+   keep hand formatting. Recommendation: adopt, at the start of Wave 1 once
+   the open-PR queue is short, since the reformat conflicts with every open
+   PR that touches `.nix`.
