@@ -119,18 +119,23 @@
     };
 
     # Kimi Code CLI and Hermes Agent (pegasus) — terminal coding agents not in
-    # nixpkgs; each is its upstream's own uv2nix flake. Follow nixpkgs-apps
-    # like hushmic-nix above. Hermes's home-manager input only feeds its own
-    # checks, so it follows ours rather than locking a second copy.
+    # nixpkgs; each is its upstream's own uv2nix flake. Kimi follows
+    # nixpkgs-apps like hushmic-nix above; Hermes is held back (below). Its
+    # home-manager input only feeds its own checks, so it follows ours.
     kimi-cli = {
       url = "git+https://github.com/MoonshotAI/kimi-cli.git";
       inputs.nixpkgs.follows = "nixpkgs-apps";
     };
     hermes-agent = {
       url = "git+https://github.com/NousResearch/hermes-agent.git";
-      inputs.nixpkgs.follows = "nixpkgs-apps";
+      inputs.nixpkgs.follows = "nixpkgs-hermes";
       inputs.home-manager.follows = "home-manager";
     };
+    # Hermes held back on its own lane pin: its pm-packages.nix patches
+    # patchelf with a fix written for 0.19.2, and unstable reverted to 0.15.2,
+    # where it doesn't apply. 1d06008 is the last lane rev on 0.19.2. Back to
+    # nixpkgs-apps once hermes or nixpkgs moves: #252.
+    nixpkgs-hermes.url = "git+https://github.com/NixOS/nixpkgs.git?ref=nixos-unstable&rev=1d060086d60cb76a40cf37109f979d88a5bd6396&shallow=1";
 
     # Apps that should move faster than the 26.05 system — deliberately NOT
     # inputs.nixpkgs.follows. Handed to every host's Home Manager as
