@@ -104,5 +104,7 @@ profile, servers and Pis included:
   aarch64 that is about 87 MiB, which lands even on the Pis' SD cards.
 - **Local compiles on pegasus.** Some lane apps there carry overrides or are
   unfree, so they build locally whenever a bump moves them (OrcaSlicer, Bambu
-  Studio, open-bamboo-networking, HushMic). Budget that time at switch; the
-  list is in pegasus's `DECISIONS.md`, "Exposed apps on the fast lane".
+  Studio, open-bamboo-networking, HushMic, and codex while #252 is open, a
+  large Rust build). Budget that time at switch; the list is in pegasus's
+  `DECISIONS.md`, "Exposed apps on the fast lane" and "Lane exceptions from
+  #242".
