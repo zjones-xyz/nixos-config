@@ -35,6 +35,34 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history, so the docs-only check below can diff against the
+          # base. The repo is small enough that this costs seconds.
+          fetch-depth: 0
+
+      # ── Docs-only detection ──
+      # Markdown, docs/ and .claude/ cannot change a host closure, so a change
+      # confined to them skips the ~10-minute memory-alpha build at the end.
+      # Evaluation still runs on every change: that is what proves the flake is
+      # well-formed. workflow_dispatch has no base to diff against and runs
+      # everything.
+      - name: Detect a docs-only change
+        id: scope
+        run: |
+          case "${{ github.event_name }}" in
+            pull_request) base="${{ github.event.pull_request.base.sha }}" ;;
+            push)         base="${{ github.event.before }}" ;;
+            *)            base="" ;;
+          esac
+          docs_only=false
+          if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
+            changed=$(git diff --name-only "$base...HEAD")
+            if [ -n "$changed" ] && ! grep -qvE '\.md$|^docs/|^\.claude/' <<<"$changed"; then
+              docs_only=true
+            fi
+          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "docs_only=$docs_only"
 
       # ── Soft lint: incident-narrative dates in .nix comments ──
       # CLAUDE.md's style section keeps dates (and the journal excerpts they
@@ -86,5 +114,20 @@ jobs:
       - name: Run flake checks (x86_64-linux)
         run: nix build --no-link --print-build-logs .#checks.x86_64-linux.homepage-config
 
+      # A fixed-output fetch that dies on a 5xx or a dropped connection is the
+      # one build failure a second attempt fixes, and it has reddened docs-only
+      # PRs. Anything else fails on the first attempt as before.
       - name: Build memory-alpha (x86_64-linux, native)
-        run: nix build .#nixosConfigurations.memory-alpha.config.system.build.toplevel --no-link
+        if: steps.scope.outputs.docs_only != 'true'
+        run: |
+          build() {
+            nix build .#nixosConfigurations.memory-alpha.config.system.build.toplevel --no-link 2>&1 | tee build.log
+            return "${PIPESTATUS[0]}"
+          }
+          build && exit 0
+          if grep -qE 'cannot download|unable to download|HTTP error|returned error: 5[0-9]{2}|Connection reset|Could not resolve host|transfer closed' build.log; then
+            echo "::warning::A download failed during the memory-alpha build; retrying once."
+            build
+          else
+            exit 1
+          fi
