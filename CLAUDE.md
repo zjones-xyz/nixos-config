@@ -150,3 +150,9 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
 - Validate with `nix flake check` / `nix eval`. On the Mac (aarch64-darwin) the
   Linux closures can be *evaluated* but not *built* (no Linux builder); building
   and every `switch` happen on the target host.
+- **In a Claude Code web session**, run `.claude/hooks/flake-check-sandboxed.sh`
+  instead: it refetches every flake input over git+https, which the session's
+  GitHub proxy allows where the `github:` tarball fetch gets a 403. It still
+  fails on the private `nixflix` input until that repo is attached to the
+  session (`add_repo zjones-xyz/nixflix-exp`); do that first rather than
+  stubbing the input, so galactica is checked too.
