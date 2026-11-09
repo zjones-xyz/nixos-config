@@ -9,33 +9,61 @@ merging has nothing left to compile.
 
 ## What it does
 
-An hourly timer (`prebuild.timer`) runs `prebuild.service` as root. It
-builds the watched branches (by default `bump-app-inputs`, the scheduled
-bump's PR branch, and `main`), then every ref listed in
-`/var/lib/prebuild/targets` (see [Open PRs](#open-prs)). For each:
+An hourly timer (`prebuild.timer`) runs `prebuild.service` as root. After a
+boot the first run comes 15 minutes in, or at the next hour mark if that's
+sooner; the switch that first installs the timer starts one too. Each of
+these lands up to 10 minutes later than that (`RandomizedDelaySec`), so
+the first run after a switch is not immediate: use `prebuild now` for that.
+A switch never restarts a running prebuild (`restartIfChanged = false`), so
+`nrs` doesn't wait on it.
 
-1. One `git ls-remote` asks origin for all their heads. If a ref doesn't
-   exist, as after a bump PR merges and its branch is deleted, its GC root
-   and state are removed and nothing is built.
+It builds the watched branches (by default `bump-app-inputs`, the scheduled
+bump's PR branch, and `main`), then every ref listed in
+`/var/lib/prebuild/targets` (see [Open PRs](#open-prs)). One `git ls-remote`
+asks origin for all their heads. If origin can't be reached, the run
+notifies once and stops; the next run retries. Then, for each:
+
+1. If the ref doesn't exist, its GC root and state are removed and nothing
+   is built. ⚠ The repo doesn't delete merged branches, and the
+   bump workflow only deletes `bump-app-inputs` when a run has nothing to
+   bump, so a merged bump's branch lingers until the next bump replaces it.
+   Turn on "Automatically delete head branches" in the repo's settings for
+   this cleanup to happen at merge.
 2. If that commit was already built, or already failed to build, it is
    skipped.
-3. Otherwise it sends a low-urgency **started** notification and builds
+3. Otherwise it sends a low-urgency **started** notification and evaluates
    `git+<repo>?ref=<ref>&rev=<sha>#nixosConfigurations.<host>.config.system.build.toplevel`
-   into `/var/lib/prebuild/result-<key>`. The out-link is a GC root, so the
-   build survives garbage collection until the switch.
+   to its `.drv` in one process, so evaluation's ~2.4 GB is freed before the
+   build, then builds that into `/var/lib/prebuild/result-<key>`. The
+   out-link is a GC root, so the build survives garbage collection until the
+   switch. A real failure removes the previous result, so `prebuild status`
+   never shows a stale "built".
 4. It sends a desktop notification to `notifyUser`'s session if that user is
    logged in: **ready**, **failed** (naming the first derivation that didn't
-   build), **out of memory** (hit the cap below) or **error** (evaluation or
-   fetch failed). The full log is at `/var/lib/prebuild/<key>.log`.
+   build), **out of memory** (hit the cap below) or **error** (evaluation
+   failed, or a download did). `/var/lib/prebuild/<key>.log` has the run's
+   output, in which nix keeps only the last lines of a failing builder;
+   `sudo nix log <drv>` has that builder's full log. Branches in
+   `quietBranches` (default `main`, which moves on every merge, docs
+   included) skip **ready**; their result is in `prebuild status`, and their
+   failures still notify. `quietBranches` never silences a listed PR: its
+   **ready** is what someone is waiting for.
 
 The `<key>` is the branch name (`/` becomes `_`) for a watched branch, and
 `pr-<N>` for `refs/pull/<N>/head`.
 
-A build failure is recorded against that commit and not retried. An eval or
-fetch error, which may be a network blip, is retried on the next run but
-notified only once per commit. So is a build killed by the memory cap below.
-**started** is also sent once per commit (`<key>.started` records it), not
-on each retry.
+A build failure is recorded against that commit and not retried. An eval
+error, a failed download and a build killed by the memory cap below are
+retried on the next run, and notified only once per commit. **started** is
+also sent once per commit (`<key>.started` records it), not again for each
+retry or for the low-memory attempt. A failed download is nix's own fetch
+failing or a fixed-output (fetcher) derivation failing, but never a hash
+mismatch, which is a real failure. Test output
+inside a build that mentions networking doesn't count. The memory case is
+read from the kernel's `oom_kill` count for the unit's own cgroup, not
+guessed from the log. A build killed by the cap is first retried in the same
+run at `lowMemory.maxJobs × lowMemory.cores` (1 × 2); only if that is killed
+too does **out of memory** notify.
 
 ## Open PRs
 
@@ -76,9 +104,10 @@ refs/heads/some-branch	some-branch, by hand
 Discovery replaces it atomically (temporary file, then `mv`). Lines that
 aren't a plain `refs/…` name, like blanks or comments, are skipped, and a
 missing label falls back to the ref. A ref other than `refs/pull/<N>/head`
-gets the key `ref-<path>` (`ref-heads_some-branch`). With discovery off, the
-file is still read, so a hand edit works. Discovery overwrites a hand edit on
-its next run.
+gets the key `ref-<path>` (`ref-heads_some-branch`). A ref that is already
+listed, a watched branch included, is built once. With discovery off, the
+file is still read, so a hand edit works. Discovery overwrites a hand edit
+on its next run.
 
 ## Staying out of the way
 
@@ -91,13 +120,20 @@ batch priority"):
   against the store directly instead of asking nix-daemon. Every compiler is
   then a child of `prebuild.service`, and its limits apply. nix-daemon's
   settings (`MemoryHigh = 40G`, `batch`) don't.
-- **Memory.** `MemoryHigh` (`memoryHigh`, 12G) throttles and reclaims,
-  `MemoryMax` (`memoryMax`, 16G) OOM-kills inside the unit only, and
-  `MemorySwapMax = 2G` stops it growing on in zram. Builds run
-  `maxJobs × cores` = 2 × 4 to stay under that. `OOMScoreAdjust = 1000`
-  makes it the kernel's first choice under global OOM, and systemd-oomd kills
-  it when its memory pressure passes 50%. A kill fails that run only; a
-  package that never fits in the cap is still built by `nrs`, uncapped.
+- **Memory.** `MemoryHigh` (`memoryHigh`, 12G) throttles and reclaims and
+  `MemoryMax` (`memoryMax`, 16G) OOM-kills inside the unit only; both are
+  options. Hardcoded: `MemorySwapMax = 2G`, which stops it growing on in
+  zram, `OOMScoreAdjust = 1000`, which makes it the kernel's first choice
+  under global OOM, and `OOMPolicy = continue`, which keeps the unit, and so
+  the script, alive when the kernel kills a process inside it. That process
+  is usually a compiler, but it can be `nix` itself. Builds run
+  `maxJobs × cores` = 2 × 4, then 1 × 2 after a kill. A package that never
+  fits even then (OrcaSlicer, Bambu Studio and codex are the candidates) is
+  still built by `nrs`, uncapped.
+- **No systemd-oomd.** That `DECISIONS.md` entry keeps oomd off build
+  cgroups because `MemoryHigh`'s throttling reads as memory pressure, so a
+  pressure kill would fire at about 12G, before `MemoryMax` ever matters. The
+  prebuild follows it: oomd still watches the user slices only.
 - **CPU.** It runs in `prebuild.slice`, a root-level slice with
   `CPUWeight = idle`, so builds nearly stop while the desktop, a game or
   Ollama wants the CPU. This is the "alt kept in reserve" from that
@@ -127,15 +163,16 @@ The `prebuild` command:
 | `prebuild now -f` | The same, then follow the build's output |
 | `prebuild stop` | Cancel a running prebuild, e.g. before `nrs` |
 
-- Status looks like this. "started …, not finished" means a build is running,
-  or was stopped before it ended:
+- Status shows each branch and listed PR as built, FAILED, error
+  (retrying), nothing yet, or "started …, not finished": a build is
+  running, or was stopped before it ended. For example:
 
   ```text
-  service: activating, next check: Sun 2026-11-08 14:07:31 GMT
+  service: activating, next check: Mon 2026-11-09 03:07:31 GMT
     bump-app-inputs: nothing yet
-    main: built 3fa1c02
-  targets (listed 2026-11-08 13:12):
-    #244 [pegasus] Prebuild the bump PR and main in the background: started 0097fd9, not finished
+    main: built 051fdc3
+  targets (listed 2026-11-09 02:12):
+    #251 [pegasus] Prebuild: notify when a build starts: started 21fbec6, not finished
     #242 [all] Bump nixpkgs-apps past opencode's hash break; fix codex, hold hermes back: error at 5be7d10, retrying
   ```
 
@@ -145,16 +182,17 @@ The `prebuild` command:
   branch's recorded commit, then run `prebuild now`.
 
   ```bash
-  sudo rm /var/lib/prebuild/main.sha    # or pr-244.sha for a PR
+  sudo rm /var/lib/prebuild/main.sha    # or pr-251.sha for a PR
   ```
 
-- Logs: `/var/lib/prebuild/<key>.log` for the last build, and
-  `journalctl -u prebuild -u prebuild-discover` for history.
+- Logs: `/var/lib/prebuild/<key>.log` for the last run (nix's output,
+  which keeps only a failing builder's last lines), `sudo nix log <drv>`
+  for that builder's full log, and `journalctl -u prebuild -u prebuild-discover`
+  for history.
 
 ## Turning it on for another host
 
 Import `modules/nixos/prebuild.nix` and set `services.prebuild.enable = true`,
-and `discover.enable = true` to build its open PRs too.
-`host` defaults to `networking.hostName`. Leave `notifyUser` unset on hosts
+and `discover.enable = true` to build its open PRs too. `host` defaults to `networking.hostName`. Leave `notifyUser` unset on hosts
 without a desktop session, where the result is only in the journal. On the
 Pis, keep building through memory-alpha as their `DEPLOY.md` describes.

@@ -1140,3 +1140,50 @@ playback for a second or two.
 13. [ ] After any change to the hidden list, run `dms-settings-snapshot`
     and commit in `~/dux-state` (the private repo, #226), so a fresh seed
     matches.
+
+## #245 Bump cache check — first run
+
+`update-apps.yml` now dry-runs every host before and after the bump and builds
+fixed-output derivations with new uncached outputs (docs/NIXPKGS-APPS.md
+§ Bumps). It had never run in Actions when it merged.
+
+1. [x] Merge #242 first, so the first run's bump PR doesn't conflict with
+       it on `flake.lock`. Done: #242 merged 2026-11-08.
+2. [ ] Start one run by hand (Actions → "Bump app inputs" → Run workflow).
+       Check that "Uncached before bump" and "Uncached after bump" finish
+       well inside the 60-minute limit, and note how many fixed-output
+       derivations the after step builds.
+3. [ ] Read the bump PR's "⚠ Newly built locally" list, if any, against
+       hydra.nixos.org before switching.
+
+## #244 Prebuild — first run on the hardware
+
+`modules/nixos/prebuild.nix` builds the bump PR and `main` in the background
+(docs/PREBUILD.md). Its limits and notifications were only tested with stubs.
+
+1. [x] Before switching: if `bump-app-inputs` on origin still points at an
+       already-merged bump, delete it, or the first run builds that old
+       commit and reports on a closed PR. Then turn on "Automatically delete
+       head branches" (repo Settings → General) so merged branches go away.
+       Done 2026-11-09: branch deleted, auto-delete on.
+2. [ ] Switch. The switch starts a first run within about 10 minutes
+       (`RandomizedDelaySec`); follow it with
+       `journalctl -fu prebuild`, or start one with `prebuild now -f`.
+       `prebuild status` should then show each branch as built or failed.
+3. [ ] Confirm the run is in its own cgroup: while it builds,
+       `systemd-cgls /prebuild.slice` shows the compilers, not
+       `nix-daemon.service`.
+4. [ ] Confirm the caps: `systemctl show prebuild -p MemoryHigh -p MemoryMax
+       -p MemorySwapMax -p OOMPolicy` reads `12884901888`, `17179869184`,
+       `2147483648` (bytes: 12G, 16G, 2G) and `continue`, and `oomctl` does
+       not list `prebuild.service`.
+5. [ ] Confirm a desktop notification reaches the Dux session ("pegasus
+       prebuild ready" or "failed") while you're logged in.
+6. [ ] If a build hits the 16G cap (OrcaSlicer, Bambu Studio or codex), the
+       log shows "OOM at 2 jobs x 4 cores" and a 1 × 2 retry. Only if that is
+       killed too do you get one "out of memory" notification. Either way
+       `systemctl status prebuild` must not say `oom-kill`.
+7. [ ] Run `nrs` once while a prebuild is running: the switch must not
+       restart the prebuild or wait for it to finish (`restartIfChanged =
+       false`). It can still wait on a derivation both are building at that
+       moment; that's the lock wait in docs/PREBUILD.md, not this.
