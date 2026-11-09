@@ -31,13 +31,14 @@ it sounds, and both have bitten PRs here already:
   as a path, so the comparison is exact. For a change that is meant to be a
   no-op on some hosts and not others, the per-host table in #107's description
   is the shape to copy.
-- galactica cannot be evaluated from a sandboxed session, because the private
-  `nixflix` input needs a token. Only CI can evaluate it, and today CI does not
-  compare anything: `nix-check.yml` evaluates each toplevel and builds
-  memory-alpha, nothing more. So "CI is green" proves galactica evaluates, not
-  that a refactor left it unchanged. W0 closes that gap with a CI job before
-  any galactica refactor starts, and every galactica item below cites that job
-  as its proof.
+- galactica only evaluates where the private `nixflix` input can be fetched:
+  in CI, which holds a token, or in a web session that has attached
+  `zjones-xyz/nixflix-exp` (`CLAUDE.md`, Workflow). A session that has not
+  cannot, and today CI does not compare anything: `nix-check.yml` evaluates
+  each toplevel and builds memory-alpha, nothing more. So "CI is green" proves
+  galactica evaluates, not that a refactor left it unchanged. W0 closes that
+  gap with a CI job before any galactica refactor starts, and every galactica
+  item below cites that job as its proof.
 
 **Delete before abstracting.** #39's one piece of advice that still holds. The
 Pi era-1 modules are not refactor candidates; they are deletions waiting on the
@@ -97,11 +98,12 @@ changed/unchanged table. Optional `--units` diffs `/etc/systemd/system` and
 `/etc/systemd/user` between the two closures' `etc` outputs, which is the
 useful view for a change that replaces one unit with another. Reuses the
 git+https rewrite from `.claude/hooks/flake-check-sandboxed.sh` so it works
-in a sandboxed session for every host but galactica.
+in a sandboxed session for every host, galactica included once the session
+has attached `zjones-xyz/nixflix-exp`.
 
 A CI job in `nix-check.yml`, on pull requests only, that runs the same script
-on the PR's merge base against its head. CI holds `NIXFLIX_EXP_TOKEN`, so this
-is the one place galactica can be compared. The job posts the per-host table
+on the PR's merge base against its head. CI holds `NIXFLIX_EXP_TOKEN`, so
+galactica is always comparable there. The job posts the per-host table
 as a step summary. It does not fail the run: a refactor PR cites the table as
 its proof, a behaviour-changing PR cites it as its blast radius.
 
