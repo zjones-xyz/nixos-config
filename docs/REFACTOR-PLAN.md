@@ -665,6 +665,45 @@ nothing is deleted or re-synced.
   from the fork's git history, then make the fork public.
 - PR title: `[galactica] nixflix from upstream; indexer list from sops`.
 
+### W21. nvfetcher for the hand-maintained source pins
+
+The pins that drift silently today are not flake inputs. They are
+`version` + `hash` pairs written by hand in `.nix` files: the Jellyfin
+PreTranscode `.dll` and the askimo `.deb` and suwayomi `.jar` from GitHub
+releases, ticktick from CloudFront, the Opera CDN override in `flake.nix`,
+dankcalendar's master commit, and the tag pins for olla and the
+open-bamboo-networking trio. nvfetcher gives them the shape the app lane
+already has: intent declared once in `nvfetcher.toml` (a version source,
+such as "latest GitHub release" or a regex over a download page, and a
+fetcher with `$ver`), a generated `_sources/generated.nix` nobody edits, and
+a scheduled job that regenerates it and opens a PR with the version-change
+list. Package files read `sources.<name>.src` and `.version` instead of
+carrying literals.
+
+Flake inputs stay in `flake.lock`; nvfetcher is not for them. olla's Go
+`vendorHash` is outside what nvfetcher computes (it handles Cargo locks, not
+Go vendoring), so olla pairs with `nix-update` or keeps a manual TOFU step.
+The regex version sources (ticktick, Opera) are the brittle part: they break
+loud when a vendor page changes, which is the right failure.
+
+npins was assessed for the same question and rejected: of the twenty flake
+inputs only two frozen theme sources would fit, it pins source trees and
+ignores GitHub release assets by design, and it would add a second lock file
+and a fetch path outside the sandbox's git+https rewrite.
+
+- Files: `nvfetcher.toml`, `_sources/` (generated), the eight package sites
+  above, a second job in `.github/workflows/update-apps.yml` (or its own
+  `update-sources.yml`) that runs `nvfetcher --changelog`, builds the new
+  fixed-output derivations the way `lane-uncached.sh` does, and opens an
+  `[all] Bump sources` PR separate from the app-lane bump; a keyfile line
+  giving nvchecker the workflow's GitHub token.
+- Proof: no-op on every host when the generated versions equal today's
+  literals (W0). The job's first run opens a PR whose changelog lists only
+  the pins that are actually behind; every new hash fetches in CI.
+- Hosts: none for the adoption itself; later bump PRs switch whichever host
+  owns the package, under that host's scope.
+- Depends on: W0. Independent of everything else; Wave 1.
+
 ## 4. Dependency graph
 
 PR nodes are the open pull requests this plan waits on. The dashed node is a
@@ -709,6 +748,7 @@ graph TD
   W16["W16 home/desktop.nix"]
   W16a["W16a Shared kitty settings"]:::runtime
   W20["W20 nixflix from upstream + sops indexers"]:::runtime
+  W21["W21 nvfetcher for in-tree pins"]
   P257["#257 checks/lint"]:::pr
   W17["W17 Lint + convention checks"]
   W18["W18 Review tiers + delta re-reviews"]
@@ -724,6 +764,7 @@ graph TD
   W0 --> W16
   W16 --> W16a
   W0 --> W20
+  W0 --> W21
   UpstreamPR --> W20
   W0 --> W18
   P257 --> W17
@@ -772,8 +813,9 @@ open ones, gets its CI table. Then merge #105, #107, #232 (rebased), #205
 (rebased), #208, #209; rebase and merge #207; decide #139; land or close #129
 and #144. Then in any order W1, W2, W3, W4, W11, W15, W16. Each is one
 `[all]` PR proven by W0, switched at leisure since nothing changes on the
-hosts. W17 and W19 go anywhere in this wave, W18 as soon as W0 has produced
-its first tables; all three touch no host and pay back on every later PR.
+hosts. W17, W19 and W21 go anywhere in this wave, W18 as soon as W0 has
+produced its first tables; all four touch no host and pay back on every
+later PR.
 
 **Wave 2, galactica's Traefik.** W5, then W6, then W7, then W8, then W12. W5
 is the one step here whose unit text may change; galactica and memory-alpha
