@@ -717,7 +717,8 @@ holding root SSH to every host, which from a phone means CI, and a fleet
 deploy key in a public repo's Actions secrets is the wrong trade. Pull fits
 how the owner works, and `modules/nixos/prebuild.nix` (#244) already does
 the hard half on pegasus: hourly fetch, evaluate and build under memory caps,
-GC root, notification. The missing step is the switch. Two rules hold
+GC root, notification. The missing step is the switch, and the owner's
+current lean is comin for it (W24). Two rules hold
 whatever is chosen: automation never reboots the three LUKS hosts (a switch
 needs no unlock; a reboot does, so a kernel or initrd change switches and
 notifies "reboot pending"), and `system.autoUpgrade` is unsuitable because
@@ -766,36 +767,69 @@ compose-in-systemd agents are tested for their systemd wiring only.
   use (`test -w /dev/kvm`), which the assessment could not verify; the
   docker-network half on W5.
 
-### W24. Pull deploy in prebuild (deferred)
+### W24. Pull deploy with comin (deferred; owner leans yes)
 
-Extend `prebuild.nix` with an opt-in deploy mode rather than adopt comin,
-which builds on the host without memory caps (pegasus's OOM history is why
-prebuild exists) and knows nothing about MANUAL-STEPS: `deploy = { enable;
-mode = "notify" | "switch"; healthCheck; }`, plus a `homelab.deploy.hold`
-option set by the PR that adds owner steps and cleared by a one-line
-follow-up, evaluated on the *new* configuration before building. The switch
-path is hold-aware, never reboots, gates on a health check (failed-unit
-count before and after, a `curl` through Traefik on memory-alpha), and
-reverts to the previous system profile on failure. Rollback is
-`switch-to-configuration` on `/nix/var/nix/profiles/system-N`; boot
-generations (#205) cover the reboot case.
+The owner's current position: comin is the right shape, with the accepted
+limitation that it never reboots. A kernel or initrd change is activated by
+the switch and takes effect at the next reboot the owner performs, which on
+galactica, memory-alpha and pegasus is also the LUKS unlock. That is the
+behaviour wanted anyway (see the frame above), so the limitation costs
+nothing.
 
-The assessment's per-host ceilings, all deferred: hopper and hamilton fully
-automatic once ephemeral (§5), pulling the aarch64 closure from memory-alpha
-rather than building on the Pi; memory-alpha automatic behind the health
-gate after a canary month; pegasus and serenity semi-automatic (notify plus
-one tap; prebuild cannot build Linux paths on the Mac, so serenity keeps
-`npulldrs`); galactica never unattended (production Let's Encrypt, ZFS, the
-*arr state, most of the MANUAL-STEPS volume).
+Read against comin's current module (nlewo/comin `main`, 2026-11), the
+assessment's three objections mostly dissolve:
 
-- Files: `modules/nixos/prebuild.nix`, `modules/nixos/common.nix` (the hold
-  option), `docs/PREBUILD.md`, a MANUAL-STEPS section per host it reaches.
-- Proof: on pegasus in notify mode, a merged no-op shows "unchanged" and a
-  real change offers `deploy`; on memory-alpha, a deliberately failing unit
-  triggers a revert and a notification.
-- Hosts: pegasus, then memory-alpha, then the Pis; never galactica.
+- *No memory caps.* comin's own unit is an ordinary systemd service, so the
+  host sets `MemoryMax` on `systemd.services.comin` to cap evaluation, and
+  the build itself runs in `nix-daemon` under the existing `nix.settings`
+  cores and max-jobs limits, which is where prebuild's caps already bite.
+  `evalTimeout`, `buildTimeout` and `buildAttemptsLimit` bound the rest.
+- *Knows nothing about MANUAL-STEPS.* True, and the answer is two-part:
+  W22 keeps a PR with missing secrets from merging at all, and
+  `deployConfirmer.mode` (`without`, `auto` with a delay, or `manual`) is set
+  per host in the *running* configuration, so a host whose owner steps are
+  common simply never switches without a confirmation. A hold option in the
+  new configuration cannot gate its own deployment, so the hold lives in the
+  confirmer, not in the PR.
+- *A third-party input.* Still true. comin is pinned like every other
+  input, has a nix-darwin module (so serenity can take it too), signed-commit
+  verification (`sshAllowedSignersPath`), a Prometheus exporter, and
+  `postBuildCommand`/`postDeploymentCommand` hooks that carry the commit,
+  generation and status for ntfy via `homelab.alerts`.
+
+What comin adds that prebuild cannot: `testing-<hostname>` branches
+deployed with `switch-to-configuration test` (no bootloader entry, gone at
+the next boot), a deployment and boot-entry retention policy, and refusal of
+force-pushed `main`. What prebuild keeps: building every open PR branch so
+the store is warm and `nrs` is instant; comin's builder finds those paths
+already built. The one gap comin leaves is automatic rollback on a failed
+health check: `postDeploymentCommand` sees `COMIN_STATUS`, so a health script
+can `switch-to-configuration switch` the previous profile itself, which is
+the part this item has to write.
+
+The per-host shape, deferred with decision 10 but drafted against comin's
+modes: hopper and hamilton `without` once ephemeral (§5), pulling the
+aarch64 closure from memory-alpha; memory-alpha `auto` with a delay and the
+health hook, after a canary month; pegasus `manual` with
+`services.comin.desktop` notifications and a one-command confirm; serenity
+`manual` through the darwin module; galactica `manual`, or comin not
+installed there at all, since nothing on it should switch unattended.
+
+- Files: `flake.nix` (the `comin` input), `modules/nixos/comin.nix` (a
+  `homelab.deploy` wrapper: confirmer mode, `MemoryMax`, the health and
+  notify hooks, signed-commit trust), `modules/darwin/comin.nix`,
+  `modules/nixos/prebuild.nix` (keeps branch prebuilds; drops nothing yet),
+  `docs/PREBUILD.md` or a new `docs/DEPLOY.md`, a MANUAL-STEPS section per
+  host it reaches (the commit-signing setup is an owner step).
+- Proof: on pegasus in `manual` mode, a merged no-op produces a build and
+  no prompt; a real change prompts and switches on confirm; a
+  `testing-pegasus` branch deploys with `test` and vanishes at reboot. On
+  memory-alpha, a deliberately failing unit makes the health hook switch
+  back to the previous generation and notify.
+- Hosts: pegasus, then memory-alpha, then the Pis; galactica only in
+  `manual` mode, if at all.
 - Depends on: W0, W22, W4; the Pis also on the hopper §5 rebuild; and
-  decision 10.
+  decision 10 for the per-host modes.
 
 ## 4. Dependency graph
 
@@ -845,7 +879,7 @@ graph TD
   W21["W21 nvfetcher for in-tree pins"]
   W22["W22 sops key-presence check (deferred)"]:::deferred
   W23["W23 VM tests (deferred)"]:::deferred
-  W24["W24 Pull deploy in prebuild (deferred)"]:::deferred
+  W24["W24 Pull deploy with comin (deferred)"]:::deferred
   P257["#257 checks/lint"]:::pr
   W17["W17 Lint + convention checks"]
   W18["W18 Review tiers + delta re-reviews"]
@@ -986,8 +1020,8 @@ own.
    the open-PR queue is short, since the reformat conflicts with every open
    PR that touches `.nix`.
 10. [ ] **Deployment and test automation (W22 to W24).** Deferred by the
-    owner until closer to implementation. The questions: whether to automate
-    at all beyond prebuild-plus-notify; pull via prebuild versus comin;
-    which hosts may ever switch unattended and under what health gate; and
-    whether the VM tests are worth their CI minutes. The assessment's answers
-    are recorded in the three items as recommendations only.
+    owner until closer to implementation, with one lean recorded: comin is
+    the tool, accepting that it never reboots. Still open: which hosts may
+    ever switch unattended and under what health gate (the per-host
+    confirmer modes in W24 are a draft); and whether the VM tests are worth
+    their CI minutes.
