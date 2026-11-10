@@ -704,6 +704,99 @@ and a fetch path outside the sandbox's git+https rewrite.
   owns the package, under that host's scope.
 - Depends on: W0. Independent of everything else; Wave 1.
 
+### Deferred: deployment and test automation (W22 to W24)
+
+The owner is deferring the decisions in these three items until closer to
+implementation. They are recorded so the shape and the prerequisites are not
+lost; nothing below is scheduled, and the tiers and tools named are the
+assessment's recommendation, not a settled choice (decision 10).
+
+The assessment's frame: every deploy today is a person typing `npullnrs`
+on the host. Push tools (`--target-host`, deploy-rs, Colmena) need a machine
+holding root SSH to every host, which from a phone means CI, and a fleet
+deploy key in a public repo's Actions secrets is the wrong trade. Pull fits
+how the owner works, and `modules/nixos/prebuild.nix` (#244) already does
+the hard half on pegasus: hourly fetch, evaluate and build under memory caps,
+GC root, notification. The missing step is the switch. Two rules hold
+whatever is chosen: automation never reboots the three LUKS hosts (a switch
+needs no unlock; a reboot does, so a kernel or initrd change switches and
+notifies "reboot pending"), and `system.autoUpgrade` is unsuitable because
+`allowReboot` reboots on exactly those changes with no health check and no
+rollback. `MANUAL-STEPS.md` preconditions are prose no tool can read, so
+automation needs two machine signals first: W22 and a declarative hold.
+
+### W22. sops key-presence check (deferred)
+
+sops keeps key names in plaintext, so a check can evaluate each host's
+`config.sops.secrets` (`key`, `sopsFile`) and the placeholders in
+`sops.templates`, and assert every key path exists in `secrets/<host>.yaml`.
+Evaluating beats grepping because it catches computed keys. This is the most
+common "before first switch" owner step (#197, #200, #248) caught at CI time
+instead of at activation. Independent of any deploy decision and useful on
+its own; deferred only because it was assessed alongside the rest.
+
+- Files: `checks/sops-keys/` (an eval script plus `yq`), `flake.nix`,
+  a step in `.github/workflows/nix-check.yml` beside W17's checks.
+- Proof: green on `main`; fails on a fixture with one key deleted; replayed
+  against #197's tree before its secrets landed, fails.
+- Hosts: none.
+- Depends on: nothing.
+
+### W23. VM tests: initrd unlock and switch-twice (deferred)
+
+Two NixOS VM tests for the failure classes this fleet has actually had at
+switch or reboot time, run as a separate KVM job so they parallelise the
+memory-alpha build. (1) Import `luks-remote-unlock.nix` into a VM with a
+LUKS root and assert port 2222 answers over DHCP and the passphrase unlocks;
+this is the one failure that turns automation into a site visit. (2) Start
+a unit as a non-root UID owning a tmpfiles `d` directory, run
+`switch-to-configuration` again, assert the owner and that the service still
+runs (#221's MariaDB lockout); once W5 lands, the same VM asserts the
+docker-network oneshot is idempotent. Traefik route generation is an eval
+check and belongs in W12, not here. VM tests have no network, so the
+compose-in-systemd agents are tested for their systemd wiring only.
+
+- Files: `checks/vm-luks-unlock/`, `checks/vm-switch-twice/`, a KVM job in
+  `nix-check.yml`.
+- Proof: green; the unlock test goes red with the
+  `99-ethernet-default-dhcp` network removed; the switch-twice test goes red
+  on #221's parent commit.
+- Hosts: none.
+- Depends on: confirming KVM on `ubuntu-latest` with the Nix installer in
+  use (`test -w /dev/kvm`), which the assessment could not verify; the
+  docker-network half on W5.
+
+### W24. Pull deploy in prebuild (deferred)
+
+Extend `prebuild.nix` with an opt-in deploy mode rather than adopt comin,
+which builds on the host without memory caps (pegasus's OOM history is why
+prebuild exists) and knows nothing about MANUAL-STEPS: `deploy = { enable;
+mode = "notify" | "switch"; healthCheck; }`, plus a `homelab.deploy.hold`
+option set by the PR that adds owner steps and cleared by a one-line
+follow-up, evaluated on the *new* configuration before building. The switch
+path is hold-aware, never reboots, gates on a health check (failed-unit
+count before and after, a `curl` through Traefik on memory-alpha), and
+reverts to the previous system profile on failure. Rollback is
+`switch-to-configuration` on `/nix/var/nix/profiles/system-N`; boot
+generations (#205) cover the reboot case.
+
+The assessment's per-host ceilings, all deferred: hopper and hamilton fully
+automatic once ephemeral (§5), pulling the aarch64 closure from memory-alpha
+rather than building on the Pi; memory-alpha automatic behind the health
+gate after a canary month; pegasus and serenity semi-automatic (notify plus
+one tap; prebuild cannot build Linux paths on the Mac, so serenity keeps
+`npulldrs`); galactica never unattended (production Let's Encrypt, ZFS, the
+*arr state, most of the MANUAL-STEPS volume).
+
+- Files: `modules/nixos/prebuild.nix`, `modules/nixos/common.nix` (the hold
+  option), `docs/PREBUILD.md`, a MANUAL-STEPS section per host it reaches.
+- Proof: on pegasus in notify mode, a merged no-op shows "unchanged" and a
+  real change offers `deploy`; on memory-alpha, a deliberately failing unit
+  triggers a revert and a notification.
+- Hosts: pegasus, then memory-alpha, then the Pis; never galactica.
+- Depends on: W0, W22, W4; the Pis also on the hopper §5 rebuild; and
+  decision 10.
+
 ## 4. Dependency graph
 
 PR nodes are the open pull requests this plan waits on. The dashed node is a
@@ -715,6 +808,7 @@ graph TD
   classDef pr fill:#eef,stroke:#669,color:#000
   classDef decision fill:#fff,stroke:#999,stroke-dasharray:4 3,color:#000
   classDef runtime fill:#fee,stroke:#966,color:#000
+  classDef deferred fill:#f6f6f6,stroke:#aaa,stroke-dasharray:2 2,color:#555
 
   P105["#105 shared LE options"]:::pr
   P107["#107 registry Phase 1"]:::pr
@@ -749,6 +843,9 @@ graph TD
   W16a["W16a Shared kitty settings"]:::runtime
   W20["W20 nixflix from upstream + sops indexers"]:::runtime
   W21["W21 nvfetcher for in-tree pins"]
+  W22["W22 sops key-presence check (deferred)"]:::deferred
+  W23["W23 VM tests (deferred)"]:::deferred
+  W24["W24 Pull deploy in prebuild (deferred)"]:::deferred
   P257["#257 checks/lint"]:::pr
   W17["W17 Lint + convention checks"]
   W18["W18 Review tiers + delta re-reviews"]
@@ -765,6 +862,12 @@ graph TD
   W16 --> W16a
   W0 --> W20
   W0 --> W21
+  W22 --> W24
+  W0 --> W24
+  W4 --> W24
+  W5 -.-> W23
+  W23 -.-> W24
+  PiDecision -.-> W24
   UpstreamPR --> W20
   W0 --> W18
   P257 --> W17
@@ -830,6 +933,10 @@ nixflix option has landed and the fork bump that carries it has been
 switched. Each carries a deploy checklist in the PR body and a
 `MANUAL-STEPS.md` section keyed by its PR number.
 
+**Deferred, not in any wave.** W22, W23 and W24 wait on decision 10. W22
+could join Wave 1 at any time if the owner wants the secrets check on its
+own.
+
 ## 6. Not in scope
 
 - Pegasus's desktop modules (`desktop-*`, `nvidia`, `gaming`, `performance`,
@@ -865,7 +972,9 @@ switched. Each carries a deploy checklist in the PR body and a
    Settled by #248: the pinned nixpkgs has `services.beszel.agent` with an
    `environmentFile`, and pegasus runs it. W10 follows for galactica.
 6. [ ] **Whether #84 (Colmena) comes back after W4**, or deploys stay
-   `nixos-rebuild --target-host`.
+   `nixos-rebuild --target-host`. The deployment assessment recommends
+   neither: close #84 once W4 lands, keep `--target-host` for Pi first
+   boots only, and let W24 carry any automation. Deferred with decision 10.
 7. [ ] **W0's CI job as advisory or blocking.** Advisory as written. It could
    fail a PR whose title claims a refactor when the table shows a changed
    host, once there is a convention for marking refactor PRs.
@@ -876,3 +985,9 @@ switched. Each carries a deploy checklist in the PR body and a
    keep hand formatting. Recommendation: adopt, at the start of Wave 1 once
    the open-PR queue is short, since the reformat conflicts with every open
    PR that touches `.nix`.
+10. [ ] **Deployment and test automation (W22 to W24).** Deferred by the
+    owner until closer to implementation. The questions: whether to automate
+    at all beyond prebuild-plus-notify; pull via prebuild versus comin;
+    which hosts may ever switch unattended and under what health gate; and
+    whether the VM tests are worth their CI minutes. The assessment's answers
+    are recorded in the three items as recommendations only.
