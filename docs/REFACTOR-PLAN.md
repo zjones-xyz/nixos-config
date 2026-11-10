@@ -40,7 +40,8 @@ it sounds, and both have bitten PRs here already:
   gap with a CI job before any galactica refactor starts, and every galactica
   item below cites that job as its proof. The NixOS cloud environment now
   lists `nixflix-exp`, so a session started with it selected evaluates
-  galactica without the manual attach.
+  galactica without the manual attach. W20 removes the private input
+  altogether.
 
 **Delete before abstracting.** #39's one piece of advice that still holds. The
 Pi era-1 modules are not refactor candidates; they are deletions waiting on the
@@ -493,6 +494,37 @@ records.
 - Depends on: W0; #129/#144 landed or closed first. Independent of
   everything else.
 
+### W16a. Shared terminal settings: `modules/home/kitty.nix`
+
+The one place where "written once" pays off across pegasus and serenity
+today is settings, not packages: `modules/home/common.nix` sets the fleet's
+kitty colours in `programs.kitty.settings`, but nothing enables kitty on
+serenity, whose kitty is the Homebrew cask, so the Mac gets none of it. A
+shared module takes pegasus's kitty layout and keybindings and `common.nix`'s
+colours, sets `programs.kitty.enable = true`, and on darwin `package = null`
+so the cask keeps supplying the app. pegasus keeps its `shell`/`SHELL` lines.
+The kitty comment in `modules/darwin/homebrew.nix` is corrected: Home
+Manager's `targets.darwin.copyApps` (default on at serenity's
+`stateVersion`) addresses the Spotlight indexing it cites.
+
+A shared GUI *roster* was assessed and rejected: fourteen apps overlap, eight
+are cask-only under different names, four carry pegasus-only GPU or version
+overrides, and a roster makes nothing shorter. Revisit only if a third
+desktop host appears. The real parity gap is the apps serenity has outside
+nix (calibre, filebot, arduino-ide, proton-vpn, dropbox, zoom and others
+under "Replicated from Serenity's /Applications" in pegasus's `home.nix`);
+that is a list to decide cask-or-none on, not a module.
+
+- Files: `modules/home/kitty.nix` (new), `modules/home/common.nix`,
+  `hosts/pegasus/home.nix`, `hosts/serenity/home.nix`,
+  `modules/darwin/homebrew.nix` (comment).
+- Proof: no-op on pegasus (W0). On serenity, Home Manager gains
+  `~/.config/kitty/kitty.conf` and nothing else; check that the ctrl+shift
+  binds do not collide with macOS cmd binds.
+- Hosts: serenity switches.
+- Depends on: W0, W16.
+- PR title: `[serenity] …`.
+
 ### W17. Lint and convention checks in CI
 
 Two halves. The tooling half is #257: `checks.x86_64-linux.lint`
@@ -576,6 +608,63 @@ later step, not part of this item.
 - Hosts: none.
 - Depends on: nothing.
 
+### W20. nixflix from upstream; indexer list as a runtime sops file
+
+galactica's `DECISIONS.md` §10 already names the exit: upstream as the input,
+the indexer list behind a runtime file. The correction worth recording: the
+indexer *credentials* are already sops values passed as `{ _secret = path; }`.
+What the private fork hides is which trackers are used, and upstream needs
+`name` and `schemaName` at eval time, so no sops template can hide them
+today. The fix is a small upstream option, `nixflix.prowlarr.config.indexersFile`
+(nullable path), read at runtime, validated with `jq`, failing closed when
+the file is missing, unreadable, invalid or empty so a decrypt failure cannot
+repeat the #197 wipe. The whole list then becomes one opaque sops value,
+`nixflix/indexers`, with `restartUnits = [ "prowlarr-indexers.service" ]`
+since a list edit no longer changes the unit's store path.
+
+Three steps, in order, so the module code at the end is exactly what was
+rehearsed: contribute `indexersFile` upstream; do a normal fork bump to an
+upstream commit that contains it and switch galactica on the fork (indexers
+still from Nix, so nothing about them changes; the §10 reconciler check
+covers upstream 4.0.0's loopback-bind default and its new metadata service,
+which must not be mixed into the input swap); then swap the input to
+`kiriwalawren/nixflix` at that same commit and move the list into sops. The
+fork stays as the public 26.05 canary, since upstream CI only runs on
+unstable: merge upstream into the fork, wait for its CI, pin this repo to
+the upstream commit the merge brought in. Pinning discipline is unchanged.
+Do not build a `mkForce` copy of the reconciler unless upstream refuses the
+option.
+
+What it buys: CI without `NIXFLIX_EXP_TOKEN`, no private input for
+galactica (the `nixflix/githubAccessToken` secret and the `nix.conf`
+`!include` go), every session evaluating galactica, and a flake anyone can
+`nix flake check` and borrow from. At the switch only `prowlarr-indexers`
+re-runs; if every `name` matches, each indexer is updated in place and
+nothing is deleted or re-synced.
+
+- Files: `flake.nix`, `flake.lock`; `hosts/galactica/nixflix.nix`;
+  `.github/workflows/nix-check.yml`, `update-apps.yml`;
+  `.claude/hooks/flake-check-sandboxed.sh` (comment); `CLAUDE.md` (last
+  Workflow bullet); `hosts/galactica/DECISIONS.md` (a §10 successor);
+  `hosts/galactica/MANUAL-STEPS.md` §#<PR>; this document's §1.
+- Proof: W0 against the base shows galactica changing only in
+  `prowlarr-indexers` and `nix.conf`, every other host unchanged; CI green
+  with the `NIXFLIX_EXP_TOKEN` secret deleted; a session without
+  `nixflix-exp` evaluates galactica; after the switch,
+  `journalctl -u prowlarr-indexers -b` shows every indexer updated and none
+  deleted.
+- Hosts: galactica switches.
+- Depends on: the upstream `indexersFile` PR merged; the fork bump that
+  contains it switched first; W0.
+- Owner steps (the PR's MANUAL-STEPS section): open the upstream PR from a
+  branch cut from `upstream/main`; the fork bump and switch; add
+  `nixflix/indexers` to `secrets/galactica.yaml` with names copied exactly,
+  before the switch; switch and check the journal and Prowlarr's Test All;
+  delete the Actions secret and revoke the PAT, drop
+  `nixflix/githubAccessToken`; delete `galactica/` from the fork, scrub it
+  from the fork's git history, then make the fork public.
+- PR title: `[galactica] nixflix from upstream; indexer list from sops`.
+
 ## 4. Dependency graph
 
 PR nodes are the open pull requests this plan waits on. The dashed node is a
@@ -599,6 +688,7 @@ graph TD
   P141["#141 Home Assistant"]:::pr
   P129["#129 / #144 pegasus home.nix"]:::pr
   PiDecision(["Pi resolver rebuild decision<br/>hopper DECISIONS §5"]):::decision
+  UpstreamPR(["upstream nixflix indexersFile PR"]):::decision
 
   W0["W0 eval-diff script + CI job"]
   W1["W1 Tailscale module"]
@@ -617,6 +707,8 @@ graph TD
   W14["W14 NUT server module"]:::runtime
   W15["W15 Move service-hardening"]
   W16["W16 home/desktop.nix"]
+  W16a["W16a Shared kitty settings"]:::runtime
+  W20["W20 nixflix from upstream + sops indexers"]:::runtime
   P257["#257 checks/lint"]:::pr
   W17["W17 Lint + convention checks"]
   W18["W18 Review tiers + delta re-reviews"]
@@ -630,6 +722,9 @@ graph TD
   W0 --> W11
   W0 --> W15
   W0 --> W16
+  W16 --> W16a
+  W0 --> W20
+  UpstreamPR --> W20
   W0 --> W18
   P257 --> W17
   W17 -.-> W18
@@ -688,7 +783,9 @@ anywhere else.
 
 **Wave 3, runtime changes, one host per PR.** W9 (memory-alpha's edge), W10
 (agents on galactica and pegasus), W14 when galactica takes the UPS, W13 when
-the Pis are rebuilt. Each carries a deploy checklist in the PR body and a
+the Pis are rebuilt, W16a (serenity's kitty), and W20 once the upstream
+nixflix option has landed and the fork bump that carries it has been
+switched. Each carries a deploy checklist in the PR body and a
 `MANUAL-STEPS.md` section keyed by its PR number.
 
 ## 6. Not in scope
