@@ -58,6 +58,14 @@ configuration byte-identical.
 W5, W9, W10, W13 and W14 change what runs. They carry deploy checklists and go
 one host at a time.
 
+**majel is the canary.** The Home Assistant host (`hosts/majel/`, onboarding
+plan in #253) joins the fleet early and carries nothing stateful until Home
+Assistant itself arrives, which is the last piece of software to migrate.
+Until then it is the first host to take every shared module it uses and the
+first to run any deploy automation (W24), so a bad change lands on a box that
+can be reimaged without losing anything. galactica stays last in every
+rollout.
+
 **Review cost is a design input.** Every PR here goes through
 `merge-after-review`: a fresh adversarial reviewer plus CI, and a new
 reviewer for every fix round. The follow-up commits after #244 and #245 were
@@ -85,7 +93,8 @@ the branch has no merge base in the shallow clone used for this check.
 | #139 | `nrs`/`nrt`/`drs` through `scripts/nrebuild.sh` with a branch banner | unverified | Decide before W3. W3 generates whatever alias shape #139 settles on. |
 | #36 | pegasus Beszel agent via nixpkgs' native `services.beszel.agent` | unverified, Aug 2026 | Superseded by `beszel-agent.nix` on `main`. Close, but W10 takes its finding: nixpkgs has a native agent module. |
 | #84 | Colmena hive | conflicts, galactica missing | Park. W4's `mkHost` should expose each host's module list so `colmena.nix` can consume it instead of re-listing modules, which was #84's stated pain. Revisit after W4. |
-| #141 | Home Assistant on memory-alpha as a compose-in-systemd container | unverified, large | Not a refactor PR, but its `home-assistant.nix` is a future W8 consumer and it edits `traefik.nix`, so it lands before W9 or is rebased after, never during. |
+| #141 | Home Assistant on memory-alpha as a compose-in-systemd container | unverified, large | Lands last: Home Assistant is the final piece of software to migrate, after W9 and after majel is up, so it is rebased onto the shared Traefik module and the W8 helper rather than landing on the compose stack (decision 4). |
+| #253 | majel: onboarding plan and decision log for the Home Assistant host | docs only | Merge early. majel is the canary host for this plan and for W24. |
 | #129, #144 | Syncthing peers; ChatGPT desktop package | unverified | Both rewrite `hosts/pegasus/home.nix` heavily. Land or close before W3 and W16 touch that file. |
 | #39 / #40 | Unification survey and tracking issue | docs only | Close #39. Replace #40's checklist with a pointer here, or close it. |
 
@@ -372,7 +381,8 @@ PR with a deploy checklist in `hosts/memory-alpha/MANUAL-STEPS.md`:
   compose labels, plus `jellyfin.internal`.
 - Hosts: memory-alpha switches, with the acme.json copy and the
   `homelab-stacks` grep first. Expect one edge restart.
-- Depends on: W6, W7, #208; #141 landed or rebased.
+- Depends on: W6, W7, #208. #141 follows W9 (decision 4), so W9 does not
+  wait on it.
 - PR title: `[memory-alpha] …`.
 
 ### W10. Agents off compose
@@ -808,12 +818,14 @@ can `switch-to-configuration switch` the previous profile itself, which is
 the part this item has to write.
 
 The per-host shape, deferred with decision 10 but drafted against comin's
-modes: hopper and hamilton `without` once ephemeral (§5), pulling the
-aarch64 closure from memory-alpha; memory-alpha `auto` with a delay and the
-health hook, after a canary month; pegasus `manual` with
-`services.comin.desktop` notifications and a one-command confirm; serenity
-`manual` through the darwin module; galactica `manual`, or comin not
-installed there at all, since nothing on it should switch unattended.
+modes: majel `without` from the day it joins, as the canary, since it holds
+nothing stateful until Home Assistant arrives last; hopper and hamilton
+`without` once ephemeral (§5), pulling the aarch64 closure from memory-alpha;
+memory-alpha `auto` with a delay and the health hook, after a canary month on
+majel; pegasus `manual` with `services.comin.desktop` notifications and a
+one-command confirm; serenity `manual` through the darwin module; galactica
+`manual`, or comin not installed there at all, since nothing on it should
+switch unattended.
 
 - Files: `flake.nix` (the `comin` input), `modules/nixos/comin.nix` (a
   `homelab.deploy` wrapper: confirmer mode, `MemoryMax`, the health and
@@ -826,10 +838,10 @@ installed there at all, since nothing on it should switch unattended.
   `testing-pegasus` branch deploys with `test` and vanishes at reboot. On
   memory-alpha, a deliberately failing unit makes the health hook switch
   back to the previous generation and notify.
-- Hosts: pegasus, then memory-alpha, then the Pis; galactica only in
-  `manual` mode, if at all.
-- Depends on: W0, W22, W4; the Pis also on the hopper §5 rebuild; and
-  decision 10 for the per-host modes.
+- Hosts: majel first, then pegasus, memory-alpha and the Pis; galactica
+  only in `manual` mode, if at all.
+- Depends on: W0, W22, W4, majel joined (#253); the Pis also on the hopper
+  §5 rebuild; and decision 10 for the per-host modes.
 
 ## 4. Dependency graph
 
@@ -852,7 +864,8 @@ graph TD
   P208["#208 memory-alpha socket proxy"]:::pr
   P209["#209 homelab.alerts"]:::pr
   P139["#139 nrebuild.sh aliases"]:::pr
-  P141["#141 Home Assistant"]:::pr
+  P141["#141 Home Assistant (last)"]:::pr
+  P253["#253 majel joins the fleet"]:::pr
   P129["#129 / #144 pegasus home.nix"]:::pr
   PiDecision(["Pi resolver rebuild decision<br/>hopper DECISIONS §5"]):::decision
   UpstreamPR(["upstream nixflix indexersFile PR"]):::decision
@@ -925,7 +938,9 @@ graph TD
   W6 --> W9
   W7 --> W9
   P208 --> W9
-  P141 -.-> W9
+  W9 --> P141
+  W8 -.-> P141
+  P253 --> W24
   P207 --> W10
   P248["#248 pegasus Beszel agent"]:::pr
   P248 --> W10
@@ -965,7 +980,9 @@ anywhere else.
 the Pis are rebuilt, W16a (serenity's kitty), and W20 once the upstream
 nixflix option has landed and the fork bump that carries it has been
 switched. Each carries a deploy checklist in the PR body and a
-`MANUAL-STEPS.md` section keyed by its PR number.
+`MANUAL-STEPS.md` section keyed by its PR number. Home Assistant (#141) is
+the last piece of software to migrate and comes after everything above, on
+majel.
 
 **Deferred, not in any wave.** W22, W23 and W24 wait on decision 10. W22
 could join Wave 1 at any time if the owner wants the secrets check on its
@@ -998,10 +1015,10 @@ own.
 3. [ ] **W7's upstream location.** Port in the registry entry versus port in the
    service file joined by name. Recommendation: service file, as written above,
    so a port change is one edit where the service is defined.
-4. [ ] **W9 timing relative to #141.** Land Home Assistant on the compose
-   Traefik first and migrate it with W9, or rebase #141 onto the shared module
-   after W9. Recommendation: after, since #141 is large and W9 changes the file
-   it edits.
+4. [x] **W9 timing relative to #141.** Settled: after. Home Assistant is the
+   last piece of software to migrate into the fleet, so #141 is rebased onto
+   the shared Traefik module and the W8 helper once both exist, and W9 does
+   not wait on it.
 5. [x] **W10's Beszel agent.** Native nixpkgs module or `oci-containers`.
    Settled by #248: the pinned nixpkgs has `services.beszel.agent` with an
    `environmentFile`, and pegasus runs it. W10 follows for galactica.
