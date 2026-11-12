@@ -173,19 +173,36 @@
       map (line: builtins.head (nixpkgs.lib.splitString "=" line)) declarations;
 
     # ── Bambuddy's virtual-printer CA in the slicers' printer.cer ──
-    # OrcaSlicer trusts printers only via its bundled cert/printer.cer, and
-    # SLIC3R_FHS bakes its path into the binary, so the CA is appended in the
-    # package itself. serenity's casks: modules/darwin/slicer-certs.nix.
+    # OrcaSlicer trusts printers only via its bundled cert/printer.cer, whose
+    # path SLIC3R_FHS bakes into the binary. To keep the cached build, this
+    # symlinks it, extends a copy of printer.cer, and copies the files naming
+    # the store path with its hash swapped (pegasus DECISIONS.md, "Bambuddy CA
+    # without recompiling"). serenity's casks: modules/darwin/slicer-certs.nix.
     bambuddyCa = ./certs/bambuddy-vp-ca.crt;
     withBambuddyCa = appDir: pkg:
-      pkg.overrideAttrs (old: {
-        postInstall = (old.postInstall or "") + ''
-          cer=$out/share/${appDir}/cert/printer.cer
-          test -f "$cer"
-          [ -z "$(tail -c1 "$cer")" ] || echo >> "$cer"
-          cat ${bambuddyCa} >> "$cer"
-        '';
-      });
+      nixpkgs.legacyPackages.${pkg.stdenv.hostPlatform.system}.runCommand pkg.name {
+        inherit (pkg) meta;
+        passthru = pkg.passthru or { };
+        preferLocalBuild = true;
+        allowSubstitutes = false;
+      } ''
+        cp -rs --no-preserve=mode ${pkg} $out
+        old=$(basename ${pkg}) new=$(basename $out)
+        # Same name, so same length: the binary's offsets survive the swap.
+        [ "''${old:32}" = "''${new:32}" ]
+        grep -rlF "''${old:0:32}" ${pkg} > refs || true
+        while read -r f; do
+          dst=$out''${f#${pkg}}
+          rm "$dst"
+          sed "s|''${old:0:32}|''${new:0:32}|g" "$f" > "$dst"
+          chmod --reference="$f" "$dst"
+        done < refs
+        cer=$out/share/${appDir}/cert/printer.cer
+        rm "$cer"
+        cat ${pkg}/share/${appDir}/cert/printer.cer > "$cer"
+        [ -z "$(tail -c1 "$cer")" ] || echo >> "$cer"
+        cat ${bambuddyCa} >> "$cer"
+      '';
 
     # ── nixpkgs-apps for every host's Home Manager ──
     # Passed to each home.nix as `pkgsApps` (policy: docs/NIXPKGS-APPS.md).

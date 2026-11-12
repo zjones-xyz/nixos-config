@@ -1179,7 +1179,7 @@ fixed-output derivations with new uncached outputs (docs/NIXPKGS-APPS.md
        not list `prebuild.service`.
 5. [ ] Confirm a desktop notification reaches the Dux session ("pegasus
        prebuild ready" or "failed") while you're logged in.
-6. [ ] If a build hits the 16G cap (OrcaSlicer, Bambu Studio or codex), the
+6. [ ] If a build hits the 16G cap (Bambu Studio or codex), the
        log shows "OOM at 2 jobs x 4 cores" and a 1 × 2 retry. Only if that is
        killed too do you get one "out of memory" notification. Either way
        `systemctl status prebuild` must not say `oom-kill`.

@@ -71,7 +71,7 @@ batch priority"):
   the script, alive when the kernel kills a process inside it. That process
   is usually a compiler, but it can be `nix` itself. Builds run
   `maxJobs × cores` = 2 × 4, then 1 × 2 after a kill. A package that never
-  fits even then (OrcaSlicer, Bambu Studio and codex are the candidates) is
+  fits even then (Bambu Studio and codex are the candidates) is
   still built by `nrs`, uncapped.
 - **No systemd-oomd.** That `DECISIONS.md` entry keeps oomd off build
   cgroups because `MemoryHigh`'s throttling reads as memory pressure, so a
@@ -93,7 +93,7 @@ toplevel depends on the commit. A prebuild of commit X is the exact system
 `nrs` builds from a **clean** checkout of X, and the switch then compiles
 nothing. A dirty tree, or a different commit (a squash-merged bump lands on
 `main` as a new commit), changes only the small top-level derivations, not
-the packages: codex, OrcaSlicer and the rest stay built.
+the packages: codex, Bambu Studio and the rest stay built.
 
 ## Using it
 
