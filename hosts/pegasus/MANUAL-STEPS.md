@@ -1187,3 +1187,19 @@ fixed-output derivations with new uncached outputs (docs/NIXPKGS-APPS.md
        restart the prebuild or wait for it to finish (`restartIfChanged =
        false`). It can still wait on a derivation both are building at that
        moment; that's the lock wait in docs/PREBUILD.md, not this.
+
+## #259 OrcaSlicer's Bambuddy CA without recompiling — verify after the switch
+
+`withBambuddyCa` now wraps the cached `orca-slicer` instead of overriding it
+(DECISIONS.md, "Bambuddy CA without recompiling"). The switch should fetch
+Orca rather than compile it. §#166's checks still apply unchanged.
+
+1. [ ] Switch. `nrs` builds only two small `orca-slicer-2.4.2` derivations
+       (seconds), not a C++ compile.
+2. [ ] Re-run §#166 step 1. The last entry is still
+       `CN=Virtual Printer CA …` with Bambuddy's fingerprint.
+3. [ ] Launch OrcaSlicer. Home, Prepare and Device pages render (profiles
+       and images load from the new path).
+4. [ ] Connect to a queue- or archive-mode virtual printer (§#166 step 2).
+       OBN logs `lan_tls: ca_file=/nix/store/…-orca-slicer-2.4.2/share/OrcaSlicer/cert/printer.cer`
+       and `mqtt connect callback rc=0 (accepted)`, with no `code=-1`.
