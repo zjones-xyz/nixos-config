@@ -46,23 +46,30 @@ jobs:
       # Evaluation still runs on every change: that is what proves the flake is
       # well-formed. workflow_dispatch has no base to diff against and runs
       # everything.
+      #
+      # On a pull_request run HEAD is GitHub's merge of the PR into the current
+      # base, so the PR's own changes are HEAD against its first parent. The
+      # event's pull_request.base.sha is the base as it stood when the PR was
+      # opened, not the current tip, so diffing against it drags in everything
+      # the base has taken since and defeats the skip.
       - name: Detect a docs-only change
         id: scope
         run: |
           case "${{ github.event_name }}" in
-            pull_request) base="${{ github.event.pull_request.base.sha }}" ;;
+            pull_request) base="HEAD^1" ;;
             push)         base="${{ github.event.before }}" ;;
             *)            base="" ;;
           esac
           docs_only=false
           if [ -n "$base" ] && git cat-file -e "$base^{commit}" 2>/dev/null; then
-            changed=$(git diff --name-only "$base...HEAD")
+            changed=$(git diff --name-only "$base" HEAD)
             if [ -n "$changed" ] && ! grep -qvE '\.md$|^docs/|^\.claude/' <<<"$changed"; then
               docs_only=true
             fi
           fi
           echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
           echo "docs_only=$docs_only"
+          printf '%s\n' "$changed" | head -40
 
       # ── Soft lint: incident-narrative dates in .nix comments ──
       # CLAUDE.md's style section keeps dates (and the journal excerpts they
