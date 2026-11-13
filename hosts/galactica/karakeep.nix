@@ -35,6 +35,13 @@ in
     MEILI_MASTER_KEY=${config.sops.placeholder."karakeep/meiliMasterKey"}
   '';
 
+  # Gemini API key for tagging and embeddings. Its own template so only
+  # karakeep-web gets it, not Meilisearch.
+  sops.secrets."karakeep/geminiApiKey" = { };
+  sops.templates."karakeep-ai.env".content = ''
+    OPENAI_API_KEY=${config.sops.placeholder."karakeep/geminiApiKey"}
+  '';
+
   systemd.tmpfiles.rules = [
     "d ${dataDir} 0750 root root - -"
     "d ${dataDir}/data 0750 root root - -"
@@ -84,8 +91,22 @@ in
         NEXTAUTH_URL = "https://karakeep.zjones.dev";
         # Locked down — see MANUAL-STEPS.md §15.
         DISABLE_SIGNUPS = "true";
+
+        # ── AI tagging + semantic search: Gemini via its OpenAI-compatible API ──
+        # Overriding the base URL turns embedding indexing off by default, hence
+        # the explicit enable. gemini-embedding-001 returns 3072 dimensions
+        # unless asked otherwise; Karakeep's 1536 default would mismatch.
+        OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
+        INFERENCE_TEXT_MODEL = "gemini-3.5-flash-lite";
+        INFERENCE_IMAGE_MODEL = "gemini-3.5-flash-lite";
+        EMBEDDING_TEXT_MODEL = "gemini-embedding-001";
+        EMBEDDING_DIMENSIONS = "3072";
+        EMBEDDING_ENABLE_AUTO_INDEXING = "true";
       };
-      environmentFiles = [ config.sops.templates."karakeep.env".path ];
+      environmentFiles = [
+        config.sops.templates."karakeep.env".path
+        config.sops.templates."karakeep-ai.env".path
+      ];
       volumes = [ "${dataDir}/data:/data" ];
       ports = [ "127.0.0.1:${toString port}:3000" ];
       extraOptions = [ "--network=karakeep" ];

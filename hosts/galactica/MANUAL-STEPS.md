@@ -2160,3 +2160,50 @@ would then remove them. Step 2 exempts them first.
 6. [ ] **Recyclarr.** After its next sync, Radarr's SQP-1 profile has a minimum
    custom-format score of 180. Too much junk getting through → set it to 1000
    in `nixflix.nix`.
+
+## #262 Karakeep on Gemini — owner steps
+
+`karakeep.nix` reads `karakeep/geminiApiKey`. A missing key fails
+**activation**, so step 2 had to happen before the switch.
+
+Switched from the PR branch on 2026-11-12. That switch also failed five
+containers on missing Docker networks, which the weekly `docker system prune`
+had deleted; recovered by restarting the network oneshots, and fixed for good
+in #263. Not caused by this PR.
+
+1. [ ] **Get a Gemini API key** at <https://aistudio.google.com/apikey>
+   (done) **and attach billing to its project** (pending). Until billing is
+   on, the free tier lets Google use the requests — bookmark text and
+   images — to improve its products, and that is already happening.
+2. [x] **Add it to sops** on galactica or serenity, the only hosts that can
+   decrypt `secrets/galactica.yaml`, under the existing `karakeep:` key:
+   ```sh
+   SOPS_AGE_KEY=$(sudo ssh-to-age -private-key -i /etc/ssh/ssh_host_ed25519_key) \
+     sops secrets/galactica.yaml
+   ```
+   ```yaml
+   karakeep:
+       geminiApiKey: <the key>
+   ```
+   Went to `main` as edd567e and was merged into the PR branch.
+3. [x] **Switch, then check tagging.** Add a bookmark; within a minute it
+   should carry AI tags. Verified 2026-11-12. If not:
+   ```sh
+   journalctl -u docker-karakeep-web --since -10min | grep -i -E 'inference|embedding|error'
+   ```
+   ⚠ A 404 naming the model means the model ID was retired: pick a current
+   Flash-Lite ID from <https://ai.google.dev/gemini-api/docs/models>.
+4. [ ] **Check embeddings separately.** Tags prove nothing about them:
+   Karakeep falls back to tagging when an embedding call fails. Look for
+   successful embedding jobs and no errors, then try a semantic search:
+   ```sh
+   journalctl -u docker-karakeep-web --since -1h | grep -i embedding
+   ```
+   Embeddings verified 2026-11-12: two new bookmarks generated and indexed
+   3072-dimension vectors, no errors. Still to do: a semantic search query.
+   ⚠ Karakeep sends up to 8000 characters (`EMBEDDING_CONTEXT_LENGTH`),
+   close to gemini-embedding-001's input limit. If long pages fail, lower it.
+5. [ ] **Backfill old bookmarks, after step 1.** Admin → Background jobs:
+   regenerate AI tags and re-run embeddings for all bookmarks. On the free
+   tier expect 429 rate limits; on a billed project it costs money, with no
+   spending cap set.
