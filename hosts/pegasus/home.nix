@@ -319,6 +319,14 @@ in
     })
   ];
 
+  # ── Java 21 (LTS) for tech screens ──────────────────────────────────────────
+  # programs.java rather than a bare package so JAVA_HOME is set for IDEs and
+  # build tools. Release nixpkgs: a toolchain, not an app-lane app.
+  programs.java = {
+    enable = true;
+    package = pkgs.jdk21;
+  };
+
   # ── kitty: launch zsh directly, not the login shell ─────────────────────────
   # Login shell stays bash (predictable non-interactive `ssh z@host cmd`
   # semantics — interactive-zsh.nix) and interactive bash execs into zsh
