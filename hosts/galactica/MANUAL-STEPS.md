@@ -2169,7 +2169,7 @@ would then remove them. Step 2 exempts them first.
 1. [ ] **Get a Gemini API key** at <https://aistudio.google.com/apikey>.
    Attach billing to the project: on the free tier Google may use the
    requests (your bookmarks' text) to improve its products.
-2. [ ] **Add it to sops** on galactica or serenity, the only hosts that can
+2. [x] **Add it to sops** on galactica or serenity, the only hosts that can
    decrypt `secrets/galactica.yaml`, under the existing `karakeep:` key:
    ```sh
    SOPS_AGE_KEY=$(sudo ssh-to-age -private-key -i /etc/ssh/ssh_host_ed25519_key) \
@@ -2179,7 +2179,8 @@ would then remove them. Step 2 exempts them first.
    karakeep:
        geminiApiKey: <the key>
    ```
-   Commit the encrypted file to this PR's branch.
+   Commit the encrypted file to this PR's branch. (Done; it went to
+   `main` as edd567e and was merged into this branch.)
 3. [ ] **Switch, then check tagging.** Add a bookmark; within a minute it
    should carry AI tags. If not:
    ```sh
