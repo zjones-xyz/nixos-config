@@ -1176,7 +1176,7 @@ fixed-output derivations with new uncached outputs (docs/NIXPKGS-APPS.md
 4. [ ] Confirm the caps: `systemctl show prebuild -p MemoryHigh -p MemoryMax
        -p MemorySwapMax -p OOMPolicy` reads `infinity`, `17179869184`,
        `2147483648` (bytes: 16G, 2G) and `continue`, and `oomctl` does
-       not list `prebuild.service`. (`MemoryHigh` was 12G until #NNN.)
+       not list `prebuild.service`. (`MemoryHigh` was 12G until #260.)
 5. [ ] Confirm a desktop notification reaches the Dux session ("pegasus
        prebuild ready" or "failed") while you're logged in.
 6. [ ] If a build hits the 16G cap (OrcaSlicer, Bambu Studio or codex), the
@@ -1188,7 +1188,7 @@ fixed-output derivations with new uncached outputs (docs/NIXPKGS-APPS.md
        false`). It can still wait on a derivation both are building at that
        moment; that's the lock wait in docs/PREBUILD.md, not this.
 
-## #NNN Prebuild — memory stall counts as an OOM
+## #260 Prebuild — memory stall counts as an OOM
 
 The prebuild no longer sets `MemoryHigh`, and a watchdog stops a build that
 stalls on memory (docs/PREBUILD.md). Tested only with a stub `nix` and a

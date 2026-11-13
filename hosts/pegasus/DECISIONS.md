@@ -1892,7 +1892,7 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   *Switches:* `restartIfChanged = false`, as nixpkgs does for nix-gc. A
   switch neither restarts a running prebuild nor waits for it to finish.
 - **Prebuild: no `MemoryHigh`; a memory stall counts as an OOM, 2026-11-12
-  (#NNN)** — the #244 prebuild had `MemoryHigh = 12G` under
+  (#260)** — the #244 prebuild had `MemoryHigh = 12G` under
   `MemoryMax = 16G`, and its 1 × 2 retry fired only on an OOM kill.
   *What happened:* a codex build (an uncached `overrideAttrs`, removed in
   #252) ran `cargo -j 4`, four rustc processes of 1.3–4.6 GB each. The
