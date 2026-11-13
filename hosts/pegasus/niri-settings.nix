@@ -317,6 +317,8 @@ in
           { namespace = "^dms:notification-popup$"; }
           { namespace = "^dms:notification-center-popout$"; }
           { namespace = "^dms:polkit-auth-surface$"; }
+          { namespace = "^noctalia-notification$"; }
+          { namespace = "^noctalia-(attached-)?panel$"; }
         ];
         block-out-from = "screencast";
       }
@@ -344,7 +346,7 @@ in
       # is installed on this host.
       "Super+Alt+L" = {
         hotkey-overlay.title = "Toggle Lock Screen";
-        action = spawn "dms" "ipc" "lock" "lock";
+        action = spawn "shell-ipc" "lock";
       };
 
       # Screen reader toggle — kept from the original template as a
@@ -356,35 +358,33 @@ in
         action = spawn-sh "pkill orca || exec orca";
       };
 
-      # Volume/brightness routed through DMS instead of the original
-      # template's raw wpctl/brightnessctl calls, so DMS's own on-screen
-      # volume/brightness indicators actually fire — matches DMS's own
-      # distro/nix/niri.nix bind list exactly (including its brightness
-      # action's odd trailing empty-string argument, which is upstream's,
-      # not a typo here).
+      # Volume/brightness routed through the shell instead of the original
+      # template's raw wpctl/brightnessctl calls, so its on-screen indicators
+      # actually fire. shell-ipc (modules/nixos/desktop-noctalia.nix) picks
+      # Dux or Noctalia for the session and holds the actual commands.
       "XF86AudioRaiseVolume" = {
         allow-when-locked = true;
-        action = spawn "dms" "ipc" "audio" "increment" "3";
+        action = spawn "shell-ipc" "volume-up";
       };
       "XF86AudioLowerVolume" = {
         allow-when-locked = true;
-        action = spawn "dms" "ipc" "audio" "decrement" "3";
+        action = spawn "shell-ipc" "volume-down";
       };
       "XF86AudioMute" = {
         allow-when-locked = true;
-        action = spawn "dms" "ipc" "audio" "mute";
+        action = spawn "shell-ipc" "mute";
       };
       "XF86AudioMicMute" = {
         allow-when-locked = true;
-        action = spawn "dms" "ipc" "audio" "micmute";
+        action = spawn "shell-ipc" "micmute";
       };
       "XF86MonBrightnessUp" = {
         allow-when-locked = true;
-        action = spawn "dms" "ipc" "brightness" "increment" "5" "";
+        action = spawn "shell-ipc" "brightness-up";
       };
       "XF86MonBrightnessDown" = {
         allow-when-locked = true;
-        action = spawn "dms" "ipc" "brightness" "decrement" "5" "";
+        action = spawn "shell-ipc" "brightness-down";
       };
 
       # Media transport keys (play/pause/etc) have no DMS equivalent — kept
@@ -597,35 +597,35 @@ in
       # for the actual install (see DECISIONS.md and
       # modules/nixos/desktop-niri.nix). These lines are transcribed
       # directly from DMS's distro/nix/niri.nix so they match upstream's
-      # own bind set.
+      # own bind set, now behind shell-ipc.
       "Mod+Space" = {
         hotkey-overlay.title = "Toggle Application Launcher";
-        action = spawn "dms" "ipc" "spotlight" "toggle";
+        action = spawn "shell-ipc" "launcher";
       };
       "Mod+N" = {
         hotkey-overlay.title = "Toggle Notification Center";
-        action = spawn "dms" "ipc" "notifications" "toggle";
+        action = spawn "shell-ipc" "notifications";
       };
       "Mod+Comma" = {
         hotkey-overlay.title = "Toggle Settings";
-        action = spawn "dms" "ipc" "settings" "toggle";
+        action = spawn "shell-ipc" "settings";
       };
       "Mod+P" = {
         hotkey-overlay.title = "Toggle Notepad";
-        action = spawn "dms" "ipc" "notepad" "toggle";
+        action = spawn "shell-ipc" "notepad";
       };
       "Mod+X" = {
         hotkey-overlay.title = "Toggle Power Menu";
-        action = spawn "dms" "ipc" "powermenu" "toggle";
+        action = spawn "shell-ipc" "powermenu";
       };
       "Mod+V" = {
         hotkey-overlay.title = "Toggle Clipboard Manager";
-        action = spawn "dms" "ipc" "clipboard" "toggle";
+        action = spawn "shell-ipc" "clipboard";
       };
       "Mod+Alt+N" = {
         allow-when-locked = true;
         hotkey-overlay.title = "Toggle Night Mode";
-        action = spawn "dms" "ipc" "night" "toggle";
+        action = spawn "shell-ipc" "night";
       };
     };
   };

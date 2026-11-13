@@ -1207,3 +1207,64 @@ fake `memory.pressure`.
        retry. It must not sit at 16G for hours.
 4. [ ] If a healthy build is ever stopped as a "memory stall", note the
        "full" `avg300` it showed and raise `memoryStall.percent` above it.
+
+## #237 Niri (Noctalia) and Umbriel sessions — first switch and trial
+
+Adds two SDDM sessions beside plain Niri + Dux, which stays the default.
+Session wiring was checked in a VM first. Everything below is what the VM
+couldn't reach. Reasoning in `DECISIONS.md` (Noctalia and Umbriel entry).
+
+Before the switch:
+
+1. [ ] `sudo nixos-rebuild switch --flake ~/nixos-config#pegasus` from a real
+   terminal. No restart of niri or Dux is needed, and the current session
+   keeps running.
+2. [ ] Still in the current session: `systemctl --user status dms` is active
+   and the shell binds (Mod+Space, Super+Alt+L, volume keys, Mod+P notepad)
+   still work. They now go through `shell-ipc`.
+
+Niri (Noctalia):
+
+3. [ ] Log out, pick **Niri (Noctalia)** in SDDM. Only Noctalia runs:
+   `systemctl --user is-active noctalia dms` prints `active`, then
+   `inactive`.
+4. [ ] Noctalia's first-run dialog offers an anonymous startup ping. Decide
+   on it there; nothing here sets it.
+5. [ ] The bar and panels land sensibly on all three monitors, portrait
+   included. Noctalia #4764 puts panels on the focused output.
+6. [ ] Launcher, notifications, lock and unlock, volume and mic-mute keys,
+   and a polkit prompt (`pkexec true` from a terminal).
+7. [ ] Screen share a window in a call: notifications and Noctalia panels
+   stay out of the stream (niri's layer rules).
+
+Umbriel:
+
+8. [ ] Log out, pick **Umbriel**. Check `umbriel-settings.nix` against the
+   real outputs (`umbriel outputs`, or Noctalia's display settings): the
+   three identities match, the portrait panel's `transform = "270"` is the
+   right way round, and the `3840x2160@60` modes take.
+9. [ ] Autostart opens Proton Bridge, Thunderbird and TickTick, and the
+   placement rules put them where niri does.
+10. [ ] NVIDIA checks: Electron apps (Vivaldi, Discord) at 1.5 scale don't
+    flash (Umbriel #590), and the GPU and CPU settle while locked
+    (Umbriel #507).
+11. [ ] An X11 game keeps running when it loses focus (Umbriel #557).
+12. [ ] Log out from Noctalia's session menu. If SDDM then says "An Umbriel
+    session is already running" (Umbriel #627), switch to a TTY and run
+    `systemctl --user stop umbriel.service`, then note it here.
+
+There is no stream privacy in this session (DECISIONS.md), so don't share a
+screen under Umbriel until the pin moves.
+
+Back on plain Niri:
+
+13. [ ] Log out to **Niri** and confirm Dux, not Noctalia, comes back up, as
+    in step 3.
+
+Moving `nixpkgs-umbriel` (once there's a reason to, like stream privacy):
+
+14. [ ] Rewrite the binds in `umbriel-settings.nix` from `action:arg` to
+    Umbriel's word-argument form, pick a nixpkgs-unstable rev whose
+    `umbriel` and `noctalia` are both past 2026-10-29, put it in `flake.nix`
+    and run `nix flake update nixpkgs-umbriel`. Then run
+    `umbriel config validate` on the generated config before switching.

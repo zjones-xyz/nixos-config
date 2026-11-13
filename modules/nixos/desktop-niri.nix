@@ -42,7 +42,8 @@
   # community comparison (chosen over Noctalia, 2026-08-11 — see
   # DECISIONS.md): more feature-complete, and this host is going multi-monitor
   # soon, which is Noctalia's one documented weak spot in the field reports
-  # that were checked.
+  # that were checked. Noctalia v5 is back on trial in its own sessions
+  # (desktop-noctalia.nix), and dms.service is gated off those sessions there.
   #
   # Uses DankMaterialShell's `nixosModules.dank-material-shell` (NixOS-level,
   # not the home-manager one) — deliberately, to match how every other

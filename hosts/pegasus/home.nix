@@ -9,6 +9,8 @@ in
   imports = [
     ../../modules/home/common.nix
     ./niri-settings.nix
+    ./noctalia-settings.nix
+    ./umbriel-settings.nix
   ];
 
   home.username = "z";
