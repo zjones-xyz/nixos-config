@@ -284,21 +284,8 @@ in
     # a container start on every boot would hold nine file-provider routes
     # hostage to a container that today proxies nothing.
 
-    # The shared network future containers join to become visible to Traefik.
-    # Mirrors hopper's docker-proxy-network unit; `docker network create` is not
-    # declarative, so it has to be a oneshot.
-    systemd.services.docker-proxy-network = {
-      description = "Create shared Docker proxy network";
-      after = [ "docker.service" ];
-      requires = [ "docker.service" ];
-      before = [ "docker-docker-socket-proxy.service" ];
-      requiredBy = [ "docker-docker-socket-proxy.service" ];
-
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        ExecStart = "${pkgs.bash}/bin/bash -c '${config.virtualisation.docker.package}/bin/docker network inspect proxy >/dev/null 2>&1 || ${config.virtualisation.docker.package}/bin/docker network create proxy'";
-      };
-    };
+    # The shared network containers join to become visible to Traefik
+    # (docker-networks.nix); each container on it adds itself.
+    homelab.dockerNetworks.proxy.services = [ "docker-docker-socket-proxy" ];
   };
 }

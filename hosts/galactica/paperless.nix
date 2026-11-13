@@ -70,24 +70,10 @@ in
 
   # Same reasoning as karakeep.nix's dedicated network: the webserver needs
   # to resolve `paperless-broker` by name, which the default bridge won't do.
-  systemd.services.docker-paperless-network = {
-    description = "Create the paperless container network";
-    after = [ "docker.service" ];
-    requires = [ "docker.service" ];
-    before = [
-      "docker-paperless-webserver.service"
-      "docker-paperless-broker.service"
-    ];
-    requiredBy = [
-      "docker-paperless-webserver.service"
-      "docker-paperless-broker.service"
-    ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStart = "${pkgs.bash}/bin/bash -c '${config.virtualisation.docker.package}/bin/docker network inspect paperless >/dev/null 2>&1 || ${config.virtualisation.docker.package}/bin/docker network create paperless'";
-    };
-  };
+  homelab.dockerNetworks.paperless.services = [
+    "docker-paperless-webserver"
+    "docker-paperless-broker"
+  ];
 
   # Every crypttab entry for `tank` is `nofail` (configuration.nix) — a
   # degraded boot with the array unimported is a real, supported state on

@@ -11,11 +11,7 @@
 # Ported from homelab-stacks memory-alpha/obico; MANUAL-STEPS.md §1.
 
 {
-  # `proxy` is created by traefik.nix's oneshot, not by this container.
-  systemd.services.docker-obico-ml-api = {
-    after = [ "docker-proxy-network.service" ];
-    requires = [ "docker-proxy-network.service" ];
-  };
+  homelab.dockerNetworks.proxy.services = [ "docker-obico-ml-api" ];
 
   virtualisation.oci-containers.containers.obico-ml-api = {
     # Upstream publishes no release tags, only `latest` and commit SHAs.
