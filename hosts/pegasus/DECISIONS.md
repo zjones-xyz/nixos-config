@@ -1861,6 +1861,8 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   adds them to `buildInputs`; `home.nix` does the same with `overrideAttrs`
   until the lane carries it. Side effect: codex is never cached while the
   override stands, so every bump compiles it locally (a large Rust build).
+  Dropped in #256 (2026-11-12): the lane's codex 0.167.1 carries the fix and
+  is cached again.
   *hermes-agent pin.* Hermes's `nix/pm-packages.nix` patches patchelf with
   NixOS/patchelf@59acc3d, written for 0.19.2. Between `1d06008` and `f4a03c0`
   unstable reverted patchelf to 0.15.2, where the patch fails, taking hermes's
