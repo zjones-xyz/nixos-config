@@ -88,8 +88,8 @@ the branch has no merge base in the shallow clone used for this check.
 | #207 | galactica beszel-agent via the socket proxy, proxy off the shared network | conflicts | Rebase and merge before W5 and W10: it adds the `dockerHost` option W10 keeps. |
 | #208 | memory-alpha socket proxy on its own compose network, pinned | clean | Merge before W9, which replaces the compose file it edits. |
 | #209 | `homelab.alerts`: ZED, smartd and failed-unit alerts to ntfy | clean | Merge. W14 uses it instead of `nut.nix`'s own ntfy script. |
-| #255 | Review friction: docs-only CI skip, union merges for run books, REST path in `merge-after-review`, branch hook | clean | Merge. The CI skip and union merges pay back on every PR below. |
-| #257 | `checks/lint`: shellcheck, actionlint, deadnix, statix in CI; ten findings fixed as no-ops | clean; touches the same `CLAUDE.md` bullets as #255, so whichever lands second merges `main` in | Merge. It is W17's lint half. |
+| #255 | Review friction: docs-only CI skip, union merges for run books, REST path in `merge-after-review`, branch hook | merged 2026-11-13 | Done. The CI skip and union merges pay back on every PR below. |
+| #257 | `checks/lint`: shellcheck, actionlint, deadnix, statix in CI; ten findings fixed as no-ops | merged 2026-11-13 | Done. It is W17's lint half. |
 | #139 | `nrs`/`nrt`/`drs` through `scripts/nrebuild.sh` with a branch banner | unverified | Decide before W3. W3 generates whatever alias shape #139 settles on. |
 | #36 | pegasus Beszel agent via nixpkgs' native `services.beszel.agent` | unverified, Aug 2026 | Superseded by `beszel-agent.nix` on `main`. Close, but W10 takes its finding: nixpkgs has a native agent module. |
 | #84 | Colmena hive | conflicts, galactica missing | Park. W4's `mkHost` should expose each host's module list so `colmena.nix` can consume it instead of re-listing modules, which was #84's stated pain. Revisit after W4. |
@@ -537,7 +537,7 @@ that is a list to decide cask-or-none on, not a module.
 
 ### W17. Lint and convention checks in CI
 
-Two halves. The tooling half is #257: `checks.x86_64-linux.lint`
+Two halves. The tooling half is merged as #257: `checks.x86_64-linux.lint`
 (`checks/lint/`) runs shellcheck at warning severity as bash, actionlint,
 deadnix with `--no-lambda-pattern-names` (otherwise every unused `lib`,
 `pkgs` or `config` in the mandated module signature is a finding) and statix
@@ -576,7 +576,7 @@ check applying only to files a PR touches until then (decision 9).
   needed a follow-up doc commit for one of these reasons flag; the others
   pass. Fixtures for each rule under `checks/conventions/`.
 - Hosts: none.
-- Depends on: #257 for the lint half, already open.
+- Depends on: nothing now; #257, the lint half, is merged.
 
 ### W18. Review tiers and delta re-reviews
 
