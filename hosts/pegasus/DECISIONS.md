@@ -1884,9 +1884,40 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   daemon's), hard caps (`MemoryMax = 16G`, `MemorySwapMax = 2G`), and that
   entry's reserve CPU option, a root-level `prebuild.slice` with
   `CPUWeight = idle`. oomd stays off it for the same reason it stays off the
-  daemon: `MemoryHigh`'s throttling reads as pressure.
+  daemon: `MemoryHigh`'s throttling reads as pressure. (`MemoryHigh` was
+  dropped three days later; see the next entry.)
   *What a kill costs:* `OOMPolicy = continue` keeps the script alive to
   report it, and the commit is retried at 1 job × 2 cores before **out of
   memory** is reported. A package that never fits is left to `nrs`.
   *Switches:* `restartIfChanged = false`, as nixpkgs does for nix-gc. A
   switch neither restarts a running prebuild nor waits for it to finish.
+- **Prebuild: no `MemoryHigh`; a memory stall counts as an OOM, 2026-11-12
+  (#260)** — the #244 prebuild had `MemoryHigh = 12G` under
+  `MemoryMax = 16G`, and its 1 × 2 retry fired only on an OOM kill.
+  *What happened:* a codex build (an uncached `overrideAttrs`, removed in
+  #252) ran `cargo -j 4`, four rustc processes of 1.3–4.6 GB each. The
+  cgroup sat at 12.0G of 12G for about 8 hours: `memory.events` showed
+  ~128M `high` events and 0 `max`/`oom`, `memory.pressure` "full" held
+  ~9.5%, and it swapped to zram. It never reached `MemoryMax`, so it never
+  retried or notified. `MemoryHigh` throttles, it never kills, so a build
+  big enough to need the retry parks at the throttle instead.
+  *Fix, two parts:* `MemoryHigh` is gone, so a build that outgrows the cap
+  reaches `MemoryMax` and the kernel kills it. That alone doesn't cover
+  thrashing *at* `MemoryMax`: with `MemorySwapMax` full, reclaim can keep
+  evicting and refaulting file pages, which counts as progress, so the
+  OOM killer may never fire. So the script also watches the cgroup's PSI:
+  "full" memory stall at 5% or more of a 30-minute window gets `nix` a
+  SIGTERM and is judged like an OOM kill (retry at 1 × 2, then **out of
+  memory**). 5% is about half what the stalled codex build showed; a
+  healthy build is near 0.
+  *Why PSI, not the alternatives:* `memory.events` `high` only counts while
+  `MemoryHigh` exists. A wall-clock budget can't tell a stall from a build
+  that is only CPU-starved, which `CPUWeight = idle` makes normal while
+  a game runs; PSI memory stall ignores CPU waits. Capping cargo's `-j`
+  separately isn't needed: `--cores` already sets it, and the 1 × 2 retry
+  is that cap. Raising `MemoryHigh` to just under `MemoryMax` would leave
+  the same parking zone, only smaller. oomd on the unit would kill the
+  script too, so nothing would retry or notify.
+  *Desktop:* 16G of a 64 GB host is still the hard bound, as before.
+  `MemoryHigh` was never what protected the session; it only slowed the
+  build.
