@@ -1179,7 +1179,7 @@ fixed-output derivations with new uncached outputs (docs/NIXPKGS-APPS.md
        not list `prebuild.service`. (`MemoryHigh` was 12G until #260.)
 5. [ ] Confirm a desktop notification reaches the Dux session ("pegasus
        prebuild ready" or "failed") while you're logged in.
-6. [ ] If a build hits the 16G cap (OrcaSlicer, Bambu Studio or codex), the
+6. [ ] If a build hits the 16G cap (Bambu Studio or codex), the
        log shows "OOM at 2 jobs x 4 cores" and a 1 × 2 retry. Only if that is
        killed too do you get one "out of memory" notification. Either way
        `systemctl status prebuild` must not say `oom-kill`.
@@ -1198,8 +1198,8 @@ fake `memory.pressure`.
        (`restartIfChanged = false` keeps it), it still has the old 12G
        `MemoryHigh`: `prebuild stop`, then `prebuild now -f`.
 2. [ ] Check `systemctl show prebuild -p MemoryHigh` reads `infinity`.
-3. [ ] On the next big build (codex until #252 lands, OrcaSlicer, Bambu
-       Studio), watch
+3. [ ] On the next big build (codex until #252 lands, Bambu Studio;
+       OrcaSlicer no longer compiles here, §#259), watch
        `cat /sys/fs/cgroup/prebuild.slice/prebuild.service/memory.pressure`.
        Then read the log, `/var/lib/prebuild/<branch>.log`. It should end
        in one of three ways: built, "OOM at 2 jobs x 4 cores", or "memory
@@ -1207,3 +1207,19 @@ fake `memory.pressure`.
        retry. It must not sit at 16G for hours.
 4. [ ] If a healthy build is ever stopped as a "memory stall", note the
        "full" `avg300` it showed and raise `memoryStall.percent` above it.
+
+## #259 OrcaSlicer's Bambuddy CA without recompiling — verify after the switch
+
+`withBambuddyCa` now wraps the cached `orca-slicer` instead of overriding it
+(DECISIONS.md, "Bambuddy CA without recompiling"). The switch should fetch
+Orca rather than compile it. §#166's checks still apply unchanged.
+
+1. [ ] Switch. `nrs` builds only two small `orca-slicer-2.4.2` derivations
+       (seconds), not a C++ compile.
+2. [ ] Re-run §#166 step 1. The last entry is still
+       `CN=Virtual Printer CA …` with Bambuddy's fingerprint.
+3. [ ] Launch OrcaSlicer. Home, Prepare and Device pages render (profiles
+       and images load from the new path).
+4. [ ] Connect to a queue- or archive-mode virtual printer (§#166 step 2).
+       OBN logs `lan_tls: ca_file=/nix/store/…-orca-slicer-2.4.2/share/OrcaSlicer/cert/printer.cer`
+       and `mqtt connect callback rc=0 (accepted)`, with no `code=-1`.
