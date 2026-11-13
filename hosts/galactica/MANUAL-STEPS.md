@@ -2160,3 +2160,33 @@ would then remove them. Step 2 exempts them first.
 6. [ ] **Recyclarr.** After its next sync, Radarr's SQP-1 profile has a minimum
    custom-format score of 180. Too much junk getting through → set it to 1000
    in `nixflix.nix`.
+
+## #262 Karakeep on Gemini — owner steps before the switch
+
+`karakeep.nix` now reads `karakeep/geminiApiKey`. A missing key fails
+**activation**, so step 2 has to happen before the switch.
+
+1. [ ] **Get a Gemini API key** at <https://aistudio.google.com/apikey>.
+   Attach billing to the project: on the free tier Google may use the
+   requests (your bookmarks' text) to improve its products.
+2. [ ] **Add it to sops** on galactica or serenity, the only hosts that can
+   decrypt `secrets/galactica.yaml`, under the existing `karakeep:` key:
+   ```sh
+   SOPS_AGE_KEY=$(sudo ssh-to-age -private-key -i /etc/ssh/ssh_host_ed25519_key) \
+     sops secrets/galactica.yaml
+   ```
+   ```yaml
+   karakeep:
+       geminiApiKey: <the key>
+   ```
+   Commit the encrypted file to this PR's branch.
+3. [ ] **Switch, then check tagging.** Add a bookmark; within a minute it
+   should carry AI tags. If not:
+   ```sh
+   journalctl -u docker-karakeep-web --since -10min | grep -i -E 'inference|embedding|error'
+   ```
+   ⚠ A 404 naming the model means the model ID was retired: pick a current
+   Flash-Lite ID from <https://ai.google.dev/gemini-api/docs/models>.
+4. [ ] **Backfill old bookmarks.** Admin → Background jobs: regenerate AI
+   tags and re-run embeddings for all bookmarks. Bookmarks saved before the
+   switch got neither.
