@@ -97,7 +97,11 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
 
 ## Workflow
 
-- `.md`/comment/bootstrap-script changes → commit straight to `main`.
+- `.md`/comment/bootstrap-script changes *may* go straight to `main`. Prefer
+  the branch when they belong to work already on one (a PR's run-book
+  section, a plan a PR is discussing), so the change and its review travel
+  together. CI runs on them either way but skips the memory-alpha build
+  when a change touches only Markdown, `docs/` or `.claude/`.
   Exception: `.claude/skills/**/SKILL.md` is executable markdown — an agent
   acts on it — so skill changes take the `.nix` route below, as `[all] …`.
 - Pending human/manual steps in markdown (`SECRETS-TODO.md`, `MANUAL-STEPS.md`,
@@ -115,7 +119,10 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
   don't go stale. It also leads back to the reasoning. A second section from the same
   PR in the same file takes a letter (`#155b`). New sections go at the end.
   Sections written before this rule keep their `§1`… numbers, so the many
-  existing cross-references stay valid.
+  existing cross-references stay valid. `DECISIONS.md` and `MANUAL-STEPS.md`
+  merge with `merge=union` (`.gitattributes`): two branches each appending a
+  section never conflict, but two edits to the same existing section are
+  combined silently, so read the result when both sides changed one.
 - `.nix`/config changes → feature branch + PR, title prefixed with the host scope
   in brackets, e.g. `[memory-alpha] …`, `[pegasus] …`, `[all] …`.
 - **Entry-only suffixes.** `/dashboard`, `/dns` and `/dhcp` after the host mark
@@ -136,26 +143,31 @@ requires deleting cached certs. Set `= false` per host once issuance is verified
   - When the switch order matters, the PR body says it, e.g. "switch
     memory-alpha, then galactica".
 - **Branch names carry no agent prefix and no generated words.** `nfs-cutover`,
-  not `claude/nfs-cutover` or `claude/nice-wozniak-vp619a` — name the branch for
-  the work, not for who did it. A session spawning another names the branch up
-  front (`create_session`'s `outcome_branch`); the generated shape is only what
-  you get when nobody passes one. A session already holding such a branch renames
-  it before opening the PR, via GitHub's branches page so an open PR follows —
-  pushing the new name and deleting the old one closes that PR instead.
-- **No branch name given? Settle one before the first push.** A session
-  started without one inherits a generated `claude/<words>-<id>` branch. Before
-  pushing anything, propose a name for the work (`nfs-cutover`) and push there
-  once the user confirms. A name in the request itself (`work on branch …`)
-  counts as that confirmation. `.claude/hooks/no-agent-branch.sh` enforces it:
-  it blocks creating or first-pushing a `claude/…` branch, and lets pushes to
-  ones that already exist on origin through.
+  not `claude/nfs-cutover`, `claude/nice-wozniak-vp619a` or `ccr-72fc92fc-…` —
+  name the branch for the work, not for who did it. A session spawning another
+  names the branch up front (`create_session`'s `outcome_branch`); the
+  generated shape is only what you get when nobody passes one. A session
+  already holding such a branch renames it before opening the PR, via GitHub's
+  branches page so an open PR follows — pushing the new name and deleting the
+  old one closes that PR instead.
+- **No branch name given? Name it from the request.** A session started
+  without one inherits a generated `claude/<words>-<id>` or `ccr-<hex>-<id>`
+  branch. Before the first push, pick a short descriptive name from the
+  user's first message (`nfs-cutover`), state it in the first reply, and push
+  there. No confirmation is needed; a name in the request itself
+  (`work on branch …`) wins. Naming conventions (prefixes, scopes) will be
+  listed here once the owner sets them. `.claude/hooks/no-agent-branch.sh`
+  enforces the ban: it blocks creating, renaming to, or first-pushing a
+  generated name, and lets pushes to ones already on origin through.
 - Validate with `nix flake check` / `nix eval`. On the Mac (aarch64-darwin) the
   Linux closures can be *evaluated* but not *built* (no Linux builder); building
   and every `switch` happen on the target host. The lint check runs locally
   with `nix build .#checks.x86_64-linux.lint`.
 - **In a Claude Code web session**, run `.claude/hooks/flake-check-sandboxed.sh`
   instead: it refetches every flake input over git+https, which the session's
-  GitHub proxy allows where the `github:` tarball fetch gets a 403. It still
-  fails on the private `nixflix` input until that repo is attached to the
-  session (`add_repo zjones-xyz/nixflix-exp`); do that first rather than
-  stubbing the input, so galactica is checked too.
+  GitHub proxy allows where the `github:` tarball fetch gets a 403. The
+  private `nixflix` input needs `zjones-xyz/nixflix-exp` on the session; the
+  NixOS cloud environment lists it, so a session started with it selected
+  checks galactica too. A session without it fails on that one input: say
+  so and ask for the attach (`add_repo`, which the owner approves) rather
+  than stubbing the input, which would leave galactica unchecked.

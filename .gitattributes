@@ -1,0 +1,7 @@
+# Per-host run books and decision logs grow by appending a section keyed by
+# PR number, so two branches touching the same file almost always both add
+# at the end. `union` keeps both sides instead of conflicting. It also
+# combines, silently, two edits to the same existing section, so read the
+# merged file when both sides changed one; new sections are always safe.
+hosts/*/DECISIONS.md merge=union
+hosts/*/MANUAL-STEPS.md merge=union
