@@ -8,8 +8,9 @@ compute*, and the answer is not necessarily the machine running the app — an
 Ollama endpoint is an HTTP call, so the model can live anywhere on the tailnet.
 
 Research only. Nothing here is deployed, and §7 lists what has to be measured
-before any of it should be. Meanwhile Karakeep tags with hosted Gemini
-(`hosts/galactica/karakeep.nix`), so a local model would replace that.
+before any of it should be. Meanwhile Karakeep uses hosted Gemini for tagging
+(text and images) and embeddings (`hosts/galactica/karakeep.nix`), so a local
+model would replace that.
 
 Dates are UTC. Prices are US street prices as of 2026-09-14.
 
