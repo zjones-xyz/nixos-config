@@ -41,28 +41,12 @@ in
     "d ${dataDir}/meilisearch 0750 root root - -"
   ];
 
-  # `docker network create` isn't declarative — same oneshot shape as
-  # traefik-galactica.nix's docker-proxy-network.
-  systemd.services.docker-karakeep-network = {
-    description = "Create the karakeep container network";
-    after = [ "docker.service" ];
-    requires = [ "docker.service" ];
-    before = [
-      "docker-karakeep-web.service"
-      "docker-karakeep-chrome.service"
-      "docker-karakeep-meilisearch.service"
-    ];
-    requiredBy = [
-      "docker-karakeep-web.service"
-      "docker-karakeep-chrome.service"
-      "docker-karakeep-meilisearch.service"
-    ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStart = "${pkgs.bash}/bin/bash -c '${config.virtualisation.docker.package}/bin/docker network inspect karakeep >/dev/null 2>&1 || ${config.virtualisation.docker.package}/bin/docker network create karakeep'";
-    };
-  };
+  # Own network so the three resolve each other by name (docker-networks.nix).
+  homelab.dockerNetworks.karakeep.services = [
+    "docker-karakeep-web"
+    "docker-karakeep-chrome"
+    "docker-karakeep-meilisearch"
+  ];
 
   # tank's crypttab entries are all `nofail` (configuration.nix) — a degraded
   # boot with the array unimported is a real state on this host, and without

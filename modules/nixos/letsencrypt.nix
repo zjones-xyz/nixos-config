@@ -7,8 +7,8 @@
   # The CA half of the staging/production switch lives here as a derived
   # option; only the storage path is per-host. traefik-galactica.nix consumes
   # it; ⟨follow-up: the three older Traefik modules still carry their own copy
-  # of the ternary, plus the shared ACME email, resolver pair and
-  # `docker-proxy-network` oneshot — collapse those when unifying them.⟩
+  # of the ternary, plus the shared ACME email and resolver pair — collapse
+  # those when unifying them.⟩
   options.homelab.letsencryptStaging = lib.mkOption {
     type = lib.types.bool;
     default = true;

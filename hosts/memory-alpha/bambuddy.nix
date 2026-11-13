@@ -77,9 +77,9 @@ in
 
   # The library is only wanted: printer control must come up even while
   # galactica is down. `rslave` lets a later NFS mount reach the container.
+  homelab.dockerNetworks.proxy.services = [ "docker-bambuddy" ];
   systemd.services.docker-bambuddy = {
-    after = [ "docker-proxy-network.service" "mnt-bambuddy_library.mount" ];
-    requires = [ "docker-proxy-network.service" ];
+    after = [ "mnt-bambuddy_library.mount" ];
     wants = [ "mnt-bambuddy_library.mount" ];
     wantedBy = [ "sys-subsystem-net-devices-eth\\x2dsecondary.device" ];
     unitConfig.RequiresMountsFor = [ dataDir ];

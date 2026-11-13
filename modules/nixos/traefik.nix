@@ -175,27 +175,18 @@ in
   sops.secrets."cloudflare/apiToken".owner = "z";
   sops.secrets."traefik/dashboardAuth".owner = "z";
 
-  systemd.services.docker-proxy-network = {
-    description = "Create shared Docker proxy network";
-    after = [ "docker.service" ];
-    wants = [ "docker.service" ];
-    before = [ "traefik-docker.service" ];
-    requiredBy = [ "traefik-docker.service" ];
-
-    serviceConfig = {
-      User = "z";
-      Type = "oneshot";
-      RemainAfterExit = true;
-      # Pin the bridge interface name (br-proxy) so the host firewall can trust
-      # it deterministically — Traefik reaches the native Jellyfin service over
-      # this bridge via host.docker.internal:host-gateway (see below).
-      ExecStart = "${pkgs.bash}/bin/bash -c '${pkgs.docker}/bin/docker network inspect proxy >/dev/null 2>&1 || ${pkgs.docker}/bin/docker network create --opt com.docker.network.bridge.name=br-proxy proxy'";
-    };
+  # Shared network (docker-networks.nix); each container on it adds itself.
+  homelab.dockerNetworks.proxy = {
+    services = [ "traefik-docker" ];
+    # Pin the bridge interface name (br-proxy) so the host firewall can trust
+    # it deterministically — Traefik reaches the native Jellyfin service over
+    # this bridge via host.docker.internal:host-gateway (see above).
+    createOptions = [ "--opt" "com.docker.network.bridge.name=br-proxy" ];
   };
 
   systemd.services.traefik-docker = {
     description = "Traefik reverse proxy";
-    after = [ "network-online.target" "docker.service" "docker-proxy-network.service" ];
+    after = [ "network-online.target" "docker.service" ];
     wants = [ "network-online.target" "docker.service" ];
     wantedBy = [ "multi-user.target" ];
 

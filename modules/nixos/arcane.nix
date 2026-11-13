@@ -52,16 +52,12 @@ in
   sops.secrets."arcane/encryptionKey".owner = "z";
   sops.secrets."arcane/jwtSecret".owner = "z";
 
-  # Both hop through docker-proxy-network's `proxy` network, defined in
-  # traefik.nix. List merging means this doesn't require editing that file.
-  systemd.services.docker-proxy-network = {
-    before = [ "arcane.service" ];
-    requiredBy = [ "arcane.service" ];
-  };
+  # Both hop through the `proxy` network (traefik.nix, docker-networks.nix).
+  homelab.dockerNetworks.proxy.services = [ "arcane" ];
 
   systemd.services.arcane = {
     description = "Arcane Docker manager";
-    after = [ "network-online.target" "docker.service" "docker-proxy-network.service" "traefik-docker.service" ];
+    after = [ "network-online.target" "docker.service" "traefik-docker.service" ];
     wants = [ "network-online.target" "docker.service" ];
     wantedBy = [ "multi-user.target" ];
 

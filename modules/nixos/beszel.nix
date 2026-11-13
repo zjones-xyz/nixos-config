@@ -48,9 +48,11 @@ in
 {
   sops.secrets."beszel/agentKey".owner = "z";
 
+  homelab.dockerNetworks.proxy.services = [ "beszel" ];
+
   systemd.services.beszel = {
     description = "Beszel monitoring (hub + agent)";
-    after = [ "network-online.target" "user@1000.service" "docker-proxy-network.service" "traefik-docker.service" ];
+    after = [ "network-online.target" "user@1000.service" "traefik-docker.service" ];
     wants = [ "network-online.target" "user@1000.service" ];
     wantedBy = [ "multi-user.target" ];
 
