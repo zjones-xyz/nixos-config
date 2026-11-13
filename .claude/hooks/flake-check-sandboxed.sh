@@ -24,6 +24,15 @@
 # uv.lock from it, which then fails "path … is not valid" on a fresh store.
 # Building only realises those eval-time paths plus the `checks` outputs
 # (cheap); nixosConfigurations toplevels are evaluated, never built.
+#
+# The git+https route only reaches repos the session is scoped to, and the
+# nixflix input is a *private* repo (zjones-xyz/nixflix-exp). The NixOS
+# cloud environment lists it, so a session started with it selected fetches
+# it like any other input. A session without it fails here on that one
+# input before any host is evaluated: attach the repo (add_repo, approved by
+# the owner) and re-run. Stubbing the input with a `--override-input nixflix
+# path:…` dummy flake also works but skips galactica's *arr stack, so it
+# only proves the other hosts.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
