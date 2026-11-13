@@ -197,6 +197,8 @@
           sed "s|''${old:0:32}|''${new:0:32}|g" "$f" > "$dst"
           chmod --reference="$f" "$dst"
         done < refs
+        # Else Orca would still read the old printer.cer, without the CA.
+        grep -rqF "$out/share/${appDir}" $out/bin
         cer=$out/share/${appDir}/cert/printer.cer
         rm "$cer"
         cat ${pkg}/share/${appDir}/cert/printer.cer > "$cer"

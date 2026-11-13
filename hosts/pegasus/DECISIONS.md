@@ -1902,8 +1902,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   which holds `SLIC3R_FHS_RESOURCES` (`<out>/share/OrcaSlicer`). The two
   paths have the same name, so they have the same length, and a same-length
   swap leaves every offset in the binary intact. Nix rewrites hashes the same
-  way for content-addressed paths. The build guards the name and fails if
-  `printer.cer` moves.
+  way for content-addressed paths. The build fails if the name differs, if
+  `printer.cer` moves, or if no file in `bin/` names the new resources path
+  afterwards (e.g. a future Orca storing it where the swap can't see it).
   *Why the binary has to change:* Orca never reads `printer.cer` itself. It
   hands `resources_dir() + "/cert"` to the network plugin
   (`set_cert_file`), and open-bamboo-networking loads `printer.cer` from that
@@ -1921,10 +1922,11 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   where the overridden build was one 311 MB output.
   *Alt rejected:* patching open-bamboo-networking to read an extra CA file
   (e.g. from an environment variable set in Orca's wrapper). It is just as
-  cheap, since OBN is built here anyway, but it is a C++ patch carried
-  across OBN bumps. It would also stop working if Orca went back to Bambu's
-  plugin, or ever read `printer.cer` itself. Upstream has no such option as
-  of OBN 2.3.0.
+  cheap, since OBN is built here anyway, and the owner doesn't expect to
+  return to Bambu's plugin, so tying the CA to OBN costs little. But it is a
+  C++ patch carried across a fast-moving upstream (2.2.0 → 2.3.0 touched 184
+  files), and it would miss the CA if Orca ever read `printer.cer` itself.
+  Upstream has no such option as of OBN 2.3.0. Revisit if it gains one.
   *Alt rejected:* bind-mounting the file over the store path with
   bubblewrap at launch. Orca's WebKit runs its own bubblewrap sandbox, and
   nesting the two is the riskier change.
