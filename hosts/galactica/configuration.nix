@@ -528,6 +528,11 @@
   # stays the local alerter.
   services.scrutinyCollector.enable = true;
 
+  # 01:00 rather than the default midnight, and clear of borgmatic's 01:30.
+  # Local time, not UTC: the module sets the container's TZ, without which this
+  # fires at 18:00.
+  services.scrutinyCollector.cronSchedule = "0 1 * * *";
+
   # ── Remote access for the dashboards (homepages.nix) ───────────────────────
   # Tailscale carries the admin homepage (and SSH) over the tailnet. authKeyFile
   # so a rebuilt host rejoins headless, same shape as hopper/pegasus/hamilton.

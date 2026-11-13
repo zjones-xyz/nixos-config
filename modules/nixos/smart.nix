@@ -43,6 +43,7 @@ in
     '';
   };
 
+
   options.homelab.smart.selfTests = lib.mkOption {
     type = lib.types.nullOr lib.types.str;
     default = null;
@@ -55,6 +56,41 @@ in
       Results surface through the attributes Scrutiny already collects (a long
       test that hits bad sectors moves 197/198) and the drive's self-test log,
       so a host shipping to the Scrutiny hub has somewhere a person looks.
+    '';
+  };
+
+  options.homelab.smart.standbyAware = lib.mkOption {
+    type = lib.types.bool;
+    default = false;
+    description = ''
+      Skip a disk's SMART poll while it is in standby, rather than spinning it
+      up to read attributes.
+
+      Defaults to false: on a host where nothing parks a disk the clause is
+      inert, and on one where something does, skipping checks should be a
+      deliberate choice rather than a fleet default. Enable it on hosts that
+      deliberately park disks — the 30-minute poll otherwise defeats every
+      spin-down on the box (galactica's PLATFORM.md §13e).
+
+      Deliberately *without* smartd's `,q` suffix: the "is in STANDBY mode"
+      line each skipped poll logs is the only cheap confirmation that the
+      spin-down is actually holding.
+
+      ⚠ Also without a `,N` count, which is a real gap rather than an
+      oversight: a disk that stays parked is never SMART-checked, for as long
+      as it stays parked. That is the right trade for disks awaiting physical
+      removal, and a deliberate blind spot if a live pool ever parks
+      long-term — `standby,N` forces a check every N skipped polls if it stops
+      being acceptable.
+
+      ⚠ This flag covers neither `-o on` nor `-s`, both of which stay in the
+      monitored string above. A drive's armed offline-collection routine can
+      spin it up on its own, and a scheduled self-test has to spin it up to
+      run at all — so on a host setting `selfTests` as well, the schedule
+      defeats the spin-down this flag is protecting, at whatever hour the
+      regex names. Neither is smartd's periodic poll, so neither shows as a
+      skipped-poll line; galactica's PLATFORM.md §13e item 1 keeps the
+      reasoning.
     '';
   };
 
@@ -71,8 +107,10 @@ in
         # Self-tests are opt-in per host (selfTests above): only hosts whose
         # SMART data reaches Scrutiny have anyone reading the result.
         # `-M daily`: re-warn while a problem persists, which keeps its
-        # login-message entry (below) fresh.
+        # login-message entry (below) fresh. ⚠ `-o on` and `-s` spin a parked
+        # disk up whatever `-n standby` says — see standbyAware's description.
         defaults.monitored = "-a -o on -S on -M daily"
+          + lib.optionalString config.homelab.smart.standbyAware " -n standby"
           + lib.optionalString (config.homelab.smart.selfTests != null)
             " -s ${config.homelab.smart.selfTests}";
 
