@@ -2181,7 +2181,8 @@ would then remove them. Step 2 exempts them first.
    ```
    Commit the encrypted file to this PR's branch. (Done; it went to
    `main` as edd567e and was merged into this branch.)
-3. [ ] **Switch, then check tagging.** Add a bookmark; within a minute it
+3. [x] **Switch, then check tagging.** Done 2026-11-12; new bookmarks get
+   tags. The switch first hit missing Docker networks (unrelated to this PR). Add a bookmark; within a minute it
    should carry AI tags. If not:
    ```sh
    journalctl -u docker-karakeep-web --since -10min | grep -i -E 'inference|embedding|error'
