@@ -568,6 +568,27 @@ branch URL: upstream commits most days, and the pin is what stops a routine
 input and move the indexer list behind a runtime file (an `indexersFile`-style
 option sent upstream). That would make the fork a pure canary again.
 
+## 11. Karakeep's AI runs on hosted Gemini, on a billed project
+
+**Karakeep tags and embeds bookmarks through Gemini's OpenAI-compatible API
+(#262): `gemini-3.5-flash-lite` for tags, `gemini-embedding-001` for semantic
+search. The project has billing on, so Google's paid terms apply and the
+content is not used to improve its products.**
+
+*Why hosted, not local:* `docs/LOCAL-INFERENCE.md` is still research with
+nothing measured, and Karakeep had no provider at all. A hosted model got
+tagging back now, for roughly $0.001–0.004 per bookmark.
+
+*Why Gemini over Claude:* one key covers both jobs. Anthropic has no
+embeddings endpoint, so semantic search would have needed a second provider.
+
+*Why billed:* on the free tier Google may use, and reviewers may read, every
+bookmark's text and images. The free tier ran for one evening (2026-11-12).
+
+*Reopen if:* a local model on the fleet meets `LOCAL-INFERENCE.md` §7's bar.
+Swapping is environment variables in `karakeep.nix` plus a re-embed, since
+vector dimensions differ between models.
+
 ## Carried forward from the VFIO plan
 
 Constraints and findings that were established under the previous design and

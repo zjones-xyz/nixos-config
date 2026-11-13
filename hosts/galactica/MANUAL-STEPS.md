@@ -2168,13 +2168,14 @@ would then remove them. Step 2 exempts them first.
 
 Switched from the PR branch on 2026-11-12. That switch also failed five
 containers on missing Docker networks, which the weekly `docker system prune`
-had deleted; recovered by restarting the network oneshots, and fixed for good
-in #263. Not caused by this PR.
+had deleted; recovered by restarting the network oneshots. Not caused by this
+PR; the lasting fix is pending in #263.
 
-1. [ ] **Get a Gemini API key** at <https://aistudio.google.com/apikey>
-   (done) **and attach billing to its project** (pending). Until billing is
-   on, the free tier lets Google use the requests — bookmark text and
-   images — to improve its products, and that is already happening.
+1. [x] **Get a Gemini API key** at <https://aistudio.google.com/apikey>
+   **and attach billing to its project.** On the free tier Google may use the
+   requests (bookmark text and images) to improve its products. Billing on
+   2026-11-12; the bookmarks saved before that went out under free-tier terms.
+   No spending cap is configured: set a budget alert in the project.
 2. [x] **Add it to sops** on galactica or serenity, the only hosts that can
    decrypt `secrets/galactica.yaml`, under the existing `karakeep:` key:
    ```sh
@@ -2194,16 +2195,29 @@ in #263. Not caused by this PR.
    ⚠ A 404 naming the model means the model ID was retired: pick a current
    Flash-Lite ID from <https://ai.google.dev/gemini-api/docs/models>.
 4. [ ] **Check embeddings separately.** Tags prove nothing about them:
-   Karakeep falls back to tagging when an embedding call fails. Look for
-   successful embedding jobs and no errors, then try a semantic search:
+   tagging and embedding are separate jobs, so one can work while the other
+   fails. Look for successful embedding jobs and no errors, then try a
+   semantic search:
    ```sh
    journalctl -u docker-karakeep-web --since -1h | grep -i embedding
    ```
    Embeddings verified 2026-11-12: two new bookmarks generated and indexed
    3072-dimension vectors, no errors. Still to do: a semantic search query.
+   ⚠ Karakeep drops semantic hits scoring under 0.75 in Meilisearch, so an
+   empty result can mean low scores rather than a broken index.
    ⚠ Karakeep sends up to 8000 characters (`EMBEDDING_CONTEXT_LENGTH`),
    close to gemini-embedding-001's input limit. If long pages fail, lower it.
-5. [ ] **Backfill old bookmarks, after step 1.** Admin → Background jobs:
-   regenerate AI tags and re-run embeddings for all bookmarks. On the free
-   tier expect 429 rate limits; on a billed project it costs money, with no
-   spending cap set.
+5. [ ] **Backfill old bookmarks.** Admin → Background jobs: regenerate AI
+   tags and re-run embeddings for all bookmarks. Roughly $0.001–0.004 per
+   bookmark at 2026-11 prices. ⚠ If the Unraid-era instance had AI tagging,
+   regenerating replaces those AI-attached tags with Gemini's; tags you added
+   by hand stay.
+
+Later, if needed:
+- **Rotating the key:** update `karakeep/geminiApiKey` in sops and switch,
+  then `sudo systemctl restart docker-karakeep-web`. The switch rewrites the
+  env file but does not restart the container.
+- **Long pages come back with no tags:** `gemini-3.5-flash-lite` reasons
+  before answering, and the reasoning counts against Karakeep's 2048-token
+  output cap. Set `OPENAI_REASONING_EFFORT = "low"` in `karakeep.nix`; it
+  also lowers cost.
