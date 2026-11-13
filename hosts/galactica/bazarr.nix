@@ -7,7 +7,7 @@
 # weighed (Bazarr+, Subliminal) and why they lost are in DECISIONS.md §9.
 
 let
-  nixflix = config.nixflix;
+  inherit (config) nixflix;
 
   mediaGroup = nixflix.globals.libraryOwner.group;
 
