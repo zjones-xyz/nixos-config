@@ -42,15 +42,30 @@ next run retries. Then, for each branch:
    result is in `prebuild status`, and their failures still notify.
 
 A build failure is recorded against that commit and not retried. An eval
-error, a failed download and a build killed by the memory cap below are
+error, a failed download and a build that ran out of memory (below) are
 retried on the next run, and notified only once per commit. A failed
 download is nix's own fetch failing or a fixed-output (fetcher) derivation
 failing, but never a hash mismatch, which is a real failure. Test output
-inside a build that mentions networking doesn't count. The memory case is
-read from the kernel's `oom_kill` count for the unit's own cgroup, not
-guessed from the log. A build killed by the cap is first retried in the same
-run at `lowMemory.maxJobs × lowMemory.cores` (1 × 2); only if that is killed
-too does **out of memory** notify.
+inside a build that mentions networking doesn't count.
+
+"Out of memory" is one of two things, both read from the kernel rather than
+guessed from the log:
+
+- **Killed at the cap.** The kernel's `oom_kill` count for the unit's own
+  cgroup went up during the build.
+- **Stalled at the cap.** A build can thrash at `MemoryMax` for hours
+  without the kernel ever killing anything, as long as reclaim keeps making
+  a little progress. While each build runs, a watchdog samples the cgroup's
+  `memory.pressure` every minute. Once the "full" stall (every task in the
+  cgroup waiting on memory at once) adds up to `memoryStall.percent` (5%) of
+  the last `memoryStall.minutes` (30), it sends `nix` SIGTERM, which stops
+  its builders, and the build counts as out of memory. A healthy build sits
+  near 0% full stall, so a slow build that is only short of CPU never
+  trips it.
+
+Either way the build is first retried in the same run at
+`lowMemory.maxJobs × lowMemory.cores` (1 × 2); only if that runs out too
+does **out of memory** notify.
 
 ## Staying out of the way
 
@@ -63,20 +78,25 @@ batch priority"):
   against the store directly instead of asking nix-daemon. Every compiler is
   then a child of `prebuild.service`, and its limits apply. nix-daemon's
   settings (`MemoryHigh = 40G`, `batch`) don't.
-- **Memory.** `MemoryHigh` (`memoryHigh`, 12G) throttles and reclaims and
-  `MemoryMax` (`memoryMax`, 16G) OOM-kills inside the unit only; both are
-  options. Hardcoded: `MemorySwapMax = 2G`, which stops it growing on in
-  zram, `OOMScoreAdjust = 1000`, which makes it the kernel's first choice
-  under global OOM, and `OOMPolicy = continue`, which keeps the unit, and so
-  the script, alive when the kernel kills a process inside it. That process
-  is usually a compiler, but it can be `nix` itself. Builds run
-  `maxJobs × cores` = 2 × 4, then 1 × 2 after a kill. A package that never
-  fits even then (Bambu Studio and codex are the candidates) is
+- **Memory.** `MemoryMax` (`memoryMax`, 16G) OOM-kills inside the unit
+  only. Hardcoded: `MemorySwapMax = 2G`, which stops it growing on in zram,
+  `OOMScoreAdjust = 1000`, which makes it the kernel's first choice under
+  global OOM, and `OOMPolicy = continue`, which keeps the unit, and so the
+  script, alive when the kernel kills a process inside it. That process is
+  usually a compiler, but it can be `nix` itself. Builds run
+  `maxJobs × cores` = 2 × 4, then 1 × 2 after a kill or a stall. A package
+  that never fits even then (Bambu Studio and codex are the candidates) is
   still built by `nrs`, uncapped.
-- **No systemd-oomd.** That `DECISIONS.md` entry keeps oomd off build
-  cgroups because `MemoryHigh`'s throttling reads as memory pressure, so a
-  pressure kill would fire at about 12G, before `MemoryMax` ever matters. The
-  prebuild follows it: oomd still watches the user slices only.
+- **No `MemoryHigh`.** It throttles a cgroup that goes over it but never
+  kills, so with it below `MemoryMax` a big build parks at the throttle
+  instead of reaching the kill and the retry. On 2026-11-12 a codex build
+  sat at a 12G `MemoryHigh` for about 8 hours with no kill, no retry and
+  no notification. On a 64 GB host, 16G is already the desktop's
+  protection; a lower soft limit only slows the build down.
+- **No systemd-oomd.** It would kill the whole unit, the script with it,
+  so nothing would retry or notify. The watchdog above does the
+  pressure-based part from inside the script. oomd still watches the user
+  slices only.
 - **CPU.** It runs in `prebuild.slice`, a root-level slice with
   `CPUWeight = idle`, so builds nearly stop while the desktop, a game or
   Ollama wants the CPU. This is the "alt kept in reserve" from that

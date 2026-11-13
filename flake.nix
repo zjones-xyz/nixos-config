@@ -243,6 +243,11 @@
       };
     };
 
+    checks.x86_64-linux.lint = import ./checks/lint {
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      src = ./.;
+    };
+
     nixosConfigurations = {
       memory-alpha = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
@@ -298,7 +303,7 @@
               # only serves a handful of recent stable builds and the flake
               # hasn't re-run its own update.sh since that commit. Override
               # to the current live build until upstream catches up.
-              operaBrowser = opera-flake.packages.x86_64-linux.opera.overrideAttrs (old: rec {
+              operaBrowser = opera-flake.packages.x86_64-linux.opera.overrideAttrs (_old: rec {
                 version = "135.0.5973.133";
                 src = nixpkgs.legacyPackages.x86_64-linux.fetchurl {
                   url = "https://download3.operacdn.com/ftp/pub/opera/desktop/${version}/linux/opera-stable_${version}_amd64.deb";

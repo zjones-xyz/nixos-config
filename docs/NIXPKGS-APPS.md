@@ -95,18 +95,18 @@ profile, servers and Pis included:
   package that already built locally before the bump never appears in it,
   even when the bump breaks it. That includes, for example, OrcaSlicer,
   Bambu Studio, open-bamboo-networking, HushMic, the overridden ticktick and
-  Claude Desktop, unfree apps that are never cached (zoom-us, opera), codex
-  while #242's override stands (#252), and hermes-agent's own toolchain
-  (#242's patchelf break was one). For those, a failure shows only at switch
-  time, or earlier in pegasus's background prebuild (docs/PREBUILD.md).
+  Claude Desktop, unfree apps that are never cached (zoom-us, opera), and
+  hermes-agent's own toolchain (#242's patchelf break was one). For those, a
+  failure shows only at switch time, or earlier in pegasus's background
+  prebuild (docs/PREBUILD.md).
 - **Closure cost.** Lane packages link unstable's glibc and other libraries,
   so the first one on a host adds those beside the release's. For herdr on
   aarch64 that is about 87 MiB, which lands even on the Pis' SD cards.
 - **Local compiles on pegasus.** Some lane apps there carry overrides or are
   unfree, so they build locally whenever a bump moves them (Bambu Studio,
-  open-bamboo-networking, HushMic, and codex while #252 is open, a large Rust
-  build). OrcaSlicer comes from the cache; only its Bambuddy CA copy (a few
-  seconds) is local. Budget that time at switch, or let pegasus's background
-  prebuild build them first (docs/PREBUILD.md). The list is in pegasus's
+  open-bamboo-networking, HushMic). OrcaSlicer comes from the cache; only its
+  Bambuddy CA copy (a few seconds) is local. Budget that time at switch, or
+  let pegasus's background prebuild build them first (docs/PREBUILD.md). The
+  list is in pegasus's
   `DECISIONS.md`, "Exposed apps on the fast lane" and "Lane exceptions from
   #242".

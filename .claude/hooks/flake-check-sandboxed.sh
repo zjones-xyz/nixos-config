@@ -26,13 +26,13 @@
 # (cheap); nixosConfigurations toplevels are evaluated, never built.
 #
 # The git+https route only reaches repos the session is scoped to, and the
-# nixflix input is a *private* repo (zjones-xyz/nixflix-exp) that no session
-# holds by default — so a fresh session fails here on that one input, before
-# any host is evaluated. The fix is to attach that repo to the session
-# (add_repo, or "add zjones-xyz/nixflix-exp" in the session's repo picker)
-# and re-run; galactica then evaluates like every other host. Stubbing the
-# input with a `--override-input nixflix path:…` dummy flake also works but
-# skips galactica's *arr stack, so it only proves the other hosts.
+# nixflix input is a *private* repo (zjones-xyz/nixflix-exp). The NixOS
+# cloud environment lists it, so a session started with it selected fetches
+# it like any other input. A session without it fails here on that one
+# input before any host is evaluated: attach the repo (add_repo, approved by
+# the owner) and re-run. Stubbing the input with a `--override-input nixflix
+# path:…` dummy flake also works but skips galactica's *arr stack, so it
+# only proves the other hosts.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 

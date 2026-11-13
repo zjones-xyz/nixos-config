@@ -37,7 +37,7 @@ let
     ];
   };
 
-  nixflix = config.nixflix;
+  inherit (config) nixflix;
 
   # Every routed service, as subdomain → upstream URL. Both halves come from
   # the service's own evaluated options — ⚠ hardcoding 127.0.0.1 breaks any

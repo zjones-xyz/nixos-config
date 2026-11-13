@@ -78,11 +78,7 @@ in
     # More terminal coding agents. On the app lane: they ship weekly and the
     # release's copies are months behind. Kimi and Hermes aren't in nixpkgs
     # and come from their upstream flakes (flake.nix; Hermes on its own pin).
-    # Unstable's 0.167.0 can't find AWS-LC; this is NixOS/nixpkgs#584667,
-    # merged but not yet on nixos-unstable. Drop once the lane carries it: #252.
-    (pkgsApps.codex.overrideAttrs (old: {
-      buildInputs = old.buildInputs ++ (with pkgsApps; [ aws-lc oniguruma sqlite zstd ]);
-    }))
+    pkgsApps.codex
     pkgsApps.github-copilot-cli
     pkgsApps.opencode
     pkgsApps.pi-coding-agent
@@ -105,7 +101,7 @@ in
     obsidian
     spotify
     # Ahead of nixpkgs-apps (8.0.11 on unstable) — drop once it catches up.
-    (pkgsApps.ticktick.overrideAttrs (finalAttrs: old: {
+    (pkgsApps.ticktick.overrideAttrs (finalAttrs: _old: {
       version = "8.0.20";
       src = fetchurl {
         url = "https://d2atcrkye2ik4e.cloudfront.net/download/linux/linux_deb_x64/ticktick-${finalAttrs.version}-amd64.deb";

@@ -1174,9 +1174,9 @@ fixed-output derivations with new uncached outputs (docs/NIXPKGS-APPS.md
        `systemd-cgls /prebuild.slice` shows the compilers, not
        `nix-daemon.service`.
 4. [ ] Confirm the caps: `systemctl show prebuild -p MemoryHigh -p MemoryMax
-       -p MemorySwapMax -p OOMPolicy` reads `12884901888`, `17179869184`,
-       `2147483648` (bytes: 12G, 16G, 2G) and `continue`, and `oomctl` does
-       not list `prebuild.service`.
+       -p MemorySwapMax -p OOMPolicy` reads `infinity`, `17179869184`,
+       `2147483648` (bytes: 16G, 2G) and `continue`, and `oomctl` does
+       not list `prebuild.service`. (`MemoryHigh` was 12G until #260.)
 5. [ ] Confirm a desktop notification reaches the Dux session ("pegasus
        prebuild ready" or "failed") while you're logged in.
 6. [ ] If a build hits the 16G cap (Bambu Studio or codex), the
@@ -1187,6 +1187,26 @@ fixed-output derivations with new uncached outputs (docs/NIXPKGS-APPS.md
        restart the prebuild or wait for it to finish (`restartIfChanged =
        false`). It can still wait on a derivation both are building at that
        moment; that's the lock wait in docs/PREBUILD.md, not this.
+
+## #260 Prebuild — memory stall counts as an OOM
+
+The prebuild no longer sets `MemoryHigh`, and a watchdog stops a build that
+stalls on memory (docs/PREBUILD.md). Tested only with a stub `nix` and a
+fake `memory.pressure`.
+
+1. [ ] After the switch, if a prebuild from before it is still running
+       (`restartIfChanged = false` keeps it), it still has the old 12G
+       `MemoryHigh`: `prebuild stop`, then `prebuild now -f`.
+2. [ ] Check `systemctl show prebuild -p MemoryHigh` reads `infinity`.
+3. [ ] On the next big build (codex until #252 lands, Bambu Studio;
+       OrcaSlicer no longer compiles here, §#259), watch
+       `cat /sys/fs/cgroup/prebuild.slice/prebuild.service/memory.pressure`.
+       Then read the log, `/var/lib/prebuild/<branch>.log`. It should end
+       in one of three ways: built, "OOM at 2 jobs x 4 cores", or "memory
+       stall at 2 jobs x 4 cores", each of the last two followed by a 1 × 2
+       retry. It must not sit at 16G for hours.
+4. [ ] If a healthy build is ever stopped as a "memory stall", note the
+       "full" `avg300` it showed and raise `memoryStall.percent` above it.
 
 ## #259 OrcaSlicer's Bambuddy CA without recompiling — verify after the switch
 
