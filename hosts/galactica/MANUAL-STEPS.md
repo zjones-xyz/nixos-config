@@ -2199,6 +2199,8 @@ in #263. Not caused by this PR.
    ```sh
    journalctl -u docker-karakeep-web --since -1h | grep -i embedding
    ```
+   Embeddings verified 2026-11-12: two new bookmarks generated and indexed
+   3072-dimension vectors, no errors. Still to do: a semantic search query.
    ⚠ Karakeep sends up to 8000 characters (`EMBEDDING_CONTEXT_LENGTH`),
    close to gemini-embedding-001's input limit. If long pages fail, lower it.
 5. [ ] **Backfill old bookmarks, after step 1.** Admin → Background jobs:
