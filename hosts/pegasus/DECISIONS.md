@@ -1849,6 +1849,80 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   in the private `dux-state` repo (#226).
   Hiding is by `node.name`, so it covers all four slots. Their volumes stay
   reachable through Dux Settings → Audio → Hidden, or through `wpctl`.
+- **Lane exceptions from #242, 2026-11-08** — two departures from
+  `docs/NIXPKGS-APPS.md`'s "one input, not a pin per app", both taken to
+  get pegasus switching after the #233 bump. Removal is tracked in #252,
+  because neither goes away on its own.
+  *codex override.* nixos-unstable `f4a03c0` added a `cargoUseSystemLibs`
+  hook to `cargo-setup-hook.sh`. It exports `AWS_LC_SYS_USE_SYSTEM`,
+  `RUSTONIG_SYSTEM_LIBONIG`, `LIBSQLITE3_SYS_USE_PKG_CONFIG` and
+  `ZSTD_SYS_USE_PKG_CONFIG`, but codex 0.167.0's package didn't provide those
+  libraries, so `aws-lc-sys`'s build script panicked. NixOS/nixpkgs#584667
+  adds them to `buildInputs`; `home.nix` does the same with `overrideAttrs`
+  until the lane carries it. Side effect: codex is never cached while the
+  override stands, so every bump compiles it locally (a large Rust build).
+  Dropped in #256 (2026-11-12): the lane's codex 0.167.1 carries the fix and
+  is cached again.
+  *hermes-agent pin.* Hermes's `nix/pm-packages.nix` patches patchelf with
+  NixOS/patchelf@59acc3d, written for 0.19.2. Between `1d06008` and `f4a03c0`
+  unstable reverted patchelf to 0.15.2, where the patch fails, taking hermes's
+  pinned node and ffmpeg down with it. Hermes's own `main` carries the same
+  patch, so an older hermes rev doesn't help. Hermes therefore follows
+  `nixpkgs-hermes`, pinned at `1d06008`, the last lane rev on 0.19.2. Cost:
+  a second unstable nixpkgs in the closure, for hermes only, and the
+  scheduled bump can't move it (the rev is in the URL).
+  *Alt rejected:* pinning the whole lane back to `1d06008` and overriding
+  opencode's `node_modules` hash there. That would have frozen every lane
+  app to fix two, against the policy's "an app that has to hold back gets
+  its own pin".
+- **Background prebuild with hard limits, 2026-11-09 (#244)** — a second
+  build path beside `nrs`: `modules/nixos/prebuild.nix` builds the bump PR
+  and `main` hourly, so a broken lane bump shows before merging and the
+  switch finds its packages built. Details in `docs/PREBUILD.md`.
+  *Why the opposite choices to the nix-daemon entry above:* that entry keeps
+  `nrs` builds soft-limited (`MemoryHigh` only, `batch`) because a kill fails
+  a switch partway. Nobody waits on a prebuild and a kill costs one retry, so
+  it runs with `NIX_REMOTE=local` (root builds in its own cgroup, not the
+  daemon's), hard caps (`MemoryMax = 16G`, `MemorySwapMax = 2G`), and that
+  entry's reserve CPU option, a root-level `prebuild.slice` with
+  `CPUWeight = idle`. oomd stays off it for the same reason it stays off the
+  daemon: `MemoryHigh`'s throttling reads as pressure. (`MemoryHigh` was
+  dropped three days later; see the next entry.)
+  *What a kill costs:* `OOMPolicy = continue` keeps the script alive to
+  report it, and the commit is retried at 1 job × 2 cores before **out of
+  memory** is reported. A package that never fits is left to `nrs`.
+  *Switches:* `restartIfChanged = false`, as nixpkgs does for nix-gc. A
+  switch neither restarts a running prebuild nor waits for it to finish.
+- **Prebuild: no `MemoryHigh`; a memory stall counts as an OOM, 2026-11-12
+  (#260)** — the #244 prebuild had `MemoryHigh = 12G` under
+  `MemoryMax = 16G`, and its 1 × 2 retry fired only on an OOM kill.
+  *What happened:* a codex build (an uncached `overrideAttrs`, removed in
+  #252) ran `cargo -j 4`, four rustc processes of 1.3–4.6 GB each. The
+  cgroup sat at 12.0G of 12G for about 8 hours: `memory.events` showed
+  ~128M `high` events and 0 `max`/`oom`, `memory.pressure` "full" held
+  ~9.5%, and it swapped to zram. It never reached `MemoryMax`, so it never
+  retried or notified. `MemoryHigh` throttles, it never kills, so a build
+  big enough to need the retry parks at the throttle instead.
+  *Fix, two parts:* `MemoryHigh` is gone, so a build that outgrows the cap
+  reaches `MemoryMax` and the kernel kills it. That alone doesn't cover
+  thrashing *at* `MemoryMax`: with `MemorySwapMax` full, reclaim can keep
+  evicting and refaulting file pages, which counts as progress, so the
+  OOM killer may never fire. So the script also watches the cgroup's PSI:
+  "full" memory stall at 5% or more of a 30-minute window gets `nix` a
+  SIGTERM and is judged like an OOM kill (retry at 1 × 2, then **out of
+  memory**). 5% is about half what the stalled codex build showed; a
+  healthy build is near 0.
+  *Why PSI, not the alternatives:* `memory.events` `high` only counts while
+  `MemoryHigh` exists. A wall-clock budget can't tell a stall from a build
+  that is only CPU-starved, which `CPUWeight = idle` makes normal while
+  a game runs; PSI memory stall ignores CPU waits. Capping cargo's `-j`
+  separately isn't needed: `--cores` already sets it, and the 1 × 2 retry
+  is that cap. Raising `MemoryHigh` to just under `MemoryMax` would leave
+  the same parking zone, only smaller. oomd on the unit would kill the
+  script too, so nothing would retry or notify.
+  *Desktop:* 16G of a 64 GB host is still the hard bound, as before.
+  `MemoryHigh` was never what protected the session; it only slowed the
+  build.
 
 - **`mimeapps.list` is forced, and drift is saved, 2026-11-04.** Apps that
   "set as default" or "always open with" swap Home Manager's link for a
