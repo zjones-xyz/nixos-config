@@ -29,6 +29,7 @@
     ../../modules/nixos/mouse-tools.nix
     ../../modules/nixos/printing.nix
     ../../modules/nixos/luks-remote-unlock.nix
+    ../../modules/nixos/prebuild.nix
     # olla-router.nix is deliberately parked: its build runs olla's own Go
     # test suite, which has a wall-clock assertion that fails under the Nix
     # sandbox. ollama.nix works standalone. Re-enable steps: MANUAL-STEPS §5.
@@ -37,6 +38,12 @@
 
   networking.hostName = "pegasus";
   networking.networkmanager.enable = true;
+
+  # Builds the bump PR and main in the background; see docs/PREBUILD.md.
+  services.prebuild = {
+    enable = true;
+    notifyUser = "z";
+  };
 
   # pegasus is where Tower's cards get flashed and probed, which is all lspci
   # work (hosts/galactica/PLATFORM.md §6). environment.systemPackages rather
