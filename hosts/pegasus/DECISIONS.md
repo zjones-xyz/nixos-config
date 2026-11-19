@@ -1932,8 +1932,10 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   *On `pkgsApps`, unlike `firefox`.* Its native program patches the Firefox
   runtime it bundles, so it has to keep pace with Firefox itself. Stable
   backports Firefox 158 but kept firefoxpwa at 2.18.2. Upstream says 158
-  needs 2.20.1, which unstable carries, built against the same 158.0.1. The
-  scheduled `nixpkgs-apps` bump keeps the two moving together.
+  needs 2.20.1, which unstable carries. The runtime it bundles is the lane's
+  own Firefox, separate from the browser that runs the extension, so the two
+  versions needn't match. The scheduled `nixpkgs-apps` bump keeps firefoxpwa
+  current with its runtime.
   *Default-profile prefs, via `user.js`.* Upstream defaults let the site
   drive the window title, the window icon and the toolbar colour. The
   default profile (the all-zero ULID) turns all of those off, so the window
