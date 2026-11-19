@@ -15,12 +15,21 @@ the exact commit that was reviewed.
 none of this. The skill is the only gate. Don't skip a step because GitHub
 would allow it.
 
+**Tooling.** A cloud session cannot use `gh` against pull requests: GitHub
+refuses GraphQL from those sessions with HTTP 403, and every `gh pr …`
+subcommand is GraphQL. Each step below names the `gh` command and its
+`mcp__github__*` equivalent (REST). Use whichever one answers; don't
+improvise a third route.
+
 ## 1. Pin the PR
 
 1. Resolve the PR: use the argument if one was given, otherwise
-   `gh pr view --json number`.
+   `gh pr view --json number`, or `list_pull_requests` with `head`
+   `zjones-xyz:<current branch>`.
 2. Read its state:
-   `gh pr view N --json number,title,state,isDraft,baseRefName,headRefName,headRefOid,mergeable,url`
+   `gh pr view N --json number,title,state,isDraft,baseRefName,headRefName,headRefOid,mergeable,url`,
+   or `pull_request_read` method `get` (the same fields as `state`, `draft`,
+   `base.ref`, `head.ref`, `head.sha`, `mergeable_state`).
 3. Stop and tell Zoe if any of these is true: it isn't `OPEN`, the base
    isn't `main`, or `mergeable` is `CONFLICTING`.
 4. If it's a draft, mark it ready for review: `gh pr ready N`, or
@@ -38,8 +47,10 @@ Start both, then wait for both.
 Its output repeats the table on every poll, so ignore the stale `pending`
 lines and go by its exit code plus a final plain `gh pr checks N`.
 In the desktop app, `mcp__ccd_pr__get_status` reads the same thing. Bind the
-PR with `bind_pr` first if it isn't bound. Don't schedule wakeups or cron jobs
-to poll it.
+PR with `bind_pr` first if it isn't bound. In a cloud session, read
+`pull_request_read` method `get_check_runs` once the reviewer has returned;
+`subscribe_pr_activity` delivers the result as an event if it isn't in yet.
+Don't schedule wakeups or cron jobs to poll it.
 
 **Review.** Spawn one `Agent` with `subagent_type: "general-purpose"` and
 `model: "opus"`. The project's settings default subagents to Sonnet, and the
@@ -58,8 +69,9 @@ merged. Assume there is at least one problem until you have looked hard.
 Rules:
 - Read-only. Do not push, commit, comment on, approve, or merge anything.
   Do not run anything with sudo or anything that switches a system.
-- Review exactly <SHA>: `gh pr diff N` and `git fetch origin <SHA>`, then read
-  files at that commit. If the PR head is no longer <SHA>, say so and stop.
+- Review exactly <SHA>: `gh pr diff N` (or `pull_request_read` method
+  `get_diff`) and `git fetch origin <SHA>`, then read files at that commit.
+  If the PR head is no longer <SHA>, say so and stop.
 - Read CLAUDE.md first. Its conventions are review criteria: the PR title
   scope and suffixes, comment budget, no incident narrative in .nix, masked
   serials, MANUAL-STEPS keyed by PR number, numbered checkboxes for pending
@@ -101,16 +113,20 @@ recorded decision, or make the PR's description false. Style nits and
 Merge only if **all** of these hold:
 
 1. The reviewer returned `VERDICT: APPROVE` and `BLOCKING: none`.
-2. Every check in `gh pr checks N` shows `pass` or `skipping`. Anything
-   else (`fail`, `pending`, `cancel`) blocks the merge. A `cancel` usually
+2. Every check in `gh pr checks N` shows `pass` or `skipping`; in
+   `get_check_runs` terms, every run is `completed` with conclusion
+   `success` or `skipped`. Anything else (`fail`, `pending`, `cancel`)
+   blocks the merge. A `cancel` usually
    means a newer push superseded the run (see the `concurrency` note in
    `.github/workflows/nix-check.yml`), and then item 4 fails and you go back
    to §1. If the head still equals SHA, the run was cancelled by hand or timed
    out: treat it as a CI failure.
 3. CI actually ran on SHA. GitHub has gone through stretches of not creating
    runs at all, and an empty `gh pr checks` is not a pass. Offer
-   `gh workflow run nix-check.yml --ref <headRefName>` and wait for it.
-4. `gh pr view N --json headRefOid` still equals SHA.
+   `gh workflow run nix-check.yml --ref <headRefName>` (or
+   `actions_run_trigger` method `run_workflow`, `workflow_id`
+   `nix-check.yml`, `ref` the head branch) and wait for it.
+4. `gh pr view N --json headRefOid` (or `get`'s `head.sha`) still equals SHA.
 
 If the reviewer says BLOCK, **don't merge, don't fix, and don't argue it
 down.** Report the blocking findings to Zoe verbatim, with your own view on
@@ -119,7 +135,8 @@ a *new* reviewer. Never send the fix back to the same one, because by then it
 has been told what to look for.
 
 If CI fails, report the failing job and the relevant log lines
-(`gh run view <id> --log-failed`) and stop.
+(`gh run view <id> --log-failed`, or `get_job_logs` with the `run_id`,
+`failed_only: true` and `return_content: true`) and stop.
 
 ## 4. Merge
 
@@ -127,10 +144,13 @@ If CI fails, report the failing job and the relevant log lines
 gh pr merge N --squash --match-head-commit <SHA>
 ```
 
+or `merge_pull_request` with `merge_method: squash`, `expectedHeadSha: <SHA>`
+and `commit_title` `<title> (#N)`.
+
 - Squash, because each PR lands on `main` as one `<title> (#N)` commit
   (direct doc commits sit between them).
-- `--match-head-commit` makes GitHub refuse the merge if anything was pushed
-  after the review.
+- `--match-head-commit`, and `expectedHeadSha` likewise, makes GitHub refuse
+  the merge if anything was pushed after the review.
 - Don't pass `--delete-branch`, because this session's worktree usually has
   the branch checked out. Don't enable auto-merge.
 
@@ -147,8 +167,9 @@ each configuration's toplevel derivation before and after the merge.
 docs-only commits included. Export both trees with `git archive` and evaluate
 them as `path:` flakes. They have no rev, so the motd reads "unknown" on both
 sides and only real changes show. M is the merge commit, taken from
-`gh pr view N --json mergeCommit -q .mergeCommit.oid` (then `git fetch
-origin main`), not the tip of `main`, which may have moved. Use the
+`gh pr view N --json mergeCommit -q .mergeCommit.oid` or `get`'s
+`merge_commit_sha` (then `git fetch origin main`), not the tip of `main`,
+which may have moved. Use the
 scratchpad for D:
 
 ```
