@@ -8,11 +8,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1794445717,
-        "narHash": "sha256-ZoiAWlDpzCleZBB41Ujo0QsEJCHJpauuxpREGEb0gDc=",
+        "lastModified": 1794934772,
+        "narHash": "sha256-csu6Jk0KUqiyyVXLOUmy7efn5y3aRq+ConWf0MqI29U=",
         "ref": "refs/heads/main",
-        "rev": "924921468831fe0872b02cd4e9f4bf8617f20124",
-        "revCount": 1495,
+        "rev": "adaec9803a00a72bde48a44dbd0f0419ee7fca3f",
+        "revCount": 1515,
         "type": "git",
         "url": "https://github.com/aaddrick/claude-desktop-debian.git"
       },
@@ -183,11 +183,11 @@
         "uv2nix": "uv2nix"
       },
       "locked": {
-        "lastModified": 1794494605,
-        "narHash": "sha256-wJQ/ZVvM8uJFLuYxk2ao4mXCG1muWt2YjR1HjlFJ3fc=",
+        "lastModified": 1795103083,
+        "narHash": "sha256-6MK2J1yX8cRyIYRXeVTBCjz5qoxOjgy0WI1n31zVvl4=",
         "ref": "refs/heads/main",
-        "rev": "34ecc0facbb774a1c6c25a346be549444f7b3368",
-        "revCount": 69383,
+        "rev": "01d69eed9b5c0b8a505a681929fb5a9896110e54",
+        "revCount": 74968,
         "type": "git",
         "url": "https://github.com/NousResearch/hermes-agent.git"
       },
@@ -225,11 +225,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1793193205,
-        "narHash": "sha256-X6xa6sGA7RnJQuZGbFMC+K+KToWAlBDCCjJXfTwEPsw=",
+        "lastModified": 1794715309,
+        "narHash": "sha256-awkBBs5ctFKgEYjpNGpi3t/VqF589n5EWfdinRb2gNI=",
         "owner": "nix-community",
         "repo": "home-manager",
-        "rev": "095fef2f265c3c0da4fe315efba8f8a04495ab34",
+        "rev": "a1293da7dd8e497e08d26173f97e2976b36a31ea",
         "type": "github"
       },
       "original": {
@@ -441,10 +441,10 @@
     },
     "nixpkgs-apps": {
       "locked": {
-        "lastModified": 1794386569,
-        "narHash": "sha256-x9sADJvoVG0L6RejZB+/BB4YiGZFBZrfTlhF4uBq1tQ=",
+        "lastModified": 1794890597,
+        "narHash": "sha256-lME2lHoDHAaSHP3/okgiVoJ0icVEvsQH8LeU3We7tcc=",
         "ref": "nixos-unstable",
-        "rev": "d4f25a3e562008648d45bcf2d70bcc7422cad84e",
+        "rev": "04906337b6d53e8bb0eaf0470ae9f070a4d4eb55",
         "shallow": true,
         "type": "git",
         "url": "https://github.com/NixOS/nixpkgs.git"
@@ -836,11 +836,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1794495687,
-        "narHash": "sha256-YufvHb7O/52Cp+B9a3HRVO0HluXSEQ75+WMIcU6YPyE=",
+        "lastModified": 1795043840,
+        "narHash": "sha256-xOaDTlUys2BZk0P0stG4a6DxW94iA5gJdFCTPAuKzgk=",
         "ref": "refs/heads/main",
-        "rev": "46c4140b55328bc3ee32f22c42185bc534998a1d",
-        "revCount": 1363,
+        "rev": "1a7722e7e35d960a17d2f5dd085631f032a77336",
+        "revCount": 1370,
         "type": "git",
         "url": "https://github.com/0xc000022070/zen-browser-flake.git"
       },
