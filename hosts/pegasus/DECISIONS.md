@@ -1923,3 +1923,20 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   *Desktop:* 16G of a 64 GB host is still the hard bound, as before.
   `MemoryHigh` was never what protected the session; it only slowed the
   build.
+
+- **`mimeapps.list` is forced, and drift is saved, 2026-11-04.** Apps that
+  "set as default" or "always open with" swap Home Manager's link for a
+  plain file. The next switch then backs it up under the host's single
+  `backupFileExtension`, and fails once a backup by that name already
+  exists. With `force`, the switch overwrites the file instead. Before that,
+  an activation step saves the app's copy and a diff against the declared
+  file to `~/.local/state/mimeapps-drift/` and sends a desktop notification.
+  The notification is needed because `nrs` only prints the Home Manager
+  unit's output when it fails. Wanted entries go into `xdg.mimeApps`; the
+  first drift copy added the Ferdium handler and two "open with" entries.
+  `force` is set on `home.file` with `mkForce`: `xdg.configFile` is
+  assigned wholesale for OrcaSlicer, and xdg.nix passes its own
+  `force = false` through.
+  *Alt rejected:* `backupCommand` with a timestamp. It would also fix the
+  failing switch, but it applies to every file Home Manager manages, and it
+  only moves the drift aside without showing it.
