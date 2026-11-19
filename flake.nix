@@ -137,6 +137,14 @@
     # nixpkgs-apps once hermes or nixpkgs moves: #252.
     nixpkgs-hermes.url = "git+https://github.com/NixOS/nixpkgs.git?ref=nixos-unstable&rev=1d060086d60cb76a40cf37109f979d88a5bd6396&shallow=1";
 
+    # gputaskman (pegasus) — per-process GPU monitor that also splits an
+    # Ollama model's VRAM into weights / KV cache / compute. Not in nixpkgs;
+    # upstream's own flake, on the lane like kimi-cli. hosts/pegasus/DECISIONS.md.
+    gputaskman = {
+      url = "git+https://github.com/shanselman/gputaskman.git";
+      inputs.nixpkgs.follows = "nixpkgs-apps";
+    };
+
     # Apps that should move faster than the 26.05 system — deliberately NOT
     # inputs.nixpkgs.follows. Handed to every host's Home Manager as
     # `pkgsApps` (appsForHm below); kernel, services and everything else stay
