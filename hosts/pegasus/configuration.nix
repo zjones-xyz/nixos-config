@@ -39,10 +39,12 @@
   networking.hostName = "pegasus";
   networking.networkmanager.enable = true;
 
-  # Builds the bump PR and main in the background; see docs/PREBUILD.md.
+  # Builds the bump PR, main and open [pegasus]/[all] PRs in the background;
+  # see docs/PREBUILD.md.
   services.prebuild = {
     enable = true;
     notifyUser = "z";
+    discover.enable = true;
   };
 
   # pegasus is where Tower's cards get flashed and probed, which is all lspci
