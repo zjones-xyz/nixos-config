@@ -1207,3 +1207,18 @@ fake `memory.pressure`.
        retry. It must not sit at 16G for hours.
 4. [ ] If a healthy build is ever stopped as a "memory stall", note the
        "full" `avg300` it showed and raise `memoryStall.percent` above it.
+
+## #235 Ferdium + Claude Desktop at login — verify after the next switch
+
+Both now start with the niri session. Ferdium shares TickTick's at-startup
+rule (right monitor) and Claude Desktop has its own (centre monitor). Claude
+Desktop's app-id is already verified; Ferdium's is the unverified
+`(?i)ferdium$` from §22.
+
+1. [ ] With Ferdium open, check `niri msg windows`: its app-id should match
+   `(?i)ferdium$`. Fix the regex in `niri-settings.nix` if it doesn't (the
+   §22 block-out uses the same one).
+2. [ ] Log out and back in. Ferdium should open on the right monitor and
+   Claude Desktop on the centre one, neither of them focused.
+3. [ ] Mid-session, quit and relaunch each by hand. Each should open on the
+   current workspace, focused.
