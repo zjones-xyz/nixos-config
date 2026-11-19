@@ -17,6 +17,22 @@
 # pins — it does not change what gets built, only how inputs are fetched
 # for this one invocation. CI (.github/workflows/nix-check.yml) runs the
 # unmodified `nix flake check` with full GitHub access.
+#
+# No --no-build: that flag also makes evaluation read-only, so a source path
+# an input builds at eval time is computed but never written — hermes-agent's
+# uv2nix wiring copies a filtered source (hermes-python-source) and reads
+# uv.lock from it, which then fails "path … is not valid" on a fresh store.
+# Building only realises those eval-time paths plus the `checks` outputs
+# (cheap); nixosConfigurations toplevels are evaluated, never built.
+#
+# The git+https route only reaches repos the session is scoped to, and the
+# nixflix input is a *private* repo (zjones-xyz/nixflix-exp). The NixOS
+# cloud environment lists it, so a session started with it selected fetches
+# it like any other input. A session without it fails here on that one
+# input before any host is evaluated: attach the repo (add_repo, approved by
+# the owner) and re-run. Stubbing the input with a `--override-input nixflix
+# path:…` dummy flake also works but skips galactica's *arr stack, so it
+# only proves the other hosts.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -72,4 +88,4 @@ while IFS=$'\t' read -r path node; do
   esac
 done <<< "$paths"
 
-nix flake check --no-build "${overrides[@]}" "$@"
+nix flake check "${overrides[@]}" "$@"

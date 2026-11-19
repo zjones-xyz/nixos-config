@@ -128,8 +128,10 @@
     # disappears under `sudo`, which is exactly when it is wanted, since every
     # sops-provisioned secret and API key on these hosts is root-readable.
     # `openssl` was absent fleet-wide; both have now cost a detour mid-task.
+    # `python3` likewise: pegasus's lives inside uv's wrapper, invisible to root.
     jq
     openssl
+    python3
 
     dnsutils
 
