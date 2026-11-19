@@ -7,7 +7,7 @@
 # Host-local because nixpkgs has no `services.unpackerr`. DECISIONS.md §9.
 
 let
-  nixflix = config.nixflix;
+  inherit (config) nixflix;
 
   # Read from each service's own options, so a port change cannot leave
   # Unpackerr talking to nothing.

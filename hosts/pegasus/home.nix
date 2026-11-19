@@ -78,7 +78,7 @@ in
     gemini-cli
     # More terminal coding agents. On the app lane: they ship weekly and the
     # release's copies are months behind. Kimi and Hermes aren't in nixpkgs
-    # and come from their upstream flakes (flake.nix).
+    # and come from their upstream flakes (flake.nix; Hermes on its own pin).
     pkgsApps.codex
     pkgsApps.github-copilot-cli
     pkgsApps.opencode
@@ -102,7 +102,7 @@ in
     obsidian
     spotify
     # Ahead of nixpkgs-apps (8.0.11 on unstable) — drop once it catches up.
-    (pkgsApps.ticktick.overrideAttrs (finalAttrs: old: {
+    (pkgsApps.ticktick.overrideAttrs (finalAttrs: _old: {
       version = "8.0.20";
       src = fetchurl {
         url = "https://d2atcrkye2ik4e.cloudfront.net/download/linux/linux_deb_x64/ticktick-${finalAttrs.version}-amd64.deb";
@@ -313,6 +313,14 @@ in
       '';
     })
   ];
+
+  # ── Java 21 (LTS) for tech screens ──────────────────────────────────────────
+  # programs.java rather than a bare package so JAVA_HOME is set for IDEs and
+  # build tools. Release nixpkgs: a toolchain, not an app-lane app.
+  programs.java = {
+    enable = true;
+    package = pkgs.jdk21;
+  };
 
   # ── kitty: launch zsh directly, not the login shell ─────────────────────────
   # Login shell stays bash (predictable non-interactive `ssh z@host cmd`

@@ -287,12 +287,12 @@ in
       mode = "0700";
     };
     "${absDir}/config".d = {
-      user = abs.user;
+      inherit (abs) user;
       group = mediaGroup;
       mode = "0750";
     };
     "${absDir}/metadata".d = {
-      user = abs.user;
+      inherit (abs) user;
       group = mediaGroup;
       mode = "0750";
     };

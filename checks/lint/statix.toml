@@ -1,0 +1,2 @@
+# W20 (repeated_keys): this repo writes `boot.loader.x` and `boot.binfmt.y` as separate keys so each carries its own comment.
+disabled = [ "repeated_keys" ]
