@@ -6,9 +6,10 @@ let
   # Flakes expose no branch name, so the rev is the whole identity.
   revision = self.rev or self.dirtyRev or "unknown";
   shortRevision =
-    if self ? shortRev then self.shortRev
-    else if self ? dirtyShortRev then "${lib.removeSuffix "-dirty" self.dirtyShortRev} (dirty)"
-    else "unknown";
+    self.shortRev or (
+      if self ? dirtyShortRev then "${lib.removeSuffix "-dirty" self.dirtyShortRev} (dirty)"
+      else "unknown"
+    );
 in
 {
   # Also exposed via `nixos-version --json` (.configurationRevision).
