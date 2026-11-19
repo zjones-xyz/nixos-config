@@ -7,6 +7,8 @@
     # modules/home/interactive-zsh.nix — not imported here, since zsh is
     # already this host's login shell and needs no bash → zsh exec).
     ../../modules/home/zsh.nix
+    # PWAs; the native program is a Homebrew formula (modules/darwin/homebrew.nix).
+    ../../modules/home/firefoxpwa.nix
   ];
 
   home.username = "z";

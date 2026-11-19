@@ -50,3 +50,25 @@ socket whenever the VM is down.
 ⚠ The context is recorded in `~/.docker/config.json`. If Home Manager ever
 manages that file (a read-only store symlink), `docker context use` fails and
 this decision needs revisiting.
+
+## 2. PWAs: PWAsForFirefox, as on pegasus
+
+**Decision:** the Homebrew `firefoxpwa` formula and the `firefox` cask
+(`modules/darwin/homebrew.nix`), plus the shared
+`modules/home/firefoxpwa.nix`. That module links the formula's
+native-messaging manifest into
+`~/Library/Application Support/Mozilla/NativeMessagingHosts`. It also
+writes the same default-profile `user.js` as pegasus: window title and icon
+stay the app's own, and sites can't recolour the titlebar.
+
+**Alternatives:** nixpkgs' `firefoxpwa`, which builds for Linux only. The
+formula's own caveat, a `sudo ln` into `/Library`, would be a manual step
+outside the flake.
+
+**Rationale:** one PWA setup across the fleet. The reasoning is in pegasus's
+`DECISIONS.md`, "PWAs on PWAsForFirefox". Unlike the nixpkgs build, the
+formula ships no runtime: the extension downloads Firefox into
+`~/Library/Application Support/firefoxpwa/runtime` and patches it there.
+That runtime is outside `flake.lock`, so it updates through the extension,
+not on switch. Installing an app compiles a small loader, which needs the
+Xcode Command Line Tools (Homebrew already requires them).
