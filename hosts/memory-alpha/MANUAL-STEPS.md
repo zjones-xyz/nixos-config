@@ -153,3 +153,22 @@ the flake switch cannot reach itself.
 3. [ ] `sudo rm /opt/stacks && sudo rmdir /opt` (if otherwise empty) — the
    tmpfiles symlink outlives the rule that created it.
 4. [ ] `rm -rf /home/z/dockge` once satisfied nothing in it is wanted.
+
+## #265 Prometheus + Grafana — owner steps after first switch
+
+Nothing is needed before switching: Grafana generates its own secrets on
+first start (DECISIONS.md §4). After `nixos-rebuild switch` (memory-alpha,
+then galactica for the homepage tile):
+
+1. [ ] `systemctl status prometheus prometheus-node-exporter grafana` — all
+   three active.
+2. [ ] `sudo cat /var/lib/grafana/secrets/admin_password` — log in at
+   `https://grafana.monitor.zjones.dev` as `admin` with it. Store it in the
+   password manager. Changing it in the UI is fine: Grafana never re-reads
+   the file once the DB exists.
+3. [ ] Connections → Data sources → Prometheus → **Test** succeeds.
+4. [ ] Dashboards → Fleet → Node Exporter Full shows memory-alpha with data.
+5. [ ] Both scrape targets are `up`: in Grafana's Explore, run
+   `up` and expect `prometheus` and `node` at 1.
+6. [ ] `https://jellyfin.zjones.dev` still loads. Its route moved onto
+   `homelab.traefik.fileConfigs` in this PR.
