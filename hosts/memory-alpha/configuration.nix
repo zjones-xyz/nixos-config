@@ -41,6 +41,9 @@ in
     ../../modules/nixos/arcane.nix
     ../../modules/nixos/nut-client.nix
     ../../modules/nixos/luks-remote-unlock.nix
+    ../../modules/nixos/prometheus.nix
+    ../../modules/nixos/prometheus-node.nix
+    ../../modules/nixos/grafana.nix
     ./borgmatic.nix
     ./bambuddy.nix
     ./obico.nix
