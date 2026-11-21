@@ -9,7 +9,8 @@
   ];
 
   networking.hostName = "hamilton";
-  # DHCP reservation on the GL.iNet router is the source of truth for the IP.
+  # IP is a DHCP reservation on the GL.iNet router at 192.168.8.11, the
+  # address fleet/hosts.nix records (AdGuard client list, hamilton.internal).
   # Add this host's IP as the *secondary* DNS server in the router's DHCP
   # settings — that's the whole failover story (primary = hopper).
   networking.networkmanager.enable = true;
