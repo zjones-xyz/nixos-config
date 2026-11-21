@@ -1924,7 +1924,7 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   `MemoryHigh` was never what protected the session; it only slowed the
   build.
 
-- **Limo as the mod manager, 2026-11-21** — for Skyrim SE, Starfield and
+- **Limo as the mod manager, 2026-11-21 (#266)** — for Skyrim SE, Starfield and
   Cyberpunk 2077. *alt:* Vortex, which is Windows-only. Nexus has said a
   Linux build will target SteamOS and Steam hardware only, and it has not
   shipped. *alt:* the Nexus Mods App, which is packaged in nixpkgs (0.21.1)
