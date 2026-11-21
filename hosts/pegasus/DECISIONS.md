@@ -1923,3 +1923,19 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   *Desktop:* 16G of a 64 GB host is still the hard bound, as before.
   `MemoryHigh` was never what protected the session; it only slowed the
   build.
+
+- **Limo as the mod manager, 2026-11-21** — for Skyrim SE, Starfield and
+  Cyberpunk 2077. *alt:* Vortex, which is Windows-only. Nexus has said a
+  Linux build will target SteamOS and Steam hardware only, and it has not
+  shipped. *alt:* the Nexus Mods App, which is packaged in nixpkgs (0.21.1)
+  but Nexus stopped developing it in January 2026 to focus on Vortex.
+  *alt:* Mod Organizer 2 under Proton via a community installer, which most
+  Bethesda modding guides assume. It lives outside Nix and is fiddlier.
+  Keep it as the fallback if Limo falls short on Starfield.
+  *Why Limo:* native Qt app with Nexus API downloads and LOOT load-order
+  sorting. Skyrim SE has built-in support; Starfield and Cyberpunk are set
+  up as generic games.
+  *From `pkgs`, not `pkgsApps`:* 26.05 and unstable both carry 1.2.2, and
+  upstream's last release was May 2025, so the app lane buys nothing
+  (`docs/NIXPKGS-APPS.md`). Move it there only if a newer release lands on
+  unstable first.
