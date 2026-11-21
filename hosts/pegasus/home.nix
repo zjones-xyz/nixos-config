@@ -186,6 +186,11 @@ in
     # no native store integration for these either.
     heroic
 
+    # Native mod manager (Nexus downloads, LOOT load order) for Skyrim SE,
+    # Starfield and Cyberpunk. Vortex is Windows-only and the Nexus Mods App
+    # was discontinued — DECISIONS.md "Limo as the mod manager".
+    limo
+
     # Parametric GUI CAD, pairs with openscad (script-only) in the 3D-printing
     # pipeline.
     freecad
