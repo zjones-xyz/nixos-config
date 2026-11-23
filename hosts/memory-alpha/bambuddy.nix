@@ -50,11 +50,10 @@ in
   # DHCP one, and a lease on .98 would collide with Bambuddy's own address.
   networking.networkmanager.unmanaged = [ "interface-name:eth-secondary" ];
 
-  systemd.services.docker-bambuddy-lan-network = {
-    description = "Create the Bambuddy printer-facing ipvlan network";
+  systemd.services.bambuddy-lan-link = {
+    description = "Bring up the Bambuddy printer-network dongle";
     # A USB dongle: wait for it, and go down with it if it's unplugged.
-    after = [ "docker.service" "sys-subsystem-net-devices-eth\\x2dsecondary.device" ];
-    requires = [ "docker.service" ];
+    after = [ "sys-subsystem-net-devices-eth\\x2dsecondary.device" ];
     bindsTo = [ "sys-subsystem-net-devices-eth\\x2dsecondary.device" ];
     before = [ "docker-bambuddy.service" ];
     requiredBy = [ "docker-bambuddy.service" ];
@@ -62,17 +61,8 @@ in
       Type = "oneshot";
       RemainAfterExit = true;
       # Unmanaged means nothing else brings the link up.
-      ExecStartPre = "${pkgs.iproute2}/bin/ip link set eth-secondary up";
+      ExecStart = "${pkgs.iproute2}/bin/ip link set eth-secondary up";
     };
-    # Docker can't edit a network in place, so the options' hash is stored as a
-    # label and a mismatch recreates it. On a switch this unit's restart takes
-    # docker-bambuddy down first (Requires), so the network is free to remove.
-    script = ''
-      have=$(${docker} network inspect --format '{{index .Labels "nixos.spec"}}' bambuddy-lan 2>/dev/null) || have=absent
-      [ "$have" = "${lanSpec}" ] && exit 0
-      [ "$have" = absent ] || ${docker} network rm bambuddy-lan
-      ${docker} network create ${lanOpts} --label nixos.spec=${lanSpec} bambuddy-lan
-    '';
   };
 
   # The library is only wanted: printer control must come up even while
@@ -83,6 +73,20 @@ in
     wants = [ "mnt-bambuddy_library.mount" ];
     wantedBy = [ "sys-subsystem-net-devices-eth\\x2dsecondary.device" ];
     unitConfig.RequiresMountsFor = [ dataDir ];
+    # bambuddy-lan, ensured on every start like homelab.dockerNetworks (the
+    # weekly prune deletes it whenever Bambuddy is down). Docker can't edit a
+    # network in place, so the options' hash is a label and a mismatch
+    # recreates it; this runs before oci-containers' own `rm -f`, hence ours.
+    preStart = ''
+      have=$(${docker} network inspect --format '{{index .Labels "nixos.spec"}}' bambuddy-lan 2>/dev/null) || have=absent
+      if [ "$have" != "${lanSpec}" ]; then
+        if [ "$have" != absent ]; then
+          ${docker} rm -f bambuddy >/dev/null 2>&1 || true
+          ${docker} network rm bambuddy-lan
+        fi
+        ${docker} network create ${lanOpts} --label nixos.spec=${lanSpec} bambuddy-lan
+      fi
+    '';
   };
 
   virtualisation.oci-containers.containers.bambuddy = {
