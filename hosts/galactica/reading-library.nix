@@ -187,6 +187,12 @@ in
   };
 
   # ── Ordering, and the state Audiobookshelf's module cannot place ──────────
+  homelab.dockerNetworks.proxy.services = [
+    "docker-grimmory"
+    "docker-grimmory-mariadb"
+    "docker-bookbridge"
+  ];
+
   # ⚠ tank is imported in stage-2 after the LUKS opens — nixflix declares the
   # same dependency via serviceDependencies. More than ordering for the
   # containers: Docker creates a missing bind-mount source as an empty
@@ -200,12 +206,11 @@ in
         "docker-bookbridge"
       ]
       (_: {
-        # docker-proxy-network creates the network above; today only the socket
-        # proxy pulls it in, so these ask for it themselves. tank's dependency
-        # is derived from nixflix's own list rather than naming zfs-mount again,
-        # so it follows if the host's storage wiring changes.
-        after = config.nixflix.serviceDependencies ++ [ "docker-proxy-network.service" ];
-        requires = config.nixflix.serviceDependencies ++ [ "docker-proxy-network.service" ];
+        # tank's dependency is derived from nixflix's own list rather than
+        # naming zfs-mount again, so it follows if the host's storage wiring
+        # changes.
+        after = config.nixflix.serviceDependencies;
+        requires = config.nixflix.serviceDependencies;
       })
     )
 

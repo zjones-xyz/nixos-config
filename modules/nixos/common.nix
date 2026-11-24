@@ -2,6 +2,7 @@
 
 {
   imports = [
+    ./docker-networks.nix
     ./letsencrypt.nix
     ./motd.nix
     ./smart.nix
