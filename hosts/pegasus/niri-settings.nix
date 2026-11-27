@@ -163,11 +163,13 @@ in
     # the tray instead of opening its window on every login.
     spawn-at-startup = [
       { argv = [ "protonmail-bridge-gui" "--no-window" ]; }
-      # Placement for these two is not here — niri decides it from the
+      # Placement for these is not here — niri decides it from the
       # window rules below, which is the only place a workspace or output
       # can be named for an opening window.
       { argv = [ "thunderbird" ]; }
       { argv = [ "ticktick" ]; }
+      { argv = [ "ferdium" ]; }
+      { argv = [ "claude-desktop" ]; }
     ];
 
     # ── Named workspaces ──────────────────────────────────────────────────
@@ -273,19 +275,34 @@ in
         open-focused = false;
       }
 
-      # TickTick opens on the right monitor's active workspace, which at
-      # login is its only (and therefore first) one. at-startup keeps that
-      # to the login instance — a later launch opens where you already are,
-      # rather than throwing the window onto another monitor — and, like
-      # Thunderbird above, it must not take focus during login.
+      # TickTick and Ferdium open on the right monitor's active workspace,
+      # Claude Desktop on the centre's — at login, each monitor's only (and
+      # therefore first) one. at-startup keeps that to the login instance — a
+      # later launch opens where you already are, rather than throwing the
+      # window onto another monitor — and, like Thunderbird, none of them may
+      # take focus during login.
       {
         matches = [
           {
             app-id = "(?i)ticktick$";
             at-startup = true;
           }
+          {
+            app-id = "(?i)ferdium$";
+            at-startup = true;
+          }
         ];
         open-on-output = monRight;
+        open-focused = false;
+      }
+      {
+        matches = [
+          {
+            app-id = "^com\\.anthropic\\.Claude$";
+            at-startup = true;
+          }
+        ];
+        open-on-output = monCentre;
         open-focused = false;
       }
 
