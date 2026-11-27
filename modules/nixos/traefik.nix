@@ -51,6 +51,15 @@ let
               - url: "http://host.docker.internal:8096"
   '';
 
+  # Every file-provider config, copied (not symlinked: the container has no
+  # /nix/store) into the one directory Traefik watches.
+  fileConfigDir = pkgs.runCommand "traefik-file-configs" { } ''
+    mkdir $out
+    ${lib.concatStrings (lib.mapAttrsToList
+      (name: file: "cp ${file} $out/${name}.yml\n")
+      config.homelab.traefik.fileConfigs)}
+  '';
+
   composeFile = pkgs.writeText "traefik-compose.yml" ''
     networks:
       proxy:
@@ -121,7 +130,7 @@ let
           # Socket access is brokered by docker-socket-proxy above — Traefik no
           # longer mounts the Docker socket directly.
           - "/home/z/traefik/letsencrypt:/letsencrypt"
-          - "${jellyfinConfig}:/traefik-config/jellyfin.yml:ro"
+          - "${fileConfigDir}:/traefik-config:ro"
           - "/home/z/traefik/auth/htpasswd:/auth/users:ro"
         networks:
           - proxy
@@ -156,55 +165,71 @@ let
   '';
 in
 {
-  networking.firewall.allowedTCPPorts = [ 80 443 ];
-
-  # Traefik runs in Docker but proxies the native Jellyfin service (port 8096 on
-  # the host) via host.docker.internal:host-gateway. Under rootless that path
-  # bypassed the host INPUT firewall; under the rootful bridge it does not, so
-  # trust the pinned proxy bridge to let containers reach host-published services
-  # like Jellyfin. Scoped to br-proxy rather than all docker bridges.
-  networking.firewall.trustedInterfaces = [ "br-proxy" ];
-
-  # The rootful daemon binds 80/443 as root, so the rootless-era
-  # ip_unprivileged_port_start lowering is no longer needed. ip_forward stays on
-  # for container networking (Docker would set it anyway).
-  boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
-
-  # Both secrets are read by the traefik service, which runs as `z`, so they
-  # must be owned by z rather than the sops-nix default of root:0400.
-  sops.secrets."cloudflare/apiToken".owner = "z";
-  sops.secrets."traefik/dashboardAuth".owner = "z";
-
-  # Shared network (docker-networks.nix); each container on it adds itself.
-  homelab.dockerNetworks.proxy = {
-    services = [ "traefik-docker" ];
-    # Pin the bridge interface name (br-proxy) so the host firewall can trust
-    # it deterministically — Traefik reaches the native Jellyfin service over
-    # this bridge via host.docker.internal:host-gateway (see above).
-    createOptions = [ "--opt" "com.docker.network.bridge.name=br-proxy" ];
+  # ── Native services ──
+  # A native service on this host routes itself by adding its file-provider
+  # YAML here, so its port is written once, in its own module (grafana.nix).
+  options.homelab.traefik.fileConfigs = lib.mkOption {
+    type = lib.types.attrsOf lib.types.path;
+    default = { };
+    description = ''
+      Traefik file-provider configs for native (non-Docker) services, as
+      name → YAML file. Each lands at /traefik-config/<name>.yml.
+    '';
   };
 
-  systemd.services.traefik-docker = {
-    description = "Traefik reverse proxy";
-    after = [ "network-online.target" "docker.service" ];
-    wants = [ "network-online.target" "docker.service" ];
-    wantedBy = [ "multi-user.target" ];
+  config = {
+    homelab.traefik.fileConfigs.jellyfin = jellyfinConfig;
 
-    serviceConfig = {
-      User = "z";
-      Restart = "on-failure";
-      RestartSec = "10s";
-      # Runs as root (+) so it can read the sops secret and stage it for the
-      # container bind-mount. (Kept from the rootless era; with the rootful
-      # daemon the mount would also work straight from /run/secrets, but staging
-      # under /home/z keeps ownership predictable.)
-      ExecStartPre = "+${pkgs.bash}/bin/bash -c 'mkdir -p /home/z/traefik/letsencrypt /home/z/traefik/auth && cp ${config.sops.secrets."traefik/dashboardAuth".path} /home/z/traefik/auth/htpasswd && chmod 640 /home/z/traefik/auth/htpasswd && chown -R z:users /home/z/traefik'";
-      ExecStop = "${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name traefik down";
+    networking.firewall.allowedTCPPorts = [ 80 443 ];
+
+    # Traefik runs in Docker but proxies the native Jellyfin service (port 8096 on
+    # the host) via host.docker.internal:host-gateway. Under rootless that path
+    # bypassed the host INPUT firewall; under the rootful bridge it does not, so
+    # trust the pinned proxy bridge to let containers reach host-published services
+    # like Jellyfin. Scoped to br-proxy rather than all docker bridges.
+    networking.firewall.trustedInterfaces = [ "br-proxy" ];
+
+    # The rootful daemon binds 80/443 as root, so the rootless-era
+    # ip_unprivileged_port_start lowering is no longer needed. ip_forward stays on
+    # for container networking (Docker would set it anyway).
+    boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
+
+    # Both secrets are read by the traefik service, which runs as `z`, so they
+    # must be owned by z rather than the sops-nix default of root:0400.
+    sops.secrets."cloudflare/apiToken".owner = "z";
+    sops.secrets."traefik/dashboardAuth".owner = "z";
+
+    # Shared network (docker-networks.nix); each container on it adds itself.
+    homelab.dockerNetworks.proxy = {
+      services = [ "traefik-docker" ];
+      # Pin the bridge interface name (br-proxy) so the host firewall can trust
+      # it deterministically — Traefik reaches the native Jellyfin service over
+      # this bridge via host.docker.internal:host-gateway (see above).
+      createOptions = [ "--opt" "com.docker.network.bridge.name=br-proxy" ];
     };
 
-    script = ''
-      export CF_DNS_API_TOKEN="$(cat ${config.sops.secrets."cloudflare/apiToken".path})"
-      exec ${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name traefik up --remove-orphans
-    '';
+    systemd.services.traefik-docker = {
+      description = "Traefik reverse proxy";
+      after = [ "network-online.target" "docker.service" ];
+      wants = [ "network-online.target" "docker.service" ];
+      wantedBy = [ "multi-user.target" ];
+
+      serviceConfig = {
+        User = "z";
+        Restart = "on-failure";
+        RestartSec = "10s";
+        # Runs as root (+) so it can read the sops secret and stage it for the
+        # container bind-mount. (Kept from the rootless era; with the rootful
+        # daemon the mount would also work straight from /run/secrets, but staging
+        # under /home/z keeps ownership predictable.)
+        ExecStartPre = "+${pkgs.bash}/bin/bash -c 'mkdir -p /home/z/traefik/letsencrypt /home/z/traefik/auth && cp ${config.sops.secrets."traefik/dashboardAuth".path} /home/z/traefik/auth/htpasswd && chmod 640 /home/z/traefik/auth/htpasswd && chown -R z:users /home/z/traefik'";
+        ExecStop = "${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name traefik down";
+      };
+
+      script = ''
+        export CF_DNS_API_TOKEN="$(cat ${config.sops.secrets."cloudflare/apiToken".path})"
+        exec ${pkgs.docker}/bin/docker compose -f ${composeFile} --project-name traefik up --remove-orphans
+      '';
+    };
   };
 }

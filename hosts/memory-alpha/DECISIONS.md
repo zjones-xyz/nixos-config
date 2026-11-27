@@ -117,3 +117,46 @@ What it costs:
 
 **Revisit if** cold starts routinely exceed Bambuddy's 10 s. Raise the idle
 timeout first; go back to always-on only if that doesn't help.
+
+---
+
+## 4. Prometheus and Grafana run natively here, as the fleet's metrics stack
+
+**`services.prometheus` and `services.grafana` on memory-alpha**
+(`modules/nixos/prometheus.nix`, `grafana.nix`, `prometheus-node.nix`),
+added 2026-11-20. *Alt:* a compose stack in homelab-stacks beside Beszel,
+or hosting it on galactica.
+
+The owner wants this as a learning exercise in the industry-standard stack,
+not because Beszel falls short. Beszel stays as the quick glance, and
+Prometheus becomes what gets alerted on. `docs/MONITORING.md` has the phases.
+
+- **Native, not compose.** The point is scrape config, alert rules and
+  Grafana provisioning as reviewed code. nixpkgs ships the server, Grafana
+  and most exporters as modules, and `promtool check config` runs at build
+  time. A compose stack would hide all of that in YAML that Arcane deploys.
+- **memory-alpha, not galactica.** It is already the always-on monitoring
+  host (hopper DECISIONS.md §3). galactica is what most needs watching (the ZFS
+  array, its disks, the UPS), and a monitor that goes down with its target can't
+  report the outage. Prometheus at this scale needs a few hundred MB of the
+  32 GB here.
+- **Grafana's secrets are generated on the host, not in sops.**
+  `secret_key` only needs to be unique and stable, and it only encrypts
+  secrets stored in Grafana's DB, of which there are none: the datasource is
+  provisioned without credentials. Grafana reads `admin_password` once, when
+  it creates the DB, so a sops copy would look declarative without being
+  so. Generating both in `preStart` also keeps CI's memory-alpha build green
+  with no secrets edit pending first. Losing `/var/lib/grafana` loses both,
+  but the DB they belong to goes with them.
+- **Routed through `homelab.traefik.fileConfigs`.** This is §3's "traefik.nix
+  takes extra files": a native service adds its own file-provider YAML in its
+  own module. `traefik.nix` is imported only here, so the option is
+  host-local in practice. Grafana listens on `0.0.0.0:3030` because Traefik
+  reaches it from Docker over `br-proxy`. The port is not opened in the
+  firewall.
+- **Prometheus is loopback-only.** Grafana's Explore view covers ad-hoc
+  PromQL. For the raw UI, use an SSH tunnel (comment in `prometheus.nix`).
+
+**Revisit if** memory-alpha's memory pressure during aarch64 emulated
+builds (HARDWARE-MAP.md §2) starts to squeeze Prometheus. Lower the
+retention first.

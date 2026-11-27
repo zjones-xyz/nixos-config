@@ -168,6 +168,11 @@
         siteMonitor: https://beszel.monitor.zjones.dev
         icon: sh-beszel
         description: Host monitoring
+    - Grafana:
+        href: https://grafana.monitor.zjones.dev
+        siteMonitor: https://grafana.monitor.zjones.dev
+        icon: grafana.png
+        description: Metrics dashboards (Prometheus)
     - Scrutiny:
         href: https://scrutiny.monitor.zjones.dev
         siteMonitor: https://scrutiny.monitor.zjones.dev
