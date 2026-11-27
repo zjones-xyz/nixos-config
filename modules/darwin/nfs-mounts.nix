@@ -48,14 +48,21 @@ in
   };
 
   config = {
-    environment.etc."auto_master".text = ''
-      +auto_master           # Use directory service
-      /net                   -hosts          -nobrowse,hidefromfinder,nosuid
-      /home                  auto_home       -nobrowse,hidefromfinder
-      /Network/Servers       -fstab
-      /-                     -static
-      /-                     auto_nfs
-    '';
+    # macOS updates restore the stock auto_master over our symlink; listing its
+    # hash lets activation replace it instead of aborting on "Unexpected files".
+    environment.etc."auto_master" = {
+      knownSha256Hashes = [
+        "b2aac03248e8f229c703561f5bb059f9be491e5db9f447692398d775a9fb12a5" # macOS 27.x stock
+      ];
+      text = ''
+        +auto_master           # Use directory service
+        /net                   -hosts          -nobrowse,hidefromfinder,nosuid
+        /home                  auto_home       -nobrowse,hidefromfinder
+        /Network/Servers       -fstab
+        /-                     -static
+        /-                     auto_nfs
+      '';
+    };
 
     environment.etc."auto_nfs".text = ''
       # <absolute mount point>   <options>                          <NFS export>
