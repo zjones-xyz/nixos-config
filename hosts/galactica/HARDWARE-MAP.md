@@ -80,7 +80,7 @@ serial-derived and stable.
 | `h-X4WE` | HGST HUH721212ALE601 12 TB | `*X4WE` | `ata-HUH721212ALE601_*X4WE` | `sdg` | ✖ **replaced by `h-YWAH` 2026-10-11** — failing (below); LUKS-erased, pulled, RMA to seller (`MANUAL-STEPS.md` §21) |
 | `h-YWAH` | HPE MB012000GWDFE (= HUH721212ALE604) 12 TB | `*YWAH` | `ata-MB012000GWDFE_*YWAH` | — | `tank` RAIDZ1 member since 2026-10-11, cage A bay `A4`. Used, SMART hours reset; HPE firmware has no 197, so its early warning is `smartctl -l devstat`, scrubs and self-tests |
 | `h-T97E` | HGST HUH721212ALE601 12 TB | `*T97E` | `ata-HUH721212ALE601_*T97E` | `sdi` | `tank` RAIDZ1 member |
-| `s-768C` | Crucial BX500 480 GB | `*768C` | `ata-CT480BX500SSD1_*768C` | `sdb` | `tank` special-vdev mirror member (on LSI) |
+| `s-768C` | Crucial BX500 480 GB | `*768C` | `ata-CT480BX500SSD1_*768C` | `sdb` | `tank` special-vdev mirror member (on LSI). ⚠ Attr 5 reads `000 FAILING_NOW` with raw 0, already so in `hardware-profile-2026-08-31.txt`: its spare pool (attr 180) reads 0, where `s-8162`'s reads 28. Every other counter is clean, so smartd ignores the flag and warns only if raw 5 moves (`configuration.nix`). First to come out when a 4th SSD arrives |
 | `s-8162` | Crucial BX500 480 GB | `*8162` | `ata-CT480BX500SSD1_*8162` | `sdf` | `tank` special-vdev mirror member (on LSI) |
 | `s-3255` | WD Blue SA510 500 GB | `*3255` | `ata-WD_Blue_SA510_2.5_500GB_*3255` | `sda` | `tank` special-vdev mirror member **+ `/boot` ESP** (recabled to onboard `ata1`) |
 | `s-3100` | Crucial MX100 512 GB | `*3100` | `ata-Crucial_CT512MX100SSD1_*3100` | `sdd` | ✖ **written off 2026-10-06** — failed on first write; pulled 2026-10-06 |

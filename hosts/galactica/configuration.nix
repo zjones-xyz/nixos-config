@@ -600,6 +600,13 @@
   # ~20 h spinner long test clear of the scrub, which starts on the 1st and
   # runs ~12 h. No stagger: the index counts every disk, SSDs included.
   homelab.smart.selfTests = "(S/../../7/03|L/../15/./03)";
+  # s-768C has read attr 5 FAILING_NOW (raw 0, spare pool 180 = 0) since before
+  # the pool was built (HARDWARE-MAP.md). Ignore the stuck flag; warn when the
+  # raw remap count moves. Listed before DEVICESCAN, which then skips it.
+  services.smartd.devices = [{
+    device = "/dev/disk/by-id/ata-CT480BX500SSD1_2422E8B6768C";
+    options = "-i 5 -R 5!";
+  }];
 
   # Flipped after staging issuance was proven (which is what the flag is
   # for). Separate cert storage per CA, so this is freely reversible.
