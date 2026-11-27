@@ -85,8 +85,8 @@ batch priority"):
   script, alive when the kernel kills a process inside it. That process is
   usually a compiler, but it can be `nix` itself. Builds run
   `maxJobs × cores` = 2 × 4, then 1 × 2 after a kill or a stall. A package
-  that never fits even then (OrcaSlicer, Bambu Studio and codex are the
-  candidates) is still built by `nrs`, uncapped.
+  that never fits even then (Bambu Studio and codex are the candidates) is
+  still built by `nrs`, uncapped.
 - **No `MemoryHigh`.** It throttles a cgroup that goes over it but never
   kills, so with it below `MemoryMax` a big build parks at the throttle
   instead of reaching the kill and the retry. On 2026-11-12 a codex build
@@ -113,7 +113,7 @@ toplevel depends on the commit. A prebuild of commit X is the exact system
 `nrs` builds from a **clean** checkout of X, and the switch then compiles
 nothing. A dirty tree, or a different commit (a squash-merged bump lands on
 `main` as a new commit), changes only the small top-level derivations, not
-the packages: codex, OrcaSlicer and the rest stay built.
+the packages: codex, Bambu Studio and the rest stay built.
 
 ## Using it
 

@@ -302,7 +302,7 @@ in
     (pkgsApps.bambu-studio.override { withNvidiaGLWorkaround = true; })
     # No GL workaround (its Zink route regresses Orca; DECISIONS.md), but its
     # WebKit pages render black on NVIDIA without this one variable. The
-    # Bambuddy CA is baked into the package; the variable is a thin wrapper.
+    # Bambuddy CA goes in without recompiling (flake.nix); this is a wrapper.
     (pkgs.symlinkJoin {
       inherit (pkgsApps.orca-slicer) name meta;
       paths = [ (withBambuddyCa "OrcaSlicer" pkgsApps.orca-slicer) ];

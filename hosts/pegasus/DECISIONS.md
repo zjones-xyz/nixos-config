@@ -1640,8 +1640,9 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   `claude-desktop-debian` twice a week and opens a PR. Merging and switching
   stay manual. `nixpkgs`, the kernel and service inputs stay out of it.
   *Cost of each bump:* `nixpkgs-apps` also carries things pegasus builds
-  itself. OrcaSlicer recompiles locally whenever a bump moves it, because
-  the Bambuddy CA append (#166) is an `overrideAttrs`. Bambu Studio is
+  itself. OrcaSlicer recompiled locally whenever a bump moved it, because
+  the Bambuddy CA append (#166) was an `overrideAttrs` (since 2026-11-12 it
+  comes from the cache: "Bambuddy CA without recompiling"). Bambu Studio is
   unfree and overridden, so it compiles locally too. open-bamboo-networking
   and HushMic build against the same input. Budget that time at switch. A newer
   Signal, Slack or Discord can also upgrade its profile on first run, so
@@ -1923,3 +1924,45 @@ Review surface for the autonomous authoring session that scaffolded `pegasus`
   *Desktop:* 16G of a 64 GB host is still the hard bound, as before.
   `MemoryHigh` was never what protected the session; it only slowed the
   build.
+- **Bambuddy CA without recompiling, 2026-11-12** — `withBambuddyCa`
+  (`flake.nix`) no longer appends the CA in an `overrideAttrs` of
+  `orca-slicer`. That moved the derivation off Hydra's cache, so every lane
+  bump compiled Orca locally (one of the prebuild's 16G-cap candidates).
+  Instead, a `runCommand` with the same name symlinks the cached output,
+  replaces `share/OrcaSlicer/cert/printer.cer` with a copy plus the CA, and
+  copies each file that contains the output's own store hash, swapping in the
+  new hash. Orca 2.4.2 has two: the `makeBinaryWrapper` launcher and the ELF,
+  which holds `SLIC3R_FHS_RESOURCES` (`<out>/share/OrcaSlicer`). The two
+  paths have the same name, so they have the same length, and a same-length
+  swap leaves every offset in the binary intact. Nix rewrites hashes the same
+  way for content-addressed paths. The build fails if the name differs, if
+  `printer.cer` moves, or if no file in `bin/` names the new resources path
+  afterwards (e.g. a future Orca storing it where the swap can't see it).
+  *Why the binary has to change:* Orca never reads `printer.cer` itself. It
+  hands `resources_dir() + "/cert"` to the network plugin
+  (`set_cert_file`), and open-bamboo-networking loads `printer.cer` from that
+  folder. `resources_dir()` is the compiled-in FHS path, with no environment
+  or CLI override, so a `symlinkJoin` with a different `printer.cer` is never
+  consulted.
+  *Checked in a cloud session against lane rev `f4a03c0` (2026-11-12):* the
+  derivation builds in about 8 s. Only the two rewritten files are real (66
+  MB; the rest are links). The rewritten ELF is byte-identical to the original
+  apart from the hash, and the last `printer.cer` entry is
+  `CN=Virtual Printer CA 31F3F0AA`. Launched under Xvfb, Orca reads its
+  resources from the new path and never opens the old one. It stops at the
+  first-run language step exactly as the unmodified package does there.
+  *Cost:* the cached Orca stays in the closure (311 MB), plus the 66 MB copy,
+  where the overridden build was one 311 MB output.
+  *Alt rejected:* patching open-bamboo-networking to read an extra CA file
+  (e.g. from an environment variable set in Orca's wrapper). It is just as
+  cheap, since OBN is built here anyway, and the owner doesn't expect to
+  return to Bambu's plugin, so tying the CA to OBN costs little. But it is a
+  C++ patch carried across a fast-moving upstream (2.2.0 → 2.3.0 touched 184
+  files), and it would miss the CA if Orca ever read `printer.cer` itself.
+  Upstream has no such option as of OBN 2.3.0. Revisit if it gains one.
+  *Alt rejected:* bind-mounting the file over the store path with
+  bubblewrap at launch. Orca's WebKit runs its own bubblewrap sandbox, and
+  nesting the two is the riskier change.
+  *Alt rejected:* pinning the CA as OBN's per-printer leaf
+  (`~/.config/OrcaSlicer/certs/<serial>.pem`). OBN writes those itself
+  (TOFU), and they are keyed by each virtual printer's serial.
