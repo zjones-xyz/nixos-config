@@ -44,9 +44,11 @@ in
   # and store the whole `APP_KEY=...` line in secrets/hopper.yaml.
   sops.secrets."speedtest-tracker/appKey".owner = "z";
 
+  homelab.dockerNetworks.proxy.services = [ "speedtest-tracker" ];
+
   systemd.services.speedtest-tracker = {
     description = "Speedtest Tracker";
-    after = [ "network-online.target" "user@1000.service" "docker-proxy-network.service" "traefik-docker.service" ];
+    after = [ "network-online.target" "user@1000.service" "traefik-docker.service" ];
     wants = [ "network-online.target" "user@1000.service" ];
     wantedBy = [ "multi-user.target" ];
 
