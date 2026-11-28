@@ -43,6 +43,7 @@
     ./homebox.nix
     ./spoolman.nix
     ./memos.nix
+    ./arm.nix
     # The reading stack, split so the client and acquisition halves stay
     # separately readable — READING-STACK.md is the spec for both.
     ./reading-library.nix
@@ -331,6 +332,15 @@
     }
     {
       domain = "memos.zjones.dev";
+      answer = "192.168.8.190";
+    }
+    # ARM (arm.nix) — same flat-name shape, named for what it does.
+    {
+      domain = "autoripper.internal";
+      answer = "192.168.8.190";
+    }
+    {
+      domain = "autoripper.zjones.dev";
       answer = "192.168.8.190";
     }
 

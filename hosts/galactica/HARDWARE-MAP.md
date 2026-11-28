@@ -668,6 +668,10 @@ convention — likely counting from the bracket end — and record it here.
 The BD-ROM moves to an **external USB3 enclosure** and does not return to SATA.
 That frees the SATA port the port budget above depends on, so it is not optional.
 
+Today it is still on SATA (owner-stated 2026-11-28; port unrecorded), and ARM
+rips from it there (`arm.nix`). The container finds the drive by itself, so the
+move to USB needs no config change, only a `docker-arm` restart after plugging in.
+
 ⚠ The C204 has no USB3 of its own — it exists on this machine only via the
 ASM1042 add-in card (`PLATFORM.md` §10). On an onboard port the enclosure runs at
 USB2, roughly 35 MB/s against a BD-ROM's ~54 MB/s at 12x: fine for playback,

@@ -51,7 +51,7 @@ NFS `fsid` values are recorded because **they must be preserved** — see §4.
 | `arr_config` | services | export | — | public | | *arr stack configuration |
 | `appdata_old` | cache *(prefer)* | — | — | private | | "application data" — ⚠ **suspected** leftover, see §3 |
 | ~~`ai_models`~~ | fastservices | — | — | public | | 🗑 **DROP** — owner-confirmed dead |
-| `arm` | fastservices | export | — | public | | 🛡 **Protected** — "automatic ripping machine" |
+| `arm` | fastservices | export | — | public | | ♻ **Regenerable** — "automatic ripping machine" |
 | ~~`jellyfin_cache`~~ | fastservices | — | — | public | | 🗑 **DROP** — owner-confirmed dead. See §3 |
 | `swap` | fastservices | — | — | public | | ⚙ **Does not migrate** — Unraid furniture, see §5 |
 | `inbox` | cache | export | — | public | | 🛡 **Protected** |
@@ -283,10 +283,10 @@ contents cannot be inferred from configuration.
 |---|---|---|
 | **Critical** | Everything below, **plus versioning and a tested restore** | **`documents`** |
 | **Precious and Irreplaceable** | Real-time redundancy, checksummed, **+ offsite** | **`immich_photos`**, **`immich_photos_archived`**, ⚠ `appdata/ferdium`, `appdata/karakeep`, `appdata/memos`, `appdata/partdb` *(exception, below)* |
-| **Protected** | Parity. No offsite. | **`music`**, **`books`**, **`bambuddy_library`**, **`webdav`**, **`public`**, **`arm`**, **`inbox`**, **`serenity_time_machine`**, ⏸ **`calibre_books`** *(parked)*, `archived_disks` ⟨?⟩ |
+| **Protected** | Parity. No offsite. | **`music`**, **`books`**, **`bambuddy_library`**, **`webdav`**, **`public`**, **`inbox`**, **`serenity_time_machine`**, ⏸ **`calibre_books`** *(parked)*, `archived_disks` ⟨?⟩ |
 | **Painful to rebuild, small** | Redundancy; cheap because tiny | `appdata` *(default — see the two exceptions above)*, `arr_config`, `ha_backup` |
 | **Re-acquirable** | Snapshot parity, 24 h lag fine | **`podcasts_audiobookshelf`**, `arr_media`, `arr_managed_data`, `jellyfin`, `isos` |
-| **Regenerable** | Parity optional | **`copyparty`**, `domains` ⟨?⟩ |
+| **Regenerable** | Parity optional | **`copyparty`**, **`arm`**, `domains` ⟨?⟩ |
 | ⚙ **Does not migrate** | n/a — no successor concept | **`swap`**, `system` *(proposed)* |
 | 🗑 **Drop** | n/a — deleted before migrating | **`jellyfin_cache`**, **`ai_models`**, **`SHARE`**, **`manyfold_library`**, **`syncthing`**, **`minishare`**; `appdata_old` + `books_old` suspected |
 | **⟨?⟩ Undecided** | — | *(none — every share is now assigned)* |
@@ -386,13 +386,13 @@ So the ladder resolves to something with real teeth:
 | **Re-acquirable** | yes | no, and it does not matter | no | no |
 
 **The offsite scope is currently three shares** — `documents`, `immich_photos`,
-`immich_photos_archived` — against eleven in Protected (ten owner-confirmed, plus
+`immich_photos_archived` — against nine in Protected (eight owner-confirmed, plus
 `archived_disks` still proposed). That is the shape you want:
 the tier that costs money every month stayed small while the tier that costs a
 one-time slice of parity absorbed most of the inventory.
 
-⚠ **Protected spans both the array and the SSD pools.** `arm` is `only` on
-fastservices and never touches the array, while the rest are array-resident. So
+⚠ **Protected spans both the array and the SSD pools.** `inbox` is
+pool-resident and never touches the array, while the rest are array-resident. So
 Protected is a *policy*, not a place, and `DESIGN.md` §5 has to implement it in
 two locations — SnapRAID parity for the array members, and something else
 entirely for the pool ones, since SnapRAID does not cover SSD pools.

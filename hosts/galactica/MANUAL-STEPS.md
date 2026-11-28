@@ -2221,3 +2221,65 @@ Later, if needed:
   before answering, and the reasoning counts against Karakeep's 2048-token
   output cap. Set `OPENAI_REASONING_EFFORT = "low"` in `karakeep.nix`; it
   also lowers cost.
+
+## #272 ARM (Automatic Ripping Machine) — owner steps before first switch
+
+`hosts/galactica/arm.nix` runs ARM as a privileged container at
+`autoripper.{internal,zjones.dev}`. Upstream supports only that shape: the
+container runs its own udev to notice a disc and mounts it itself. Both names
+are LAN-only: split-horizon rewrites, no Pangolin route, no tailnet node.
+State lives in a plain directory, `tank/appdata/arm`. Rips go to a new
+dataset, `tank/arm`. It takes the Unraid `arm` share's place, but not its
+tier: it is Regenerable (`SHARES.md` §5, owner's call 2026-11-28). Rips pass
+through on their way to the library and can be redone from the disc.
+
+The dataset has to exist **before** the first switch. Otherwise tmpfiles
+creates `/tank/arm` as a plain directory on tank's root dataset.
+
+1. [x] **Confirm the drive is visible.** `lsscsi` isn't installed; util-linux
+   covers it. `lsblk -S -o NAME,TYPE,TRAN,MODEL` should list the BD-ROM as
+   `sr0`, type `rom`, transport `sata`.
+   `ls -d /sys/class/scsi_generic/*/device/block/sr*` names its `sg` node.
+   ARM uses whatever the container sees at start, so no device path is
+   configured.
+   ✅ Checked 2026-11-28, after the switch: `sr0` answers on `sg2`.
+2. [x] **Create and tag the dataset:**
+   ```sh
+   sudo zfs create tank/arm
+   sudo zfs set homelab:tier=regenerable tank/arm
+   ```
+   No `org.torsion.borgmatic:backup` tag: nothing here goes offsite.
+3. [ ] **Old Unraid rips, if any were kept:** copy them into
+   `/tank/arm/media/completed/` (music into `/tank/arm/music/`) and chown to
+   `z:users`. Skip this if the share was never carried over.
+4. [x] **First switch.** Confirm `docker-arm` starts (`journalctl -u
+   docker-arm`; a UID/GID complaint there means a volume isn't owned by `z`),
+   that `autoripper.internal` and `autoripper.zjones.dev` serve the login page,
+   and that the LE cert issues.
+   ✅ 2026-11-28: container up, drive detected, login page served with a valid cert.
+5. [x] **Change the admin password.** Upstream ships `admin` / `password`.
+   Change it in ARM's UI on first login.
+6. [ ] **OMDb key into sops — before the next switch.** `arm.nix` writes
+   `RIPMETHOD`, `SKIP_TRANSCODE`, `METADATA_PROVIDER` and `OMDB_API_KEY` into
+   `/tank/appdata/arm/config/arm.yaml` on every container start, so editing
+   those keys by hand doesn't stick. Every other key stays ARM's to edit in that
+   file. The API key comes from sops, and a key missing from
+   `secrets/galactica.yaml` fails activation:
+   1. [ ] Get a free key at <https://www.omdbapi.com/apikey.aspx>.
+   2. [ ] `sops secrets/galactica.yaml` and add it under `arm: omdbApiKey:`.
+   3. [ ] Switch, then check `grep -E '^(RIPMETHOD|SKIP_TRANSCODE|METADATA_PROVIDER):' /tank/appdata/arm/config/arm.yaml`.
+   To change the key later, edit sops, switch, then
+   `sudo systemctl restart docker-arm`; a secret change alone doesn't restart it.
+   `APPRISE` (ntfy) is still a hand edit: it points at
+   `/etc/arm/config/apprise.yaml`, whose `NTFY_*` keys take the topic and URL.
+7. [ ] **MakeMKV key.** ARM fetches the free beta key itself. If you've bought
+   one, put it in `MAKEMKV_PERMA_KEY`; that stops the beta-key refresh.
+8. [ ] **Test rip.** Insert a DVD, then a Blu-ray. Each should appear as a job
+   in the UI within a minute and land in `/tank/arm/media/completed/`. If
+   nothing happens, `docker exec arm ls -l /dev/sr0 /dev/sg*` shows whether
+   the container sees the drive. ⚠ UHD discs need LibreDrive-capable firmware on the drive.
+9. [ ] **Get rips into the library.** `completed/` is not a library path, so
+   nothing picks rips up automatically. Move them by hand into
+   `/tank/media_staging/jellyfin`, or use Radarr's manual import.
+10. [ ] **Dashboard.** Confirm the `ARM` entry in Media Management renders
+    (`sh-automatic-ripping-machine.png`) and its status dot is green.
