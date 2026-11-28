@@ -2238,10 +2238,12 @@ creates `/tank/arm` as a plain directory on tank's root dataset.
 
 1. [ ] **Confirm the drive is visible.** `lsscsi` isn't installed; util-linux
    covers it. `lsblk -S -o NAME,TYPE,TRAN,MODEL` should list the BD-ROM as
-   `sr0`, type `rom`, transport `sata`. After the switch loads `sg`,
+   `sr0`, type `rom`, transport `sata`.
    `ls -d /sys/class/scsi_generic/*/device/block/sr*` names its `sg` node.
    ARM uses whatever the container sees at start, so no device path is
    configured.
+   ✅ Checked 2026-11-28: `sr0` answers on `sg2`. `sg` was already loaded
+   before this PR's switch.
 2. [ ] **Create and tag the dataset:**
    ```sh
    sudo zfs create tank/arm
