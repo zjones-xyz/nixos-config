@@ -2275,4 +2275,4 @@ creates `/tank/arm` as a plain directory on tank's root dataset.
    nothing picks rips up automatically. Move them by hand into
    `/tank/media_staging/jellyfin`, or use Radarr's manual import.
 10. [ ] **Dashboard.** Confirm the `ARM` entry in Media Management renders
-    (`mdi-disc-player` icon) and its status dot is green.
+    (`sh-automatic-ripping-machine.png`) and its status dot is green.

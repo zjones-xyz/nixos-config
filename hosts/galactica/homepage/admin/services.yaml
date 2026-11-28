@@ -90,7 +90,7 @@
     - ARM:
         href: https://autoripper.zjones.dev
         siteMonitor: https://autoripper.zjones.dev
-        icon: mdi-disc-player
+        icon: sh-automatic-ripping-machine.png
         description: Disc ripping
 
 # The reading stack (hosts/galactica/READING-STACK.md), split the same way the
