@@ -26,10 +26,9 @@
 
     # Plain cross-platform CLI tools that nixpkgs provides are kept in nix
     # instead (see hosts/serenity/home.nix). Homebrew keeps only what's awkward
-    # to get from nixpkgs on darwin: asdf (shell-integrated runtime manager),
-    # handbrake (CLI), and immich-go.
+    # to get from nixpkgs on darwin: handbrake (CLI) and immich-go. (asdf is
+    # gone; the JDK comes from programs.java in hosts/serenity/home.nix.)
     brews = [
-      "asdf"
       "handbrake"
       "immich-go"
     ];
