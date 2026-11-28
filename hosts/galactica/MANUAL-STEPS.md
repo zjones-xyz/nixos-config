@@ -2229,9 +2229,9 @@ Later, if needed:
 container runs its own udev to notice a disc and mounts it itself. Both names
 are LAN-only: split-horizon rewrites, no Pangolin route, no tailnet node.
 State lives in a plain directory, `tank/appdata/arm`. Rips go to a new
-dataset, `tank/arm`. It takes the Unraid `arm` share's place and its tier,
-Protected (`SHARES.md` §5): parity, no offsite, since a rip can be redone from
-a disc you still own.
+dataset, `tank/arm`. It takes the Unraid `arm` share's place, but not its
+tier: it is Regenerable (`SHARES.md` §5, owner's call 2026-11-28). Rips pass
+through on their way to the library and can be redone from the disc.
 
 The dataset has to exist **before** the first switch. Otherwise tmpfiles
 creates `/tank/arm` as a plain directory on tank's root dataset.
@@ -2243,9 +2243,9 @@ creates `/tank/arm` as a plain directory on tank's root dataset.
 2. [ ] **Create and tag the dataset:**
    ```sh
    sudo zfs create tank/arm
-   sudo zfs set homelab:tier=protected tank/arm
+   sudo zfs set homelab:tier=regenerable tank/arm
    ```
-   No `org.torsion.borgmatic:backup` tag; Protected means no offsite.
+   No `org.torsion.borgmatic:backup` tag: nothing here goes offsite.
 3. [ ] **Old Unraid rips, if any were kept:** copy them into
    `/tank/arm/media/completed/` (music into `/tank/arm/music/`) and chown to
    `z:users`. Skip this if the share was never carried over.

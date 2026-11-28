@@ -8,8 +8,8 @@
 # Automatic Ripping Machine — rips whatever disc goes into the BD-ROM
 # (https://github.com/automatic-ripping-machine/automatic-ripping-machine).
 # No nixpkgs module, hence a container; served at autoripper.{internal,zjones.dev}.
-# Rips land in `tank/arm`, the Unraid `arm` share re-homed (Protected: parity,
-# no offsite — SHARES.md). Owner steps: MANUAL-STEPS.md §#272.
+# Rips land in `tank/arm`, the Unraid `arm` share re-homed: Regenerable, since
+# a rip can be redone from the disc (SHARES.md). Owner steps: MANUAL-STEPS.md §#272.
 
 let
   image = "automaticrippingmachine/automatic-ripping-machine:2.25.0";
