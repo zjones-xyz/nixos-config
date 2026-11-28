@@ -2259,18 +2259,19 @@ creates `/tank/arm` as a plain directory on tank's root dataset.
    ✅ 2026-11-28: container up, drive detected, login page served with a valid cert.
 5. [x] **Change the admin password.** Upstream ships `admin` / `password`.
    Change it in ARM's UI on first login.
-6. [ ] **Set `arm.yaml`.** ARM writes a default to
-   `/tank/appdata/arm/config/arm.yaml` on first start. The ripper settings
-   have to be edited in that file, not in the UI. It isn't declared in Nix
-   because ARM owns it. `z` owns it, so no `sudo`; restart afterwards with
-   `sudo systemctl restart docker-arm`. Recommended:
-   - `SKIP_TRANSCODE: true`. galactica has no GPU, and a CPU HandBrake pass
-     over a Blu-ray takes hours on this Xeon. Keep the MakeMKV remux;
-     Jellyfin transcodes at playback if it has to.
-   - `RIPMETHOD: "mkv"` (the default; `SKIP_TRANSCODE` needs it).
-   - `OMDB_API_KEY` or `TMDB_API_KEY` for title lookup. Without one, rips
-     are named after the disc label.
-   - `APPRISE` / `apprise.yaml` pointed at ntfy if you want a "rip done" push.
+6. [ ] **OMDb key into sops — before the next switch.** `arm.nix` writes
+   `RIPMETHOD`, `SKIP_TRANSCODE`, `METADATA_PROVIDER` and `OMDB_API_KEY` into
+   `/tank/appdata/arm/config/arm.yaml` on every container start, so editing
+   those keys by hand doesn't stick. Every other key stays ARM's to edit in that
+   file. The API key comes from sops, and a key missing from
+   `secrets/galactica.yaml` fails activation:
+   1. [ ] Get a free key at <https://www.omdbapi.com/apikey.aspx>.
+   2. [ ] `sops secrets/galactica.yaml` and add it under `arm: omdbApiKey:`.
+   3. [ ] Switch, then check `grep -E '^(RIPMETHOD|SKIP_TRANSCODE|METADATA_PROVIDER):' /tank/appdata/arm/config/arm.yaml`.
+   To change the key later, edit sops, switch, then
+   `sudo systemctl restart docker-arm`; a secret change alone doesn't restart it.
+   `APPRISE` (ntfy) is still a hand edit: it points at
+   `/etc/arm/config/apprise.yaml`, whose `NTFY_*` keys take the topic and URL.
 7. [ ] **MakeMKV key.** ARM fetches the free beta key itself. If you've bought
    one, put it in `MAKEMKV_PERMA_KEY`; that stops the beta-key refresh.
 8. [ ] **Test rip.** Insert a DVD, then a Blu-ray. Each should appear as a job

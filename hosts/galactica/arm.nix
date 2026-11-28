@@ -18,8 +18,28 @@ let
   port = 3027; # next free loopback slot after memos.nix's 3026
   uid = toString config.users.users.z.uid;
   gid = toString config.users.groups.${config.users.users.z.group}.gid;
+  armYaml = "${appDir}/config/arm.yaml";
+
+  # Keys Nix owns in arm.yaml; ARM keeps every other key. SKIP_TRANSCODE:
+  # no GPU here, so keep MakeMKV's remux rather than an hours-long CPU encode.
+  managedKeys = {
+    RIPMETHOD = "mkv"; # SKIP_TRANSCODE only works with mkv
+    SKIP_TRANSCODE = true;
+    METADATA_PROVIDER = "omdb"; # movies and shows; TMDB is movies only
+  };
+
+  setManagedKeys = pkgs.writeShellScript "arm-set-managed-keys" ''
+    set -euo pipefail
+    [ -f ${armYaml} ] || exit 0 # first start: ARM writes the default, next start sets keys
+    OMDB_API_KEY=$(cat ${config.sops.secrets."arm/omdbApiKey".path}) \
+      ${lib.getExe pkgs.yq-go} -i \
+      '. *= ${builtins.toJSON managedKeys} | .OMDB_API_KEY = strenv(OMDB_API_KEY)' \
+      ${armYaml}
+    chown ${uid}:${gid} ${armYaml} # yq -i replaces the file, as root
+  '';
 in
 {
+  sops.secrets."arm/omdbApiKey" = { };
   # MakeMKV drives the BD-ROM through its SCSI-generic node (/dev/sg*), not
   # /dev/sr0, so `sg` is loaded explicitly.
   boot.kernelModules = [ "sg" ];
@@ -41,6 +61,8 @@ in
     appDir
     mediaDir
   ];
+  # Re-applied on every start, so a hand edit to these keys doesn't stick.
+  systemd.services.docker-arm.serviceConfig.ExecStartPre = lib.mkAfter [ "${setManagedKeys}" ];
 
   virtualisation.oci-containers.containers.arm = {
     inherit image;
