@@ -592,6 +592,21 @@ failing to link — which is the ASM1166's §1 signature. It was in a slot for t
 run and did not enumerate. See `PLATFORM.md` §6e; that result is confounded and
 is not yet a verdict on the card.
 
+### Slot connectors and the PSU — owner-stated 2026-11-24
+
+| Fact | Value | Status |
+|---|---|---|
+| Physical slot connectors | **All four x8** | Confirmed by the owner, and it agrees with the Supermicro manual |
+| Open-ended? | ⟨unchecked⟩ | **Open** — see §7 |
+| PSU | **420 W** | Wattage only. Make, model, 12 V rail rating and spare PCIe aux leads are ⟨unrecorded⟩ |
+
+⚠ **Whether a slot is open-ended decides whether a GPU can go in at all.**
+Nearly every GPU has a physical x16 connector. A closed x8 slot needs a riser
+or a card with a genuinely narrower edge. 420 W is already carrying the Xeon,
+eight 3.5" spinners, the SSDs and the LSI, so budget a slot-powered card
+(≤75 W) unless the spare aux leads are confirmed. This settles the "PSU headroom
+unrecorded" gap in `docs/LOCAL-INFERENCE.md` §5.
+
 ### ✅ The current cabling is already the bare-metal optimum — do not re-run it
 
 `ata1`/`ata2` are the C204's two **6 Gb/s** ports and `ata3`–`ata6` its four
@@ -742,6 +757,7 @@ drawer is, so the answer is currently no on both counts.
 | Port-to-bay mapping | Measure it — hotswap insertion + sysfs, see §3 | All cable labels |
 | Which two onboard ports are 6Gb/s | Board manual or silkscreen | Final disk placement |
 | ASM1166 port numbering convention | A decision, if cables run there | Any ASM1166 cable labels |
+| Are any PCIe slots open-ended? PSU make/model and spare aux leads | Eyes, case open | Any GPU purchase (§4) |
 
 The first three are readable from the running machine. The rest need the case
 open, and the natural moment is whichever service window does the recabling.

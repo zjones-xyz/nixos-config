@@ -86,6 +86,15 @@
   # (starship + direnv from common.nix hook into it automatically).
   programs.zsh.enable = true;
 
+  # ── Java: newest JDK nixpkgs ships (25, LTS) ───────────────────────────────
+  # Replaces asdf. programs.java so JAVA_HOME is set; a project that needs
+  # another JDK overrides it with a flake devShell + direnv `use flake`.
+  # macOS's /usr/libexec/java_home won't list it — point IDEs at $JAVA_HOME.
+  programs.java = {
+    enable = true;
+    package = pkgs.jdk25;
+  };
+
   # sops' age identity for this Mac. Without this, sops falls back to probing
   # default locations (~/.ssh/id_ed25519, etc.) and fails to decrypt anything
   # this admin key is a recipient for.
