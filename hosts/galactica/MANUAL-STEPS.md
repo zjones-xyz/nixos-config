@@ -2252,11 +2252,12 @@ creates `/tank/arm` as a plain directory on tank's root dataset.
 3. [ ] **Old Unraid rips, if any were kept:** copy them into
    `/tank/arm/media/completed/` (music into `/tank/arm/music/`) and chown to
    `z:users`. Skip this if the share was never carried over.
-4. [ ] **First switch.** Confirm `docker-arm` starts (`journalctl -u
+4. [x] **First switch.** Confirm `docker-arm` starts (`journalctl -u
    docker-arm`; a UID/GID complaint there means a volume isn't owned by `z`),
    that `autoripper.internal` and `autoripper.zjones.dev` serve the login page,
    and that the LE cert issues.
-5. [ ] **Change the admin password.** Upstream ships `admin` / `password`.
+   ✅ 2026-11-28: container up, drive detected, login page served with a valid cert.
+5. [x] **Change the admin password.** Upstream ships `admin` / `password`.
    Change it in ARM's UI on first login.
 6. [ ] **Set `arm.yaml`.** ARM writes a default to
    `/tank/appdata/arm/config/arm.yaml` on first start. Its settings page
