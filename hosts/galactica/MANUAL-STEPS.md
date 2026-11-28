@@ -1508,6 +1508,106 @@ middleware is the natural fix if that's ever wanted; not built.
 
 ---
 
+## 17. Power draw — the measurements this box has never taken
+
+`PLATFORM.md` §13 is the analysis: an estimated **~90–140 W at the wall** (it was
+~105–155 W before the 2026-10-06 pull), with the reclaimable share now
+concentrated in two places — §13c item 2's unverified BIOS idle configuration and
+item 3's LSI. **Nothing here blocks anything**; it is queued work, ordered so each
+step makes the next one interpretable.
+
+⚠ **Still not one measured watt.** Every figure in §13 is a datasheet estimate,
+including the ~13 W that item 1 has now collected. Step 1 is what changes that,
+and it is free.
+
+⛔ **The array spins continuously, decided 2026-10-29** — `PLATFORM.md` §13f is
+closed and items 6–9 below retired with it. §13e is still the reason, and still
+what to read before anyone proposes parking a disk here again.
+
+1. [ ] **Baseline at the wall.** Falls out of §6 for free — once `power.ups` is
+   up, `upsc ups` reports `ups.load` and usually `ups.realpower`. Record the
+   idle figure here before changing anything else, or every later number is
+   uninterpretable. The BMC cannot substitute: this board has no PSU power
+   sensor.
+2. [ ] **Read the CPU's idle behaviour.** Needs no hardware and can happen
+   today (`linuxPackages.cpupower`, `linuxPackages.turbostat`):
+   ```sh
+   cpupower idle-info
+   cpupower frequency-info | head -20
+   turbostat --quiet --show PkgWatt,CPU%c1,CPU%c6,Pkg%pc6 sleep 60
+   ```
+   Record `PkgWatt` and `Pkg%pc6` at idle. Deep-idle residency near zero with
+   `PkgWatt` in the twenties means the BIOS is restricting C-states, which is
+   step 3.
+3. [ ] **Check `Power Technology`** on the next trip into BIOS setup
+   (`Advanced → CPU Configuration`). Worth 10–20 W if it is restricted —
+   `PLATFORM.md` §13c item 2. Re-run step 2 afterwards; that is the
+   confirmation, not the setup screen. Already added to §5's post-CMOS-clear
+   checklist so a battery change does not silently undo it.
+4. [x] **✅ Interim: park `sidepool`'s four disks — overtaken by the pull, done
+   2026-10-06.** This step existed only for the case where §9 step 3 was weeks
+   out. It was not: all four disks and the written-off MX100 left the case in the
+   same session that brought `h-YWAH` in, so the ~13 W was collected the durable
+   way and there is nothing left to park. ⚠ The `hdparm -S`/`-y` procedure that
+   stood here is deliberately *not* kept for reuse — nothing else in this chassis
+   can be parked without touching a live `tank` member, which `PLATFORM.md` §13d
+   rejects. It also carried four full serials, which the repo's masking
+   convention no longer allows.
+
+   One thing from it is worth keeping, because it outlives the disks: `hdparm`
+   on this HBA can return `SG_IO: bad/missing sense data`, meaning the SAT layer
+   is not passing ATA through. `sg_start --stop` (`sg3_utils`) or
+   `sdparm --command=stop` issue SCSI START STOP UNIT instead, which mpt3sas
+   translates — but neither has an equivalent of `-S`, so a re-arm would need a
+   systemd timer. `PLATFORM.md` §13e records why that matters generally.
+
+5. [ ] **Weigh the LSI — now the largest item left.** ⭐ The precondition is met:
+   `sidepool`'s disks and the MX100 came out 2026-10-06, so ports 2–7 are empty
+   and the card drives two SSDs while still drawing ~9 W. `PLATFORM.md` §13c item 3
+   has the port arithmetic; the short version is that the ASM1166 is a proven
+   replacement (§6e: Gen3 x2, no downgrade marker) and the real trade is that it
+   needs two BIOS settings held where the LSI needs none — §1's landmine. Not a
+   decision to make from the desk.
+   ⭐ **Bundle it with §5's coin cell and the BIOS rows.** The battery is the
+   failure that landmine is exposed to, and steps 3 and 5 here want the same
+   case-open visit. Doing them together is what makes the controller swap safe
+   rather than a new dependency on an unreplaced 2011 cell.
+   ⭐ **Nothing in §21 stands in the way, and this item claimed one step did.**
+   §21 step 10 records the pull as done 2026-10-11; its box is open only for the
+   `h-YWAH` caddy label, which has no bearing on the card. §3's initrd
+   verification (first run 2026-10-25) confirms it: nine disks, X4WE not among
+   them, two BX500s on the LSI. The card already drives those two and nothing
+   else, so this measurement waits on nothing but the next case-open visit.
+   `PLATFORM.md` §13c item 3 carries the correction.
+6. [x] **~~Measure the seed set.~~ RETIRED 2026-10-29** with §13f — it existed
+   to size the seed tier. If the question ever returns: the number wanted is the
+   *active seed* total (`du -sh /tank/nixflix_media/downloads` plus
+   qBittorrent's own), it includes book and manga torrents since the reading
+   stack shares `downloadsDir`, and since #206 it converges on 14 days of
+   everything plus the one indefinitely-seeding indexer.
+7. [x] **~~Count concurrently seeded torrents.~~ RETIRED 2026-10-29** with §13f
+   — it only ever picked `h-SDCP` over a bought SSD.
+8. [x] **~~Burn `h-SDCP` in before trusting it.~~ RETIRED 2026-10-29** with
+   §13f. The disk stays in the drawer uncommitted, where `docs/DISK-DRAWER.md`
+   and `PLATFORM.md` §12 already require a burn-in before it is trusted.
+9. [x] **~~Settle the blockers §13f does not remove.~~ RETIRED 2026-10-29** —
+   they were blockers only to a spin-down, and §13e keeps every one as a fact
+   about the host. One survives for a different reason: **Paperless-ngx's
+   SQLite database and Whoosh index are on the RAIDZ1 spinners**
+   (`/tank/documents/paperless`, §15), restored in place rather than onto the
+   special vdev. That is a latency question now, not a power one, and moving
+   just its `data` dir to `tank/appdata` is still the small fix.
+10. [ ] **Check whether borgmatic's nightly run re-reads everything.** Its ZFS
+    hook mounts each snapshot at a fresh path per run and borg's files cache is
+    path-keyed; if that defeats the cache, 01:30 is hours of reading the whole
+    Critical + Precious set rather than a metadata sweep (§13e item 3). ⭐ Kept
+    after §13f closed because it was never really a power item: a backup that
+    re-reads everything nightly is a duration and array-load problem on a pool
+    that stays spinning either way. Compare the job's duration and read volume
+    against the amount of data that actually changed that day.
+
+---
+
 ## 18. The reading stack — owner steps
 
 ⚠ **§18, not §17**, and deliberately leaving a gap: PR #113 (galactica's idle
