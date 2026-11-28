@@ -2236,10 +2236,12 @@ through on their way to the library and can be redone from the disc.
 The dataset has to exist **before** the first switch. Otherwise tmpfiles
 creates `/tank/arm` as a plain directory on tank's root dataset.
 
-1. [ ] **Confirm the drive is visible.** `lsscsi -g` (or `ls /dev/sr* /dev/sg*`
-   after the switch loads `sg`) should list the BD-ROM as `/dev/sr0` with an
-   `sg` node beside it. ARM uses whatever the container sees at start, so no
-   device path is configured.
+1. [ ] **Confirm the drive is visible.** `lsscsi` isn't installed; util-linux
+   covers it. `lsblk -S -o NAME,TYPE,TRAN,MODEL` should list the BD-ROM as
+   `sr0`, type `rom`, transport `sata`. After the switch loads `sg`,
+   `ls -d /sys/class/scsi_generic/*/device/block/sr*` names its `sg` node.
+   ARM uses whatever the container sees at start, so no device path is
+   configured.
 2. [ ] **Create and tag the dataset:**
    ```sh
    sudo zfs create tank/arm
@@ -2269,8 +2271,8 @@ creates `/tank/arm` as a plain directory on tank's root dataset.
    one, put it in `MAKEMKV_PERMA_KEY`; that stops the beta-key refresh.
 8. [ ] **Test rip.** Insert a DVD, then a Blu-ray. Each should appear as a job
    in the UI within a minute and land in `/tank/arm/media/completed/`. If
-   nothing happens, `docker exec arm lsscsi -g` shows whether the container
-   sees the drive. ⚠ UHD discs need LibreDrive-capable firmware on the drive.
+   nothing happens, `docker exec arm ls -l /dev/sr0 /dev/sg*` shows whether
+   the container sees the drive. ⚠ UHD discs need LibreDrive-capable firmware on the drive.
 9. [ ] **Get rips into the library.** `completed/` is not a library path, so
    nothing picks rips up automatically. Move them by hand into
    `/tank/media_staging/jellyfin`, or use Radarr's manual import.
