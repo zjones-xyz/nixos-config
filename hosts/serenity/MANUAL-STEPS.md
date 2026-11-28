@@ -51,3 +51,24 @@ it until the next switch.
        launched-before app normally doesn't care, but a freshly upgraded
        (quarantined) one may be refused as "damaged". If so,
        `xattr -dr com.apple.quarantine /Applications/OrcaSlicer.app`.
+
+## #236 PWAsForFirefox — first switch
+
+Background: DECISIONS.md §2.
+
+1. [ ] Before switching, check whether `/Applications/Firefox.app` was
+   installed by hand (`brew list --cask firefox` fails if so). If it was,
+   quit Firefox and delete the app. Profiles live in `~/Library` and stay.
+   Otherwise the `firefox` cask won't install over it and `brew bundle`
+   fails the switch.
+2. [ ] Switch serenity. Check that
+   `~/Library/Application Support/Mozilla/NativeMessagingHosts/firefoxpwa.json`
+   resolves (`cat` it).
+3. [ ] In Firefox, install the **PWAsForFirefox** extension from
+   addons.mozilla.org. In its setup, let it **install the runtime**. On
+   macOS that step is required, unlike on pegasus.
+4. [ ] Install a first app from the extension's toolbar button. It should
+   appear in `~/Applications`. Launch it: the window title should be the
+   app's name, and the titlebar shouldn't take the site's colour.
+5. [ ] Optional, per app whose icon looks off: same as pegasus
+   MANUAL-STEPS.md §#236, step 4.
