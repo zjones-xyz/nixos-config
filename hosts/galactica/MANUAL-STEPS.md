@@ -2260,8 +2260,10 @@ creates `/tank/arm` as a plain directory on tank's root dataset.
 5. [x] **Change the admin password.** Upstream ships `admin` / `password`.
    Change it in ARM's UI on first login.
 6. [ ] **Set `arm.yaml`.** ARM writes a default to
-   `/tank/appdata/arm/config/arm.yaml` on first start. Its settings page
-   edits the same file, so it is not declared in Nix. Recommended:
+   `/tank/appdata/arm/config/arm.yaml` on first start. The ripper settings
+   have to be edited in that file, not in the UI. It isn't declared in Nix
+   because ARM owns it. `z` owns it, so no `sudo`; restart afterwards with
+   `sudo systemctl restart docker-arm`. Recommended:
    - `SKIP_TRANSCODE: true`. galactica has no GPU, and a CPU HandBrake pass
      over a Blu-ray takes hours on this Xeon. Keep the MakeMKV remux;
      Jellyfin transcodes at playback if it has to.
