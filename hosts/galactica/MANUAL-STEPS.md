@@ -2222,7 +2222,7 @@ Later, if needed:
   output cap. Set `OPENAI_REASONING_EFFORT = "low"` in `karakeep.nix`; it
   also lowers cost.
 
-## #PR ARM (Automatic Ripping Machine) — owner steps before first switch
+## #272 ARM (Automatic Ripping Machine) — owner steps before first switch
 
 `hosts/galactica/arm.nix` runs ARM as a privileged container at
 `autoripper.{internal,zjones.dev}`. Upstream supports only that shape: the

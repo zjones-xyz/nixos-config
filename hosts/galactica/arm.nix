@@ -9,7 +9,7 @@
 # (https://github.com/automatic-ripping-machine/automatic-ripping-machine).
 # No nixpkgs module, hence a container; served at autoripper.{internal,zjones.dev}.
 # Rips land in `tank/arm`, the Unraid `arm` share re-homed (Protected: parity,
-# no offsite — SHARES.md). Owner steps: MANUAL-STEPS.md §#PR.
+# no offsite — SHARES.md). Owner steps: MANUAL-STEPS.md §#272.
 
 let
   image = "automaticrippingmachine/automatic-ripping-machine:2.25.0";
