@@ -1755,7 +1755,7 @@ measured**, including the one row that has since been collected.
 | ASM1064 + ASM1042 | ~2 W | |
 | Chassis + CPU fans | 5–15 W | Unknown fan count and BMC fan mode (§13c item 4) |
 | **DC subtotal** | **~77–117 W** | Was ~90–130 W before the pull |
-| PSU conversion loss | +13–21 W | Assuming ~85 %; the unit is unidentified (`HARDWARE-MAP.md` §7) |
+| PSU conversion loss | +13–21 W | Assuming ~85 %; 420 W unit, so idle sits near a quarter load, where cheap supplies fall short of that. Make and model still unrecorded (`HARDWARE-MAP.md` §7) |
 | **At the wall** | **~90–140 W** | ≈ 790–1,230 kWh/yr. Was ~105–155 W ≈ 920–1,360 |
 
 ### 13c. ✅ Worth doing, in order
