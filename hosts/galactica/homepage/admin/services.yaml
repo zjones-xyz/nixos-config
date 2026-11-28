@@ -11,7 +11,7 @@
 # fails the build if an entry has `href` without a matching `siteMonitor`.
 #
 # Live services only. The Tower services not yet re-homed (Jellyseerr, Immich,
-# ARM, 13ft) come back one group entry at a time as each migrates —
+# 13ft) come back one group entry at a time as each migrates —
 # homelab-stacks tower/homepage/config/services.yaml is the reference for what
 # each entry looked like. Audiobookshelf, Grimmory and Shelfmark came back with
 # the reading stack (READING-STACK.md) and are in the two Reading groups below.
@@ -87,6 +87,11 @@
           type: prowlarr
           url: https://prowlarr.arr.zjones.dev
           key: "{{HOMEPAGE_VAR_PROWLARR_API_KEY}}"
+    - ARM:
+        href: https://autoripper.zjones.dev
+        siteMonitor: https://autoripper.zjones.dev
+        icon: mdi-disc-player
+        description: Disc ripping
 
 # The reading stack (hosts/galactica/READING-STACK.md), split the same way the
 # media groups are: what you read from, then what acquires it.

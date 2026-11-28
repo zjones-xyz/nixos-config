@@ -2221,3 +2221,58 @@ Later, if needed:
   before answering, and the reasoning counts against Karakeep's 2048-token
   output cap. Set `OPENAI_REASONING_EFFORT = "low"` in `karakeep.nix`; it
   also lowers cost.
+
+## #PR ARM (Automatic Ripping Machine) — owner steps before first switch
+
+`hosts/galactica/arm.nix` runs ARM as a privileged container at
+`autoripper.{internal,zjones.dev}`. Upstream supports only that shape: the
+container runs its own udev to notice a disc and mounts it itself. Both names
+are LAN-only: split-horizon rewrites, no Pangolin route, no tailnet node.
+State lives in a plain directory, `tank/appdata/arm`. Rips go to a new
+dataset, `tank/arm`. It takes the Unraid `arm` share's place and its tier,
+Protected (`SHARES.md` §5): parity, no offsite, since a rip can be redone from
+a disc you still own.
+
+The dataset has to exist **before** the first switch. Otherwise tmpfiles
+creates `/tank/arm` as a plain directory on tank's root dataset.
+
+1. [ ] **Confirm the drive is visible.** `lsscsi -g` (or `ls /dev/sr* /dev/sg*`
+   after the switch loads `sg`) should list the BD-ROM as `/dev/sr0` with an
+   `sg` node beside it. ARM uses whatever the container sees at start, so no
+   device path is configured.
+2. [ ] **Create and tag the dataset:**
+   ```sh
+   sudo zfs create tank/arm
+   sudo zfs set homelab:tier=protected tank/arm
+   ```
+   No `org.torsion.borgmatic:backup` tag; Protected means no offsite.
+3. [ ] **Old Unraid rips, if any were kept:** copy them into
+   `/tank/arm/media/completed/` (music into `/tank/arm/music/`) and chown to
+   `z:users`. Skip this if the share was never carried over.
+4. [ ] **First switch.** Confirm `docker-arm` starts (`journalctl -u
+   docker-arm`; a UID/GID complaint there means a volume isn't owned by `z`),
+   that `autoripper.internal` and `autoripper.zjones.dev` serve the login page,
+   and that the LE cert issues.
+5. [ ] **Change the admin password.** Upstream ships `admin` / `password`.
+   Change it in ARM's UI on first login.
+6. [ ] **Set `arm.yaml`.** ARM writes a default to
+   `/tank/appdata/arm/config/arm.yaml` on first start. Its settings page
+   edits the same file, so it is not declared in Nix. Recommended:
+   - `SKIP_TRANSCODE: true`. galactica has no GPU, and a CPU HandBrake pass
+     over a Blu-ray takes hours on this Xeon. Keep the MakeMKV remux;
+     Jellyfin transcodes at playback if it has to.
+   - `RIPMETHOD: "mkv"` (the default; `SKIP_TRANSCODE` needs it).
+   - `OMDB_API_KEY` or `TMDB_API_KEY` for title lookup. Without one, rips
+     are named after the disc label.
+   - `APPRISE` / `apprise.yaml` pointed at ntfy if you want a "rip done" push.
+7. [ ] **MakeMKV key.** ARM fetches the free beta key itself. If you've bought
+   one, put it in `MAKEMKV_PERMA_KEY`; that stops the beta-key refresh.
+8. [ ] **Test rip.** Insert a DVD, then a Blu-ray. Each should appear as a job
+   in the UI within a minute and land in `/tank/arm/media/completed/`. If
+   nothing happens, `docker exec arm lsscsi -g` shows whether the container
+   sees the drive. ⚠ UHD discs need LibreDrive-capable firmware on the drive.
+9. [ ] **Get rips into the library.** `completed/` is not a library path, so
+   nothing picks rips up automatically. Move them by hand into
+   `/tank/media_staging/jellyfin`, or use Radarr's manual import.
+10. [ ] **Dashboard.** Confirm the `ARM` entry in Media Management renders
+    (`mdi-disc-player` icon) and its status dot is green.
