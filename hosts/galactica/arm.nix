@@ -21,7 +21,7 @@ let
 in
 {
   # MakeMKV drives the BD-ROM through its SCSI-generic node (/dev/sg*), not
-  # /dev/sr0. Something loads `sg` today; this keeps it from being luck.
+  # /dev/sr0, so `sg` is loaded explicitly.
   boot.kernelModules = [ "sg" ];
 
   # `d` also re-owns an existing directory, so this chowns the fresh dataset
